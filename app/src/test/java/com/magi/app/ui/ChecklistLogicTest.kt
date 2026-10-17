@@ -8,8 +8,8 @@ class ChecklistLogicTest {
     @Test fun countsRegularAndExtendedOnlyAndNoInput() {
         val c = wishEntryCounts(5, wishKeys = listOf("0,3", "0,4", "2,1"), extKeys = listOf("2,5", "3,0"))
         assertEquals(WishEntryCounts(entered = 3, extOnly = 1, noInput = 2), c)
-        assertEquals("入力あり 3名（拡張希望のみ 1名）・未入力 2名", wishEntryText(c))
-        assertEquals("入力あり 0名・未入力 4名", wishEntryText(wishEntryCounts(4, emptyList(), emptyList())))
+        assertEquals("入力あり 3人（拡張希望のみ 1人）・未入力 2人", wishEntryText(c))
+        assertEquals("入力あり 0人・未入力 4人", wishEntryText(wishEntryCounts(4, emptyList(), emptyList())))
     }
 
     @Test fun ignoresKeysOutsideTheStaffRange() {

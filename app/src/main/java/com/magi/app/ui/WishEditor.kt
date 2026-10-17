@@ -74,6 +74,7 @@ internal fun WishCard(
     // 選んでいる職員と日は呼出側（画面全体）が持つ＝タブを離れても入力途中が残る（3.646.0 U02）。
     staffSel: Int, onStaffSel: (Int) -> Unit, daysSel: Set<Int>, onDaysSel: (Set<Int>) -> Unit,
     initialStaff: Int? = null, initialDay: Int? = null, onInitialConsumed: () -> Unit = {},
+    scrollKey: Int = 0, onShowConflicts: (() -> Unit)? = null,
 ) {
     val staff = ui.staffNames
     val shifts = cv.shiftKigou
@@ -93,6 +94,8 @@ internal fun WishCard(
             onInitialConsumed()
         }
     }
+    // [3.707.0 3a-4] 見出しの「希望・休暇 ›」は寄せるだけ（職員と選んだ日はそのまま）。
+    LaunchedEffect(scrollKey) { if (scrollKey > 0) { withFrameNanos { }; requester.bringIntoView() } }
     var staffMenu by remember { mutableStateOf(false) }
     var showAllStaff by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
@@ -128,6 +131,13 @@ internal fun WishCard(
                         style = MaterialTheme.typography.labelMedium, color = cs.primary,
                     )
                 }
+            }
+            val name = staff.getOrElse(i) { "" }
+            Text(wishStaffSummary(name, myRows.size, myExt.size), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            // [3.707.0 3b-2] この職員のぶつかっている希望（先頭の 1 件の日を添える、件数は出さない）。
+            val conflict = remember(ui, i) { wishTrialCandidates(ui).let { c -> c.direct.firstOrNull { it.staff == i } ?: c.shortfall.flatMap { it.rows }.firstOrNull { it.staff == i } } }
+            if (conflict != null && onShowConflicts != null) {
+                TextButton(onClick = onShowConflicts, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishConflictLinkText(name, DayText.short(ui.startDate, conflict.day))) }
             }
             MonthHeaderStatic(ui.startDate)
             WishMonthGrid(
@@ -243,16 +253,16 @@ private fun WishApplyPanel(
             TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
         }
         if (selK !in allowed) {
-            Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると必須違反になります。",
+            Text(wishOutOfScopeNote(shifts.getOrNull(selK) ?: "", ui.staffNames.getOrElse(staffIdx) { "" }),
                 style = MaterialTheme.typography.bodySmall, color = cs.error)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(CLEAR_SELECTION_BUTTON) }
             Button(
                 onClick = { onEvent(MagiEvent.Condition.SetWishesForDays(staffIdx, usable.map { it - 1 }, selK)); onDone() },
                 enabled = !ui.running && usable.isNotEmpty(),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text("${usable.size}日に適用") }
+            ) { Text(wishApplyButton(usable.size, shifts.getOrNull(selK) ?: "")) }
         }
         TextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
             colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
@@ -320,14 +330,14 @@ private fun ExtWishPanel(
             Text("${wishDayList(ui.startDate, days.filter { it in wishDays }.sorted())}は希望のある日なので、拡張希望に入れられません。希望を消すと入れられます。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
-        if (failed != null) Text("登録できませんでした: ${failed}。日かシフトを選び直して、もう一度試せます。", style = MaterialTheme.typography.bodySmall, color = cs.error)
+        if (failed != null) Text(extWishFailedText(failed), style = MaterialTheme.typography.bodySmall, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(CLEAR_SELECTION_BUTTON) }
             Button(
                 onClick = { sentSerial = ui.extWishResult?.serial ?: 0L; onEvent(MagiEvent.Condition.AddExtWish(staffIdx, usable.map { it - 1 }, selected.sorted())) },
                 enabled = !ui.running && selected.isNotEmpty() && usable.isNotEmpty(),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text("${usable.size}日に登録") }
+            ) { Text(extWishApplyButton(usable.size)) }
         }
     }
 }

@@ -119,6 +119,7 @@ internal fun NeedCalendarCard(
     // 選んでいるシフトと日は呼出側（画面全体）が持つ＝タブを離れても入力途中が残る（3.646.0 U02）。
     shiftSel: Int, onShiftSel: (Int) -> Unit, daysSel: Set<Int>, onDaysSel: (Set<Int>) -> Unit,
     initialShift: Int? = null, initialDay: Int? = null, onInitialConsumed: () -> Unit = {},
+    scrollKey: Int = 0,
 ) {
     if (v.shifts.isEmpty()) return
     val k = shiftSel.takeIf { it in v.shifts.indices } ?: 0
@@ -136,6 +137,8 @@ internal fun NeedCalendarCard(
             onInitialConsumed()
         }
     }
+    // [3.707.0 3a-4] 見出しの「必要人数 ›」「必要人数を編集する」は寄せるだけ（選んだシフトと日はそのまま）。
+    LaunchedEffect(scrollKey) { if (scrollKey > 0) { withFrameNanos { }; requester.bringIntoView() } }
     val shift = v.shifts[k]
     val cs = MaterialTheme.colorScheme
     var shiftMenu by remember { mutableStateOf(false) }
@@ -165,8 +168,10 @@ internal fun NeedCalendarCard(
                     }
                 }
                 Box(Modifier.heightIn(min = 48.dp).clickable { baseSheet = true }, contentAlignment = Alignment.CenterStart) {
-                    Text("標準 $baseLabel", style = MaterialTheme.typography.bodyLarge, color = cs.primary)
+                    Text("標準 $baseLabel ›", style = MaterialTheme.typography.bodyLarge, color = cs.primary)
                 }
+                // [3.707.0 3a-7] 状態は 2 点（標準のリンクと、このシフトの例外の件数）。
+                Text("例外 ${individualDays.size}件", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             }
             MonthHeaderStatic(ui.startDate)
             NeedMonthGrid(startDate = ui.startDate, ranges = ranges, individualDays = individualDays, selectedDays = daysSel, onToggle = onToggleDay)
@@ -212,12 +217,12 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
         }
         if (invalid) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(CLEAR_SELECTION_BUTTON) }
             Button(
                 onClick = { onEvent(MagiEvent.Condition.SetNeedDaysForDays(k, sorted.map { it - 1 }, p1, p2)); onDone() },
                 enabled = !ui.running && (p1.isNotBlank() || (use2 && p2.isNotBlank())) && !invalid,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text("${days.size}日に適用") }
+            ) { Text(needApplyButton(days.size)) }
         }
         TextButton(onClick = { onEvent(MagiEvent.Condition.ClearNeedDaysForDays(k, sorted.map { it - 1 })); onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を標準に戻す") }
@@ -341,6 +346,8 @@ private fun NeedMonthGrid(
 @Composable
 internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit) {
     val overrides = cv.needDayOverrides
+    // [3.707.0 3a-8] 例外が無ければ出さない（件数は見出しと必要人数カードにある）。
+    if (overrides.isEmpty()) return
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
@@ -349,22 +356,14 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (overrides.isEmpty()) {
-                Text(
-                    "（例外なし — すべて標準）",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                overrides.forEach { o ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "${o.kigou}  ${DayText.full(ui.startDate, o.j)}  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }, enabled = !ui.running)
-                    }
+            overrides.forEach { o ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${o.kigou}  ${DayText.full(ui.startDate, o.j)}  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }, enabled = !ui.running)
                 }
             }
         }

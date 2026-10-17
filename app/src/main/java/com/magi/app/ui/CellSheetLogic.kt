@@ -1779,3 +1779,101 @@ internal fun cellSheetBadge(severity: CellSeverity, tourAt: Int? = null, tourTot
 
 /** 足りない側の人探しのボタンを塗りにするか（S-4）。セルに人員不足以外の問題もあれば外枠（主は「変更案を探す」＝INV-09）。 */
 internal fun shortSideFilled(families: List<String>): Boolean = families.all { it == "covU" }
+
+/** [3.707.0 E-2] 編集タブの見出しカードの主ボタン（塗りは 1 つ＝INV-09）。RERUN は下部バーの「再作成」、PANEL は開いている入力パネルの適用ボタン。 */
+internal enum class EditHeaderPrimary { EDIT_NEED, OPEN_MASTER, ADD_STAFF, RERUN, PANEL }
+internal enum class EditHeaderSecondary { WISH_CONFLICTS }
+
+/** 見出しカードに要る数（画面の状態から集める）。[month] は「2026年11月」、無ければ空。 */
+internal data class EditHeaderCounts(
+    val month: String = "", val staff: Int = 0, val shifts: Int = 0,
+    val wish: WishEntryCounts = WishEntryCounts(0, 0, 0), val needStdOk: Boolean = false, val needExceptions: Int = 0,
+    val issues: Int = 0, val wishConflicts: Boolean = false,
+)
+
+internal data class EditHeaderPlan(
+    val title: String, val subtitle: String, val points: List<String>,
+    val primary: EditHeaderPrimary?, val secondary: EditHeaderSecondary?,
+)
+
+internal const val EDIT_SCOPE_MONTHLY_NOTE = "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
+internal const val EDIT_SCOPE_STAFF_NOTE = "入退職・所属・資格スキル（随時変更）。職員の一覧はここだけ"
+internal const val EDIT_SCOPE_MASTER_NOTE = "毎月は変えない基本の設定：シフト・ルール・人数（制度変更時のみ）"
+internal const val EDIT_NEED_BUTTON = "必要人数を編集する"
+internal const val WISH_CONFLICTS_BUTTON = "ぶつかっている希望を見る"
+
+/**
+ * [3.707.0 E-2] 編集タブ（[scope] 0=月次条件／1=職員管理／2=年間マスター）の見出し。点は 3 つまで、1 点に単位は 1 つ（INV-07）。
+ * 主ボタン（Q10）: 実行中は無し、入力パネルを開いている間は PANEL、結果のあとに条件を変えた（[ranBeforeEdit]）なら RERUN、
+ * 職員かシフトが無ければ OPEN_MASTER（シフトはあって職員だけ無ければ ADD_STAFF）、それ以外は区分ごとの主（月次＝EDIT_NEED）。
+ */
+internal fun editHeaderPlan(scope: Int, counts: EditHeaderCounts, panelOpen: Boolean, ranBeforeEdit: Boolean, running: Boolean): EditHeaderPlan {
+    val title = when (scope) {
+        0 -> if (counts.month.isBlank()) "月次条件" else "月次条件（${counts.month}）"
+        1 -> "職員管理"
+        else -> "年間マスター"
+    }
+    val subtitle = when (scope) { 0 -> EDIT_SCOPE_MONTHLY_NOTE; 1 -> EDIT_SCOPE_STAFF_NOTE; else -> EDIT_SCOPE_MASTER_NOTE }
+    val points = when (scope) {
+        0 -> listOf(
+            "希望・休暇 ${wishEntryText(counts.wish)}",
+            "必要人数 " + (if (counts.needStdOk) "標準あり" else "標準が未設定") + "・例外 ${counts.needExceptions}件",
+            "入力診断 " + (if (counts.issues == 0) "問題なし" else "見直し ${counts.issues}件"),
+        )
+        1 -> listOf("職員 ${counts.staff}人")
+        else -> listOf("シフト ${counts.shifts}種類")
+    }
+    val primary = when {
+        running -> null
+        panelOpen -> EditHeaderPrimary.PANEL
+        ranBeforeEdit -> EditHeaderPrimary.RERUN
+        counts.shifts == 0 -> EditHeaderPrimary.OPEN_MASTER
+        counts.staff == 0 -> EditHeaderPrimary.ADD_STAFF
+        scope == 0 -> EditHeaderPrimary.EDIT_NEED
+        scope == 1 -> EditHeaderPrimary.ADD_STAFF
+        else -> EditHeaderPrimary.OPEN_MASTER
+    }
+    val secondary = if (scope == 0 && counts.wishConflicts) EditHeaderSecondary.WISH_CONFLICTS else null
+    return EditHeaderPlan(title, subtitle, points, primary, secondary)
+}
+
+/** [3.707.0 3a-3] 下部バーの作成ボタンを外枠にするか（編集タブでは見出しの主が RERUN のときだけ塗り）。 */
+internal fun editBarSecondary(plan: EditHeaderPlan): Boolean = plan.primary != null && plan.primary != EditHeaderPrimary.RERUN
+
+/** [3.707.0 3b-1] 希望カードの職員の行。 */
+internal fun wishStaffSummary(name: String, wishes: Int, extWishes: Int): String = "${name}さん：希望 ${wishes}件・拡張希望 ${extWishes}件"
+
+/** [3.707.0 3b-2] その職員のぶつかっている希望への文字ボタン（件数は出さない）。 */
+internal fun wishConflictLinkText(name: String, dayLabel: String): String = "$WISH_CONFLICTS_BUTTON（${name}さん $dayLabel）"
+
+/** [3.707.0 3b-4] 希望の入力パネルのボタン。 */
+internal fun wishApplyButton(days: Int, symbol: String): String = "${days}日を${symbol}の希望にする"
+internal fun extWishApplyButton(days: Int): String = "${days}日を選んだシフト以外にする"
+internal const val CLEAR_SELECTION_BUTTON = "選択を外す"
+internal fun needApplyButton(days: Int): String = "${days}日に適用する"
+
+/** [3.707.0 3b-5] 担当外のシフトを選んだときの注記。 */
+internal fun wishOutOfScopeNote(symbol: String, name: String): String =
+    "⚠「$symbol」は${name}さんの担当外です。希望は登録できますが、配置すると必須違反になります。"
+
+/** [3.707.0 3b-5] 拡張希望の登録に失敗したときの文（できなかったこと・原因・次の行動）。 */
+internal fun extWishFailedText(reason: String): String =
+    "拡張希望を登録できませんでした。${reason.trimEnd('。')}。日かシフトを選び直して、もう一度登録してください。"
+
+/** [3.707.0 W-1] ぶつかっている希望のダイアログの題の直下（0 の点は出さない、3 つまで）。 */
+internal fun wishConflictSummary(c: WishTrialCandidates): List<String> {
+    val direct = c.direct.size
+    val people = c.shortfall.flatMap { g -> g.rows.map { it.staff } }.toSet().size
+    val wishOnly = c.direct.count { it.wishOnly }
+    return listOfNotNull(
+        "必須違反に関わる希望 ${direct}件".takeIf { direct > 0 },
+        "人員不足の日に別の勤務の希望 ${people}人".takeIf { people > 0 },
+        "うち計算では消せない ${wishOnly}件".takeIf { wishOnly > 0 },
+    )
+}
+
+/** [3.707.0 3a-6] 着地先が必要人数の日なら、その日の人員不足の 1 文（3.698.0 の shortageHeadline）。無ければ null。 */
+internal fun editReturnProblem(shortfalls: List<com.magi.app.v6.CoverageShortfall>, shift: Int?, day: Int?): String? {
+    if (shift == null || day == null) return null
+    return shortfalls.firstOrNull { it.shiftIndex == shift && it.dayIndex == day }?.let { shortageHeadline(it).headline }
+}

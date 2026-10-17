@@ -121,8 +121,6 @@ internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
-            Text("作成対象の月。変えると日数に合わせて表を作り直します。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("前の月") }
@@ -527,35 +525,34 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 //   速く/かんたんは主導線（思考誘導カード onMake/onDraft）と重複、バックグラウンド実行は SettingsCard へ移設。
 
 /**
- * [入口4分割/月次条件] 今月の作成条件チェックリスト。作成前の入力状況（職員/希望/必要人数/入力診断）を
- * 1枚で確認し、そのまま作成へ進む（月末モードの Step0）。read-only＋作成ボタン＝スコアリング不変。
+ * [3.707.0 E-2] 月次条件の見出しカード（旧「今月の作成条件」チェックリスト＋区分の 1 行を統合）。題・副題・点 3 つ・主ボタン 1 つ・副の文字ボタン。
+ * 中身は [editHeaderPlan]（純関数）。点の希望・必要人数は同じ画面のカードへ寄せるだけ（選んだ日は消さない＝U02）。
  * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
  */
 @Composable
-internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, onOpenWish: (() -> Unit)? = null) {
+internal fun EditHeaderCard(
+    ui: UiState, plan: EditHeaderPlan, wishNoInput: Int,
+    onOpenWish: () -> Unit, onOpenNeed: () -> Unit, onWishConflicts: () -> Unit,
+) {
     if (!ui.loaded) return
-    val staffN = ui.staffNames.size
-    val wishCounts = remember(ui.wishes, ui.extBanned, staffN) { wishEntryCounts(staffN, ui.wishes.keys, ui.extBanned.keys) }
-    val needExceptions = cv.needDayOverrides.size
-    val needStdOk = v?.shifts?.any { it.need1.isNotBlank() } == true
-    val issues = ui.settingIssues.size
+    val cs = MaterialTheme.colorScheme
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
     var issuesOpen by rememberSaveable { mutableStateOf(false) }
     var issuesAll by rememberSaveable { mutableStateOf(false) }
+    val issues = ui.settingIssues.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
-            ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
-            // [見つけやすさ改善] タップで希望シフト登録へ直行（SetupGuideCardと同じ入口を共有）。
-            // [3.643.0] 登録の有無だけを数える（✓ で「集め終わった」と読まれないよう判定は出さない）。拡張希望だけの職員も入力ありに含める。
-            ChecklistRow("希望・休暇", wishEntryText(wishCounts), ok = null, onClick = onOpenWish)
-            if (wishCounts.noInput > 0) Text("未入力の ${wishCounts.noInput}名が「希望なし」か「まだ聞いていない」かは、ここでは分かりません。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 24.dp))
-            ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
-            ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件" + (if (issuesOpen) " ▾" else " ▸"), ok = issues == 0,
+            Text(plan.title, style = MaterialTheme.typography.titleMedium)
+            Text(plan.subtitle, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            val (wishLabel, needLabel, issueLabel) = plan.points.map { it.substringBefore(' ') to it.substringAfter(' ') }.let { Triple(it[0], it[1], it[2]) }
+            // [3.643.0] 登録の有無だけを数える（✓ で「集め終わった」と読まれないよう判定は出さない）。
+            ChecklistRow(wishLabel.first, wishLabel.second, ok = null, onClick = onOpenWish)
+            if (wishNoInput > 0) Text("未入力の ${wishNoInput}人が「希望なし」か「まだ聞いていない」かは、ここでは分かりません。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 24.dp))
+            ChecklistRow(needLabel.first, needLabel.second, ok = !needLabel.second.startsWith("標準が未設定"), onClick = onOpenNeed)
+            ChecklistRow(issueLabel.first, issueLabel.second + (if (issues == 0) "" else if (issuesOpen) " ▾" else " ▸"), ok = issues == 0,
                 onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
             if (issuesOpen && issues > 0) {
-                val cs = MaterialTheme.colorScheme
                 val shown = if (issuesAll) ui.settingIssues else ui.settingIssues.take(SETTING_ISSUE_PREVIEW)
                 shown.forEach { iss ->
                     Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
@@ -563,9 +560,15 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
                 }
                 if (shown.size < issues) SettingIssuesShowAll(issues - shown.size) { issuesAll = true }
             }
-            // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
-            //   常設の同名ボタンがあり、1画面に作成導線が3つ（案内文・このボタン・フッター）並んでいた。
-            //   3.480.0 の「フッターに一本化」をホームだけでなく編集タブにも適用する。
+            // Q10: 塗りは EDIT_NEED のときだけ。RERUN（下部の再作成）・PANEL（入力パネル）の間は外枠＝画面の塗りは 1 つ（INV-09）。
+            if (plan.primary == EditHeaderPrimary.EDIT_NEED) {
+                Button(onClick = onOpenNeed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(EDIT_NEED_BUTTON) }
+            } else if (plan.primary != null) {
+                OutlinedButton(onClick = onOpenNeed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(EDIT_NEED_BUTTON) }
+            }
+            if (plan.secondary == EditHeaderSecondary.WISH_CONFLICTS) {
+                TextButton(onClick = onWishConflicts, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(WISH_CONFLICTS_BUTTON) }
+            }
         }
     }
 }

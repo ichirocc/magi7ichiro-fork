@@ -12,4 +12,4 @@ internal fun wishEntryCounts(staffN: Int, wishKeys: Collection<String>, extKeys:
 }
 
 internal fun wishEntryText(c: WishEntryCounts): String =
-    "入力あり ${c.entered}名" + (if (c.extOnly > 0) "（拡張希望のみ ${c.extOnly}名）" else "") + "・未入力 ${c.noInput}名"
+    "入力あり ${c.entered}人" + (if (c.extOnly > 0) "（拡張希望のみ ${c.extOnly}人）" else "") + "・未入力 ${c.noInput}人"
