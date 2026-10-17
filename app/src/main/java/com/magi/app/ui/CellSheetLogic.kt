@@ -1860,15 +1860,15 @@ internal fun wishOutOfScopeNote(symbol: String, name: String): String =
 internal fun extWishFailedText(reason: String): String =
     "拡張希望を登録できませんでした。${reason.trimEnd('。')}。日かシフトを選び直して、もう一度登録してください。"
 
-/** [3.707.0 W-1] ぶつかっている希望のダイアログの題の直下（0 の点は出さない、3 つまで）。 */
+/** [3.707.0 W-1] ぶつかっている希望のダイアログの題の直下（0 の点は出さない、2 つまで）。 */
 internal fun wishConflictSummary(c: WishTrialCandidates): List<String> {
     val direct = c.direct.size
     val people = c.shortfall.flatMap { g -> g.rows.map { it.staff } }.toSet().size
     val wishOnly = c.direct.count { it.wishOnly }
     return listOfNotNull(
-        "必須違反に関わる希望 ${direct}件".takeIf { direct > 0 },
+        // 「うち」は直前の行の内訳に読まれるので、人数の行の後ろでなく件数の行の括弧に入れる。
+        ("必須違反に関わる希望 ${direct}件" + (if (wishOnly > 0) "（うち計算では消せない ${wishOnly}件）" else "")).takeIf { direct > 0 },
         "人員不足の日に別の勤務の希望 ${people}人".takeIf { people > 0 },
-        "うち計算では消せない ${wishOnly}件".takeIf { wishOnly > 0 },
     )
 }
 

@@ -65,7 +65,7 @@ class Review3707Test {
     @Test fun wishConflictSummaryShowsOnlyNonZeroPoints() {
         val r = { s: Int, d: Int, only: Boolean -> WishTrialRow(s, d, "n$s", "理由", locked = true, wishOnly = only) }
         val c = WishTrialCandidates(listOf(r(0, 1, true), r(1, 2, false)), listOf(ShortfallWishGroup(3, 0, "4日 日勤 1人不足", listOf(r(2, 3, false), r(2, 3, false), r(4, 3, false)))))
-        assertEquals(listOf("必須違反に関わる希望 2件", "人員不足の日に別の勤務の希望 2人", "うち計算では消せない 1件"), wishConflictSummary(c))
+        assertEquals(listOf("必須違反に関わる希望 2件（うち計算では消せない 1件）", "人員不足の日に別の勤務の希望 2人"), wishConflictSummary(c))
         assertEquals(listOf("必須違反に関わる希望 1件"), wishConflictSummary(WishTrialCandidates(listOf(r(1, 2, false)), emptyList())))
         assertEquals(emptyList<String>(), wishConflictSummary(WishTrialCandidates(emptyList(), emptyList())))
     }

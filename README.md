@@ -38,6 +38,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-17（3.708.1: ぶつかっている希望の行で名字が欠ける件（行ボタンの角丸）・要約の「うち」を件数の行へ（`wishConflictSummary`）、出力不変）
 **最終更新**：2026-10-17（3.708.0: 画面文言を yomiyasu の規則で見直す（ダッシュ・単位の後ろの空白・英字前後の空白・比喩動詞「効く」・＝つなぎ・言い換えカッコなど 35 か所、出力不変））
 **最終更新**：2026-10-17（3.707.0: 編集タブ① 月次条件の見出しカード（`editHeaderPlan`／`EditHeaderCard`）・塗りを状態で 1 つに・寄せ専用の鍵・着地の帯を固定（`EditReturn.problem`）・希望と必要人数のカードの文言・ぶつかっている希望の要約（`wishConflictSummary`））
 **最終更新**：2026-10-17（3.706.0: 設定タブの「組む時間を変える」＝候補のシート（`budgetPresets`）・状態の 1 行（`budgetText`/`budgetStatusLine`）・保存失敗の帯（`SettingsSaveFailedBanner`）・ボタンを動詞に）
