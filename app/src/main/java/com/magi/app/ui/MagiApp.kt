@@ -603,7 +603,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE))
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE))
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
@@ -956,6 +956,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 }
                 else -> {
                     // 作成の時間は設定タブの先頭（再作成の前にいちばん触る設定）。
+                    // 保存に失敗している間は、時間のカードの上で直す（3.706.0 S4: この間は塗りをここだけにする）。
+                    if (ui.saveState == SaveState.Failed) SettingsSaveFailedBanner(onRetry = { vm.retrySave() })
                     SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },

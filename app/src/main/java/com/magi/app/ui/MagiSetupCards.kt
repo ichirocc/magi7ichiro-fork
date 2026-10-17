@@ -213,18 +213,17 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
         Column(Modifier.padding(16.dp)) {
             Text(SETTINGS_TIME_TITLE, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("組む時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
-            // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない＝共通の枠と書く）。
-            Text("このほか、仕上げと勤務の入れ替え調整（玉突き）に共通の枠として合計 ${com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC} 秒を足します。",
+            Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodyMedium)
+            // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
+            Text("仕上げと玉突き（勤務の入れ替え調整）は共通の枠です。改善が止まると早く終わることがあります。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec - 60).coerceAtLeast(10))) },
-                    enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.heightIn(min = 48.dp)) { Text("− 60秒") }
-                Text("${ui.budgetSec} 秒", style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center, modifier = Modifier.width(84.dp))
-                Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC))) },
-                    enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.heightIn(min = 48.dp)) { Text("＋ 60秒") }
-            }
+            Spacer(Modifier.height(8.dp))
+            var picking by rememberSaveable { mutableStateOf(false) }
+            val m = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            // 保存失敗の間は上の「もう一度保存する」が主操作（INV-09）。
+            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text("組む時間を変える") }
+            else Button(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text("組む時間を変える") }
+            if (picking) BudgetPickerSheet(ui.budgetSec, onPick = { onEvent(MagiEvent.Settings.SetBudget(it)); picking = false }, onDismiss = { picking = false })
             Spacer(Modifier.height(10.dp))
             Spacer(Modifier.height(10.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
@@ -232,17 +231,47 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text("つくる（閉じても大丈夫・あとで通知）") }
-            Spacer(Modifier.height(14.dp))
-            // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
-            //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
-            val ctx = LocalContext.current
-            val versionLabel = remember(ctx) {
-                runCatching {
-                    val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-                    "${pi.versionName} (${pi.longVersionCode})"
-                }.getOrDefault("不明")
+        }
+    }
+}
+
+/** 「組む時間を選ぶ」シート（3.706.0 S1）。候補は [budgetPresets]、［この時間にする］で決める。 */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun BudgetPickerSheet(currentSec: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var chosen by rememberSaveable { mutableIntStateOf(currentSec) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("組む時間を選ぶ", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (sec in budgetPresets(currentSec)) {
+                    val sel = sec == chosen
+                    val label = if (sec == currentSec && sec !in BUDGET_TILE_SECS) "いまの値 ${sec}秒" else budgetText(sec)
+                    Surface(onClick = { chosen = sec }, shape = MaterialTheme.shapes.small,
+                        color = if (sel) cs.primaryContainer else cs.surfaceVariant,
+                        border = if (sel) BorderStroke(2.dp, cs.primary) else null,
+                        modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = label + if (sel) "（選択中）" else "" }) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp)) {
+                            Text(label, style = MaterialTheme.typography.titleSmall, color = if (sel) cs.onPrimaryContainer else cs.onSurface)
+                        }
+                    }
+                }
             }
-            Text("バージョン: $versionLabel", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = { onPick(chosen) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("この時間にする") }
+        }
+    }
+}
+
+private val BUDGET_TILE_SECS = setOf(10, 60, 120, 180, 240, MAX_BUDGET_SEC)
+
+/** 設定タブの保存失敗の帯（3.706.0 S4＋F-3）。1 文と塗りの［もう一度保存する］。 */
+@Composable
+internal fun SettingsSaveFailedBanner(onRetry: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(HOME_SAVE_FAILED_LINE, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
         }
     }
 }
@@ -683,7 +712,7 @@ internal fun AdvancedSettingsSection(
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
                     // [3.188.0 オプション集約] 並列/ネイティブ/仕上げの技術系チューニングを SettingsCard から
                     //   ここへ移設したため、説明文を「ログのみ」から実態に同期。
-                    Text("最適化方式・並列数・ネイティブ加速・仕上げ最適化の調整とログの確認。一般の運用では触りません。",
+                    Text("計算方式・並列数・ネイティブ加速・仕上げの調整とログの確認。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -727,8 +756,8 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("ログ", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("テキスト出力") }
-                OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("JSON出力") }
+                OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("テキストで書き出す") }
+                OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("JSONで書き出す") }
             }
             // 操作ログ（監査・新しい順）
             Text("操作ログ（新しい順 ${ui.opLog.size}件）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
@@ -776,7 +805,7 @@ internal fun DataActionsCard(
             Text("データ", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenJson, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを開く") }
-                OutlinedButton(onClick = onSample, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("サンプル") }
+                OutlinedButton(onClick = onSample, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("サンプルで試す") }
             }
             // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
             if (ui.prevBackupAvailable) {
@@ -785,7 +814,8 @@ internal fun DataActionsCard(
                 }
             }
             // [3.529.0/外部仕様書取り入れ] 自動保存の状態。既定(Saved)では出さず、変化がある間だけ表示。
-            if (ui.saveState != SaveState.Saved) {
+            //   失敗は時間のカードの上（SettingsSaveFailedBanner）に出す＝ここでは重ねない（3.706.0 S4）。
+            if (ui.saveState == SaveState.Dirty || ui.saveState == SaveState.Saving) {
                 Text(
                     when (ui.saveState) {
                         SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
@@ -796,26 +826,35 @@ internal fun DataActionsCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ui.saveState == SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存") }
+                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存する") }
                 OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSV取込") }
-                OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSV出力") }
+                OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを取り込む") }
+                OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを書き出す") }
             }
-            Text("コンポーネント別 出力（取込種別と対・往復用）",
+            Text("種類別のCSVを書き出す",
                 style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [3.547.0] 3→4項目化でRow等分weightだと1項目あたりの幅が狭まり続けるため、
             //   幅いっぱいに収まる分だけ並べ余りは折り返すFlowRowへ（ShiftColorCardのチップと同じ考え方）。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員") }
-                OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望") }
-                OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("制約") }
+                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員一覧") }
+                OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフト") }
+                OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("各制約") }
                 OutlinedButton(onClick = onSaveShiftColorsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("シフト色") }
             }
+            // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
+            //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
+            val ctx = LocalContext.current
+            val versionLabel = remember(ctx) {
+                runCatching {
+                    val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+                    "${pi.versionName} (${pi.longVersionCode})"
+                }.getOrDefault("不明")
+            }
+            Text("バージョン: $versionLabel", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
