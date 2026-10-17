@@ -18,11 +18,11 @@ class Review3705Test {
         assertEquals("まだ作っていません。", analysisSummary(UiState(loaded = true), 0, null).sentence)
         assertEquals("勤務表をつくっています。表示は途中の値です。", analysisSummary(made.copy(running = true), 2, null).sentence)
         assertEquals("手で編集した勤務表です（自動作成はまだ）。", analysisSummary(made.copy(engineRan = false), 2, null).sentence)
-        assertEquals("配る前に直す必須違反が残っています。", analysisSummary(made, 2, null).sentence)
-        assertEquals("必須違反はありません。要調整が残っています。", analysisSummary(made.copy(bestHard = 0L, breakdown = mapOf("c1" to 5)), 0, null).sentence)
+        assertEquals("必須2件 · 要調整5件", analysisSummary(made, 2, null).sentence)
+        assertEquals("必須0 · 要調整5件", analysisSummary(made.copy(bestHard = 0L, breakdown = mapOf("c1" to 5)), 0, null).sentence)
         assertEquals("必須違反も要調整もありません。", analysisSummary(made.copy(bestHard = 0L, bestSoft = 0L, breakdown = emptyMap()), 0, null).sentence)
         // 自動作成のあと手で変えた盤面は、上部の札と同じく「自動作成済み」の側。
-        assertEquals("配る前に直す必須違反が残っています。", analysisSummary(made.copy(engineRan = false, ranBeforeEdit = true), 2, null).sentence)
+        assertEquals("必須2件 · 要調整5件", analysisSummary(made.copy(engineRan = false, ranBeforeEdit = true), 2, null).sentence)
     }
 
     @Test fun primaryIsTourThenGuidedElseNone() {
@@ -41,10 +41,10 @@ class Review3705Test {
     }
 
     @Test fun thirdPointOnlyWhenEvaluatedAndSearched() {
-        assertEquals(2, analysisSummary(made, 2, null).points.size)
-        assertEquals("変更案で直せる必須違反 1か所", analysisSummary(made, 2, 1).points[2])
-        assertEquals(2, analysisSummary(made.copy(checkRev = 0), 2, 1).points.size)
-        assertEquals(2, analysisSummary(made.copy(running = true), 2, 1).points.size)
+        assertEquals(0, analysisSummary(made, 2, null).points.size)
+        assertEquals("変更案で直せる必須違反 1か所", analysisSummary(made, 2, 1).points[0])
+        assertEquals(0, analysisSummary(made.copy(checkRev = 0), 2, 1).points.size)
+        assertEquals(0, analysisSummary(made.copy(running = true), 2, 1).points.size)
         assertEquals(emptyList<String>(), analysisSummary(UiState(loaded = true), 0, 1).points)
     }
 

@@ -51,6 +51,6 @@ class Review3711Test {
         assertEquals(RepeatedEmptyAction.WISHES, repeatedEmptyAction(true, true))
         assertEquals(RepeatedEmptyAction.SETTINGS, repeatedEmptyAction(false, true))
         assertNull(repeatedEmptyAction(false, false))
-        assertEquals("この対象には、いまの条件で直せる変更案がありません。", REPEATED_EMPTY_LINE)
+        assertEquals("続けて案がありませんでした", REPEATED_EMPTY_LINE)
     }
 }

@@ -13,7 +13,7 @@ import org.junit.Test
 class ConsultListTest {
     @Test fun lineOnlyWhenSomethingIsPending() {
         assertNull(consultLine(0))
-        assertEquals("未確認事項 2 件（相談中。下の一覧で確認してから配ってください）", consultLine(2))
+        assertEquals("相談中 2件", consultLine(2))
     }
 
     @Test fun buildersCarryTheTargetAndTheQuestion() {
@@ -168,12 +168,12 @@ class ConsultListTest {
     /** 保留は相談と分けて数える（どちらも未解決＝違反は減らさない。仕様 §4.2・UX-07）。 */
     @Test fun consultLineCountsHeldSeparately() {
         val a = ConsultItem("s1", "n1"); val b = ConsultItem("s2", "n2", held = true)
-        assertEquals("未確認事項 2 件（相談中 1・保留 1。下の一覧で確認してから配ってください）", consultLine(listOf(a, b)))
-        assertEquals("未確認事項 1 件（保留 1。下の一覧で確認してから配ってください）", consultLine(listOf(b)))
+        assertEquals("相談中 2件（保留 1）", consultLine(listOf(a, b)))
+        assertEquals("相談中 1件（保留 1）", consultLine(listOf(b)))
         assertEquals(null, consultLine(emptyList<ConsultItem>()))
         assertEquals(true, consultMatch(listOf(b), ConsultItem("s2", "n2"))?.held)
         assertEquals("了承済みは数えない", null, consultLine(listOf(a.copy(answer = ConsultAnswer.AGREED))))
-        assertEquals("未確認事項 1 件（相談中 1。下の一覧で確認してから配ってください）", consultLine(listOf(a, a.copy(subject = "s3", answer = ConsultAnswer.AGREED))))
+        assertEquals("相談中 1件", consultLine(listOf(a, a.copy(subject = "s3", answer = ConsultAnswer.AGREED))))
     }
 
     /** [3.665.0] 回答は 回答待ち→了承→不可。入れ替えの相談は、回答のあとで勤務表か設定が変わると回答待ちに戻す（以前の回答を流用しない）。 */

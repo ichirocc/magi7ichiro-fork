@@ -2329,8 +2329,10 @@ private fun NoFixBlock(
     }
     val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
+    // [3.713.0] 見出し「案はありません」と説明の 1 行（続けて空なら 3.711.0 の行）。
+    Text(NO_FIX_TITLE, style = MaterialTheme.typography.titleSmall)
+    Text(noFixLine(ui.fixEmptyRepeatKey == focus.key), style = MaterialTheme.typography.bodySmall)
     if (ui.fixEmptyRepeatKey == focus.key) {
-        Text(REPEATED_EMPTY_LINE, style = MaterialTheme.typography.bodySmall)
         // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。
         if (compact) when (repeatedEmptyAction(why.wishRelated, ui.settingIssues.isNotEmpty())) {
             RepeatedEmptyAction.WISHES -> OutlinedButton(onClick = { nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(RepeatedEmptyAction.WISHES.label, maxLines = 1) }

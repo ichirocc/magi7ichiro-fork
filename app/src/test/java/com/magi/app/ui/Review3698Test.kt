@@ -28,7 +28,7 @@ class Review3698Test {
             assertTrue(case, s.indexOf(HomeSection.HELPER) < s.indexOf(HomeSection.DETAIL))
             assertEquals(case, hasResult, HomeSection.SATISFACTION in s)
             assertEquals(case, hasResult, HomeSection.CREATION in s)
-            assertEquals(case, hasResult && !hard0, HomeSection.BADGES in s)
+            assertEquals(case, hasResult, HomeSection.BADGES in s)
             if (hasResult) assertTrue(case, s.indexOf(HomeSection.DETAIL) < s.indexOf(HomeSection.SATISFACTION) && s.indexOf(HomeSection.SATISFACTION) < s.indexOf(HomeSection.INFO))
         }
         // 結果はあるが自動作成を経ていない（手で編集）＝作成の行は出ない。
@@ -54,11 +54,12 @@ class Review3698Test {
     }
 
     @Test fun headlinePerStage() {
-        assertEquals("2026年10月の判断", homeHeadline(HomePlanKind.LIST, "2026-10-01"))
-        assertEquals("2026年10月の判断", homeHeadline(HomePlanKind.GUIDED_FIX, "2026-10-01"))
-        assertEquals("いまの判断", homeHeadline(HomePlanKind.WISHES, ""))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.LIST, "2026-10-01"))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.GUIDED_FIX, "2026-10-01"))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.WISHES, ""))
+        assertEquals("2026年10月の判断", homeMonthHeadline("2026-10-01"))
         assertEquals(HOME_MAKE_HEADLINE, homeHeadline(HomePlanKind.MAKE, "2026-10-01"))
-        assertEquals(HOME_HARD0_HEADLINE, homeHeadline(HomePlanKind.PRE_DIST, "2026-10-01"))
+        assertEquals(HOME_MONTH_HEADLINE, homeHeadline(HomePlanKind.PRE_DIST, "2026-10-01"))
         assertFalse(HOME_MAKE_HEADLINE.contains("②")); assertFalse(HOME_HARD0_HEADLINE.contains("③"))
     }
 
@@ -66,12 +67,12 @@ class Review3698Test {
 
     @Test fun shortageHeadlineNamesShiftAndCount() {
         val h = shortageHeadline(shortfall)
-        assertEquals("10/15(水) の Cｵ が 1人 足りません", h.headline)
-        assertEquals("いま1人／必要2人", h.status)
-        assertEquals("Cｵ 必要2 不足1", h.badge)
+        assertEquals("10/15のCｵが1人不足", h.headline)
+        assertEquals("配置 1 / 必要 2", h.status)
+        assertEquals("担当・希望の確認", h.badge)
         // 札は単位ごと＝件と人を足さない（INV-07）。
-        assertEquals(listOf("必須 3件・2人", "Cｵ 必要2 不足1"), homeBadges("3件・2人", shortfall))
-        assertEquals(listOf("必須 1件"), homeBadges("1件", null))
+        assertEquals(listOf("必須 残り3件・2人"), homeBadges("3件・2人", shortfall))
+        assertEquals(listOf("必須 残り1件"), homeBadges("1件", null))
     }
 
     /** 「次に確認する問題」は主ボタンの対象と同じ（INV-01）。見出しと同じ対象なら完了の 1 行だけ。 */
@@ -93,6 +94,6 @@ class Review3698Test {
         assertEquals("読み込んでいます…", emptyStateSubtitle(true))
         assertEquals("保存データ・サンプル・新規から選べます", emptyStateSubtitle(false))
         assertEquals("変更内容を確認する", REVIEW_CHANGE_BUTTON)
-        assertEquals("残っている問題を見る", HOME_LIST_BUTTON)
+        assertEquals("必須を見る", HOME_LIST_BUTTON)
     }
 }

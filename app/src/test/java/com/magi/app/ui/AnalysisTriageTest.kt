@@ -126,7 +126,7 @@ class AnalysisTriageTest {
         assertEquals("アリフ 10/8の希望を見る", homeTargetLabel(HOME_WISH_BUTTON, "アリフ", "10/8"))
         assertEquals("10/8のなおし方を見る", homeTargetLabel("なおし方を見る", null, "10/8"))
         assertEquals("なおし方を見る", homeTargetLabel("なおし方を見る", "10/15(水) Cｵ", null))
-        assertEquals(HOME_LIST_BUTTON, homeTargetLabel(HOME_LIST_BUTTON, "福澤さん 禁止の並び", null))
+        assertEquals("残っている問題を見る", homeTargetLabel("残っている問題を見る", "福澤さん 禁止の並び", null))
         for (b in listOf(HOME_WISH_BUTTON, "なおし方を見る", "直す1手を見る", HOME_LIST_BUTTON))
             assertTrue(homeTargetLabel(b, "アイウエオ", "10/18").length <= HOME_BUTTON_MAX_CHARS)
         assertEquals("直す1手を見る", homeTargetLabel("直す1手を見る", null, null))
