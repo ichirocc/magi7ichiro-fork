@@ -726,7 +726,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
                         onApplyMove = { s -> vm.previewFixSuggestion(s, globalPolish = true) },
-                        onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
+                        onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null, auto = true)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
                         outcomeLine = vm.fixOutcomeLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),

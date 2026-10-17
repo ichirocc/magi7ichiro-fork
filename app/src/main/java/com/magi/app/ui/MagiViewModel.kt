@@ -1607,6 +1607,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var bgInput: Array<IntArray>? = null
 
     /** 盤面の内容から決まる指紋。S×T が小さい（30×31）ので毎回の計算コストは無視できる。[3.694.0] 実体は `StateFingerprint.ofBoard`（書き出しの拡張関数と共有）。 */
+    /** 直前に完了した作成の（状態指紋, 結果の盤面指紋）。同じ組が続けば「前回と同じ結果」を出す。 */
+    private var lastRunKeys: Pair<Long, Long>? = null
+    private var emptyStreak: EmptySearchStreak? = null
+
+    private fun noteRunResult(hard: Int) {
+        val st = state ?: return; val sc = currentSchedule ?: return
+        val keys = stateKey(st) to boardKey(sc)
+        val same = isSameRunResult(lastRunKeys, keys)
+        lastRunKeys = keys
+        if (same) logOp("I", OpLogText.sameResultLine(keys.second))
+        _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, u.editRev, u.schedule) else null) }
+    }
+
     private fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)
 
     /** [3.694.0] 実行の開始点で 1 回だけ読む設定（利用者の設定値と PolishGate の現在値）。語は「設定の効き」と同じ源（`TuningTelemetry.toggleWords`）。 */
@@ -1968,6 +1981,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
                 logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
+                noteRunResult(adoptedReport.hard)
                 if (s5 != null) {
                     cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
                     logOp("I", "S5 結果: ${s5.h0}/${s5.hx}/${s5.rk}/${s5.rr}/${s5.pCancel} → ${adoptedReport.hard}")
@@ -3201,7 +3215,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixStateKey = 0L
     private var fixSearchKey = ""
 
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false, auto: Boolean = false) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -3227,7 +3241,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val target = if (exceptStaff == null) panelTarget(_ui.value, cv0, FixFocus(focusStaff, focusShift, day, allDays = allDays)) else null
                 // [3.697.0] 起点は画面の見出しと同じ語（対象＝fixTargetLabel、職員＝氏名、どちらも無ければ全体）。
                 val searchStartMs = System.currentTimeMillis()
-                logOp("I", OpLogText.fixSearchStartLine(target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }))
+                val origin = target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }
+                logOp("I", OpLogText.fixSearchStartLine(origin, auto))
                 var tiers: FixTierView? = null
                 val list = withContext(Dispatchers.Default) {
                     (if (exceptStaff != null && day != null) {
@@ -3249,11 +3264,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val curSched = currentSchedule; val curSt = state
                 if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
                     _ui.update { it.copy(fixSearching = false) }
-                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day, quick, allDays)
+                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day, quick, allDays, auto)
                     return@launch
                 }
-                _ui.update { it.copy(fixSuggestions = list, fixTiers = tiers, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
-                logOp("I", OpLogText.fixSearchEndLine(list.size, System.currentTimeMillis() - searchStartMs))
+                emptyStreak = nextEmptySearchStreak(emptyStreak, "$focusKey|$origin", boardKey(snap), stateKey(st), list.size)
+                val repeatKey = if ((emptyStreak?.count ?: 0) >= 2) focusKey else null
+                _ui.update { it.copy(fixSuggestions = list, fixTiers = tiers, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey,
+                    fixEmptyRepeatKey = repeatKey) }
+                logOp("I", OpLogText.fixSearchEndLine(list.size, System.currentTimeMillis() - searchStartMs, auto))
                 // [S6 §8] 全体の 1 手探索が必須を減らす候補なしで終わったら、背景で設定の壁を探す。
                 if (focusName.isBlank() && list.none { it.deltaHard < 0 } && _ui.value.bestHard > 0) startRelaxTrial()
             } catch (e: CancellationException) {

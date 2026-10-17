@@ -91,6 +91,10 @@ data class UiState(
     val draftStage: Boolean = false,   // 最後のエンジン実行が下書きづくり（手を入れたかは engineRan で見る）
     val draftConfirm: String? = null,   // 下書きで今の勤務表を置き換える前の確認の文（null＝出さない）
     val fixTimedOut: Boolean = false,   // [仕様 §7] 直近の直し方の探索が締切で打ち切られたか（見つからない理由を「時間不足」と言う）
+    /** 同じ依頼が続けて案 0 件で終わったときの依頼の鍵（`FixFocus.key`、null＝続いていない）。 */
+    val fixEmptyRepeatKey: String? = null,
+    /** 前回の作成と同じ設定から同じ盤面が出た（[sameResultVisible] で今の盤面・設定と照合）。 */
+    val sameResult: SameResultNote? = null,
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val stopSummary: com.magi.app.v6.V6FinalPort.StopSummary? = null,   // [3.643.0] 直近の実行がどう終わったか（ホームの説明行）。結果が無効になる操作で null
@@ -322,3 +326,6 @@ internal fun topFixResolvedLabels(ui: UiState): List<String> {
     val top = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 } ?: return emptyList()
     return ui.topFixResolved?.takeIf { it.matches(top.ops, ui.schedule) }?.labels.orEmpty()
 }
+
+/** 前回と同じ結果の印。出したときの盤面と編集の世代を持ち、どちらかが変われば出さない。 */
+data class SameResultNote(val hard: Int, val editRev: Int, val schedule: List<List<Int>>)

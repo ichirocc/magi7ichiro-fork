@@ -215,7 +215,7 @@ internal sealed interface MagiEvent {
         data class SetNameQuery(val query: String) : Session
         data object RefreshCheck : Session
         data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?, val focusKey: String = "", val exceptStaff: Int? = null, val day: Int? = null, val allDays: Boolean = false,
-                                      val quick: Boolean = false) : Session   // quick＝セルのシート（締切 3 秒）
+                                      val quick: Boolean = false, val auto: Boolean = false) : Session   // quick＝セルのシート（締切 3 秒）、auto＝作成の完了で自動に走る
         /** シートを閉じたときの探索の取り消し（古い結果を書き戻さない）。 */
         data object CancelFixSearch : Session
         data class Notify(val text: String, val level: String = "I") : Session

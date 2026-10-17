@@ -106,8 +106,14 @@ internal object OpLogText {
 
     /** 起点が対象も職員も持たないとき（ホームの「変更案を探す」）。 */
     const val FIX_ORIGIN_ALL = "全体"
-    fun fixSearchStartLine(origin: String): String = "案を探す: $origin"
-    fun fixSearchEndLine(count: Int, elapsedMs: Long): String = if (count > 0) "案: ${count}件（${sec(elapsedMs)}秒）" else "案: なし（${sec(elapsedMs)}秒）"
+    /** [auto]＝作成の完了で自動に走った探索。利用者の操作と分け、迷いの指標（[hesitation]）に数えない。 */
+    fun fixSearchStartLine(origin: String, auto: Boolean = false): String = if (auto) "案を探す（自動）: $origin" else "案を探す: $origin"
+    fun fixSearchEndLine(count: Int, elapsedMs: Long, auto: Boolean = false): String {
+        val head = if (auto) "案（自動）: " else "案: "
+        return if (count > 0) "$head${count}件（${sec(elapsedMs)}秒）" else "${head}なし（${sec(elapsedMs)}秒）"
+    }
+    /** 前回の作成と同じ設定から同じ盤面が出たとき。 */
+    fun sameResultLine(boardKey: Long): String = "同じ結果（盤面指紋 ${hex16(boardKey)}）"
 
     fun previewOpenLine(label: String): String = "変更の確認: 開く $label"
     fun previewDismissLine(label: String): String = "変更の確認: 今は変更しない $label"
