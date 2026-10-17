@@ -70,9 +70,7 @@ class CountShortageTextTest {
         assertEquals(APPLY_CHANGE_BUTTON, applyCountButton(1))
     }
 
-    @Test fun countGapLineNamesCurrentTargetAndDifference() {
-        assertEquals("現在 4回／目標 5回 ・ 不足 1回", countGapLine("vio-aptLow", 4, Triple(null, null, 5)))
-        assertEquals("現在 7回／下限 15回 ・ 不足 8回", countGapLine("vio-low", 7, Triple(15, null, null)))
+    @Test fun countChipRowTextNamesTargetAndDifference() {
         assertEquals("Dテ　3回／目標 5回　あと2回", CountChip("Dテ", 3, 5, "", true, 1).rowText)
         assertEquals("B4　5回／上限 1回　4回多い", CountChip("B4", 5, 1, "上限", false, 2).rowText)
     }

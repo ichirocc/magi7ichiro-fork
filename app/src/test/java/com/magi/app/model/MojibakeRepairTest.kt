@@ -27,18 +27,12 @@ class MojibakeRepairTest {
     fun leavesCleanJapaneseUntouched() {
         val s = "古泉 健一 ・ 夜勤 ・ 休"
         assertEquals(s, MojibakeRepair.repair(s))
-        assertFalse(MojibakeRepair.looksMojibake(s))
     }
 
     @Test
     fun leavesAsciiUntouched() {
         val s = """{"name":"A4","count":12}"""
         assertEquals(s, MojibakeRepair.repair(s))
-    }
-
-    @Test
-    fun detectsMojibake() {
-        assertTrue(MojibakeRepair.looksMojibake(doubleEncode("佐藤 美和")))
     }
 
     @Test

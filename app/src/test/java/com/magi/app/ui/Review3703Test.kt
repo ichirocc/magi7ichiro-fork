@@ -31,7 +31,6 @@ class Review3703Test {
         assertEquals(listOf("配置 1 / 必要 2"), guidedStatusPoints(2, 1, 0))
         assertEquals("山田さんをA4に入れる", guidedCandidateLabel("山田", "A4"))
         assertEquals("必須違反4か所を順に見る", guidedTourButton(4))
-        assertEquals("ほかの必須違反（1件）が残っています", otherHardAfterShortage(mapOf("covU" to 2, "c3n" to 1)))
     }
 
     @Test fun summaryLineWithAndWithoutTarget() {

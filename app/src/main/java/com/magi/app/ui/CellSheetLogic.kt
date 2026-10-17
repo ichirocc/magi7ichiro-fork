@@ -364,21 +364,6 @@ internal fun extWishDayKigou(extWishes: List<ExtWishView>, i: Int, j: Int, shift
 internal fun extWishDayNote(kigou: List<String>): String =
     "この日は拡張希望${if (kigou.isEmpty()) "" else "（${kigou.joinToString("・")} 以外）"}の指定日なので、希望は入れられません"
 
-/**
- * 違反を順に見る巡回の順（日→職員）。必須のセルを先に、要調整は必須が 0 件か [includeSoft] のときだけ。
- * 人員・回数の族はセルを持たないので巡回には入らない（日ヘッダ・名前の横の印から開く）。
- */
-internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair<Int, Int>> {
-    val cells = ui.violationCellFamilies.mapNotNull { (key, fams) ->
-        val i = VioKey.first(key) ?: return@mapNotNull null
-        val j = VioKey.second(key) ?: return@mapNotNull null
-        Triple(i, j, fams.any { isHardCellViolation(it) })
-    }
-    val hard = cells.filter { it.third }
-    val pick = if (hard.isNotEmpty() && !includeSoft) hard else cells
-    return pick.sortedWith(compareBy({ !it.third }, { it.second }, { it.first })).map { it.first to it.second }
-}
-
 /** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
  *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol/extWish＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
 data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String,
@@ -457,13 +442,6 @@ internal fun tourHeading(items: List<TourItem>, at: Int): String? =
 
 /** 巡回に入らない人員不足の件数の 1 行（0 なら null）。 */
 internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}人（日の印から開けます）" else null
-
-/** 巡回の次のセル（今のセルの次。今が巡回に無ければ先頭、末尾なら先頭へ戻る）。空なら null。 */
-internal fun nextTourCell(tour: List<Pair<Int, Int>>, current: Pair<Int, Int>?): Pair<Int, Int>? {
-    if (tour.isEmpty()) return null
-    val at = tour.indexOf(current)
-    return tour[if (at < 0) 0 else (at + 1) % tour.size]
-}
 
 /** 「他の人で補う」: 本人を動かさず、その日のセルを含む手だけ（本人の希望は守ったまま）。 */
 internal fun fixesByOthers(list: List<com.magi.app.v6.FixSuggestion>, day: Int, except: Int): List<com.magi.app.v6.FixSuggestion> =
@@ -580,9 +558,6 @@ internal fun peekShifts(shown: List<Int>, canDo: Set<Int>, current: Int, wish: I
 
 /** ちら見の操作行に並べるシフトの数: 「詳しく ▸」(64dp) と同じ行に 52dp＋間 6dp で入るだけ（1〜4）。360dp 以上の端末は 4。 */
 internal fun peekPickCount(contentWidthDp: Int): Int = ((contentWidthDp - 64 + 6) / 58).coerceIn(1, 4)
-
-/** ちら見の見出し: 巡回の見出しから日付の範囲を落とす（日付は 2 段目にある）。 */
-internal fun peekHeading(tourHeading: String): String = tourHeading.substringBeforeLast(" ・ ")
 
 internal const val PEEK_HARD_RISK_NOTE = "⚠＝変えると必須違反"
 
@@ -807,18 +782,6 @@ internal fun noNeedFixLine(label: String, t: FixTarget, timedOut: Boolean = fals
     if (timedOut) "${label}の${t.gapWord}を減らす案は、制限時間内には見つかりませんでした。もう一度探すと続きを探せます。"
     else "${label}の${t.gapWord}を減らす案は、今回の検索では見つかりませんでした。" +
         if (t.under) "担当できる職員と、その日の希望・固定勤務をご確認ください。" else "その日に入っている職員の希望・固定勤務をご確認ください。"
-
-/** 回数の過不足の要点（集計セルの詳細）。「▼4」だけでは今の回数か不足数か分からない＝現在・基準・差を言葉で。 */
-internal fun countGapLine(vio: String, count: Int, limits: Triple<Int?, Int?, Int?>): String? {
-    val (lo, hi, apt) = limits
-    return when {
-        vio == "vio-low" && lo != null -> "現在 ${count}回／下限 ${lo}回 ・ 不足 ${(lo - count).coerceAtLeast(0)}回"
-        vio == "vio-high" && hi != null -> "現在 ${count}回／上限 ${hi}回 ・ 超過 ${(count - hi).coerceAtLeast(0)}回"
-        vio == "vio-aptLow" && apt != null -> "現在 ${count}回／目標 ${apt}回 ・ 不足 ${(apt - count).coerceAtLeast(0)}回"
-        vio == "vio-aptHigh" && apt != null -> "現在 ${count}回／目標 ${apt}回 ・ 超過 ${(count - apt).coerceAtLeast(0)}回"
-        else -> null
-    }
-}
 
 /** 選んだ問題（族）が 1 案でどう変わるか。案の先頭に出す。 */
 internal fun familyEffectLine(s: com.magi.app.v6.FixSuggestion, family: String, label: String): String? =
@@ -1753,12 +1716,6 @@ internal const val EMPTY_STATE_TITLE = "データを開く"
 /** 未読込の補足。読込中は 1 文だけ。 */
 internal fun emptyStateSubtitle(loading: Boolean): String = if (loading) "読み込んでいます…" else "保存データ・サンプル・新規から選べます"
 
-/** 対象の月の見出し「2026年10月の判断」（開始日が読めなければ「いまの判断」）。 */
-internal fun homeMonthHeadline(startDate: String): String {
-    val m = Regex("""^(\d{4})-(\d{2})-\d{2}""").find(startDate) ?: return "いまの判断"
-    return "${m.groupValues[1].toInt()}年${m.groupValues[2].toInt()}月の判断"
-}
-
 /** 段ごとの見出し: 未作成は 1 文、結果があれば「今月の判断」（必須の有無は札が言う。3.713.0 デザイン例）。 */
 internal fun homeHeadline(kind: HomePlanKind, @Suppress("UNUSED_PARAMETER") startDate: String): String = when (kind) {
     HomePlanKind.MAKE -> HOME_MAKE_HEADLINE
@@ -1777,9 +1734,6 @@ internal fun shortageHeadline(s: com.magi.app.v6.CoverageShortfall): ShortageHea
 
 /** 必須の札は 1 つ＝残りの件数だけ（単位ごと＝INV-07）。必須 0 は「満たしています」。 */
 internal fun homeHardPill(bestHard: Long, hardLabel: String): String = if (bestHard > 0L) "必須 残り$hardLabel" else HOME_HARD0_HEADLINE
-
-internal fun homeBadges(hardLabel: String, @Suppress("UNUSED_PARAMETER") shortage: com.magi.app.v6.CoverageShortfall?): List<String> =
-    listOf(homeHardPill(1L, hardLabel))
 
 /** 状態の行（2 行まで）。保存の失敗は段に関係なく先頭（SF-1）。必須あり＝問題の 1 文と相談中の行（D10）。必須 0＝相談中の行と、CSV が今の内容と違う行（保存済みの行は主ボタンの下）。 */
 internal fun homeStatusLines(kind: HomePlanKind, sentence: String?, consultLine: String?, savedLine: String?, saveFailed: Boolean = false): List<String> =

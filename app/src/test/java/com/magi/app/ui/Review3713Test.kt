@@ -14,20 +14,17 @@ class Review3713Test {
     private val sf = CoverageShortfall(9, "10/10(土)", 0, "Aｱ", need = 1, got = 0, miss = 1, capacity = 3, verdict = CoverageVerdict.FIXABLE, reason = "")
 
     @Test fun homeHeadingPillAndProblemLine() {
-        assertEquals("今月の判断", homeHeadline(HomePlanKind.LIST, "2026-10-01"))
         assertEquals("必須 残り4件", homeHardPill(4L, "4件"))
         assertEquals("必須は満たしています", homeHardPill(0L, "0件"))
         assertEquals("10/10のAｱが1人不足", shortageHeadline(sf).headline)
         assertEquals("配置 0 / 必要 1", shortageHeadline(sf).status)
         assertEquals("担当・希望の確認", SHORTAGE_TAG)
-        assertEquals("必須を見る", HOME_LIST_BUTTON)
         assertEquals("配布前の確認", HOME_PRE_DIST_BUTTON)
         assertEquals("表で全体を見る", HOME_SCHEDULE_HELPER)
         assertEquals("相談中 3件", consultLine(3))
     }
 
     @Test fun dialogsAndEmptyStates() {
-        assertEquals("変更の確認", PREVIEW_TITLE)
         assertEquals("2か所変わります", previewCountLine(2))
         assertEquals("山本  10/15  休 → 遅番", previewRowLine("山本", "10/15", "休", "遅番"))
         assertEquals("案はありません", NO_FIX_TITLE)

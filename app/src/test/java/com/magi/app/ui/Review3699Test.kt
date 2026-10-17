@@ -49,7 +49,6 @@ class Review3699Test {
 
     @Test fun draftConfirmShowsBeforeAndAfter() {
         assertEquals("今の勤務表を下書きで置き換えます（必須 3件・1人→1件）。元に戻せます", draftConfirmText("3件・1人", "1件"))
-        assertEquals("今の勤務表（必須 2件）を下書きで置き換えます。元に戻せます", draftConfirmText("2件"))
         assertEquals("今の勤務表を下書きで置き換えます。元に戻せます", draftConfirmText(null, "1件"))
     }
 

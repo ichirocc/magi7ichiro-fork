@@ -680,14 +680,6 @@ internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<
     return StaffCountSheet(chips, weekly, fair, c1)
 }
 
-/** セルシートの「この職員の回数・偏り」用の平文（シートと同じ中身を 1 行ずつ）。 */
-internal fun staffCountLines(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): List<String> {
-    val sh = staffCountSheet(ui, i, limits)
-    return sh.c1 + sh.chips.map { (if (it.under) "▼ " else "▲ ") + it.text } +
-        sh.weekly.map { "${breakdownLabels["weekly"]} ${it}" } +
-        sh.fair.map { "${breakdownLabels["fair"]} ${it}" }
-}
-
 /** 日 j の人員の一覧（日ヘッダの印のシート）。limits は (シフト,日) → (必要, 適正)。 */
 internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, limits: ((Int, Int) -> Pair<Int, Int>?)? = null): List<String> =
     marks.map { m ->

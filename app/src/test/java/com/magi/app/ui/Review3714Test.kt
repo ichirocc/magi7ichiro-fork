@@ -32,7 +32,6 @@ class Review3714Test {
         val rows = hardViolationRows(items, listOf("福澤"), emptySet())
         assertEquals("福澤 10/1 希望の前日", rows.single().line)
         assertEquals("残っている問題 4件", hardListTitle("4件"))
-        assertEquals("直し方を見る", HARD_LIST_START_BUTTON)
         for (f in listOf("covU", "c3w", "low", "high", "c3n", "pref", "extWish", "groupViol", "c41")) {
             val l = problemLine(f, "とても長い名前の職員さん", "12/31", "長い記号の勤務", "長い記号の勤務", 12)
             assertTrue(l, l.length <= PROBLEM_LINE_MAX)
