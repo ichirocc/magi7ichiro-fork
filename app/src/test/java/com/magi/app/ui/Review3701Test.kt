@@ -9,7 +9,7 @@ import org.junit.Test
 /** 3.701.0: 保存の失敗を知らせる（上部の語・ダイアログ・主カードの状態の行）と、上部の札の狭い幅。 */
 class Review3701Test {
     @Test fun topBarSaveWordOnlyWhenFailed() {
-        assertEquals("自動保存できていません", topBarSaveWord(SaveState.Failed))
+        assertEquals("保存できていません", topBarSaveWord(SaveState.Failed))
         assertNull(topBarSaveWord(SaveState.Saved))
         assertNull(topBarSaveWord(SaveState.Saving))
         assertNull(topBarSaveWord(SaveState.Dirty))

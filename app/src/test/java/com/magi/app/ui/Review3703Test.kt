@@ -29,10 +29,8 @@ class Review3703Test {
     @Test fun statusPointsAndCandidateLabel() {
         assertEquals(listOf("いま1人／必要2人", "動かせる人が3人います"), guidedStatusPoints(2, 1, 3))
         assertEquals(listOf("いま1人／必要2人"), guidedStatusPoints(2, 1, 0))
-        assertEquals("山田さんを「A4」に入れる（休から）", guidedCandidateLabel("山田", "A4", "休"))
-        assertEquals("山田さんを「A4」に入れる", guidedCandidateLabel("山田", "A4", null))
-        assertEquals("山田さんを「A4」に入れる", guidedCandidateLabel("山田", "A4", ""))
-        assertEquals("残っている必須違反を順に見る（4か所）", guidedTourButton(4))
+        assertEquals("山田さんをA4に入れる", guidedCandidateLabel("山田", "A4"))
+        assertEquals("必須違反4か所を順に見る", guidedTourButton(4))
         assertEquals("ほかの必須違反（1件）が残っています", otherHardAfterShortage(mapOf("covU" to 2, "c3n" to 1)))
     }
 

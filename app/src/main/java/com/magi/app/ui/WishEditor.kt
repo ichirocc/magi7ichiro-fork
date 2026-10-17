@@ -137,7 +137,7 @@ internal fun WishCard(
             // [3.707.0 3b-2] この職員のぶつかっている希望（先頭の 1 件の日を添える、件数は出さない）。
             val conflict = remember(ui, i) { wishTrialCandidates(ui).let { c -> c.direct.firstOrNull { it.staff == i } ?: c.shortfall.flatMap { it.rows }.firstOrNull { it.staff == i } } }
             if (conflict != null && onShowConflicts != null) {
-                TextButton(onClick = onShowConflicts, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishConflictLinkText(name, DayText.short(ui.startDate, conflict.day))) }
+                TextButton(onClick = onShowConflicts, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishConflictLinkText(DayText.short(ui.startDate, conflict.day))) }
             }
             MonthHeaderStatic(ui.startDate)
             WishMonthGrid(

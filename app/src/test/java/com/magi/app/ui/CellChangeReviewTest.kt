@@ -48,13 +48,13 @@ class CellChangeReviewTest {
     }
 
     @Test fun boardStatusSeparatesAutoCreateFromEvaluation() {
-        assertEquals("自動作成：未実行" to "評価：未評価", boardStatusLines(false, false, false, 0, 0))
-        assertEquals("自動作成：未実行（手で編集）" to "評価：必須違反 3件", boardStatusLines(false, true, true, 3, 5))
-        assertEquals("自動作成：済み" to "評価：要調整 5件", boardStatusLines(true, true, true, 0, 5))
-        assertEquals("自動作成：済み" to "評価：違反なし", boardStatusLines(true, true, true, 0, 0))
+        assertEquals("自動作成前" to "評価：未評価", boardStatusLines(false, false, false, 0, 0))
+        assertEquals("手で編集" to "評価：必須違反 3件", boardStatusLines(false, true, true, 3, 5))
+        assertEquals("自動作成済み" to "評価：要調整 5件", boardStatusLines(true, true, true, 0, 5))
+        assertEquals("自動作成済み" to "評価：違反なし", boardStatusLines(true, true, true, 0, 0))
         // [3.678.0] 自動作成のあと手で変えた盤面は「未実行」と言わない。
-        assertEquals("自動作成：済み（そのあと手で変更あり）", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = true).first)
-        assertEquals("自動作成：未実行（手で編集）", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = false).first)
+        assertEquals("手で変更あり", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = true).first)
+        assertEquals("手で編集", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = false).first)
     }
 
     @Test fun cellCountLinesKeepTheTargetVisible() {

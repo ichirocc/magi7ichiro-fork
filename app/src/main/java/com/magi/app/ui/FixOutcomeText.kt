@@ -65,7 +65,7 @@ internal fun otherHardAfterShortage(breakdown: Map<String, Int>): String? =
     unitTotals(breakdown, com.magi.app.v6.MirrorKeys.hard.filter { it != "covU" })?.let { "ほかの必須違反（$it）が残っています" }
 
 /** 人員不足の手伝いの終わりの主ボタン（巡回の先頭を開く、Q2）。 */
-internal fun guidedTourButton(n: Int): String = "残っている必須違反を順に見る（${n}か所）"
+internal fun guidedTourButton(n: Int): String = "必須違反${n}か所を順に見る"
 
 /** 人員不足の手伝いの段（候補の人がいる／入れ替えで埋める／埋められない／終わり）。 */
 internal enum class GuidedStage { CANDIDATES, CHAIN, BLOCKED, DONE }
@@ -89,8 +89,7 @@ internal fun guidedFixTitle(stage: GuidedStage, target: com.magi.app.v6.Coverage
 internal fun guidedStatusPoints(need: Int, got: Int, movable: Int): List<String> =
     listOfNotNull(shortageHeadline("", "", need, got, need - got).status, if (movable > 0) "動かせる人が${movable}人います" else null)
 
-/** 候補 1 人の行（H-3）「山田さんを「A4」に入れる（休から）」。今の勤務が無ければ括弧ごと省く。 */
-internal fun guidedCandidateLabel(name: String, shiftSymbol: String, fromSymbol: String?): String =
-    "${name}さんを「${shiftSymbol}」に入れる" + (fromSymbol?.takeIf { it.isNotBlank() }?.let { "（${it}から）" } ?: "")
+/** 候補 1 人の行（H-3）「山田さんをA4に入れる」。今の勤務は下の回数の行（guidedCandidateImpact）が示す。 */
+internal fun guidedCandidateLabel(name: String, shiftSymbol: String): String = "${name}さんを${shiftSymbol}に入れる"
 
 internal const val SHORTAGE_DONE_TITLE = "人員不足は直し終わりました"

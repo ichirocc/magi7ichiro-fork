@@ -213,7 +213,7 @@ private fun WishTrialRowView(
                         enabled = !ui.running,
                         colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
                         modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
-                    ) { Text("希望を外して再作成（元に戻せます）") }
+                    ) { Text("希望を外して再作成する") }
                 }
             }
         }
@@ -386,7 +386,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                     Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
                     // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
-                    TextButton(onClick = { onCycleAnswer(c) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    TextButton(onClick = { onCycleAnswer(c) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
@@ -469,9 +469,9 @@ internal fun GuidedFixDialog(
                                         },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                     ) {
-                                        // 長い氏名でも切れないよう2行まで折り返し（文字欠け防止）。
-                                        Text(guidedCandidateLabel(c.name, target.shiftSymbol, fromSym),
-                                            textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        // 1 行に収める（折り返すと角の丸みで先頭の字が欠ける）。長い氏名は省略する。
+                                        Text(guidedCandidateLabel(c.name, target.shiftSymbol),
+                                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                     guidedCandidateImpact(fromSym, ui.schedule.getOrNull(c.staffIndex)?.count { it == from } ?: 0,
                                         from?.let { gcv.staffCellLimits(c.staffIndex, it).first })
@@ -812,8 +812,10 @@ internal fun OperatorNextActionCard(
                 }
                 // [3.261.0] 初期解生成へ常に戻れる小さな常設リンク（元に戻すで取消可能・破壊的でない）。
                 // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る操作なので、その結果と戻し方を文言に含める。
-                HomeSection.DRAFT_LINK -> TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) {
-                    Text("下書きから作り直す（今の結果は「元に戻す」で戻せます）")
+                HomeSection.DRAFT_LINK -> Column(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) { Text("下書きから作り直す") }
+                    Text("今の結果は「元に戻す」で戻せます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp))
                 }
             }
         }
@@ -876,6 +878,7 @@ internal fun CopilotCard(
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = onSoftPolish, modifier = Modifier.heightIn(min = 48.dp)) { Text(SOFT_POLISH_LINK, color = cs.onTertiaryContainer) }
+                        Text(SOFT_POLISH_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
                     }
                 }
             }
@@ -981,7 +984,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                     onClick = { onCancelWish(i, s.dayIndex) },
                                     enabled = !ui.running,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望（${s.shiftSymbol}）を外して調整する", color = cs.error) }
+                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望（${s.shiftSymbol}）を外す", color = cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             }
                         }
                     }

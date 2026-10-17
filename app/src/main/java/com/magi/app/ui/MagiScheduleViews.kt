@@ -922,7 +922,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                 }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error),
                     border = BorderStroke(1.dp, if (ui.running) cs.onSurface.copy(alpha = 0.12f) else cs.error)) {
-                    Text("この範囲を希望なしに")
+                    Text("希望なしにする")
                 }
                 Button(onClick = {
                     if (picked in ui.shiftSymbols.indices) {
@@ -930,7 +930,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     }
                 }, enabled = picked in ui.shiftSymbols.indices && wishCount > 0 && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text(if (ui.running) "計算が終わるまで変更できません" else "適用（${wishCount}件）")
+                    Text(if (ui.running) "計算中です" else "適用（${wishCount}件）")
                 }
             }
             Text("※「希望なし」は消す件数を確かめてから消します。元に戻すで取り消せます。",
@@ -1368,7 +1368,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { detail = null; onEvent(MagiEvent.Condition.RemoveWish(i, dj)) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を調整する（外す）", color = cs.error) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を外す", color = cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                             // [実機バグ修正] 希望で固定していない在勤者にも1人にしぼった「直し方を探す」への導線を足す。
@@ -1383,7 +1383,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { person = i },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの勤務変更案を探す") }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの変更案を探す", maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                         }
@@ -1528,6 +1528,7 @@ private fun TallyBox(
 // ===== 平面グリッド（円柱インターフェース置き換え）=====
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null, onEvent: (MagiEvent) -> Unit = {}, fixNav: FixNav = FixNav(), editCell: Pair<Int, Int>? = null, sheetPx: Float = 0f, barKey: Int = 0, corner: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
@@ -1812,7 +1813,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 t?.let { fixTargetHead(it, it.countOf(ui.schedule)) }?.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 FixSearchPanel(ui, cv, FixFocus(i, k), onEvent, fixNav, onApplied = { staffSheet = null })
             }) {
-            if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (i in vs.c1Stuck) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i, null) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishDayButton(null)) }
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
@@ -1838,7 +1839,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     }
                 }
             }
-            if (marks.size >= 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (marks.size >= 2) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { daySheet = null; fixNav.onDay(j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${DayText.short(ui.startDate, j)}の勤務を見る") }
                 OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_headcount")) }
             }

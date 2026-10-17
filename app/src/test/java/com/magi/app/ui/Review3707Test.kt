@@ -54,7 +54,7 @@ class Review3707Test {
 
     @Test fun wishCardTexts() {
         assertEquals("佐藤さん：希望 3件・拡張希望 1件", wishStaffSummary("佐藤", 3, 1))
-        assertEquals("ぶつかっている希望を見る（佐藤さん 11/24(火)）", wishConflictLinkText("佐藤", "11/24(火)"))
+        assertEquals("11/24(火)のぶつかる希望を見る", wishConflictLinkText("11/24(火)"))
         assertEquals("3日を夜の希望にする", wishApplyButton(3, "夜"))
         assertEquals("2日を選んだシフト以外にする", extWishApplyButton(2))
         assertEquals("4日に適用する", needApplyButton(4))

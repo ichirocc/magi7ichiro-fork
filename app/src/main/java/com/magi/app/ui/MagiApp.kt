@@ -1226,7 +1226,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
         val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
         val saveWordView: @Composable () -> Unit = {
             if (saveWord != null) TextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
-                Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 2)
+                Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
       Column(Modifier.fillMaxWidth()) {
@@ -1267,7 +1267,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("必須違反を順に見る（${tourCount}か所）", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
