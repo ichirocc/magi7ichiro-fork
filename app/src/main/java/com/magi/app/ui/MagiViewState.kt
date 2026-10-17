@@ -350,7 +350,7 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
 internal fun wishTrialNoGain(o: WishTrial.Outcome): Boolean = o is WishTrial.Result && o.rk >= o.h0 && o.att <= 0
 
 internal const val WISH_KEEP_FOOTER = "希望は、あなたが選ぶまで外しません（外したあとも元に戻すで戻せます）。"
-internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を緩めて試す"
+internal const val WISH_TO_RELAX_LABEL = "希望を残し設定を緩めて試す"
 
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =

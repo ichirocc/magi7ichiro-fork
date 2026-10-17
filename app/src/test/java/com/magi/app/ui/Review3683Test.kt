@@ -63,7 +63,7 @@ class Review3683Test {
 
     @Test fun wordingConstants() {
         assertEquals("条件ごとの状況（守れている 10／残っている 3）", conditionStatusTitle(10, 3))
-        assertEquals("担当外の希望 4件をまとめて外す（勤務表は変わりません・元に戻せます）", bulkClearWishesLabel(4))
+        assertEquals("担当外の希望 4件を外す", bulkClearWishesLabel(4))
         assertEquals("変更案を見る", VIEW_FIXES_BUTTON)
     }
 }

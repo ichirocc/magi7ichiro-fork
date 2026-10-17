@@ -15,7 +15,7 @@ class Review3693Test {
     }
 
     @Test fun appliedNextButtonCountsTourItemsNotReportHard() {
-        assertEquals("残っている必須違反を順に見る（2か所）", appliedNextButton(false, null, 3, 2))
+        assertEquals("必須違反2か所を順に見る", appliedNextButton(false, null, 3, 2))
         assertNull(appliedNextButton(false, null, 3, 0))
         assertEquals("続けて A の案を見る", appliedNextButton(true, "A", 3, 0))
     }

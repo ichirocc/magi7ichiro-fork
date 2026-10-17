@@ -181,7 +181,7 @@ class CountShortageTextTest {
         // 保存済みなら保存の行は出さない。続けて同じ勤務の案へ進むボタン。
         assertTrue(appliedLines(u.copy(saveState = SaveState.Saved), a, t, "10/3のA", need).none { it.startsWith("保存：") })
         assertEquals("続けて A の案を見る", appliedNextButton(true, "A", 2, 2))
-        assertEquals("残っている必須違反を順に見る（2か所）", appliedNextButton(false, "A", 2, 2))
+        assertEquals("必須違反2か所を順に見る", appliedNextButton(false, "A", 2, 2))
         assertNull(appliedNextButton(false, "A", 0, 2))
         assertEquals("新たに生じた問題：禁止の並び +1件", appearedFamiliesLine(mapOf("c3n" to 0), mapOf("c3n" to 1, "c1" to 0)))
     }
@@ -231,8 +231,8 @@ class CountShortageTextTest {
         assertEquals("A（2日）", fixTargetLabel(t, "A", "2026-10-01"))
         assertEquals("A（2日）の不足をまとめて解消する", fixTargetPurpose(t, null, "A（2日）"))
         assertEquals(listOf("2日で合計2人不足しています（日ごとの不足の合計）", "対象の日：10/3・10/4"), fixTargetHead(t, 0, schedule, "2026-10-01"))
-        assertEquals("両日の不足をまとめて調整する案を探す", multiFixButton(2))
-        assertEquals("3日の不足をまとめて調整する案を探す", multiFixButton(3))
+        assertEquals("両日の不足をまとめて直す案を探す", multiFixButton(2))
+        assertEquals("3日の不足をまとめて直す案を探す", multiFixButton(3))
         val u = UiState(schedule = schedule, needFamilies = fams)
         val cv = ConditionsView(needLimits = List(3) { k -> List(4) { j -> need(k, j) } })
         assertEquals(t, panelTarget(u, cv, FixFocus(null, 1, null, allDays = true)))

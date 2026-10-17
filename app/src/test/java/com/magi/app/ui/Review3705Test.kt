@@ -21,14 +21,14 @@ class Review3705Test {
         assertEquals("配る前に直す必須違反が残っています。", analysisSummary(made, 2, null).sentence)
         assertEquals("必須違反はありません。要調整が残っています。", analysisSummary(made.copy(bestHard = 0L, breakdown = mapOf("c1" to 5)), 0, null).sentence)
         assertEquals("必須違反も要調整もありません。", analysisSummary(made.copy(bestHard = 0L, bestSoft = 0L, breakdown = emptyMap()), 0, null).sentence)
-        // 自動作成のあと手で変えた盤面は、上部の札と同じく「自動作成：済み」の側。
+        // 自動作成のあと手で変えた盤面は、上部の札と同じく「自動作成済み」の側。
         assertEquals("配る前に直す必須違反が残っています。", analysisSummary(made.copy(engineRan = false, ranBeforeEdit = true), 2, null).sentence)
     }
 
     @Test fun primaryIsTourThenGuidedElseNone() {
         val tour = analysisSummary(made, 3, null)
         assertEquals(AnalysisPrimary.TOUR, tour.primary)
-        assertEquals("必須違反を順に見る（3か所）", tour.primaryLabel)
+        assertEquals("必須違反3か所を順に見る", tour.primaryLabel)
         val short = CoverageDiagnosis(3, 0, 3, listOf(
             shortfall(day = 4), shortfall(day = 4, shift = 1), shortfall(day = 9)))
         val guided = analysisSummary(made.copy(breakdown = mapOf("covU" to 3), coverageDiag = short), 0, null)

@@ -79,7 +79,7 @@ internal fun PreRunCheckSheet(
                 Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(w, style = MaterialTheme.typography.bodyMedium)
                 t.wallLanding?.let { l ->
-                    TextButton(onClick = { onOpenLanding(l) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
+                    TextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
                 }
             }
         }
@@ -96,12 +96,12 @@ private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Bo
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) {
             if (i != null && j != null) {
-                TextButton(onClick = { onOpenCell(i, j, row.wish) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                TextButton(onClick = { onOpenCell(i, j, row.wish) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text(row.text, modifier = Modifier.fillMaxWidth())
                 }
             } else if (l != null) {
                 // セルを持たない行は、その原因の入力箇所へ（押す前に行き先を 1 行で示す）。
-                TextButton(onClick = { onOpenLanding(l) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                TextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Column(Modifier.fillMaxWidth()) {
                         Text(row.text)
                         Text("→ ${landingButtonLabel(l)}", style = MaterialTheme.typography.bodySmall)

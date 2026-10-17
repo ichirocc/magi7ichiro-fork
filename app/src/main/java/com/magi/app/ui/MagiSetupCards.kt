@@ -228,7 +228,8 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             //   バックグラウンド実行だけをここ（実行条件＝予算の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("つくる（閉じても大丈夫・あとで通知）") }
+            ) { Text("閉じてもつくり続ける") }
+            Text("できたら通知します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -758,10 +759,8 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("ログ", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("テキストで書き出す") }
-                OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("JSONで書き出す") }
-            }
+            OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("テキストで書き出す") }
+            OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("JSONで書き出す") }
             // 操作ログ（監査・新しい順）
             Text("操作ログ（新しい順 ${ui.opLog.size}件）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
             if (ui.opLog.isEmpty()) {
@@ -813,8 +812,9 @@ internal fun DataActionsCard(
             // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
             if (ui.prevBackupAvailable) {
                 TextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
-                    Text("開く前のデータに戻す（もう一度押すと入れ替え）")
+                    Text("開く前のデータに戻す")
                 }
+                Text("もう一度押すと、今のデータと入れ替わります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             // [3.529.0/外部仕様書取り入れ] 自動保存の状態。既定(Saved)では出さず、変化がある間だけ表示。
             //   失敗は時間のカードの上（SettingsSaveFailedBanner）に出す＝ここでは重ねない（3.706.0 S4）。
@@ -831,7 +831,7 @@ internal fun DataActionsCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存する") }
+                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("保存する") }
                 OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

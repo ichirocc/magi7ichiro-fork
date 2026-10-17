@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -70,6 +72,7 @@ import kotlinx.coroutines.withContext
  * 上から: 見出し・1 行の状態・直し方・詳しく（読む）→ 割当｜希望｜回数 → 前日/翌日 → シフトボタン（固定配置）→ 閉じる → 32dp の余白。
  * 閉じるのは「閉じる」・戻る・シートの外のタップ。別のセルをタップするとそのセルへ移る（呼び出し側）。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CellEditSheet(
     ui: UiState,
@@ -276,7 +279,7 @@ internal fun CellEditSheet(
                             ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                     }
                     if (c1Here != null && c1Here.stuck && mode == 0) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { fixNav.onWishes(i, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishDayButton(DayText.short(ui.startDate, j))) }
                             OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
                         }
@@ -428,8 +431,9 @@ internal fun CellEditSheet(
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
                     OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", textAlign = TextAlign.Center)
+                        Text("希望は残して別のシフトにする", textAlign = TextAlign.Center)
                     }
+                    Text("別のシフトにすると、希望は未反映になります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if ((mode == 0 && step == 1) || mode == 1) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

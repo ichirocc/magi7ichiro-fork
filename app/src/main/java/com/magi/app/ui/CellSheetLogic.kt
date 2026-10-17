@@ -579,11 +579,14 @@ internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除さ�
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
 internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした。端末に書き込めません（空き容量が足りない可能性があります）。「$SAVE_RETRY_BUTTON」を押してください"
 internal const val HOME_SAVE_FAILED_LINE = "自動保存できていません。端末の空き容量を確かめてください"
-internal const val TOP_BAR_SAVE_FAILED = "自動保存できていません"
+internal const val TOP_BAR_SAVE_FAILED = "保存できていません"
 /** 上部の札の幅の境界（3.657.0 の名前列と同じ）。これより狭いと自動作成の状態を札の下の行へ畳む。 */
 internal const val TOP_BAR_NARROW_DP = 396
 
 /** 上部の札の左に出す保存の語。失敗のときだけ（押すと保存の失敗のダイアログ）。 */
+/** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。 */
+internal fun topBarTourLabel(n: Int): String = "必須違反${n}か所を見る"
+
 internal fun topBarSaveWord(s: SaveState): String? = if (s == SaveState.Failed) TOP_BAR_SAVE_FAILED else null
 
 internal fun topBarStatusWrapped(widthDp: Int): Boolean = widthDp < TOP_BAR_NARROW_DP
@@ -724,7 +727,7 @@ internal fun multiNeedTarget(needFamilies: Map<String, List<String>>, shift: Int
 }
 
 /** まとめて調整するボタンの名（2 日なら「両日」）。 */
-internal fun multiFixButton(n: Int): String = (if (n == 2) "両日" else "${n}日") + "の不足をまとめて調整する案を探す"
+internal fun multiFixButton(n: Int): String = (if (n == 2) "両日" else "${n}日") + "の不足をまとめて直す案を探す"
 
 /** 対象の見出し 2 行: 「下限まで、あと8回です」「現在 7回 ／ 下限 15回」。人員は「必要人数より1人少ない状態です」「配置 0人 ／ 必要 1人」。 */
 internal fun fixTargetHead(t: FixTarget, count: Int, schedule: List<List<Int>> = emptyList(), startDate: String = ""): List<String> {
@@ -1063,7 +1066,7 @@ internal fun appearedFamiliesLine(before: Map<String, Int>?, after: Map<String, 
 /** 反映の帯の次の一歩のボタン。同じ問題が残れば続けてその勤務の案を、無ければ残りの必須違反の巡回（「（Nか所）」＝巡回できる項目の数 [tourCount]。上部の札と同じ値で、件と人が混ざった report.hard ではない＝INV-07、3.693.0）、どちらも無ければ null。 */
 internal fun appliedNextButton(sameRemains: Boolean, sym: String?, hardLeft: Int, tourCount: Int): String? = when {
     sameRemains && sym != null -> "続けて $sym の案を見る"
-    hardLeft > 0 && tourCount > 0 -> "残っている必須違反を順に見る（${tourCount}か所）"
+    hardLeft > 0 && tourCount > 0 -> guidedTourButton(tourCount)
     else -> null
 }
 
@@ -1290,7 +1293,7 @@ internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが�
 
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
 internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap(), ranBeforeEdit: Boolean = false): Pair<String, String> =
-    (if (engineRan) "自動作成：済み" else if (ranBeforeEdit && hasResult) "自動作成：済み（そのあと手で変更あり）" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
+    (if (engineRan) "自動作成済み" else if (ranBeforeEdit && hasResult) "手で変更あり" else if (hasResult) "手で編集" else "自動作成前") to
         (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hardText(breakdown, hard)}"
         else if (soft > 0) "評価：要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "評価：違反なし")
 
@@ -1498,7 +1501,8 @@ internal fun creationNextProblem(staffName: String?, heading: String): String =
 internal fun creationTopLines(next: String?, kept: Boolean = false, headlineTarget: String? = null): List<String> =
     listOfNotNull(if (kept) KeptResultText.KEPT_TITLE else CREATION_DONE_TITLE, next?.takeIf { it != headlineTarget }?.let { "次に確認する問題：$it" })
 
-internal const val SOFT_POLISH_LINK = "要調整をもう少し減らせるか試す（減らない場合もあります）"
+internal const val SOFT_POLISH_LINK = "要調整を減らせるか試す"
+internal const val SOFT_POLISH_NOTE = "減らない場合もあります。"
 
 internal const val TRIAGE_HARD_HEADING = "必須違反（配る前に直す必要があります）"
 internal const val TRIAGE_SETTINGS_HEADING = "設定を変えないと消えない項目"
@@ -1506,7 +1510,7 @@ internal const val TRIAGE_SETTINGS_HEADING = "設定を変えないと消えな�
 /** 分析の畳んだ一覧の見出し（内部の語を使わない）。 */
 internal fun conditionStatusTitle(ok: Int, busy: Int): String = "条件ごとの状況（守れている $ok／残っている $busy）"
 
-internal fun bulkClearWishesLabel(n: Int): String = "担当外の希望 ${n}件をまとめて外す（勤務表は変わりません・元に戻せます）"
+internal fun bulkClearWishesLabel(n: Int): String = "担当外の希望 ${n}件を外す"
 
 internal const val ALTERNATIVES_ALL_WORSE = "今の勤務表より良くありません"
 
@@ -1844,7 +1848,7 @@ internal fun editBarSecondary(plan: EditHeaderPlan): Boolean = plan.primary != n
 internal fun wishStaffSummary(name: String, wishes: Int, extWishes: Int): String = "${name}さん：希望 ${wishes}件・拡張希望 ${extWishes}件"
 
 /** [3.707.0 3b-2] その職員のぶつかっている希望への文字ボタン（件数は出さない）。 */
-internal fun wishConflictLinkText(name: String, dayLabel: String): String = "$WISH_CONFLICTS_BUTTON（${name}さん $dayLabel）"
+internal fun wishConflictLinkText(dayLabel: String): String = "${dayLabel}のぶつかる希望を見る"
 
 /** [3.707.0 3b-4] 希望の入力パネルのボタン。 */
 internal fun wishApplyButton(days: Int, symbol: String): String = "${days}日を${symbol}の希望にする"

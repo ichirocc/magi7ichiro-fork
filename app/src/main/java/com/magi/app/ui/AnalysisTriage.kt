@@ -307,7 +307,7 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
         else -> AnalysisPrimary.NONE
     }
     val label = when (primary) {
-        AnalysisPrimary.TOUR -> "必須違反を順に見る（${tourCount}か所）"
+        AnalysisPrimary.TOUR -> guidedTourButton(tourCount)
         AnalysisPrimary.GUIDED -> "なおし方を見る（${shortDays}日）"
         AnalysisPrimary.NONE -> null
     }
