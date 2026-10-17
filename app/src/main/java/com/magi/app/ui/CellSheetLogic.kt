@@ -1717,7 +1717,7 @@ internal const val EMPTY_STATE_TITLE = "データを開く"
 internal fun emptyStateSubtitle(loading: Boolean): String = if (loading) "読み込んでいます…" else "保存データ・サンプル・新規から選べます"
 
 /** 段ごとの見出し: 未作成は 1 文、結果があれば「今月の判断」（必須の有無は札が言う。3.713.0 デザイン例）。 */
-internal fun homeHeadline(kind: HomePlanKind, @Suppress("UNUSED_PARAMETER") startDate: String): String = when (kind) {
+internal fun homeHeadline(kind: HomePlanKind): String = when (kind) {
     HomePlanKind.MAKE -> HOME_MAKE_HEADLINE
     else -> HOME_MONTH_HEADLINE
 }
