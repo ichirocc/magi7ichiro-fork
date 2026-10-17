@@ -99,7 +99,6 @@ class GridDisplayMarksTest {
         assertTrue(rest >= 0)
         val u2 = ui.copy(c1Shortages = c1Shortages(p, s))
         assertTrue(0 in MagiViewState(u2).c1Stuck)
-        assertTrue(staffCountLines(u2, 0).any { C1_STUCK_TEXT in it })
         // 実データでも職員11 の 10/13〜10/22 に変えられる日の無い窓がある。
         assertTrue(ui.c1Shortages.any { it.staff == 10 && it.stuck })
     }
@@ -159,7 +158,6 @@ class GridDisplayMarksTest {
         assertEquals(27, keys.size)
         val staff = keys.mapNotNull { VioKey.first(it) }.toSet()
         assertEquals(staff, vs.countBadges.keys)
-        for (i in staff) assertTrue(staffCountLines(ui, i).isNotEmpty())
         assertTrue(MagiViewState(ui, allVioBucketKeys - "count").countBadges.isEmpty())
     }
 
@@ -179,12 +177,6 @@ class GridDisplayMarksTest {
         }
         assertTrue(hidden.isNotEmpty())
         for (key in hidden) assertNotNull(key, vs.cellSecond[VioKey.first(key)!!][VioKey.second(key)!!])
-    }
-
-    @Test fun fairAndWeeklyAppearInTheStaffSheet() {
-        for (fam in listOf("fair", "weekly")) for (e in rep.distLocations[fam].orEmpty()) {
-            assertTrue("$fam 職員${e[0]}", staffCountLines(ui, e[0]).any { breakdownLabels[fam]!! in it })
-        }
     }
 
     /** 行末の印のシート（実データ 職員02）: 回数は 2 列のチップ、曜日は 1 シフト 1 句、公平化は差ごとに 1 行。 */

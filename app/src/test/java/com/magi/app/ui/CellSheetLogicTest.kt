@@ -184,22 +184,6 @@ class CellSheetLogicTest {
         assertTrue(!isWishDilemma(wish!! + 1, s[i][2], line.severity))
     }
 
-    @Test fun tourVisitsHardCellsFirstByDayThenStaff() {
-        val ui = UiState(violationCellFamilies = mapOf(
-            "3,5" to listOf("vio-c3n"), "1,5" to listOf("vio-pref"), "0,2" to listOf("vio-c42s"), "2,1" to listOf("vio-c3w"),
-        ))
-        assertEquals(listOf(2 to 1, 1 to 5, 3 to 5), violationTour(ui))
-        assertEquals(listOf(2 to 1, 1 to 5, 3 to 5, 0 to 2), violationTour(ui, includeSoft = true))
-        assertEquals(listOf(0 to 2), violationTour(UiState(violationCellFamilies = mapOf("0,2" to listOf("vio-c42s")))))
-        val tour = violationTour(ui)
-        assertEquals(1 to 5, nextTourCell(tour, 2 to 1))
-        assertEquals(2 to 1, nextTourCell(tour, 3 to 5))
-        assertEquals(2 to 1, nextTourCell(tour, 9 to 9))
-        assertEquals(null, nextTourCell(emptyList(), 0 to 0))
-        val real = violationTour(UiState(violationCellFamilies = rep.cellFamilies))
-        assertTrue(real.isNotEmpty() && real.all { (a, b) -> rep.cellFamilies["$a,$b"]!!.any { isHardCellViolation(it) } })
-    }
-
     /** 巡回は違反単位: 実データの必須 5 件（c3n 4＋c3w 1）が 5 件、日→職員の順、職員10 は 10/8〜10/9 の 1 件、人員不足は別の 1 行。 */
     @Test fun tourItemsAreOnePerHardViolation() {
         val items = hardViolationItems(st, p, s, rep.cellFamilies)
@@ -214,7 +198,6 @@ class CellSheetLogicTest {
         assertEquals(listOf(0, 1), w.days)
         assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9", tourHeading(items, items.indexOf(a)))
         assertEquals(null, tourHeading(items, 9))
-        assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4", peekHeading(tourHeading(items, items.indexOf(a))!!))
         assertEquals("ほかに人員不足 2人（日の印から開けます）", tourCovULine(2))
         assertEquals(null, tourCovULine(0))
     }

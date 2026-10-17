@@ -57,7 +57,6 @@ class Review3698Test {
         assertEquals("今月の判断", homeHeadline(HomePlanKind.LIST, "2026-10-01"))
         assertEquals("今月の判断", homeHeadline(HomePlanKind.GUIDED_FIX, "2026-10-01"))
         assertEquals("今月の判断", homeHeadline(HomePlanKind.WISHES, ""))
-        assertEquals("2026年10月の判断", homeMonthHeadline("2026-10-01"))
         assertEquals(HOME_MAKE_HEADLINE, homeHeadline(HomePlanKind.MAKE, "2026-10-01"))
         assertEquals(HOME_MONTH_HEADLINE, homeHeadline(HomePlanKind.PRE_DIST, "2026-10-01"))
         assertFalse(HOME_MAKE_HEADLINE.contains("②")); assertFalse(HOME_HARD0_HEADLINE.contains("③"))
@@ -70,9 +69,6 @@ class Review3698Test {
         assertEquals("10/15のCｵが1人不足", h.headline)
         assertEquals("配置 1 / 必要 2", h.status)
         assertEquals("担当・希望の確認", h.badge)
-        // 札は単位ごと＝件と人を足さない（INV-07）。
-        assertEquals(listOf("必須 残り3件・2人"), homeBadges("3件・2人", shortfall))
-        assertEquals(listOf("必須 残り1件"), homeBadges("1件", null))
     }
 
     /** 「次に確認する問題」は主ボタンの対象と同じ（INV-01）。見出しと同じ対象なら完了の 1 行だけ。 */

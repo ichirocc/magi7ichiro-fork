@@ -35,9 +35,6 @@ object MojibakeRepair {
         }
     }
 
-    /** 修復が必要(=変化する)かの判定。ログ表示用。 */
-    fun looksMojibake(s: String): Boolean = repair(s) != s
-
     /**
      * [3.282.0] 「本当に二重エンコードを復号したか」の判定。repair() は BOM 除去だけでも新しい String を
      * 返すため、呼出側の参照比較(`!==`)では「健全な BOM付きUTF-8 ファイル」でも毎回
