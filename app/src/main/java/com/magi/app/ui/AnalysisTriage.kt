@@ -293,6 +293,9 @@ internal fun issueSettingsLabel(kind: IssueKind?): String = when (kind) {
  * 分析タブの状態の段。一文は上部の札（[boardStatusLines]）と同じ区別で決める。
  * [tourCount]＝巡回できる必須違反の数、[fixResolved]＝変更案で直せる必須違反の数（null＝未探索・古い＝出さない）。
  */
+/** 分析タブの一文（「必須3件 · 要調整12件」）。 */
+internal fun analysisCountLine(hardLabel: String, softLabel: String): String = "必須$hardLabel · 要調整$softLabel"
+
 internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): AnalysisSummary {
     val hard = ui.bestHard
     val evaluated = ui.checkRev > 0 && !ui.running
@@ -300,13 +303,11 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
         ui.running -> "勤務表をつくっています。表示は途中の値です。"
         !ui.hasResult -> "まだ作っていません。"
         !ui.engineRan && !ui.ranBeforeEdit -> "手で編集した勤務表です（自動作成はまだ）。"
-        hard > 0 -> "配る前に直す必須違反が残っています。"
-        ui.bestSoft > 0 -> "必須違反はありません。要調整が残っています。"
+        hard > 0 || ui.bestSoft > 0 -> analysisCountLine(if (hard > 0) hardText(ui.breakdown, hard) else "0", unitTotals(ui.breakdown, MirrorKeys.soft) ?: "0")
         else -> "必須違反も要調整もありません。"
     }
+    // [3.713.0] 件数は一文（「必須3件 · 要調整12件」）が言う＝点は変更案で直せる数だけ。
     val points = if (!ui.hasResult && !ui.running) emptyList() else buildList {
-        add(if (hard > 0) "必須違反 ${hardText(ui.breakdown, hard)}" else "必須違反 なし")
-        add("要調整 " + (unitTotals(ui.breakdown, MirrorKeys.soft) ?: "なし"))
         if (evaluated && hard > 0 && fixResolved != null) add("変更案で直せる必須違反 ${fixResolved}か所")
     }
     val shortDays = ui.coverageDiag?.shortfalls?.filter { it.miss > 0 }?.map { it.dayIndex }?.distinct()?.size ?: 0
@@ -344,7 +345,12 @@ internal fun nextEmptySearchStreak(prev: EmptySearchStreak?, origin: String, boa
     else -> EmptySearchStreak(origin, board, state, 1)
 }
 
-internal const val REPEATED_EMPTY_LINE = "この対象には、いまの条件で直せる変更案がありません。"
+internal const val REPEATED_EMPTY_LINE = "続けて案がありませんでした"
+internal const val NO_FIX_TITLE = "案はありません"
+internal const val NO_FIX_LINE = "設定か希望の確認が必要です"
+
+/** 案なしの説明の 1 行: 続けて空なら続けて空の行、そうでなければ定型の 1 行（3.711.0 の行を残す）。 */
+internal fun noFixLine(repeated: Boolean): String = if (repeated) REPEATED_EMPTY_LINE else NO_FIX_LINE
 
 internal enum class RepeatedEmptyAction(val label: String) { WISHES("希望を見る"), SETTINGS("設定の確認を見る") }
 

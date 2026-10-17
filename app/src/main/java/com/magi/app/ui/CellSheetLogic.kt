@@ -1383,7 +1383,7 @@ internal fun softSummary(breakdown: Map<String, Int>, max: Int = 4): String {
     return soft.take(max).joinToString("・") { (k, n) -> "${breakdownLabels[k] ?: k} $n${unitOf(k)}" } + if (soft.size > max) " ほか${soft.size - max}種" else ""
 }
 
-internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりました"
+internal const val CREATION_DONE_TITLE = "作成が終わりました"
 
 /** 適用後の「今回の問題」の状態（解消／減少／残存）。 */
 /** 見ている問題の数が厳密に減るか（統合仕様 INV-03＝適用は対象の改善と正式な門の両方）。対象を持たない案は判定しない。 */
@@ -1675,7 +1675,7 @@ internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = 
     val creation = ui.hasResult && ui.engineRan
     if (creation) add(HomeSection.CREATION)
     add(HomeSection.HEADLINE)
-    if (ui.hasResult && ui.bestHard > 0L) add(HomeSection.BADGES)
+    if (ui.hasResult) add(HomeSection.BADGES)
     add(HomeSection.STATUS)
     if (plan.primaryEnabled) add(HomeSection.PRIMARY)
     if (plan.helper != null || ui.hasResult) add(HomeSection.HELPER)
@@ -1689,10 +1689,11 @@ internal fun homeDraftStatus(hard: String, bestHard: Long): String =
     "下書きができました" + (if (bestHard > 0L) "（必須 $hard）" else "") + "。「勤務表をつくる」で仕上げます"
 
 internal const val HOME_MAKE_HEADLINE = "ボタンひとつで、勤務表をつくります"
-internal const val HOME_HARD0_HEADLINE = "必須違反はありません"
+internal const val HOME_HARD0_HEADLINE = "必須は満たしています"
+internal const val HOME_MONTH_HEADLINE = "今月の判断"
 internal const val HOME_SCHEDULE_HELPER = "表で全体を見る"
-internal const val HOME_LIST_BUTTON = "残っている問題を見る"
-internal const val HOME_PRE_DIST_BUTTON = "配布前の確認をする"
+internal const val HOME_LIST_BUTTON = "必須を見る"
+internal const val HOME_PRE_DIST_BUTTON = "配布前の確認"
 internal const val PRE_DIST_TITLE = "配布前の確認"
 internal const val HOME_SOFT_NOTE = "要調整は分析で確認"
 internal const val HOME_OTHERS_BUTTON = "ほかの問題を見る"
@@ -1708,24 +1709,27 @@ internal fun homeMonthHeadline(startDate: String): String {
     return "${m.groupValues[1].toInt()}年${m.groupValues[2].toInt()}月の判断"
 }
 
-/** 段ごとの見出し: 未作成・必須 0 は 1 文、必須ありは対象の月。 */
-internal fun homeHeadline(kind: HomePlanKind, startDate: String): String = when (kind) {
+/** 段ごとの見出し: 未作成は 1 文、結果があれば「今月の判断」（必須の有無は札が言う。3.713.0 デザイン例）。 */
+internal fun homeHeadline(kind: HomePlanKind, @Suppress("UNUSED_PARAMETER") startDate: String): String = when (kind) {
     HomePlanKind.MAKE -> HOME_MAKE_HEADLINE
-    HomePlanKind.PRE_DIST -> HOME_HARD0_HEADLINE
-    else -> homeMonthHeadline(startDate)
+    else -> HOME_MONTH_HEADLINE
 }
 
 /** 人員不足の 1 文（ホームの「いま決めること」と人員不足の手伝いの題）と、札・状態の行。 */
 internal data class ShortageHeadline(val headline: String, val status: String, val badge: String)
 
 internal fun shortageHeadline(dayLabel: String, shiftSymbol: String, need: Int, got: Int, miss: Int): ShortageHeadline =
-    ShortageHeadline("$dayLabel の $shiftSymbol が ${miss}人 足りません", "いま${got}人／必要${need}人", "$shiftSymbol 必要$need 不足$miss")
+    ShortageHeadline("${dayLabel.substringBefore('(')}の${shiftSymbol}が${miss}人不足", "配置 $got / 必要 $need", SHORTAGE_TAG)
+
+internal const val SHORTAGE_TAG = "担当・希望の確認"
 
 internal fun shortageHeadline(s: com.magi.app.v6.CoverageShortfall): ShortageHeadline = shortageHeadline(s.dayLabel, s.shiftSymbol, s.need, s.got, s.miss)
 
-/** 札 2 つ: 必須は単位ごと（INV-07）、2 つ目は最優先の不足（無ければ 1 つ）。 */
-internal fun homeBadges(hardLabel: String, shortage: com.magi.app.v6.CoverageShortfall?): List<String> =
-    listOfNotNull("必須 $hardLabel", shortage?.let { shortageHeadline(it).badge })
+/** 必須の札は 1 つ＝残りの件数だけ（単位ごと＝INV-07）。必須 0 は「満たしています」。 */
+internal fun homeHardPill(bestHard: Long, hardLabel: String): String = if (bestHard > 0L) "必須 残り$hardLabel" else HOME_HARD0_HEADLINE
+
+internal fun homeBadges(hardLabel: String, @Suppress("UNUSED_PARAMETER") shortage: com.magi.app.v6.CoverageShortfall?): List<String> =
+    listOf(homeHardPill(1L, hardLabel))
 
 /** 状態の行（2 行まで）。保存の失敗は段に関係なく先頭（SF-1）。必須あり＝問題の 1 文と相談中の行（D10）。必須 0＝相談中の行と、CSV が今の内容と違う行（保存済みの行は主ボタンの下）。 */
 internal fun homeStatusLines(kind: HomePlanKind, sentence: String?, consultLine: String?, savedLine: String?, saveFailed: Boolean = false): List<String> =

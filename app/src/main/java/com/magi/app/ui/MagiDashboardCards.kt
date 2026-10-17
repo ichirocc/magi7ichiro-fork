@@ -300,22 +300,22 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
+                // [3.713.0] 最初は「Nか所変わります」と変わるセルの行だけ。目的・回数・判断材料・注記は「詳しく」の中。
+                Text(previewCountLine(p.suggestion.ops.size), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
+                var more by remember { mutableStateOf(false) }
+                TextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) "閉じる" else "詳しく") }
+                if (more) {
                 p.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
                 p.purpose?.let {
                     Text("今回の目的", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     Text(it, style = MaterialTheme.typography.bodyMedium)
                 } ?: Text(p.suggestion.label, style = MaterialTheme.typography.bodyMedium)
-                Text("変更する勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                p.rows.groupBy { it.staffKey }.forEach { (_, rows) ->
-                    Text("対象：${rows.first().staff}さん", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    Row { listOf("日付", "変更前", "変更後").forEach { h -> Text(h, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f)) } }
-                    rows.forEach { r ->
-                        Row { listOf(r.date, r.before, r.after).forEach { v -> Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) } }
-                        if (r.impact.isNotEmpty()) Text("　人数：${r.impact}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        if (r.wish.isNotEmpty()) Text("　${r.wish}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    }
+                p.rows.forEach { r ->
+                    if (r.impact.isNotEmpty()) Text("${r.staff} ${r.date} 人数：${r.impact}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    if (r.wish.isNotEmpty()) Text("${r.staff} ${r.date} ${r.wish}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 p.effect.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Text(p.hardLine, style = MaterialTheme.typography.bodyMedium)
@@ -332,6 +332,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 Text(PREVIEW_GATE_NOTE,
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Text(CONSULT_NOT_CONTACT_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
             }
         },
         // 第 2 の操作と「今は変更しない」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
@@ -685,7 +686,7 @@ internal fun OperatorNextActionCard(
                 note = (hardChangeLine(top.diff) ?: hardLine) + (caution?.let { "\n$it" } ?: ""))
         }
         HomePlanKind.SEARCHING ->
-            OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。直し方を探しています…", "", {}, false, null, onSetup)
+            OpNextPlan(amber, onAmber, "直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
         HomePlanKind.RELAX -> {
             val t = relaxCardText(relax!!.result, ui)
@@ -696,13 +697,13 @@ internal fun OperatorNextActionCard(
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
         HomePlanKind.WISH_FLOOR ->
             OpNextPlan(amber, onAmber,
-                if (ui.relaxSearching) "必須違反が $hardNow 残っています。" else "今の希望とルールでは、必須違反 $hardNow からこれ以上は減らせない見込みです。",
+                if (ui.relaxSearching) "" else "これ以上は減らせない見込みです",
                 wishLabel, onShowWishes, true, "このまま書き出す", onPreDist)
         HomePlanKind.WISHES ->
-            OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。希望とルールがぶつかっています。",
+            OpNextPlan(amber, onAmber, "希望とルールがぶつかっています",
                 wishLabel, onShowWishes, true, null, onSetup)
-        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。",
-            homeTargetLabel(HOME_LIST_BUTTON, nextTarget, null), onShowList, true, null, onSetup)
+        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, nextTarget ?: "",
+            HOME_LIST_BUTTON, onShowList, true, null, onSetup)
     }
     // 並びは純関数 `homeCardSections` が決める＝ここは区画ごとの中身を描くだけ（C# と 1 対 1）。
     val sections = homeCardSections(hp, ui)
@@ -719,7 +720,7 @@ internal fun OperatorNextActionCard(
                 HomeSection.HEADLINE -> Text(homeHeadline(kind, ui.startDate), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
                 // 札は見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。件と人は足さない（INV-07）。
                 HomeSection.BADGES -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (b in homeBadges(hardNow, ui.coverageDiag?.shortfalls?.firstOrNull { it.miss > 0 })) {
+                    for (b in listOf(homeHardPill(ui.bestHard, hardNow))) {
                         Box(Modifier.background(MagiAccent.orange, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
                             // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
                             Text(b, style = MaterialTheme.typography.labelMedium, color = ensureReadable(MagiAccent.orange, Color.White), fontWeight = FontWeight.Bold)
@@ -751,13 +752,11 @@ internal fun OperatorNextActionCard(
                         Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                // [校正] 補助操作もテキストリンクではなく外枠ボタンに（カード地色でも見えるよう枠色=前景色）。段に補助が無ければ「表で全体を見る」。
-                HomeSection.HELPER -> OutlinedButton(
+                // [3.713.0] 補助操作は文字ボタン（塗りは主ボタン 1 つ）。段に補助が無ければ「表で全体を見る」。
+                HomeSection.HELPER -> TextButton(
                     onClick = if (plan.helperLabel != null) plan.helperAction else onSchedule,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg),
-                    border = BorderStroke(1.dp, plan.fg),
-                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, color = plan.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 HomeSection.OTHERS -> if (creation != null) TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
                 HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     plan.body?.let { Text(it, style = body, color = plan.fg) }

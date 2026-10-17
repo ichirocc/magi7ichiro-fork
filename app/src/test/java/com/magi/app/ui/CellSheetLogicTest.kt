@@ -455,7 +455,7 @@ class CellSheetLogicTest {
     /** [3.678.0] 確認の見出しは 1 手でも入替でも同じ。件数が増えても重い違反が減った採用は理由を言う。 */
     @Test
     fun previewTitleAndAdoptedDespiteMore() {
-        assertEquals("この変更を適用しますか？", PREVIEW_TITLE)
+        assertEquals("変更の確認", PREVIEW_TITLE)
         assertEquals("件数は +3 ですが、重い違反が減ったため改善として採用しました", adoptedDespiteMoreText(10, 13, 900.0, 500.0))
         assertNull(adoptedDespiteMoreText(10, 9, 900.0, 500.0))
         assertNull(adoptedDespiteMoreText(10, 13, 500.0, 500.0))

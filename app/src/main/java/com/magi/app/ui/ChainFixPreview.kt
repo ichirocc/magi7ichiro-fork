@@ -45,7 +45,11 @@ internal const val PREVIEW_GATE_NOTE = "適用の直前に最新の勤務表で�
 /** 当てずに閉じるボタン（今の勤務表のまま）。 */
 internal const val KEEP_CURRENT_BUTTON = "今は変更しない"
 /** 変更を当てる前の確認の見出し（1 手でも入替でも同じ）。 */
-internal const val PREVIEW_TITLE = "この変更を適用しますか？"
+internal const val PREVIEW_TITLE = "変更の確認"
+
+/** 変更の確認の 1 行と、変わるセルの 1 行（「山本  10/15  休 → 遅番」）。 */
+internal fun previewCountLine(n: Int): String = "${n}か所変わります"
+internal fun previewRowLine(staff: String, date: String, before: String, after: String): String = "$staff  $date  $before → $after"
 
 /** [shiftNames]＝登録された勤務名（記号と違えば「記号（勤務名）」で併記）、[wishes]＝希望 "i,j"→シフト（あれば行ごとに希望どおりか添える）。 */
 internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffNames: List<String>, shiftSymbols: List<String>, startDate: String,
