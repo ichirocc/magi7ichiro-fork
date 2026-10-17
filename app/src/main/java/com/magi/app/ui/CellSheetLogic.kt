@@ -1317,11 +1317,20 @@ internal fun resolvesAtCell(state: MagiState, s: Array<IntArray>, before: com.ma
 
 // ===== 自動と担当者の分担（2026-10-14 利用者レビュー「どこまで自動で進み、どこで担当者が判断するか」） =====
 
+/** 組む時間の表記（3.706.0 S2: 作成前の要点と設定タブで共有）。60 の倍数は「N分」、それ以外は「N秒」。 */
+internal fun budgetText(sec: Int): String = if (sec % 60 == 0) "${sec / 60}分" else "${sec}秒"
+
+/** 設定タブの組む時間の状態行（3.706.0 S2）。 */
+internal fun budgetStatusLine(sec: Int, reserveSec: Int): String = "組む時間 ${budgetText(sec)}（＋仕上げと玉突き ${reserveSec}秒）"
+
+/** 「組む時間を選ぶ」の候補（3.706.0 S1）。10秒・1〜5分に、範囲内へ丸めた今の値を必ず含めて昇順。既定・範囲は変えない（HF77）。 */
+internal fun budgetPresets(currentSec: Int): List<Int> =
+    (listOf(10, 60, 120, 180, 240, com.magi.app.v6.MAX_OPTIMIZE_SEC) + currentSec.coerceIn(10, com.magi.app.v6.MAX_OPTIMIZE_SEC)).distinct().sorted()
+
 /** 勤務表を作成する画面の要点（作成前）を 1 行に。時間は設定値（探索）と固定の仕上げ枠。 */
 internal fun preRunPlanLine(startDate: String, days: Int, staff: Int, budgetSec: Int, reserveSec: Int): String {
     val period = if (days <= 0 || startDate.isBlank()) "" else DayText.range(startDate, 0, days - 1) + "・"
-    val search = if (budgetSec % 60 == 0) "${budgetSec / 60}分" else "${budgetSec}秒"
-    return "$period${staff}人・組む時間 $search（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
+    return "$period${staff}人・組む時間 ${budgetText(budgetSec)}（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
 }
 
 /** 登録条件の 1 行（3.704.0 R-4: 節ごとの件数を並べる）。[overCaps]＝希望が個人の上限を超える組（作成しても残る）。 */
