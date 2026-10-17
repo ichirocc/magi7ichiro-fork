@@ -426,6 +426,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.update { it.copy(topFixResolved = TopFixResolved(ops, sch, labels)) }
             }
         }
+        // 分析タブの「変更案で直せる必須違反」。必須違反を減らすすべての案の解消の鍵を合わせる（既にある案を読むだけ、探索しない）。
+        viewModelScope.launch {
+            _ui.map { u -> u.fixSuggestions.filter { it.deltaHard < 0 }.map { it.ops } to u.schedule }.distinctUntilChanged().collectLatest { (opsList, sch) ->
+                val st = state ?: return@collectLatest
+                if (opsList.isEmpty() || sch.isEmpty()) return@collectLatest
+                val keys = withContext(Dispatchers.Default) {
+                    runCatching {
+                        val s = Array(sch.size) { sch[it].toIntArray() }
+                        val before = UnifiedViolationChecker.check(st, s)
+                        fixResolvedUnionOf(opsList) { resolvedHardKeys(st, s, before, it) }
+                    }.getOrNull()
+                } ?: return@collectLatest
+                _ui.update { it.copy(fixResolvedUnion = FixResolvedUnion(opsList, sch, keys)) }
+            }
+        }
         // 起動時: 前回の自動保存があれば復元（無ければ何もしない）
         viewModelScope.launch {
             // [並行I/O] 独立した3つのファイル読み込み（自動保存・中断マーカー・完了結果）は互いに依存しない

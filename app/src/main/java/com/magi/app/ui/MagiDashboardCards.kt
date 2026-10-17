@@ -1619,6 +1619,9 @@ private fun ConfirmRow(
         val s = item.staff; val d = item.day
         when { s != null && d != null -> onShowCell(s, d); s != null -> onFocusStaff(s); d != null -> onShowDay(d) }
     }.semantics { contentDescription = "${item.title} ${item.sub}・" + (if (dayOnly) "タップで勤務表の該当日へ" else "タップで直し方を探す") }
+    val ws = item.wishStaff
+    val ns = item.needShift
+    Column(Modifier.fillMaxWidth()) {
     Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
@@ -1632,24 +1635,18 @@ private fun ConfirmRow(
                 Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            // [下流→上流ディープリンク] 末尾に「設定で直す」（行本体タップの勤務表/直し方導線とは別アクション）。
-            //   ローカル val に取り出してラムダ内スマートキャストを安全化。
-            val ws = item.wishStaff
-            val ns = item.needShift
-            when {
-                ws != null -> TextButton(onClick = { onFixWish(ws, item.day) }) { Text("設定で直す") }
-                // 人員不足の行は、まず直し方（主）、設定は 2 番目。
-                ns != null && dayOnly -> Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = { onShowDay(item.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("なおし方を見る") }
-                    TextButton(onClick = { onFixNeed(ns, item.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定で直す", style = MaterialTheme.typography.labelMedium) }
-                }
-                ns != null -> TextButton(onClick = { onFixNeed(ns, item.day) }) { Text("設定で直す") }
-                // [3.483.0 A-3] 「直し方→」は同じタブ内の下のカード（改善の提案）で探索が始まるだけ＝別画面へ
-                //   飛ぶように読めた。動作をそのまま言う。
-                clickable -> Text(if (dayOnly) "勤務表→" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
-                    color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
-            }
+            // [3.483.0 A-3] 行の押下で起きることをそのまま言う。
+            if (clickable) Text(if (dayOnly) "勤務表→" else if (item.day != null) "勤務を開く" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
+                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
+    }
+    // [下流→上流ディープリンク] 設定の節の名を本文の下に全幅で（行本体の押下とは別の操作）。
+    //   なおし方の画面は日を指定して開けないので、人員不足の行は「勤務表でこの日を見る」と言う。
+    if (ns != null && dayOnly) TextButton(onClick = { onShowDay(item.day!!) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("勤務表でこの日を見る") }
+    when {
+        ws != null -> TextButton(onClick = { onFixWish(ws, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.WISH)) }
+        ns != null -> TextButton(onClick = { onFixNeed(ns, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.DEMAND)) }
+    }
     }
 }
 
@@ -1685,6 +1682,8 @@ internal fun AnalysisTriageCard(
     onShowDay: (Int) -> Unit,
     onFixWish: (Int, Int?) -> Unit,   // 職員と、行の日（希望の登録をその日を選んだ状態で開く）
     onFixNeed: (Int, Int?) -> Unit,   // シフトと、行の日
+    summary: AnalysisSummary,
+    onPrimary: (AnalysisPrimary) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
@@ -1693,16 +1692,12 @@ internal fun AnalysisTriageCard(
     var showSummary by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("分析", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Surface(color = if (t.computed) cs.tertiaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
-                    Text(
-                        if (t.computed) "計算済み" else "未計算",
-                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (t.computed) cs.onTertiaryContainer else cs.onSurfaceVariant,
-                    )
-                }
+            Text("分析", style = MaterialTheme.typography.titleMedium)
+            // 状態の段: 一文・3 点まで・主ボタン 1 つ（[analysisSummary]）。
+            Text(summary.sentence, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            summary.points.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
+            summary.primaryLabel?.let { label ->
+                Button(onClick = { onPrimary(summary.primary) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(label) }
             }
 
             if (!t.hasAnything && ui.schedule.isNotEmpty() && !ui.running) {
@@ -1728,12 +1723,10 @@ internal fun AnalysisTriageCard(
                 }
                 t.issues.forEach { row ->
                     Surface(color = warnBg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
-                                if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                            TextButton(onClick = { onGoEdit(row.kind) }) { Text("設定へ") }
+                        Column(Modifier.padding(10.dp)) {
+                            Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
+                            if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            TextButton(onClick = { onGoEdit(row.kind) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(row.kind)) }
                         }
                     }
                 }
@@ -1774,9 +1767,6 @@ internal fun AnalysisTriageCard(
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
 
-            // [3.483.0 A-1] 旧「▶ 勤務表をつくる」ボタンは撤去。固定フッター（BottomCommandBar）の同名ボタンと重複
-            //   （3.480.0 ホーム／3.482.0 編集タブで「フッターに一本化」した方針の取り残し）。
-            if (ui.running) Text("※実行中のため、確定前の値です（確定すると最新の値になります）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -1786,7 +1776,7 @@ internal fun AnalysisTriageCard(
 private fun TriageRowLine(row: TriageRow, bg: Color, fg: Color) {
     Surface(color = bg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("${row.label} ${row.count}${row.unit}" + if (row.promoted) "（構造的に残ると判定）" else "",
+            Text("${row.label} ${row.count}${row.unit}",
                 style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
             if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = fg)
         }

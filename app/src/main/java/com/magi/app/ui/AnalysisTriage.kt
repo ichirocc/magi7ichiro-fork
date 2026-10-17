@@ -248,7 +248,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     }
 
     val note = if (computed) {
-        "最適化後も残っている項目です。構造的に残ると判定されたものは上へ移しています。"
+        "作成後も残っている項目です。設定を変えないと消えないものは上に分けています。"
     } else if (ui.relaxedBoard) {
         "設定を緩めて手順を当てた盤面の概算です（再作成する前）。"
     } else {
@@ -263,4 +263,53 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
         busyFamilies = busy,
         searchNote = note,
     )
+}
+
+/** 分析タブの主ボタン（1 つだけ）。巡回できるなら巡回、人員不足だけならなおし方、それ以外は出さない。 */
+internal enum class AnalysisPrimary { TOUR, GUIDED, NONE }
+
+/** 分析タブの状態の段: 一文・3 点まで・主ボタン（[analysisSummary]）。 */
+internal data class AnalysisSummary(val sentence: String, val points: List<String>, val primary: AnalysisPrimary, val primaryLabel: String?)
+
+/** 設定の見直しの行の全幅ボタン（節の名を言う）。 */
+internal fun issueSettingsLabel(kind: IssueKind?): String = when (kind) {
+    IssueKind.WISH -> "希望の設定を開く"
+    IssueKind.DEMAND -> "必要人数の設定を開く"
+    null -> "設定を開く"
+    else -> settingsLabelFor(yearSectionForIssueKind(kind) ?: "")
+}
+
+/**
+ * 分析タブの状態の段。一文は上部の札（[boardStatusLines]）と同じ区別で決める。
+ * [tourCount]＝巡回できる必須違反の数、[fixResolved]＝変更案で直せる必須違反の数（null＝未探索・古い＝出さない）。
+ */
+internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): AnalysisSummary {
+    val hard = ui.bestHard
+    val evaluated = ui.checkRev > 0 && !ui.running
+    val sentence = when {
+        ui.running -> "勤務表をつくっています。表示は途中の値です。"
+        !ui.hasResult -> "まだ作っていません。"
+        !ui.engineRan && !ui.ranBeforeEdit -> "手で編集した勤務表です（自動作成はまだ）。"
+        hard > 0 -> "配る前に直す必須違反が残っています。"
+        ui.bestSoft > 0 -> "必須違反はありません。要調整が残っています。"
+        else -> "必須違反も要調整もありません。"
+    }
+    val points = if (!ui.hasResult && !ui.running) emptyList() else buildList {
+        add(if (hard > 0) "必須違反 ${hardText(ui.breakdown, hard)}" else "必須違反 なし")
+        add("要調整 " + (unitTotals(ui.breakdown, MirrorKeys.soft) ?: "なし"))
+        if (evaluated && hard > 0 && fixResolved != null) add("変更案で直せる必須違反 ${fixResolved}か所")
+    }
+    val shortDays = ui.coverageDiag?.shortfalls?.filter { it.miss > 0 }?.map { it.dayIndex }?.distinct()?.size ?: 0
+    val active = hard > 0 && !ui.running && ui.hasResult
+    val primary = when {
+        active && tourCount > 0 -> AnalysisPrimary.TOUR
+        active && shortDays > 0 -> AnalysisPrimary.GUIDED
+        else -> AnalysisPrimary.NONE
+    }
+    val label = when (primary) {
+        AnalysisPrimary.TOUR -> "必須違反を順に見る（${tourCount}か所）"
+        AnalysisPrimary.GUIDED -> "なおし方を見る（${shortDays}日）"
+        AnalysisPrimary.NONE -> null
+    }
+    return AnalysisSummary(sentence, points, primary, label)
 }

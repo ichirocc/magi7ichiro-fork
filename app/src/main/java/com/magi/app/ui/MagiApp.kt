@@ -592,6 +592,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     // [勤務表の縦寸法] 下部バーの種別（勤務表タブは週送り＋元に戻す＋つくるを 1 本に、シートを開いている間は隠す）。
+    val analysis = analysisSummary(ui, tourItems.size, analysisFixResolved(ui))
     val barMode = bottomBarMode(ui.loaded, tab == 1, editingCell != null, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
@@ -602,7 +603,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0)
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE))
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
@@ -941,10 +942,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         ui,
                         onFocusStaff = { vm.findFixSuggestions(it) },
                         onGoEdit = { kind -> editReturn = EditReturn("問題の一覧", EditReturn.ANALYSIS); goEditForIssue(kind) },
-                        onShowCell = { i, j -> focusCell = i to j; tab = 1 },
+                        onShowCell = { i, j -> focusCell = i to j; tab = 1; editingCell = i to j; sheetMode = 0 },
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
                         onFixWish = { s, d -> openEditLandingFrom(EditLanding(0, null, wishStaff = s, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
                         onFixNeed = { k, d -> openEditLandingFrom(EditLanding(0, null, needShift = k, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
+                        summary = analysis,
+                        onPrimary = { p -> if (p == AnalysisPrimary.TOUR) goTourItem(0) else if (p == AnalysisPrimary.GUIDED) guidedFix = true },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)

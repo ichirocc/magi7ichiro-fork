@@ -38,6 +38,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-16（3.705.0: 分析タブの状態の段＝一文・3 点まで・主ボタン 1 つ（`analysisSummary`／`AnalysisPrimary`）・変更案で直せる必須違反の和集合（`FixResolvedUnion`）・設定の節の名の全幅ボタン（`issueSettingsLabel`））
 **最終更新**：2026-10-16（3.704.0: 配布前の確認の上段を 3 点に（`preDistributionTop`／「詳しく」）・作成前のシートの主ボタンを開いたボタンと同じ語に・条件の行に節ごとの件数・ダイアログの塗りを推奨 1 つに（`DialogOptionButton`）・単純な確認を `ConfirmDialog`（3 点まで）に）
 **最終更新**：2026-10-16（3.703.0: 人員不足の手伝いの題を段ごとに（`guidedFixTitle`）・状態 2 点・候補「山田さんを「A4」に入れる（休から）」・終わりの段の主［残っている必須違反を順に見る］、変更の確認に前後の 1 行（`previewSummaryLine`）と 3 経路共通の目的・前後（`fillPreview`）・閉じるボタンを 1 つに。画面のみ・出力不変）
 **最終更新**：2026-10-16（3.702.0: 勤務表タブの状態の 1 行（`scheduleStateLine`）・必須違反の一覧に件数と［上から順に見る］・セルのシート「このマスの確認」の対象の行と札・ちら見の主［変更案を探す］を 1 つ。画面のみ・出力不変）

@@ -1210,6 +1210,13 @@ internal fun resolvedHardLabels(state: MagiState, s: Array<IntArray>, ops: List<
         .resolved.filter { it.hard }.map { "${breakdownLabels[it.family] ?: it.family}：${violationKeyPlace(it, staffNames, shiftSymbols, state.startDate)}" }
 }
 
+/** 手 [ops] で解消する必須違反の鍵（[before]＝今の盤面の正式な報告。案ごとに検査し直さない）。 */
+internal fun resolvedHardKeys(state: MagiState, s: Array<IntArray>, before: com.magi.app.v6.ViolationReport, ops: List<com.magi.app.v6.FixCell>): Set<com.magi.app.v6.ViolationKey> {
+    val trial = Array(s.size) { s[it].copyOf() }
+    for (op in ops) if (op.staff in trial.indices && op.day in trial[op.staff].indices) trial[op.staff][op.day] = op.toShift
+    return com.magi.app.v6.ViolationIdentity.diff(before, UnifiedViolationChecker.check(state, trial)).resolved.filterTo(LinkedHashSet()) { it.hard }
+}
+
 /** ホームの「直す手」の見出し。解消する必須違反の名と場所が分かれば 2 件まで名指しする（3 件目からは件数）。 */
 internal fun homeFixHeadline(hard: String, resolved: List<String>): String {
     if (resolved.isEmpty()) return "必須違反 $hard を減らす手があります"

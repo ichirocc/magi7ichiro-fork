@@ -163,6 +163,8 @@ data class UiState(
     val display: DisplaySnapshot? = null,
     /** ホームの先頭の直す手が解消する必須違反の名と場所（VM が Default で作る。[TopFixResolved.matches] で鮮度を照合）。state 非保存。 */
     val topFixResolved: TopFixResolved? = null,
+    /** 必須違反を減らすすべての案の解消の鍵の和集合（分析タブの 3 点目。VM が Default で作る）。state 非保存。 */
+    val fixResolvedUnion: FixResolvedUnion? = null,
     val message: String? = null,
     /** 操作の通知（「元に戻す」付き）。検査の進み具合の [message] とは別のイベント＝再検査で上書きされない。 */
     val opNotice: OpNotice? = null,
@@ -296,6 +298,23 @@ enum class SearchStrength {
 /** 先頭の直す手（[ops]）を [schedule] に当てたとき解消する必須違反の行。盤面と手が今と同じときだけ使う。 */
 data class TopFixResolved(val ops: List<com.magi.app.v6.FixCell>, val schedule: List<List<Int>>, val labels: List<String>) {
     fun matches(ops: List<com.magi.app.v6.FixCell>?, schedule: List<List<Int>>): Boolean = ops == this.ops && schedule == this.schedule
+}
+
+/** 必須違反を減らす案の手（[opsList]）を [schedule] に当てたとき解消する必須違反の鍵の和集合。 */
+data class FixResolvedUnion(val opsList: List<List<com.magi.app.v6.FixCell>>, val schedule: List<List<Int>>, val keys: Set<com.magi.app.v6.ViolationKey>) {
+    fun matches(opsList: List<List<com.magi.app.v6.FixCell>>, schedule: List<List<Int>>): Boolean = opsList == this.opsList && schedule == this.schedule
+}
+
+/** 案ごとの解消の鍵を合わせる（同じ場所を直す案が重なっても 1 か所）。 */
+internal fun fixResolvedUnionOf(opsList: List<List<com.magi.app.v6.FixCell>>, resolve: (List<com.magi.app.v6.FixCell>) -> Set<com.magi.app.v6.ViolationKey>): Set<com.magi.app.v6.ViolationKey> =
+    opsList.flatMapTo(LinkedHashSet()) { resolve(it) }
+
+/** 分析タブの「変更案で直せる必須違反 Nか所」の N。未探索・盤面か案が変わった後は null（出さない）。 */
+internal fun analysisFixResolved(ui: UiState): Int? {
+    if (!ui.fixSearched) return null
+    val opsList = ui.fixSuggestions.filter { it.deltaHard < 0 }.map { it.ops }
+    if (opsList.isEmpty()) return 0
+    return ui.fixResolvedUnion?.takeIf { it.matches(opsList, ui.schedule) }?.keys?.size
 }
 
 /** ホームの見出しが読む解消の行（鮮度が合わなければ空＝件数だけの見出し）。 */
