@@ -252,7 +252,17 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
 
 /** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
-internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false, val wishOnly: Boolean = false)
+internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false, val wishOnly: Boolean = false,
+                                  val c3wLine: String? = null)
+
+/** [3.714.0] 希望の前日（c3w）の行の短い 1 行（22 字まで）。[prev]＝印の付く前日自身の希望の行、それ以外は翌日の希望の行。 */
+internal fun c3wShortLine(prev: Boolean, sym: String?): String =
+    if (prev) "翌日の${sym ?: "希望"}の前に置けない勤務" else "前日の${sym ?: "勤務"}と並べられない希望"
+
+/** [3.714.0] 希望の前日の行の操作（デザイン例 6）。主は「希望のまま」、副は文字ボタン。 */
+internal const val WISH_KEEP_BUTTON = "希望のまま"
+internal const val WISH_CONSULT_SHORT = "相談"
+internal const val WISH_HOLD_SHORT = "保留"
 
 /** 行に添える短い札。希望どうしのぶつかり（計算では消せない）だけ「希望のまま」。 */
 internal const val WISH_ONLY_TAG = "希望のまま"
@@ -285,7 +295,7 @@ internal const val WISH_TRIAL_GROUP_LIMIT = 8
  */
 internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     // 優先度（小さいほど代表）と「ほか」に出す短い名前。
-    class Hit(val staff: Int, val day: Int, val prio: Int, val reason: String)
+    class Hit(val staff: Int, val day: Int, val prio: Int, val reason: String, val line: String? = null)
     val short = listOf("希望の勤務になっていない", "前日の禁止", "禁止の並び", "希望どうし")
     val hits = ui.violationCellFamilies.flatMap { (key, fams) ->
         val parts = key.split(",")
@@ -294,8 +304,8 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         buildList {
             if ("vio-pref" in fams) add(Hit(i, j, 0, prefReason(ui, i, j)))
             if ("vio-c3w" in fams) {
-                add(Hit(i, j + 1, 1, c3wNextReason(ui, i, j)))
-                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, c3wPrevReason(ui, i, j)))
+                add(Hit(i, j + 1, 1, c3wNextReason(ui, i, j), c3wShortLine(false, boardSym(ui, i, j))))
+                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, c3wPrevReason(ui, i, j), c3wShortLine(true, wishSym(ui, i, j + 1))))
             }
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, c3nWishReason(ui, i, j)))
         }
@@ -318,7 +328,7 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
             (if (sd in pinnedKeys) listOf("人員不足の日") else emptyList())
         val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
         WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins,
-            wishOnly = "${sd.first},${sd.second}" in selfKeys)
+            wishOnly = "${sd.first},${sd.second}" in selfKeys, c3wLine = rep.line)
     }.sortedWith(compareBy({ it.staff }, { it.day }))
     val directKeys = direct.map { it.staff to it.day }.toSet()
     val shortfall = pinned.map { s ->

@@ -31,8 +31,8 @@ class Review3702Test {
     }
 
     @Test fun hardListShape() {
-        assertEquals("必須違反の一覧（3件・2人）", hardListTitle("3件・2人"))
-        assertEquals("上から順に見る", HARD_LIST_START_BUTTON)
+        assertEquals("残っている問題 3件・2人", hardListTitle("3件・2人"))
+        assertEquals("直し方を見る", HARD_LIST_START_BUTTON)
     }
 
     @Test fun targetLineAndBadge() {

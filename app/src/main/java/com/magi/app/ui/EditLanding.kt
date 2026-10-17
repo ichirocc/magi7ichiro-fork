@@ -52,6 +52,13 @@ internal fun landingButtonLabel(l: EditLanding?): String = when {
     else -> "データを見直す"
 }
 
+/** [3.714.0] 人員不足の詳しい画面の文字ボタン: その日の希望（希望で固定した人がいればその人）と、担当（年間マスター①）。 */
+internal const val SHORTAGE_WISH_BUTTON = "希望を見る"
+internal const val SHORTAGE_SKILL_BUTTON = "担当を編集"
+internal fun shortageWishLanding(s: CoverageShortfall): EditLanding =
+    EditLanding(scope = 0, section = null, wishStaff = s.wishPinned.firstOrNull(), day = s.dayIndex)
+internal fun shortageSkillLanding(): EditLanding = EditLanding(scope = 2, section = "yr_ws1")
+
 internal const val LANDING_ZERO_CAP = "入れない指定を見直す"
 internal const val LANDING_WINDOW = "期間の制約を見直す"
 

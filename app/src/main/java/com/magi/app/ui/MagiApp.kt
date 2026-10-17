@@ -470,6 +470,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員・日／設定＝年間マスターの節／必要人数＝月次条件のその日）。
     var tourRequest by remember { mutableStateOf(false) }
+    var consultOpen by remember { mutableStateOf(false) }   // [3.714.0] 作成中に相談の行の「開く」で相談の一覧を出す
     var dayJump by remember { mutableStateOf<Int?>(null) }   // 日の人員のシートの「その日の勤務を見る」（勤務表タブのその日の列へ）   // 変更を反映したあとの「残っている問題を見る」（巡回は下で定義する goTourItem で始める）
     val fixNav = remember(tourItems.size) { FixNav(
         onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
@@ -740,10 +741,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onRetryRelax = { vm.retryRelaxTrial() },
                         creation = creationTop,
                         tourNext = tourNext,
+                        onOpenConsults = { consultOpen = true },
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     // [3.712.0] 実行中は主カードの状態・相談の 1 行・止めるだけ（一覧と他の案は終わってから）。
-                    if (!ui.running) ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
+                    if (!ui.running || consultOpen) ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
                         onResumeChain = { vm.resumeConsultChain(it) }, answerOf = { vm.consultAnswer(it) }, onCycleAnswer = { vm.cycleConsultAnswer(it) })
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
@@ -856,9 +858,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     if (editScope != 0) SetupGuideCard(ui, conditionsView, editScope = editScope, onOpenWish = openWish)
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
+                    // [3.714.0] タブの見出し＋1 行（区分ごとの説明は見出しカードの副題・SetupGuideCard）。
+                    Text(EDIT_TAB_HEADING, style = MaterialTheme.typography.titleMedium)
+                    Text(EDIT_TAB_LINE, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
-                    // [発見性] 各スコープの中身を1行で示す（月次条件では見出しカードの副題）。
-                    if (editScope != 0) Text(editPlan.subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     when (editScope) {
                         0 -> {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
@@ -1516,10 +1519,8 @@ internal fun HardListChip(hard: String, rows: List<HardListRow>, covULine: Strin
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(r.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                            Text(r.heading, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        }
+                        // [3.714.0] 1 件 1 行（族ごとの型、18 字まで）。族と日の詳しい見出しはセルのシートが言う。
+                        Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
                     }
                 }

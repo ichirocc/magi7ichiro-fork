@@ -209,18 +209,24 @@ internal fun GuideRow(label: String, value: String, done: Boolean?, onClick: (()
 internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(SETTINGS_TIME_TITLE, style = MaterialTheme.typography.titleMedium)
+            // [3.714.0] 見出し「設定」＋組む時間の 1 行＋主ボタン。仕上げの秒数と注記は「詳しく」の中。
+            Text(SETTINGS_HEADING, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodyMedium)
-            // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
-            Text("仕上げと玉突き（勤務の入れ替え調整）は共通の枠です。改善が止まると早く終わることがあります。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
+            var budgetMore by rememberSaveable { mutableStateOf(false) }
+            TextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) "閉じる" else "詳しく") }
+            if (budgetMore) {
+                Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
+                // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
+                Text("仕上げと玉突き（勤務の入れ替え調整）は共通の枠です。改善が止まると早く終わることがあります。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Spacer(Modifier.height(8.dp))
             var picking by rememberSaveable { mutableStateOf(false) }
             val m = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             // 保存失敗の間は上の「もう一度保存する」が主操作（INV-09）。
-            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text("組む時間を変える") }
-            else Button(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text("組む時間を変える") }
+            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text(BUDGET_CHANGE_BUTTON) }
+            else Button(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text(BUDGET_CHANGE_BUTTON) }
             if (picking) BudgetPickerSheet(ui.budgetSec, onPick = { onEvent(MagiEvent.Settings.SetBudget(it)); picking = false }, onDismiss = { picking = false })
             Spacer(Modifier.height(10.dp))
             Spacer(Modifier.height(10.dp))

@@ -34,8 +34,8 @@ class WishTrialCandidatesTest {
         // 盤面が無い＝今の勤務は添えない（希望の記号だけ）。
         assertEquals(listOf(
             WishTrialRow(0, 2, "山田", "希望の「日」になっていません（ほか: 禁止の並び・人員不足の日）", true),
-            WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望「日」の前日に置けない「夜」の希望です", true),
-            WishTrialRow(1, 4, "佐藤", "前日（4日）に置けない勤務が入っています", true),
+            WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望「日」の前日に置けない「夜」の希望です", true, c3wLine = "翌日の日の前に置けない勤務"),
+            WishTrialRow(1, 4, "佐藤", "前日（4日）に置けない勤務が入っています", true, c3wLine = "前日の勤務と並べられない希望"),
             WishTrialRow(2, 5, "鈴木", "希望「日」が禁止の並びに掛かっています", false),
         ), c.direct)
         // (0,2) は S5a が代表＝S5b の 3日 の枠は空になって消える。枠は日順、行は職員順。
