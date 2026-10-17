@@ -62,14 +62,6 @@ class Review3707Test {
         assertEquals("拡張希望を登録できませんでした。希望のある日だけです。日かシフトを選び直して、もう一度登録してください。", extWishFailedText("希望のある日だけです。"))
     }
 
-    @Test fun wishConflictSummaryShowsOnlyNonZeroPoints() {
-        val r = { s: Int, d: Int, only: Boolean -> WishTrialRow(s, d, "n$s", "理由", locked = true, wishOnly = only) }
-        val c = WishTrialCandidates(listOf(r(0, 1, true), r(1, 2, false)), listOf(ShortfallWishGroup(3, 0, "4日 日勤 1人不足", listOf(r(2, 3, false), r(2, 3, false), r(4, 3, false)))))
-        assertEquals(listOf("必須違反に関わる希望 2件（うち計算では消せない 1件）", "人員不足の日に別の勤務の希望 2人"), wishConflictSummary(c))
-        assertEquals(listOf("必須違反に関わる希望 1件"), wishConflictSummary(WishTrialCandidates(listOf(r(1, 2, false)), emptyList())))
-        assertEquals(emptyList<String>(), wishConflictSummary(WishTrialCandidates(emptyList(), emptyList())))
-    }
-
     @Test fun editReturnBandPutsProblemFirstInTwoLines() {
         val r = EditReturn("なおし方", EditReturn.GUIDED, problem = "11/24(火) の A4 が 1人 足りません")
         assertEquals(listOf("11/24(火) の A4 が 1人 足りません", "直したら「なおし方」へ戻れます。"), editReturnLines(r))

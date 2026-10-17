@@ -1036,13 +1036,14 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     }
     // 内訳があれば単位ごとに（件・人・回・pt を 1 つの数に足さない＝統合仕様 INV-07）。
     fun t(b: Map<String, Int>?, fams: List<String>, n: Int) = b?.let { unitTotals(it, fams) ?: "なし" } ?: "${n}件"
-    if (a.hardBefore >= 0) out += "必須違反（勤務表全体）：${t(a.breakdownBefore, MirrorKeys.hard, a.hardBefore)} → ${t(a.breakdownAfter, MirrorKeys.hard, a.hardAfter)}"
+    if (a.hardBefore >= 0) out += "必須 ${t(a.breakdownBefore, MirrorKeys.hard, a.hardBefore)}→${t(a.breakdownAfter, MirrorKeys.hard, a.hardAfter)}"
     appearedFamiliesLine(a.breakdownBefore, a.breakdownAfter)?.let { out += it }
     val (same, other) = headcountImpact(a.before, a.ops, ui.shiftSymbols, ui.startDate, needLimits, target?.day?.let { target.shift to it })
     out += same + other
     if (ui.saveState == SaveState.Failed || ui.saveState == SaveState.Saving) out += saveStateLine(ui.saveState)
-    val next = appliedRemaining(ui, a, target, label, needLimits)
-    if (next.isNotEmpty()) out += "次に確認すること：" + next.joinToString("。") + "。"
+    // [3.712.0] 見ている問題の残りは 1 行目が言う＝「次」はほかの日の同じ勤務だけ（同じ文を 2 回出さない）。
+    val next = if (target?.day != null) remainingSameShift(ui.needFamilies, ui.schedule, target, needLimits, ui.shiftSymbols, ui.startDate) else emptyList()
+    if (next.isNotEmpty()) out += "次：" + next.joinToString("。")
     out += "勤務表が変わったため、変更案を探し直しました（下の案は今の勤務表のものです）。"
     return out
 }
@@ -1539,6 +1540,38 @@ internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
 internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋まらなかった"
 internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「なおし方を見る」で 1 人ずつ入れられます"
 
+/** [3.712.0] 診断カードの行は 1 行の事実と札だけ。理由・内訳はカードの末尾の「詳しく」に 1 回だけ（利用者仕様: 説明は画面に 1 回）。 */
+internal const val DIAG_DETAILS_LABEL = "詳しく"
+internal const val DIAG_DETAILS_CLOSE = "詳しくを閉じる"
+internal const val SHORTAGE_TAG_INFEASIBLE = "担当が足りない"
+internal const val SHORTAGE_MOVABLE_LINE = "休みや余裕のある勤務から移せます"
+internal const val FORBIDDEN_RETRY_NOTE = "玉突きか隣の日の調整で崩せます。もう一度つくると直る場合があります"
+
+/** 人員不足の行の札（4 区分を 3 語へ。試した入れ替えで埋まらなかった区別は「詳しく」の理由が言う）。 */
+internal fun shortageRowTag(infeasible: Boolean, blockedNow: Boolean): String = when {
+    infeasible -> SHORTAGE_TAG_INFEASIBLE
+    blockedNow -> SHORTAGE_LABEL_BLOCKED
+    else -> SHORTAGE_LABEL_FIXABLE
+}
+
+/** 人員不足の行: 「10/10(土) Cｵ 不足1」。 */
+internal fun shortageRowLine(dayLabel: String, shiftSymbol: String, miss: Int): String = "$dayLabel $shiftSymbol 不足$miss"
+
+/** 人員不足の行の下の 1 行（動かせば埋まる枠だけ）。 */
+internal fun shortageRowNote(infeasible: Boolean, blockedNow: Boolean): String? = SHORTAGE_MOVABLE_LINE.takeIf { !infeasible && !blockedNow }
+
+/** 人員不足カードの見出しの下の 1 行: 「足りない日3 · 動かせる枠あり」。 */
+internal fun shortageCardLine(days: Int, movable: Boolean): String = "足りない日$days · " + if (movable) "動かせる枠あり" else "動かせる枠なし"
+
+/** 人員過剰の行の理由（「。内訳: …」から先は「詳しく」へ）。 */
+internal fun surplusShortReason(reason: String): String = reason.substringBefore("。内訳: ")
+
+/** 禁止の並びの行の札。 */
+internal fun forbiddenRunTag(escapable: Boolean): String = if (escapable) "崩せる" else "崩せない"
+
+/** 禁止の並びの行の下の 1 行: 「10/9 Dﾃ · 10/10 Aｱ」（[cells]＝日の表示と記号の組）。 */
+internal fun forbiddenRunCellsLine(cells: List<Pair<String, String>>): String = cells.joinToString(" · ") { "${it.first} ${it.second}" }
+
 internal const val SETTINGS_TIME_TITLE = "勤務表をつくる時間"
 
 /** 名前・記号が引けないときの共通の表示（番号を見せない）。 */
@@ -1864,17 +1897,8 @@ internal fun wishOutOfScopeNote(symbol: String, name: String): String =
 internal fun extWishFailedText(reason: String): String =
     "拡張希望を登録できませんでした。${reason.trimEnd('。')}。日かシフトを選び直して、もう一度登録してください。"
 
-/** [3.707.0 W-1] ぶつかっている希望のダイアログの題の直下（0 の点は出さない、2 つまで）。 */
-internal fun wishConflictSummary(c: WishTrialCandidates): List<String> {
-    val direct = c.direct.size
-    val people = c.shortfall.flatMap { g -> g.rows.map { it.staff } }.toSet().size
-    val wishOnly = c.direct.count { it.wishOnly }
-    return listOfNotNull(
-        // 「うち」は直前の行の内訳に読まれるので、人数の行の後ろでなく件数の行の括弧に入れる。
-        ("必須違反に関わる希望 ${direct}件" + (if (wishOnly > 0) "（うち計算では消せない ${wishOnly}件）" else "")).takeIf { direct > 0 },
-        "人員不足の日に別の勤務の希望 ${people}人".takeIf { people > 0 },
-    )
-}
+/** [3.712.0] ぶつかっている希望の行の 1 行目: 「福澤俊陽 · 10/1」（理由は次の行。題の下の件数の要約は 3.712.0 で撤去）。 */
+internal fun wishRowHead(name: String, day: String): String = "$name · $day"
 
 /** [3.707.0 3a-6] 着地先が必要人数の日なら、その日の人員不足の 1 文（3.698.0 の shortageHeadline）。無ければ null。 */
 internal fun editReturnProblem(shortfalls: List<com.magi.app.v6.CoverageShortfall>, shift: Int?, day: Int?): String? {

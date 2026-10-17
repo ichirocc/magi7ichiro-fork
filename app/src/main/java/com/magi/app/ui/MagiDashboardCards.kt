@@ -135,15 +135,11 @@ internal fun WishConflictDialog(
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
-                    // [3.707.0 W-1] 題の直下に 0 でない点だけ（2 つまで）。
-                    wishConflictSummary(cands).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
                     control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
                         Text(line, fontWeight = FontWeight.Bold)
                         OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("再作成") }
                     }
                     if (cands.direct.isNotEmpty()) {
-                        Text("この希望とルールがぶつかっています。1件ずつ開いて、本人と相談して希望を調整するか、勤務を決めてください。",
-                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                     }
                     if (cands.shortfall.isNotEmpty()) {
@@ -185,7 +181,9 @@ private fun WishTrialRowView(
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         // [3.696.0] 札を右に並べると名前の先頭が欠けた（端末報告「福澤が欠けている」）＝文は全幅、札はその下。
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
+            // [3.712.0] 1 行目は名前と日、2 行目に短い理由（利用者仕様）。
+            Text(wishRowHead(row.name, DayText.short(ui.startDate, row.day)), modifier = Modifier.fillMaxWidth())
+            Text(row.reason, style = small, color = cs.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
             if (row.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
         }
     }
@@ -517,7 +515,8 @@ internal fun GuidedFixDialog(
                     infeasible.isNotEmpty() -> {
                         Text("${infeasible.map { it.dayIndex }.distinct().size}日 は、これ以上は自動で埋められません。", fontWeight = FontWeight.Bold)
                         infeasible.take(4).forEach {
-                            Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
+                            // [3.712.0] 行は事実と札だけ（理由の長文はホームの診断カードの「詳しく」）。
+                            Text("・${shortageRowLine(it.dayLabel, it.shiftSymbol, it.miss)}　${shortageRowTag(it.verdict == CoverageVerdict.INFEASIBLE, it.blockedNow)}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Text("担当できる職員（担当できるシフト）や希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -531,7 +530,8 @@ internal fun GuidedFixDialog(
                         //   ここで「直し終わりました」と言うのが旧実装の嘘だった。診断が調べた理由をそのまま出す。
                         Text("いまの希望・担当のままでは埋められない日が ${blocked.map { it.dayIndex }.distinct().size}日 残っています。", fontWeight = FontWeight.Bold)
                         blocked.take(4).forEach {
-                            Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
+                            // [3.712.0] 行は事実と札だけ（理由の長文はホームの診断カードの「詳しく」）。
+                            Text("・${shortageRowLine(it.dayLabel, it.shiftSymbol, it.miss)}　${shortageRowTag(it.verdict == CoverageVerdict.INFEASIBLE, it.blockedNow)}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Text("再作成しても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
@@ -900,10 +900,13 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
     val cs = MaterialTheme.colorScheme
     var allShortfalls by remember { mutableStateOf(false) }
     var allSurpluses by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (diag.hasShortage) {
-                Text("人員不足の原因", style = MaterialTheme.typography.titleMedium)
+                Text("人員不足", style = MaterialTheme.typography.titleMedium)
+                Text(shortageCardLine(diag.shortfalls.map { it.dayIndex }.distinct().size, diag.shortfalls.any { it.verdict != CoverageVerdict.INFEASIBLE && !it.blockedNow }),
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 // [3.344.0] 「充足可能N枠」と言いながら各枠の説明が「いまの希望のままでは解消できません」
                 //   という矛盾を解消する。枠の数（静的に足りているか）と、いま実際に埋められるかは別軸。
                 val headline = when {
@@ -922,7 +925,8 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     else -> "不足 ${diag.totalShortfall} 人。${SHORTAGE_LABEL_INFEASIBLE} ${diag.infeasibleSlots} 枠、${SHORTAGE_LABEL_FIXABLE} ${diag.fixableSlots} 枠。" +
                         "動かせば埋まる枠は再作成すると解消する場合があります。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                 }
-                Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                // [3.712.0] 見出しの長い説明は「詳しく」の中へ。
+                if (details) Text(headline, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 val shownShortfalls = if (allShortfalls) diag.shortfalls else diag.shortfalls.take(6)
                 for (s in shownShortfalls) {
                     val infeasible = s.verdict == CoverageVerdict.INFEASIBLE
@@ -931,15 +935,10 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     Surface(color = container, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("${s.dayLabel}  ${s.shiftSymbol}  必要${s.need}/現状${s.got}（不足${s.miss}）",
+                                Text(shortageRowLine(s.dayLabel, s.shiftSymbol, s.miss),
                                     color = onContainer, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                                 MagiTagChip(
-                                    text = when {
-                                        infeasible -> SHORTAGE_LABEL_INFEASIBLE
-                                        s.blockedNow && s.searchMiss -> SHORTAGE_LABEL_SEARCH_MISS
-                                        s.blockedNow -> SHORTAGE_LABEL_BLOCKED
-                                        else -> SHORTAGE_LABEL_FIXABLE
-                                    },
+                                    text = shortageRowTag(infeasible, s.blockedNow),
                                     color = when {
                                         infeasible -> MagiAccent.red
                                         s.blockedNow -> MagiAccent.orange
@@ -947,7 +946,8 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                     },
                                 )
                             }
-                            Text(s.reason, color = onContainer, style = MaterialTheme.typography.bodySmall)
+                            shortageRowNote(infeasible, s.blockedNow)?.let { Text(it, color = onContainer, style = MaterialTheme.typography.bodySmall) }
+                            if (details) Text(s.reason, color = onContainer, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -967,8 +967,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
             }
             if (diag.hasSurplus) {
                 Text("人員過剰がなぜ減らないか", style = MaterialTheme.typography.titleMedium)
-                Text("過剰 ${diag.totalSurplus} 人。勤務している人を他のシフトへ動かせば消えるはずの過剰について、動かない理由を枠ごとに示します。",
-                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                Text("過剰 ${diag.totalSurplus} 人", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownSurpluses = if (allSurpluses) diag.surpluses else diag.surpluses.take(6)
                 for (s in shownSurpluses) {
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
@@ -977,7 +976,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                 color = cs.onSecondaryContainer, style = MaterialTheme.typography.titleSmall)
                             // [3.406.0] 主因は画面では日本語で出す（ログは生キー＝C1Plateau と同じ規約）。
                             val famJp = s.blockedFamily?.let { breakdownLabels[it] ?: it }
-                            Text(s.reason + (famJp?.let { "（主因: $it）" } ?: ""),
+                            Text((if (details) s.reason else surplusShortReason(s.reason)) + (famJp?.let { "（主因: $it）" } ?: ""),
                                 color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodySmall)
                             // [3.492.0] 「希望固定N人」の中身を名指しし、その場で希望を取り消せる（データ修正の導線）。
                             for (i in s.pinnedStaff) {
@@ -992,6 +991,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 }
                 if (shownSurpluses.size < diag.surpluses.size) SettingIssuesShowAll(diag.surpluses.size - shownSurpluses.size) { allSurpluses = true }
             }
+            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_CLOSE)
         }
     }
 }
@@ -1009,6 +1009,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     val cs = MaterialTheme.colorScheme
     var allRuns by remember { mutableStateOf(false) }
     var confirmRule by remember { mutableStateOf<Pair<String, Int>?>(null) }   // 並びと、その崩せない件数
+    var details by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("禁止の並びがなぜ崩せないか", style = MaterialTheme.typography.titleMedium)
@@ -1029,10 +1030,13 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                             Text("${r.staffName}  ${r.seqLabel}",
                                 color = onContainer, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             MagiTagChip(
-                                text = if (blocked) "崩せない" else "崩す手あり",
+                                text = forbiddenRunTag(!blocked),
                                 color = if (blocked) MagiAccent.red else MagiAccent.blue,
                             )
                         }
+                        Text(forbiddenRunCellsLine(r.cells.map { it.dayLabel to it.shiftSymbol }), color = onContainer, style = MaterialTheme.typography.bodySmall)
+                        // [3.712.0] セルごとの判定と理由は「詳しく」の中だけ。玉突きの定型文は行に出さず末尾に 1 回。
+                        if (details) {
                         val cellsTxt = r.cells.joinToString(" ・ ") { c ->
                             val tag = when (c.escape) {
                                 com.magi.app.v6.ForbiddenCellEscape.FREE -> "崩せる"
@@ -1044,11 +1048,14 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                             "${c.dayLabel} ${c.shiftSymbol}=$tag"
                         }
                         Text(cellsTxt, color = onContainer, style = MaterialTheme.typography.bodySmall)
-                        Text(r.hint, color = onContainer, style = MaterialTheme.typography.bodySmall)
+                        if (r.hint != com.magi.app.v6.V6PortAnalyzer.FORBIDDEN_CHAIN_HINT) Text(r.hint, color = onContainer, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
             if (shownRuns.size < diag.runs.size) SettingIssuesShowAll(diag.runs.size - shownRuns.size) { allRuns = true }
+            if (details && diag.runs.any { it.hint == com.magi.app.v6.V6PortAnalyzer.FORBIDDEN_CHAIN_HINT }) Text(FORBIDDEN_RETRY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_CLOSE)
 
             // [壁の名指しと緩和] 「崩せない」判定の run を並び（ルール）ごとに集約し、そのルールを
             //   その場で削除できるようにする。制約画面へ行って行を探す往復を省く導線。

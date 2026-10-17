@@ -173,10 +173,10 @@ class CountShortageTextTest {
         val lines = appliedLines(u, a, t, "10/3のA", need)
         assertEquals("今回の問題：解消（10/3のA：1人 → 2人、必要 2人を満たします）", lines[0])
         assertEquals("Aの不足（期間全体）：5人 → 4人", lines[1])
-        assertEquals("必須違反（勤務表全体）：3件 → 2件", lines[2])
+        assertEquals("必須 3件→2件", lines[2])
         assertEquals("10/3の休：1人 → 0人", lines[3])
         assertEquals("保存：保存中", lines[4])
-        assertEquals("次に確認すること：10/4のAは、2人不足のままです。", lines[5])
+        assertEquals("次：10/4のAは、2人不足のままです", lines[5])
         assertTrue(lines.last().startsWith("勤務表が変わったため"))
         // 保存済みなら保存の行は出さない。続けて同じ勤務の案へ進むボタン。
         assertTrue(appliedLines(u.copy(saveState = SaveState.Saved), a, t, "10/3のA", need).none { it.startsWith("保存：") })
