@@ -729,7 +729,7 @@ internal fun OperatorNextActionCard(
                 HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     creationTopLines(nextTarget, creation.kept, headlineTarget = nextTarget).forEach { Text(it, style = body, color = plan.fg) }
                 }
-                HomeSection.HEADLINE -> Text(homeHeadline(kind, ui.startDate), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+                HomeSection.HEADLINE -> Text(homeHeadline(kind), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
                 // 札は見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。件と人は足さない（INV-07）。
                 HomeSection.BADGES -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (b in listOf(homeHardPill(ui.bestHard, hardNow))) {

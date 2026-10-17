@@ -54,11 +54,11 @@ class Review3698Test {
     }
 
     @Test fun headlinePerStage() {
-        assertEquals("今月の判断", homeHeadline(HomePlanKind.LIST, "2026-10-01"))
-        assertEquals("今月の判断", homeHeadline(HomePlanKind.GUIDED_FIX, "2026-10-01"))
-        assertEquals("今月の判断", homeHeadline(HomePlanKind.WISHES, ""))
-        assertEquals(HOME_MAKE_HEADLINE, homeHeadline(HomePlanKind.MAKE, "2026-10-01"))
-        assertEquals(HOME_MONTH_HEADLINE, homeHeadline(HomePlanKind.PRE_DIST, "2026-10-01"))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.LIST))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.GUIDED_FIX))
+        assertEquals("今月の判断", homeHeadline(HomePlanKind.WISHES))
+        assertEquals(HOME_MAKE_HEADLINE, homeHeadline(HomePlanKind.MAKE))
+        assertEquals(HOME_MONTH_HEADLINE, homeHeadline(HomePlanKind.PRE_DIST))
         assertFalse(HOME_MAKE_HEADLINE.contains("②")); assertFalse(HOME_HARD0_HEADLINE.contains("③"))
     }
 

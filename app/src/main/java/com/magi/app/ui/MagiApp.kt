@@ -471,6 +471,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員・日／設定＝年間マスターの節／必要人数＝月次条件のその日）。
     var tourRequest by remember { mutableStateOf(false) }
     var consultOpen by remember { mutableStateOf(false) }   // [3.714.0] 作成中に相談の行の「開く」で相談の一覧を出す
+    LaunchedEffect(ui.running) { if (!ui.running) consultOpen = false }   // 作成が終わったら畳む（次の作成中はまた 1 行から）
     var dayJump by remember { mutableStateOf<Int?>(null) }   // 日の人員のシートの「その日の勤務を見る」（勤務表タブのその日の列へ）   // 変更を反映したあとの「残っている問題を見る」（巡回は下で定義する goTourItem で始める）
     val fixNav = remember(tourItems.size) { FixNav(
         onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
