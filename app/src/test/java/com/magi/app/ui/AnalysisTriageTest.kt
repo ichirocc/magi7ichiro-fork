@@ -121,10 +121,14 @@ class AnalysisTriageTest {
         assertEquals("必須 残り1件（うち希望のまま 1件）", homeRemainingLabel(1L, 0, emptyMap(), 3))
     }
 
-    /** 主ボタンに最初の対象を添える。対象が無ければ元の文言。 */
+    /** 主ボタンに最初の対象を前置きする。対象が無いか 1 行に収まらなければ元の文言。 */
     @Test fun homeTargetLabelNamesFirstItem() {
-        assertEquals("ぶつかっている希望を見る（アリフ 10/8）", homeTargetLabel("ぶつかっている希望を見る", "アリフ", "10/8"))
-        assertEquals("なおし方を見る（10/8）", homeTargetLabel("なおし方を見る", null, "10/8"))
+        assertEquals("アリフ 10/8の希望を見る", homeTargetLabel(HOME_WISH_BUTTON, "アリフ", "10/8"))
+        assertEquals("10/8のなおし方を見る", homeTargetLabel("なおし方を見る", null, "10/8"))
+        assertEquals("なおし方を見る", homeTargetLabel("なおし方を見る", "10/15(水) Cｵ", null))
+        assertEquals(HOME_LIST_BUTTON, homeTargetLabel(HOME_LIST_BUTTON, "福澤さん 禁止の並び", null))
+        for (b in listOf(HOME_WISH_BUTTON, "なおし方を見る", "直す1手を見る", HOME_LIST_BUTTON))
+            assertTrue(homeTargetLabel(b, "アイウエオ", "10/18").length <= HOME_BUTTON_MAX_CHARS)
         assertEquals("直す1手を見る", homeTargetLabel("直す1手を見る", null, null))
     }
 

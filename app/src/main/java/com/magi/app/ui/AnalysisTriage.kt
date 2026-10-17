@@ -124,11 +124,21 @@ internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<S
     }
 }
 
-/** ホームの主ボタンに最初の対象（名前・日）を添える。対象が無ければ元の文言のまま。 */
+/** ホームの主ボタンの 1 行に収める字数（全幅のボタンで折り返さない上限）。 */
+internal const val HOME_BUTTON_MAX_CHARS = 18
+
+/**
+ * ホームの主ボタンに最初の対象（名前・日）を前置きする（「アリフ 10/8の希望を見る」）。対象が無いとき、または
+ * 前置きで [HOME_BUTTON_MAX_CHARS] を超えるときは元の文言のまま（対象は「次に確認する問題」の行が名指しする）。
+ */
 internal fun homeTargetLabel(base: String, name: String?, day: String?): String {
     val t = listOfNotNull(name?.takeIf { it.isNotBlank() }, day?.takeIf { it.isNotBlank() }).joinToString(" ")
-    return if (t.isEmpty()) base else "$base（$t）"
+    if (t.isEmpty()) return base
+    val label = if (base == HOME_WISH_BUTTON) "${t}の希望を見る" else "${t}の$base"
+    return if (label.length <= HOME_BUTTON_MAX_CHARS) label else base
 }
+
+internal const val HOME_WISH_BUTTON = "ぶつかっている希望を見る"
 
 /** `SettingIssue` の種類 → 画面に出す見出し（英字符号を出さない＝`docs/operator_ux.md`）。 */
 private fun issueKindLabel(kind: IssueKind) = when (kind) {
@@ -312,4 +322,35 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
         AnalysisPrimary.NONE -> null
     }
     return AnalysisSummary(sentence, points, primary, label)
+}
+
+/** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */
+internal fun isSameRunResult(prev: Pair<Long, Long>?, now: Pair<Long, Long>): Boolean = prev != null && prev == now
+
+/** 盤面か設定が変わったら出さない。 */
+internal fun sameResultVisible(note: SameResultNote?, editRev: Int, schedule: List<List<Int>>): Boolean =
+    note != null && note.editRev == editRev && note.schedule == schedule
+
+internal fun sameResultNotice(hard: Int): String =
+    if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。"
+
+/** 同じ依頼（起点）・同じ盤面と設定で続いた案 0 件の回数。 */
+internal data class EmptySearchStreak(val origin: String, val board: Long, val state: Long, val count: Int)
+
+/** 案があれば途切れる（null）。起点・盤面・設定のどれかが違えば 1 から数え直す。 */
+internal fun nextEmptySearchStreak(prev: EmptySearchStreak?, origin: String, board: Long, state: Long, found: Int): EmptySearchStreak? = when {
+    found > 0 -> null
+    prev != null && prev.origin == origin && prev.board == board && prev.state == state -> prev.copy(count = prev.count + 1)
+    else -> EmptySearchStreak(origin, board, state, 1)
+}
+
+internal const val REPEATED_EMPTY_LINE = "この対象には、いまの条件で直せる変更案がありません。"
+
+internal enum class RepeatedEmptyAction(val label: String) { WISHES("希望を見る"), SETTINGS("設定の確認を見る") }
+
+/** 続けて 0 件の対象の行き先。希望がぶつかるセルなら希望、設定ミスの診断が出ていれば設定、どちらも無ければボタンなし。 */
+internal fun repeatedEmptyAction(wishOnTarget: Boolean, settingIssueKnown: Boolean): RepeatedEmptyAction? = when {
+    wishOnTarget -> RepeatedEmptyAction.WISHES
+    settingIssueKnown -> RepeatedEmptyAction.SETTINGS
+    else -> null
 }

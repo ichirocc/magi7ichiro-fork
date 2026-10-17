@@ -649,13 +649,13 @@ internal fun OperatorNextActionCard(
         wish = firstWish?.let { "${staffName(it.staff)} ${DayText.short(ui.startDate, it.day)}" },
         relax = relax?.let { relaxTarget(it.result, ui) }?.let { "${it.name} ${it.span}" },
         tour = tourNext ?: creation?.next)
-    val wishLabel = homeTargetLabel("ぶつかっている希望を見る", nextTarget, null)
+    val wishLabel = homeTargetLabel(HOME_WISH_BUTTON, nextTarget, null)
     val hardNow = hardText(ui.breakdown, ui.bestHard)
     val plan = when (kind) {
         // [校正] 「やめる」は下部コマンドバーに常設済み。見出し文は下の進捗行と重複のため出さない（ユーザー赤囲い指示）。
         HomePlanKind.RUNNING -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
         HomePlanKind.MAKE -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "",
-            "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial,
+            "勤務表をつくる", onMake, true, "希望と期間の制約で下書きをつくる", onSmartInitial,
             bigColors = cs.onPrimaryContainer to cs.primaryContainer)
         HomePlanKind.DRAFT -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, homeDraftStatus(hardNow, ui.bestHard),
             "勤務表をつくる", onMake, true, HOME_SCHEDULE_HELPER, onSchedule,
@@ -744,10 +744,11 @@ internal fun OperatorNextActionCard(
                     Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f))
                 }
                 HomeSection.PRIMARY -> {
+                    ui.sameResult?.takeIf { sameResultVisible(it, ui.editRev, ui.schedule) }?.let { Text(sameResultNotice(it.hard), style = body, color = plan.fg) }
                     val (bigBg, bigFg) = plan.bigColors ?: (cs.primary to cs.onPrimary)
                     Button(onClick = plan.bigAction, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = bigBg, contentColor = bigFg)) {
-                        Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium)
+                        Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 // [校正] 補助操作もテキストリンクではなく外枠ボタンに（カード地色でも見えるよう枠色=前景色）。段に補助が無ければ「表で全体を見る」。
@@ -756,7 +757,7 @@ internal fun OperatorNextActionCard(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg),
                     border = BorderStroke(1.dp, plan.fg),
-                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER) }
+                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 HomeSection.OTHERS -> if (creation != null) TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
                 HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     plan.body?.let { Text(it, style = body, color = plan.fg) }

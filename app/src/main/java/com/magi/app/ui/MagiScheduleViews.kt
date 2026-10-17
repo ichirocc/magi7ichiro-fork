@@ -2326,6 +2326,15 @@ private fun NoFixBlock(
     }
     val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
+    if (ui.fixEmptyRepeatKey == focus.key) {
+        Text(REPEATED_EMPTY_LINE, style = MaterialTheme.typography.bodySmall)
+        // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。
+        if (compact) when (repeatedEmptyAction(why.wishRelated, ui.settingIssues.isNotEmpty())) {
+            RepeatedEmptyAction.WISHES -> OutlinedButton(onClick = { nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(RepeatedEmptyAction.WISHES.label, maxLines = 1) }
+            RepeatedEmptyAction.SETTINGS -> OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(RepeatedEmptyAction.SETTINGS.label, maxLines = 1) }
+            null -> {}
+        }
+    }
     if (compact) {
         val st = focus.staff; val d = focus.day
         val prev = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d - 1) else null
