@@ -336,10 +336,10 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
         o.rk >= o.h0 && o.att <= 0 -> "この希望を調整して外しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。すべての組み合わせを試したわけではありません。"
-        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件 減り、再作成するとさらに${o.b}件 減る見込みです。"
-        o.rk >= o.h0 && o.aPrime > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件 減ります。"
-        o.rk >= o.h0 -> "希望を調整して外し、再作成すると、必須違反が${o.b}件 減る見込みです。"
-        o.att > 0 -> "再作成するだけの場合より、さらに${o.att}件 減る見込みです。"
+        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件減り、再作成するとさらに${o.b}件減る見込みです。"
+        o.rk >= o.h0 && o.aPrime > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件減ります。"
+        o.rk >= o.h0 -> "希望を調整して外し、再作成すると、必須違反が${o.b}件減る見込みです。"
+        o.att > 0 -> "再作成するだけの場合より、さらに${o.att}件減る見込みです。"
         else -> "希望を外さなくても、再作成するだけで同じだけ減る見込みです。"
     }
     is WishTrial.Unavailable -> "試算できませんでした（${o.reason}）。"
@@ -354,7 +354,7 @@ internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を�
 
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
-    if (control.rk < control.h0) "希望を残したまま、再作成するだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
+    if (control.rk < control.h0) "希望を残したまま、再作成するだけで必須違反が${control.h0 - control.rk}件減る見込みです。" else null
 
 /** [S6] 起点の違反の呼び方（名前・日の範囲・族名）。ダイアログの題とホームの見出しが共有する。 */
 internal data class RelaxTarget(val name: String, val span: String, val what: String)
@@ -413,8 +413,8 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
         "${DayText.short(ui.startDate, d)}　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
     }
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
-    val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
-        else "今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
+    val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件減る見込みです。"
+        else "今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が ${r.att}件減る見込みです。"
     val keep = if (r.rk > r.h0) "設定をそのままに再作成すると、上限0の勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
     val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
     val title = "${target.name} ${target.span}　${target.what}"
@@ -426,7 +426,7 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
         prerequisiteRows = preRows,
         lead = lead,
         rows = r.relaxes.map(::row),
-        solveNote = "この${target.what}を解消できます。" + (if (r.rr > 0) "他の必須違反 ${r.rr}件 は残ります。" else "必須違反はなくなる見込みです。"),
+        solveNote = "この${target.what}を解消できます。" + (if (r.rr > 0) "他の必須違反 ${r.rr}件は残ります。" else "必須違反はなくなる見込みです。"),
         moveLines = dayLines(inWin),
         otherMoveLines = dayLines(outWin),
         otherMoves = outWin.size,
@@ -637,7 +637,7 @@ internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<
     val c1 = stuck.distinctBy { it.shift }.map { sh ->
         val spans = stuck.filter { it.shift == sh.shift && it.day1 == sh.day1 && it.day2 == sh.day2 }
             .joinToString("・") { DayText.range(ui.startDate, it.from, it.to) }
-        "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日・$spans）— $C1_STUCK_TEXT"
+        "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日・$spans）。$C1_STUCK_TEXT"
     }
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val row = ui.schedule.getOrNull(i).orEmpty()
@@ -907,7 +907,7 @@ internal data class PreRunSheetText(
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。行を押すと、そのセルか直す場所を開けます。"
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
-internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。"
+internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限なので、残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。"
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、設定で上限を見直してください。"
 internal const val PRE_RUN_ZERO_CAP_TAG = "（入れないシフトの指定が関係）"
 internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。見直すときは、設定で入れない指定を変えてください。"

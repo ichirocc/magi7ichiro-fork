@@ -923,7 +923,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (nonAtomicSaveLogged || !nonAtomicSaveSeen) return
         nonAtomicSaveLogged = true
         logOp("W", "自動保存で原子置換（一時ファイルの差し替え）が使えず直接書き込みました" +
-            "（書き込み中にアプリが強制終了すると自動保存が壊れる可能性があります）")
+            "（書き込み中にアプリが強制終了すると自動保存が使えなくなる可能性があります）")
     }
 
     private fun reportAutoSave(ok: Boolean) {
@@ -2144,8 +2144,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun csvSavedLine(): String? {
         val at = _ui.value.csvSavedAt ?: return null
         val c = csvSavedCtx ?: return null
-        return if (csvSavedMatches(c)) "この内容で勤務表 CSV を保存済みです（$at）。"
-        else "$at に保存した勤務表 CSV は、今の内容と違います（配るなら保存し直してください）。"
+        return if (csvSavedMatches(c)) "この内容で勤務表CSVを保存済みです（$at）。"
+        else "$at に保存した勤務表CSVは、今の内容と違います（配るなら保存し直してください）。"
     }
     internal fun setMonthMovePrompt(p: MonthMovePlan?) { _ui.update { it.copy(monthMovePrompt = p) } }
     private fun resolvePendingGuidedFix(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, diag: CoverageDiagnosis?) {

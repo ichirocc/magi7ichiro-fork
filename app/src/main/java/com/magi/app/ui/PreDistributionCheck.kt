@@ -26,7 +26,7 @@ internal fun preDistributionRows(ui: UiState, csvLine: String?): List<PreDistRow
         PreDistRow("必須違反", hardText, ui.bestHard == 0L, primary = true),
         PreDistRow("要調整", softText, null),
         PreDistRow("相談", if (consults == 0) "「相談中」に未解決の項目はありません" else "未完了 ${consults}件" + (if (held > 0) "（うち保留 ${held}件）" else "") + "（ホームの「相談中」）", consults == 0, primary = true),
-        PreDistRow("保存", csvLine ?: "まだ勤務表 CSV に保存していません", csvLine?.startsWith("この内容で") == true, primary = true),
+        PreDistRow("保存", csvLine ?: "まだ勤務表CSVに保存していません", csvLine?.startsWith("この内容で") == true, primary = true),
     )
 }
 
@@ -37,7 +37,7 @@ internal fun preDistributionDetails(rows: List<PreDistRow>): List<PreDistRow> = 
 internal const val PRE_DIST_EDGE_FOOT = "前月・翌月をまたぐ並びは未評価"
 
 /** 評価できていない範囲（違反セルの半自動修正仕様 §7・§8、3.665.0 利用者決定「未評価と明示するだけ」）。前月・翌月の勤務はデータに無い。 */
-internal const val MONTH_EDGE_NOTE = "前月末・翌月初をまたぐ並び（前月・翌月の勤務）は評価していません（今月の中だけで判定）"
+internal const val MONTH_EDGE_NOTE = "前月末・翌月初をまたぐ並びは評価していません。今月の中だけで判定します"
 
 /** 変更した日が月の初め・終わりの [maxLen]−1 日以内か（並びの長さ [maxLen] の窓が月の外へはみ出しうる）。 */
 internal fun monthEdgeTouched(days: List<Int>, totalDays: Int, maxLen: Int): Boolean =

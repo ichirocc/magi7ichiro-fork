@@ -149,7 +149,7 @@ private fun aggregateIssues(issues: List<SettingIssue>): List<TriageRow> =
             //   設定の重複警告が勤務表の違反に読めた（経緯: history 3.515.2）。
             val detail = if (list.size == 1) {
                 val s = list.single()
-                if (s.problem.isBlank()) s.where else "${s.where} — ${s.problem}"
+                if (s.problem.isBlank()) s.where else "${s.where}。${s.problem}"
             } else {
                 list.take(2).joinToString("/") { it.where.take(18) } + (if (list.size > 2) " ほか" else "")
             }
@@ -177,7 +177,7 @@ private fun promotedSoftFamilies(
     if (c1Plateau != null && c1Plateau.hasEntries) {
         val e = c1Plateau.entries.first()
         val more = c1Plateau.entries.size - 1
-        out["c1"] = e.label + (if (more > 0) "ほか${more}件" else "") + " — ${e.recommendedAction(::labelOf)}"
+        out["c1"] = e.label + (if (more > 0) "ほか${more}件" else "") + "。${e.recommendedAction(::labelOf)}"
     }
     val stuckSurplus = coverage?.surpluses?.filter { it.blockedFamily != null }.orEmpty()
     if (stuckSurplus.isNotEmpty()) {

@@ -49,7 +49,7 @@ class Review3701Test {
             val ui = UiState(loaded = true, hasResult = true, bestHard = 0L, engineRan = engineRan, saveState = SaveState.Failed)
             assertTrue(HomeSection.STATUS in homeCardSections(homePlan(false, true, true), ui))
         }
-        val pre = homeStatusLines(HomePlanKind.PRE_DIST, null, "未確認事項 1 件", "勤務表 CSV は今の内容と違います", saveFailed = true)
+        val pre = homeStatusLines(HomePlanKind.PRE_DIST, null, "未確認事項 1 件", "勤務表CSVは今の内容と違います", saveFailed = true)
         assertEquals(listOf(HOME_SAVE_FAILED_LINE, "未確認事項 1 件"), pre)
         val list = homeStatusLines(HomePlanKind.LIST, "必須違反が 2件 残っています。", "未確認事項 1 件", null, saveFailed = true)
         assertEquals(2, list.size)

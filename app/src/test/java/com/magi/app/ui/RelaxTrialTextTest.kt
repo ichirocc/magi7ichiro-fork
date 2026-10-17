@@ -34,7 +34,7 @@ class RelaxTrialTextTest {
         val r = RelaxTrial.firstWall(st, board) as RelaxTrial.Result
         val t = relaxTrialText(r, ui)
         assertEquals(listOf("職員10 Pｼ 上限 0回→1回まで", "職員11 Cｵ 上限 0回→1回まで"), t.rows.map { it.substringBefore("（") })
-        assertEquals("今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
+        assertEquals("今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が 1件減る見込みです。", t.lead)
         assertTrue(t.title, t.title.startsWith("職員10 ") && t.title.endsWith("禁止の並び"))
         assertTrue(t.moveLines.isNotEmpty() && t.moveLines.all { it.contains("→") })
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)
@@ -47,7 +47,7 @@ class RelaxTrialTextTest {
         assertEquals("変わるもの: 設定5つ、${people}人の勤務、${r.moves.size}か所", t.scaleLine)
         assertEquals(3, t.prerequisiteRows.size)
         assertTrue(t.prerequisiteRows[0], t.prerequisiteRows[0].contains("（10/") && t.moveLines[0].startsWith("10/7　"))
-        assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)
+        assertEquals("この禁止の並びを解消できます。他の必須違反 4件は残ります。", t.solveNote)
         println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
         assertEquals("設定を緩めて手順を適用しました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
         val c = relaxCardText(r, ui)
@@ -60,6 +60,6 @@ class RelaxTrialTextTest {
     @Test fun realData_handPlacedUpperZeroGetsOneSettingsLine() {
         val lines = V6SanityPort.build(st, board).guidance.filter { it.problem.contains("上限0のシフトが") }
         assertEquals(1, lines.size)
-        assertEquals("今の勤務表に個人の上限0のシフトが 4件 入っています。再作成すると外されます", lines[0].problem)
+        assertEquals("今の勤務表に個人の上限0のシフトが 4件入っています。再作成すると外されます", lines[0].problem)
     }
 }

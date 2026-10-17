@@ -43,7 +43,7 @@ internal fun monthMovePlan(state: MagiState, year: Int, month: Int): MonthMovePl
 internal fun monthMoveLines(p: MonthMovePlan): List<String> {
     val carry = ArrayList<String>()
     carry.add("勤務表の中身（同じ日番号に残ります）")
-    if (p.carriedWishes > 0) carry.add("通常希望 ${p.carriedWishes} 件（同じ日番号に残ります＝前の月の希望です）")
+    if (p.carriedWishes > 0) carry.add("通常希望 ${p.carriedWishes} 件（同じ日番号に残ります。前の月の希望です）")
     if (p.carriedNeedExceptions > 0) carry.add("必要人数の例外 ${p.carriedNeedExceptions} 件（同じ日番号）")
     if (p.carriedPins > 0) carry.add("手動固定 ${p.carriedPins} 件（同じ日番号）")
     val drop = ArrayList<String>()
