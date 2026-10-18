@@ -22,7 +22,7 @@ object MagiAccent {
     //   保存済みのユーザー指定シフト色(shiftColors 等)は不変。ここは既定パレット＋直接使用アクセントのみ更新。
     val blue = Color(0xFF3B6FD4)    // 実行中 / 早番（スティールブルー）
     val green = Color(0xFF2E9E62)   // 成功 / 日勤（リーフ、ティール主色と弁別）
-    val orange = Color(0xFFE08A1E)  // 警告 / 夜勤（アンバー）
+    val orange = hexToColor(ACCENT_ORANGE_HEX)  // 警告 / 夜勤（アンバー）。白地 3.99:1（3.719.0、旧 #E08A1E は 2.68:1）
     val purple = Color(0xFF8A5CD1)  // 遅番 / 個人属性（ミュートバイオレット）
     val pink = Color(0xFFD24D89)    // 希望 / 個人属性（ローズ）
     val red = Color(0xFFD23B34)     // 重大違反 / NG制約（明快なアラート赤）
@@ -72,11 +72,7 @@ internal fun magiSeverityColors(severity: CellSeverity): Triple<Color, Color, Co
  * 記号は短い太字グリフのため既定しきい値は 4.5（通常テキスト基準）。
  */
 fun ensureReadable(bg: Color, preferred: Color, minRatio: Float = 4.5f): Color {
-    fun ratio(a: Color, b: Color): Float {
-        val hi = maxOf(a.luminance(), b.luminance())
-        val lo = minOf(a.luminance(), b.luminance())
-        return (hi + 0.05f) / (lo + 0.05f)
-    }
+    fun ratio(a: Color, b: Color): Float = contrastRatio(a.luminance(), b.luminance())
     if (ratio(bg, preferred) >= minRatio) return preferred
     return if (ratio(bg, Color.White) >= ratio(bg, Color.Black)) Color.White else Color.Black
 }

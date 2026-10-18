@@ -6,6 +6,18 @@ import java.time.LocalDate
 internal object ScheduleLayoutMetrics {
     const val ROW_DP = 48
     const val DAY_HEADER_DP = 72
+    const val CELL_MIN_DP = 36
+    const val CELL_MAX_DP = 48
+
+    /** [3.719.0] 文字拡大は 1.3× までセルの寸法を変えない（記号は幅に合わせて大きくなり、7 日が収まる幅は守る）。
+     *  それ以上は比例して広げる＝2.0× では見える日が 7 日より少なくなる。 */
+    const val GROW_FROM_FONT_SCALE = 1.3f
+    const val MAX_FONT_SCALE = 2.0f
+    fun growth(fontScale: Float): Float = (fontScale.coerceIn(1f, MAX_FONT_SCALE) / GROW_FROM_FONT_SCALE).coerceAtLeast(1f)
+    fun rowDp(fontScale: Float): Int = Math.round(ROW_DP * growth(fontScale))
+    fun dayHeaderDp(fontScale: Float): Int = Math.round(DAY_HEADER_DP * growth(fontScale))
+    fun cellMinDp(fontScale: Float): Int = Math.round(CELL_MIN_DP * growth(fontScale))
+    fun cellMaxDp(fontScale: Float): Int = Math.round(CELL_MAX_DP * growth(fontScale))
     const val TOP_BAR_DP = 60
     const val TOP_BAR_WITH_VIOLATION_DP = 72
     const val NAV_BAR_DP = 80
@@ -53,9 +65,9 @@ internal object ScheduleLayoutMetrics {
         else -> MERGED_BAR_DP + NAV_BAR_DP
     }
 
-    /** 見えるセル行数＝floor((画面 − 上バー − 下の積み − 日ヘッダ − シート − 本文の上の余白) / 48)。 */
-    fun visibleRows(usableHeightDp: Int, bottomStack: Int, sheetDp: Int, bodyAbove: Int, topBar: Int = TOP_BAR_DP): Int =
-        ((usableHeightDp - topBar - bottomStack - DAY_HEADER_DP - sheetDp - bodyAbove) / ROW_DP).coerceAtLeast(0)
+    /** 見えるセル行数＝floor((画面 − 上バー − 下の積み − 日ヘッダ − シート − 本文の上の余白) / 行の高さ)。行と日ヘッダは文字拡大に追従。 */
+    fun visibleRows(usableHeightDp: Int, bottomStack: Int, sheetDp: Int, bodyAbove: Int, topBar: Int = TOP_BAR_DP, fontScale: Float = 1f): Int =
+        ((usableHeightDp - topBar - bottomStack - dayHeaderDp(fontScale) - sheetDp - bodyAbove) / rowDp(fontScale)).coerceAtLeast(0)
 }
 
 /** 勤務表タブの下部バー。タブ・シート・最適化・違反巡回から 1 つに決まる（描画は MagiApp）。 */

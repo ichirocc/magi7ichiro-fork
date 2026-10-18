@@ -60,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -344,15 +346,17 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        // [3.719.0 読み上げ] スイッチの行は行ごと toggleable（role=Switch）＋ mergeDescendants＝TalkBack が「名前・説明・ON/OFF」を 1 つに読む。
+        //   Switch 自身は onCheckedChange=null（行が受ける）。以下のスイッチの行はすべて同じ形。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeAccel, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）", style = MaterialTheme.typography.bodyMedium)
                 Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = ui.nativeAccel, onCheckedChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }, enabled = !ui.running)
+            Switch(checked = ui.nativeAccel, onCheckedChange = null, enabled = !ui.running)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeParity, enabled = !ui.running && ui.nativeAccel, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeParity(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("Kotlin照合", style = MaterialTheme.typography.bodyMedium, color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
                 Text(
@@ -364,18 +368,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )
             }
-            Switch(checked = ui.nativeParity, onCheckedChange = { onEvent(MagiEvent.Settings.SetNativeParity(it)) }, enabled = !ui.running && ui.nativeAccel)
+            Switch(checked = ui.nativeParity, onCheckedChange = null, enabled = !ui.running && ui.nativeAccel)
         }
         // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
         //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = ui.softPolish,
-                onCheckedChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) },
-                enabled = !ui.running,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {
+            Switch(checked = ui.softPolish, onCheckedChange = null, enabled = !ui.running)
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
@@ -393,13 +393,12 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.aptFairToleranceUnguarded, enabled = !ui.running && ui.searchStrength == SearchStrength.THOROUGH, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("容認 6% で重い違反の増加も許す", style = MaterialTheme.typography.bodyMedium)
                     Text(APT_FAIR_UNGUARDED_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.aptFairToleranceUnguarded, onCheckedChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) },
-                    enabled = !ui.running && ui.searchStrength == SearchStrength.THOROUGH)
+                Switch(checked = ui.aptFairToleranceUnguarded, onCheckedChange = null, enabled = !ui.running && ui.searchStrength == SearchStrength.THOROUGH)
             }
         }
         Column(Modifier.fillMaxWidth()) {
@@ -416,44 +415,43 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionChainSwap, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("入れ替えも1手として使う", style = MaterialTheme.typography.bodyMedium)
                     Text("同じ日の2人、同じ人の2日を入れ替える手も試します（既定はON）",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.ejectionChainSwap, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) },
-                    enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
+                Switch(checked = ui.ejectionChainSwap, onCheckedChange = null, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
             // 次の 2 つはパイプライン（「見込みのある所だけ」）にだけ効く。
             val pipelineOn = !ui.running && ui.ejectionChain == EjectionChainMode.PIPELINE
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineRounds, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineRounds(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("採れたら探し直す", style = MaterialTheme.typography.bodyMedium)
                     Text(EJECTION_ROUNDS_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.ejectionPipelineRounds, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineRounds(it)) }, enabled = pipelineOn)
+                Switch(checked = ui.ejectionPipelineRounds, onCheckedChange = null, enabled = pipelineOn)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineHardLeg, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("必須の違反からも始める", style = MaterialTheme.typography.bodyMedium)
                     Text(EJECTION_HARD_LEG_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }, enabled = pipelineOn)
+                Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = null, enabled = pipelineOn)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionUseLeftover, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionUseLeftover(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("余った時間も玉突きに使う", style = MaterialTheme.typography.bodyMedium)
                     Text(EJECTION_LEFTOVER_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.ejectionUseLeftover, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionUseLeftover(it)) }, enabled = pipelineOn)
+                Switch(checked = ui.ejectionUseLeftover, onCheckedChange = null, enabled = pipelineOn)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.c3nWallShortStall, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetC3nWallShortStall(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("禁止の並びだけ残ったら早めに切り上げる", style = MaterialTheme.typography.bodyMedium)
                     Text(C3N_WALL_SHORT_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.c3nWallShortStall, onCheckedChange = { onEvent(MagiEvent.Settings.SetC3nWallShortStall(it)) }, enabled = !ui.running)
+                Switch(checked = ui.c3nWallShortStall, onCheckedChange = null, enabled = !ui.running)
             }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -882,15 +880,15 @@ internal fun AppearanceCard(
             Text("外観", style = MaterialTheme.typography.titleMedium)
             Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = oneHand, onCheckedChange = onOneHand)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = oneHand, role = Role.Switch, onValueChange = onOneHand).semantics(mergeDescendants = true) {}) {
+                Switch(checked = oneHand, onCheckedChange = null)
                 Spacer(Modifier.width(8.dp))
                 Text("片手モード", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
             // [通常セルの枠線] 違反の無いセルに常時1dp輪郭を付けるか（既定=付けない）。付けると同色が
             //   並ぶセル同士の境目が分かりやすくなる一方、格子全体が線で埋まり違反枠が目立ちにくくなる。
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = plainCellBorder, onCheckedChange = onPlainCellBorder)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = plainCellBorder, role = Role.Switch, onValueChange = onPlainCellBorder).semantics(mergeDescendants = true) {}) {
+                Switch(checked = plainCellBorder, onCheckedChange = null)
                 Spacer(Modifier.width(8.dp))
                 Text("勤務表の通常セルに枠線を表示", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }

@@ -131,11 +131,12 @@ internal const val HOME_BUTTON_MAX_CHARS = 18
  * ホームの主ボタンに最初の対象（名前・日）を前置きする（「アリフ 10/8の希望を見る」）。対象が無いとき、または
  * 前置きで [HOME_BUTTON_MAX_CHARS] を超えるときは元の文言のまま（対象は「次に確認する問題」の行が名指しする）。
  */
-internal fun homeTargetLabel(base: String, name: String?, day: String?): String {
+internal fun homeTargetLabel(base: String, name: String?, day: String?, fontScale: Float = 1f): String {
     val t = listOfNotNull(name?.takeIf { it.isNotBlank() }, day?.takeIf { it.isNotBlank() }).joinToString(" ")
     if (t.isEmpty()) return base
     val label = if (base == HOME_WISH_BUTTON) "${t}の希望を見る" else "${t}の$base"
-    return if (label.length <= HOME_BUTTON_MAX_CHARS) label else base
+    // 文字拡大では 1 行に入る字数も縮む（18 字 ÷ 倍率、3.719.0）。
+    return if (label.length <= (HOME_BUTTON_MAX_CHARS / fontScale).toInt()) label else base
 }
 
 internal const val HOME_WISH_BUTTON = "ぶつかっている希望を見る"

@@ -123,9 +123,10 @@ private val COLOR_PALETTE = listOf(
     "#fab3c5", "#e5f4f7", "#fff2b8", "#d4c3ec", "#262b2f",
 )
 /** 違反色専用パレット（必須違反・要調整・族別19種）。シフト色とは別物＝家族ヒュー帯の制約が無い分、
- *  全域でCUD距離を最大化できる（`tools/palette_violation_cud.py`）。 */
+ *  全域でCUD距離を最大化できる（`tools/palette_violation_cud.py`）。2 番目は要調整の既定色（[SOFT_VIO_DEFAULT_HEX]、
+ *  3.719.0 で #f59e0b → #b86e00＝白地 3:1 以上。旧値はピッカーの選択肢としては残さない）。 */
 internal val VIOLATION_COLOR_PALETTE = listOf(
-    "#b71c1c", "#f59e0b", "#3b6fd4", "#2e9e62", "#e08a1e", "#8a5cd1",
+    "#b71c1c", "#b86e00", "#3b6fd4", "#2e9e62", "#e08a1e", "#8a5cd1",
     "#d24d89", "#d23b34", "#8a979b", "#5740d1", "#75581a", "#7ec6bd",
     "#975eca", "#915a2d", "#5eabe4", "#286760", "#339312", "#602e4f",
     "#b4bd85", "#8fc5cd", "#7386ce", "#106dbd", "#1b5574", "#9ab7e9",

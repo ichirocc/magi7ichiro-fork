@@ -410,12 +410,12 @@ private fun WishMonthGrid(
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { d ->
-                    if (d == null) Box(Modifier.weight(1f).height(64.dp))
+                    if (d == null) Box(Modifier.weight(1f).heightIn(min = 64.dp))
                     else {
                         val sel = d in selectedDays
                         val k = marked[d]
                         Box(
-                            Modifier.weight(1f).height(64.dp)
+                            Modifier.weight(1f).heightIn(min = 64.dp)
                                 .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
                                 .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(d) }
@@ -449,7 +449,7 @@ private fun WishMonthGrid(
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(64.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).heightIn(min = 64.dp)) }
             }
         }
     }
