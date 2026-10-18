@@ -447,6 +447,60 @@ internal fun hardViolationRows(items: List<TourItem>, staffNames: List<String>, 
         HardListRow(at, name, it.heading, it.days.all { d -> "${it.staff},$d" in wishSelfKeys }, tourProblemLine(it, name))
     }.sortedBy { it.wishOnly }
 
+/** [3.718.0] 勤務表タブの下のパネルの状態。閉じる／セルの編集／問題一覧（2026-10-18 ユーザー指示「制約違反を見ながら勤務表を修正したい」）。 */
+internal enum class PanelMode { CLOSED, CELL, LIST }
+
+/** パネルへの操作。一覧を開く／セルをタップ／一覧の行をタップ／「一覧へ」／閉じる（✕・戻る・余白のタップ）。 */
+internal enum class PanelAction { OPEN_LIST, CELL_TAP, ROW_TAP, TO_LIST, CLOSE }
+
+/** パネルの次の状態。セルのタップは閉じずに編集へ、行のタップは一覧のまま（表をそのセルへ送るだけ）、「一覧へ」は一覧へ戻る。 */
+internal fun nextPanelMode(mode: PanelMode, action: PanelAction): PanelMode = when (action) {
+    PanelAction.OPEN_LIST, PanelAction.TO_LIST -> PanelMode.LIST
+    PanelAction.CELL_TAP -> PanelMode.CELL
+    PanelAction.ROW_TAP -> if (mode == PanelMode.CLOSED) PanelMode.CLOSED else mode
+    PanelAction.CLOSE -> PanelMode.CLOSED
+}
+
+/** 画面の状態からパネルの状態を出す（セルを開いていれば編集が優先＝「一覧へ」でセルを離すと一覧へ戻る）。 */
+internal fun panelModeOf(listOpen: Boolean, cellOpen: Boolean): PanelMode =
+    if (cellOpen) PanelMode.CELL else if (listOpen) PanelMode.LIST else PanelMode.CLOSED
+
+/** 勤務表の前に出す画面の高さの上限＝画面の 1/3（ちら見・全体・一覧とも。2026-10-18 ユーザー決定「1/3固定・今の閉じ方のまま」）。 */
+internal fun panelMaxHeightDp(screenHeightDp: Int): Int = screenHeightDp / 3
+
+internal const val PANEL_LIST_BUTTON = "一覧へ"
+
+/** 問題一覧の 1 行。必須は巡回の何件目か（[tourAt]）を持ち、要調整は null。押すと [cell]（関連セルは [days]）へ表を送る。 */
+internal data class ProblemRow(val family: String, val staff: Int, val days: List<Int>, val line: String, val hard: Boolean,
+                               val tourAt: Int? = null, val wishOnly: Boolean = false) {
+    val cell: Pair<Int, Int> get() = staff to days.first()
+}
+
+/** 要調整の見出し「要調整 N件」（0 なら出さない）。 */
+internal fun softRowsHeading(n: Int): String? = if (n > 0) "要調整 ${n}件" else null
+
+/**
+ * 残っている問題の一覧＝必須（[hardViolationRows] の順）に続けて要調整のセル（セル×族ごとに 1 行、日→職員→族の順）。
+ * 人員・回数の族はセルを持たないので入らない（人員不足は末尾の 1 行、[hardListCovULine]）。
+ */
+internal fun problemRows(hardRows: List<HardListRow>, items: List<TourItem>, cellFamilies: Map<String, List<String>>,
+                         staffNames: List<String>, symbols: List<String>, schedule: List<List<Int>>, startDate: String): List<ProblemRow> {
+    fun name(i: Int) = staffNames.getOrNull(i) ?: "職員${i + 1}"
+    val hard = hardRows.mapNotNull { r -> items.getOrNull(r.tourAt)?.let { ProblemRow(it.family, it.staff, it.days, r.line, true, r.tourAt, r.wishOnly) } }
+    val soft = ArrayList<ProblemRow>()
+    for ((key, fams) in cellFamilies) {
+        val i = VioKey.first(key) ?: continue
+        val j = VioKey.second(key) ?: continue
+        if (i !in schedule.indices || j !in (schedule[i].indices)) continue
+        val sym = symbols.getOrNull(schedule[i][j]) ?: "?"
+        for (fam in fams.map(::familyOfVioClass).distinct()) {
+            if (fam in MirrorKeys.hard) continue
+            soft += ProblemRow(fam, i, listOf(j), problemLine(fam, name(i), DayText.short(startDate, j), sym), false)
+        }
+    }
+    return hard + soft.sortedWith(compareBy({ it.days.first() }, { it.staff }, { it.family }))
+}
+
 /** 巡回の見出し「必須違反 2 / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9」。 */
 internal fun tourHeading(items: List<TourItem>, at: Int): String? =
     items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }

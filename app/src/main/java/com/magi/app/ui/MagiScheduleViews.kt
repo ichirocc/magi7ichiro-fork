@@ -55,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.drawBehind
@@ -108,8 +109,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -371,15 +370,11 @@ internal fun LegendSheet(ui: UiState, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-    val sheetState = rememberModalBottomSheetState()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            DialogHeader("凡例（枠・バッジ・印の見方）", onClose = onDismiss)
-            ViolationLegend(vioColor, vioSoftColor)
-            Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodyMedium)
-            ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
-        }
+    // [3.718.0] 勤務表の前に出す画面は下 1/3 のモードレスのパネル（`SchedulePanel`。旧: ModalBottomSheet）。
+    SchedulePanel("凡例（枠・バッジ・印の見方）", onDismiss) {
+        ViolationLegend(vioColor, vioSoftColor)
+        Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodyMedium)
+        ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
     }
 }
 
@@ -824,7 +819,6 @@ internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: and
 @Composable
 internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, presetWeekday: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState()
     val days = ui.days
     val weekdays = listOf("月", "火", "水", "木", "金", "土", "日")
     val startDow = startDowMonFirst(ui.startDate)
@@ -847,12 +841,9 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
     val eligibleCount = if (staffSel < 0 && picked in ui.shiftSymbols.indices) ui.staffNames.indices.count { picked in cv.allowedShiftsFor(it) } else -1
     val wishCount = targetDays.size * when { staffSel >= 0 -> 1; eligibleCount >= 0 -> eligibleCount; else -> ui.staffNames.size }
     val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            DialogHeader("希望シフトの一括操作", onDismiss)
+    // [3.718.0] 下 1/3 のモードレスのパネル（`SchedulePanel`。旧: ModalBottomSheet）。
+    SchedulePanel("希望シフトの一括操作", onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
@@ -944,7 +935,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
             dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
             title = { DialogHeader("職員を選ぶ", { showStaff = false }) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState())) {
                     ui.staffNames.forEachIndexed { idx, n ->
                         Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { staffSel = idx; showStaff = false },
                             contentAlignment = Alignment.CenterStart) {
@@ -980,7 +971,6 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
 @Composable
 internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit, canDo: (Int, Int) -> Boolean = { _, _ -> true }) {
     val cs = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState()
     val days = ui.days
     val weekdays = listOf("月", "火", "水", "木", "金", "土", "日")
     val startDow = startDowMonFirst(ui.startDate)
@@ -999,12 +989,9 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
     val skippedStaff = targetStaff.size - eligibleStaff.size
     val cellCount = eligibleStaff.size * targetDays.size
     val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            DialogHeader("割当の一括操作", onDismiss)
+    // [3.718.0] 下 1/3 のモードレスのパネル（`SchedulePanel`。旧: ModalBottomSheet）。
+    SchedulePanel("割当の一括操作", onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
@@ -1091,7 +1078,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
             title = { DialogHeader("職員を選ぶ", { showStaff = false }) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState())) {
                     ui.staffNames.forEachIndexed { idx, n ->
                         Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { staffSel = idx; showStaff = false },
                             contentAlignment = Alignment.CenterStart) {
@@ -2415,7 +2402,7 @@ private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate
         onDismissRequest = onDismiss,
         title = { Text("「${ui.shiftSymbols.getOrNull(shift) ?: "?"}」を追加する候補日") },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 list.sortedBy { if (it.reason != null) 0 else 1 }.forEach { c ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(addCandidateHead(c, ui, shift), style = MaterialTheme.typography.titleSmall)

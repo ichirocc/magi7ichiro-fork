@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -132,7 +133,7 @@ internal fun WishConflictDialog(
         onDismissRequest = onDismiss,
         title = { Text("ぶつかっている希望") },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
                     control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
@@ -252,7 +253,7 @@ internal fun RelaxTrialDialog(
         onDismissRequest = onDismiss,
         title = { Text(t?.dialogTitle ?: "例外として上限を緩める候補") },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (token == null || t == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
                 else {
                     Text(RELAX_WISH_LINE, fontWeight = FontWeight.Bold)
@@ -304,7 +305,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         onDismissRequest = onDismiss,
         title = { Text(PREVIEW_TITLE) },
         text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
                 // [3.713.0] 最初は「Nか所変わります」と変わるセルの行だけ。目的・回数・判断材料・注記は「詳しく」の中。
                 Text(previewCountLine(p.suggestion.ops.size), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -449,7 +450,7 @@ internal fun GuidedFixDialog(
         title = { Text(guidedFixTitle(stage, target)) },
         text = {
             Column(
-                Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
+                Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when {

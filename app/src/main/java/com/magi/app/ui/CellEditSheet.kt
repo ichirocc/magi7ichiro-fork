@@ -104,6 +104,7 @@ internal fun CellEditSheet(
     tourPrev: Pair<Int, Int>? = null,
     canUndo: Boolean = false,           // 勤務表タブの下部バーはシートを開く間は隠れる＝元に戻すをここへ（規則は下部バーと同じ）
     onUndo: () -> Unit = {},
+    onList: (() -> Unit)? = null,       // [3.718.0] 「一覧へ」＝同じパネルを問題一覧に戻す（null なら出さない）
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -196,7 +197,7 @@ internal fun CellEditSheet(
         val peekRecommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet }
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, { k -> choose(k) }, onMove, onDismiss, onToggleExpand, onShowRelax,
-            canUndo = canUndo, onUndo = onUndo, onMode = onMode, extKigou = extKigou, onWishes = { fixNav.onWishes(i, j) },
+            canUndo = canUndo, onUndo = onUndo, onMode = onMode, extKigou = extKigou, onWishes = { fixNav.onWishes(i, j) }, onList = onList,
             target = target, badge = badge, cause = status.cause, severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
             recommend = peekRecommend,
@@ -218,6 +219,7 @@ internal fun CellEditSheet(
                     if (tourNext != null && tourNext != cell && step == 0) {
                         TextButton(onClick = { onMove(tourNext) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                     }
+                    SheetListButton(onList)
                     SheetUndoButton(canUndo, onUndo)
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
@@ -505,6 +507,12 @@ private fun ReviewSection(title: String, lines: List<String>) {
     lines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
 }
 
+/** [3.718.0] 見出し行の「一覧へ」（文字ボタン＝主は 1 つのまま、INV-09）。同じパネルを問題一覧に戻す。 */
+@Composable
+private fun SheetListButton(onList: (() -> Unit)?) {
+    if (onList != null) TextButton(onClick = onList, modifier = Modifier.heightIn(min = 48.dp)) { Text(PANEL_LIST_BUTTON) }
+}
+
 /** 見出し行の「元に戻す」（IconButton 既定の 48dp）。有効条件は下部バーの元に戻すと同じ（呼び出し側が `canUndo && !running` を渡す）。 */
 @Composable
 private fun SheetUndoButton(enabled: Boolean, onUndo: () -> Unit) {
@@ -530,7 +538,7 @@ private fun PeekBody(
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
     canUndo: Boolean = false, onUndo: () -> Unit = {},
     onMode: (Int) -> Unit = {}, extKigou: List<String>? = null, onWishes: () -> Unit = {},
-    searchLabel: String? = null, onSearch: () -> Unit = {},
+    searchLabel: String? = null, onSearch: () -> Unit = {}, onList: (() -> Unit)? = null,
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -541,6 +549,7 @@ private fun PeekBody(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(target, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            SheetListButton(onList)
             SheetUndoButton(canUndo, onUndo)
             IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
         }

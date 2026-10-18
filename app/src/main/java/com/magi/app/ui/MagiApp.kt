@@ -88,6 +88,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -98,9 +99,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -126,6 +126,9 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -214,6 +217,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var gridTopInContent by remember { mutableIntStateOf(-1) }   // 勤務表グリッドの上端（タブ本体のスクロール内容座標 px）
     var gridHInContent by remember { mutableIntStateOf(0) }      // 勤務表グリッドの高さ（px）。週送りで画面外のグリッドへ戻す判定に使う
     var prevTab by remember { mutableIntStateOf(-1) }
+    // [3.718.0] 下のパネルの問題一覧（セルを開いていれば編集が優先＝`panelModeOf`）と、一覧の行で選んだセル（表をそのセルへ送って強調する）。
+    var problemList by remember { mutableStateOf(false) }
+    var listFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見。希望の説明はちら見に出ないので、希望の行からは全体で開く）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -536,6 +542,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             focusRange = Triple(it.staff, it.days.first(), it.days.last())
         }
     }
+    // 問題一覧を開く（上部の札・「必須 N ▼」）。セルのシートは閉じ、パネルは一覧に（`nextPanelMode(OPEN_LIST)`）。
+    val openProblemList: () -> Unit = { tab = 1; editingCell = null; tourActive = false; focusRange = null; sheetExpanded = false; problemList = true }
+    val panelMode = panelModeOf(problemList, editingCell != null)
+    val panelOpen = panelMode != PanelMode.CLOSED
     LaunchedEffect(dayJump) {
         val j = dayJump ?: return@LaunchedEffect
         dayJump = null; tab = 1; revealGrid()
@@ -614,12 +624,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         issues = ui.settingIssues.size, wishConflicts = editHasConflicts),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
         ranBeforeEdit = ui.hasResult && (ui.ranBeforeEdit || condEdited), running = ui.running)
-    val barMode = bottomBarMode(ui.loaded, tab == 1, editingCell != null, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
+    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
-            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }, tourCount = tourItems.size,
+            onHardTour = if (tourItems.isNotEmpty()) openProblemList else null, onPreDist = { preDist = true }, tourCount = tourItems.size,
             onSaveWord = { vm.showSaveFailDialog() }) },
         bottomBar = {
             Column {
@@ -678,11 +688,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 //   勤務表グリッドの日ヘッダは、この上端より上へ出る分だけ下へ平行移動して画面に留まる。
                 .onGloballyPositioned { viewportTopPx = it.positionInRoot().y }
                 // セル編集シートを開いている間、何も押していない所のタップはシートを閉じる（セル・ボタンのタップは各自が消費する）。
-                .then(if (editingCell != null && tab == 1) Modifier.pointerInput(Unit) {
+                .then(if (panelOpen && tab == 1) Modifier.pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         val up = waitForUpOrCancellation(PointerEventPass.Final)
-                        if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
+                        if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false; problemList = false; listFocus = null }
                     }
                 } else Modifier)
                 .verticalScroll(if (tab == 2) editScrolls[editScope.coerceIn(0, 2)] else tabScrolls[tab.coerceIn(0, 4)]),
@@ -806,11 +816,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.648.0 配置見直し] 必須チップ・種別フィルタ・凡例の短い一覧＋検索を道具カード 1 枚に（旧: 必須チップ＋フィルタのカード＋
                     //   「検索・凡例」のカードの 3 段）。凡例の詳細はシート、集計は折りたたみ＝タブを開いた直後に表がより多く見える。
                     val hardChip: (@Composable () -> Unit)? = if (!ui.running && ui.hasResult && ui.bestHard > 0L) {
-                        {
-                            val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
-                            val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                            HardListChip(displayHardText(ui), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
-                        }
+                        { HardListChip(displayHardText(ui), onOpen = openProblemList) }
                     } else null
                     // 状態の 1 行。必須違反があれば押すと巡回の先頭を開く。
                     val stateLine = scheduleStateLine(ui.hasResult, ui.running, ui.bestHard, displayHardText(ui),
@@ -829,7 +835,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
                         canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView, onEvent = onEvent, fixNav = fixNav,
-                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell, sheetPx = sheetPx, barKey = barMode.ordinal)
+                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell ?: listFocus, sheetPx = sheetPx, barKey = barMode.ordinal)
                     }
                     // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。[3.648.0] 1 枚の行に（説明＋ボタン 2 つ）。
                     //   [3.650.0] 集計は既定で開く（3.514.0）ので、長い集計の下まで探させないよう集計の上＝グリッドの直下に置く。
@@ -1020,22 +1026,42 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 }
             }
             // 下部コマンドバー分の余白。セル編集シートを開いている間は、最後の行もシートの上へ出せるだけ足す。
-            Spacer(Modifier.height(if (editingCell != null && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
+            Spacer(Modifier.height(if (panelOpen && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
         }
         }
-        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false; schedNav.vioMode = false } }
+        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false; problemList = false; listFocus = null; schedNav.vioMode = false } }
         // [勤務表の縦寸法] 勤務表タブを開いたときだけ、縦スクロールをグリッドの上端へ（フィルタ・検索は上へスクロールで届く）。
         //   シートを開いて入る（巡回）・要確認一覧からの注目セルは各自の位置決めがあるので動かさない。
         LaunchedEffect(tab) {
             val prev = prevTab; prevTab = tab
-            if (!shouldScrollToGridTop(prev, tab, ui.loaded, editingCell != null, focusCell != null)) return@LaunchedEffect
+            if (!shouldScrollToGridTop(prev, tab, ui.loaded, panelOpen, focusCell != null)) return@LaunchedEffect
             withFrameNanos { }; withFrameNanos { }   // 開いた直後の配置が確定してから測る
             val top = snapshotFlow { gridTopInContent }.first { it >= 0 }
             tabScrolls[1].scrollTo(top)
         }
         val cell = editingCell
+        // [3.718.0] 勤務表の前に出すのは下 1/3 のパネル 1 つ（セルの編集／問題一覧）。背面の表はそのまま押せる（モードレス）、閉じ方は従来どおり。
+        val maxH = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp
+        if (cell == null && panelMode == PanelMode.LIST && tab == 1) {
+            val closePanel = { problemList = false; listFocus = null; focusRange = null }
+            BackHandler(onBack = closePanel)
+            val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
+            val rows = remember(tourItems, ui.staffNames, selfKeys, ui.violationCellFamilies, ui.schedule) {
+                problemRows(hardViolationRows(tourItems, ui.staffNames, selfKeys), tourItems, ui.violationCellFamilies, ui.staffNames, ui.shiftSymbols, ui.schedule, ui.startDate)
+            }
+            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
+                ProblemListPanel(
+                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = listFocus,
+                    covULine = hardListCovULine(rows.none { it.hard }, ui.breakdown["covU"] ?: 0),
+                    onStart = { rows.firstOrNull { it.hard }?.tourAt?.let(goTourItem) },
+                    onRow = { r -> listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
+                    onClose = closePanel,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
+                )
+            }
+        }
         if (cell != null && tab == 1) {
-            val closeSheet = { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
+            val closeSheet = { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false; problemList = false; listFocus = null }
             BackHandler(onBack = closeSheet)
             val moveTo: (Pair<Int, Int>) -> Unit = { c ->
                 if (c.first in 0 until ui.staff && c.second in 0 until ui.days) {
@@ -1043,7 +1069,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     focusRange = vm.violationRange(c.first, c.second)?.let { Triple(c.first, it.first, it.second) }
                 }
             }
-            val maxH = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 CellEditSheet(
                     ui = ui,
@@ -1085,6 +1110,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     tourPrev = if (tourActive && tourItems.size > 1) tourItems[(tourAt - 1 + tourItems.size) % tourItems.size].cell else null,
                     canUndo = ui.canUndo && !ui.running,
                     onUndo = { vm.undo() },
+                    onList = if (ui.hasResult && !ui.running) { { editingCell = null; tourActive = false; focusRange = null; sheetExpanded = false; listFocus = cell; problemList = true } } else null,
                 )
             }
         }
@@ -1493,40 +1519,55 @@ internal fun ScheduleStateRow(line: ScheduleStateLine, onTour: () -> Unit) {
 internal fun hardListCovULine(noRows: Boolean, covU: Int): String? =
     if (noRows && covU > 0) "人員不足 ${covU}人（日の印から開けます）" else tourCovULine(covU)
 
-/** 勤務表タブ上部の「必須 N ▼」と、押すと開く必須違反の一覧。行を押すとシートを閉じ、巡回と同じ移動でそのセルのシートを開く。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/** 勤務表タブ上部の「必須 N ▼」。押すと下のパネルを問題一覧で開く（[ProblemListPanel]。旧: ModalBottomSheet、3.718.0）。 */
 @Composable
-internal fun HardListChip(hard: String, rows: List<HardListRow>, covULine: String?, onPick: (Int) -> Unit) {
+internal fun HardListChip(hard: String, onOpen: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    var open by rememberSaveable { mutableStateOf(false) }
-    Surface(onClick = { open = true }, color = cs.errorContainer, shape = MaterialTheme.shapes.small,
+    Surface(onClick = onOpen, color = cs.errorContainer, shape = MaterialTheme.shapes.small,
         modifier = Modifier.heightIn(min = 48.dp)) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
             Text("必須 $hard ▼", color = cs.onErrorContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                 modifier = Modifier.padding(horizontal = 16.dp))
         }
     }
-    if (!open) return
-    val sheetState = rememberModalBottomSheetState()
-    ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DialogHeader(hardListTitle(hard), onClose = { open = false })
-            if (rows.isNotEmpty()) Button(onClick = { open = false; onPick(rows.first().tourAt) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text(HARD_LIST_START_BUTTON)
+}
+
+/**
+ * [3.718.0] 下 1/3 のパネルの問題一覧（2026-10-18 ユーザー指示「制約違反を見ながら勤務表を修正したい」）。必須 1 件 1 行に続けて要調整。
+ * 行を押すとパネルは閉じずに表をそのセルへ送って強調し、選んだ行の 1 行をパネルの先頭に出す（目線を動かさない）。主は「直し方を見る」1 つ（INV-09）。
+ */
+@Composable
+internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Pair<Int, Int>?, covULine: String?, onStart: () -> Unit,
+                              onRow: (ProblemRow) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val topCorner = MaterialTheme.shapes.extraLarge
+    Surface(modifier = modifier, color = cs.surfaceContainerLow, shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)), tonalElevation = 2.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val pickedRow = picked?.let { c -> rows.firstOrNull { it.cell == c } }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = if (pickedRow?.hard == true) cs.error else cs.onSurface, modifier = Modifier.weight(1f))
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
             }
-            for (r in rows) {
-                Surface(onClick = { open = false; onPick(r.tourAt) }, color = cs.surfaceVariant, shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // [3.714.0] 1 件 1 行（族ごとの型、18 字まで）。族と日の詳しい見出しはセルのシートが言う。
-                        Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
+            if (rows.any { it.hard }) Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(HARD_LIST_START_BUTTON) }
+            val softCount = rows.count { !it.hard }
+            LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemsIndexed(rows) { idx, r ->
+                    if (!r.hard && (idx == 0 || rows[idx - 1].hard)) softRowsHeading(softCount)?.let {
+                        Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    val sel = r.cell == picked
+                    Surface(onClick = { onRow(r) }, color = if (sel) cs.primaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
+                        }
                     }
                 }
+                covULine?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) } }
             }
-            covULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
         }
     }
 }
