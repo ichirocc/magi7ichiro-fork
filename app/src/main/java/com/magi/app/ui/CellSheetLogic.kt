@@ -1963,10 +1963,15 @@ internal fun staffingRowText(canDo: Int, maxNeed: Int): String {
     }
 }
 
-/** [3.720.0] 問題一覧で選んだ行（同じマスに行が複数あっても押した行だけ＝INV-01）。行番号が今の [cell] を指さなければ、そのマスの先頭行。 */
-internal fun problemPickedIndex(rows: List<ProblemRow>, pickedIdx: Int?, cell: Pair<Int, Int>?): Int? {
+/**
+ * [3.720.0] 問題一覧で選んだ行（同じマスに行が複数あっても押した行だけ＝INV-01）。
+ * [3.721.1] 一覧が作り直されて行番号がずれても同じ族の行に留まる: 行番号のマス・族が一致 → 同じマス・族の先頭 → そのマスの先頭。
+ */
+internal fun problemPickedIndex(rows: List<ProblemRow>, pickedIdx: Int?, cell: Pair<Int, Int>?, pickedFamily: String? = null): Int? {
     if (cell == null) return null
-    if (pickedIdx != null && rows.getOrNull(pickedIdx)?.cell == cell) return pickedIdx
+    fun same(r: ProblemRow) = r.cell == cell && (pickedFamily == null || r.family == pickedFamily)
+    if (pickedIdx != null && rows.getOrNull(pickedIdx)?.let(::same) == true) return pickedIdx
+    rows.indexOfFirst(::same).takeIf { it >= 0 }?.let { return it }
     return rows.indexOfFirst { it.cell == cell }.takeIf { it >= 0 }
 }
 

@@ -153,6 +153,8 @@
     **→ 3.571.0 で計測実装＋ペアベンチ実施**（`SaParams.officialTieBreak`、既定OFF・選定ロジックは無変更）。
     実データ4件×10seed×20秒×4ワーカー＝40走行で HARD退行0/40・weightedScoreの勝ちは0/40＝**採用基準を満たさず
     既定動作は不変**（この決定自体は維持、詳細は `docs/history/3.4xx.md`）。
+    **→ 2026-10-18 の測定（コード不採用）で探索の目的関数側（`PolishGate.searchHardFamilyTiebreak`）も実装・測定**: 6件×5seed×60秒で必須差0/30・weighted平均−20[−101,+61]・
+    sample_v6は5/5悪化＝**既定OFF維持**。
 20. ~~**[C# パリティ・要調査] `-MAGI_PC` の `PinInvariantTest.PostOptimizationHoldsPinsAcrossRandomStates` が赤**（3.569.0 の同期時に
     発見。random#1「実現可能な希望（職員0 日5）が後処理で動いた」。同期前の 6276edf でも同じ＝今回の変更と無関係）。
     Kotlin の同名テストは緑なので、C# の後処理チェーンのどこかが `wishLocked` を破っている。C# 単独では直さない

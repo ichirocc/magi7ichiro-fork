@@ -221,6 +221,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var problemList by remember { mutableStateOf(false) }
     var listFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var listPick by remember { mutableStateOf<Int?>(null) }   // [3.720.0] 問題一覧で押した行（同じマスの別の行と分ける）
+    var listPickFamily by remember { mutableStateOf<String?>(null) }   // [3.721.1] その行の族（作り直し後の行番号ずれを補う）
     var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見。希望の説明はちら見に出ないので、希望の行からは全体で開く）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -1045,10 +1046,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 ProblemListPanel(
-                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = problemPickedIndex(rows, listPick, listFocus),
+                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = problemPickedIndex(rows, listPick, listFocus, listPickFamily),
                     covULine = hardListCovULine(rows.none { it.hard }, ui.breakdown["covU"] ?: 0),
                     onStart = { rows.firstOrNull { it.hard }?.tourAt?.let(goTourItem) },
-                    onRow = { idx, r -> listPick = idx; listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
+                    onRow = { idx, r -> listPick = idx; listPickFamily = r.family; listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
                     onClose = closePanel,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                 )
