@@ -348,6 +348,7 @@ internal fun CellEditSheet(
                             // 問題が 2 件以上なら、選ぶまで案を出さない（どの問題を直す案かを先頭の問題で埋めない＝統合仕様 INV-01）。
                             if (fams.size >= 2 && problem == null) Text(PICK_PROBLEM_FIRST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             else FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem,
+                                primaryElsewhere = "covU" in shortSide && shortSideFilled(fams),   // 足りない側の塗りのボタンが上に出ている
                                 addresses = { s -> resolves?.get(s) == true }, addressPending = resolves == null,
                                 addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"),
                                 singleProblem = fams.singleOrNull()?.let { breakdownLabels[it] ?: it })

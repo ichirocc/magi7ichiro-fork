@@ -1215,10 +1215,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 runSummary = null, stopSummary = null, copilotHint = null, alternatives = emptyList(),
                                 fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixFocusName = "", stalledHardFamilies = emptyList(),
                                 consults = emptyList(),   // 相談も前のデータの対象を指している（T01）
+                                sameResult = null,   // [3.716.0] 「前回と同じ結果」も前のデータの実行の印
                                 message = "読込完了: ${lp.state.staffCount}名 / ${DayText.range(lp.state.startDate, 0, lp.state.dayCount - 1)}（${lp.state.dayCount}日） / ${lp.state.shiftCount}シフト$note",
                             )
                         }
                         rollback = null
+                        lastRunKeys = null   // [3.716.0] 次の実行を前のデータの結果と比べない
                         // 確定後なので中止で途切れさせない。成功したときだけ復元可能にする（3.289.0、既存の退避があれば維持）。
                         val prevSaved = prevJson != null && withContext(NonCancellable + Dispatchers.IO) {
                             runCatching { writeFileAtomically(prevBackupFile, prevJson) }.getOrDefault(false)
@@ -1611,13 +1613,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var lastRunKeys: Pair<Long, Long>? = null
     private var emptyStreak: EmptySearchStreak? = null
 
-    private fun noteRunResult(hard: Int) {
+    /** [3.716.0] [kept]＝前の勤務表のままにした実行。結果の盤面は捨てたので同じ結果とは言わず、前の印も消す。 */
+    private fun noteRunResult(hard: Int, kept: Boolean) {
+        if (kept) { _ui.update { it.copy(sameResult = null) }; return }
         val st = state ?: return; val sc = currentSchedule ?: return
         val keys = stateKey(st) to boardKey(sc)
         val same = isSameRunResult(lastRunKeys, keys)
         lastRunKeys = keys
         if (same) logOp("I", OpLogText.sameResultLine(keys.second))
-        _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, u.editRev, u.schedule) else null) }
+        _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, keys.first, u.schedule) else null) }
     }
 
     private fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)
@@ -1981,7 +1985,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
                 logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
-                noteRunResult(adoptedReport.hard)
+                noteRunResult(adoptedReport.hard, kept = worseThanInput)
                 if (s5 != null) {
                     cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
                     logOp("I", "S5 結果: ${s5.h0}/${s5.hx}/${s5.rk}/${s5.rr}/${s5.pCancel} → ${adoptedReport.hard}")
@@ -3267,7 +3271,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day, quick, allDays, auto)
                     return@launch
                 }
-                emptyStreak = nextEmptySearchStreak(emptyStreak, "$focusKey|$origin", boardKey(snap), stateKey(st), list.size)
+                // [3.716.0] 鍵に quick（セルのシートか全面か）を含め、自動の探索は数えない（開いただけで「続けて」にしない）。
+                emptyStreak = nextEmptySearchStreak(emptyStreak, "$focusKey|$origin|$quick", boardKey(snap), stateKey(st), list.size, auto)
                 val repeatKey = if ((emptyStreak?.count ?: 0) >= 2) focusKey else null
                 _ui.update { it.copy(fixSuggestions = list, fixTiers = tiers, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey,
                     fixEmptyRepeatKey = repeatKey) }
@@ -3853,6 +3858,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             weightedScore = report.weightedScore,
             breakdown = emptyBreakdown + report.breakdown,
             checkRev = base.checkRev + 1,
+            stateKey = stateKey(st),
             violationCells = report.violations,
             needViolations = report.needViolations,
             countViolations = report.countViolations,

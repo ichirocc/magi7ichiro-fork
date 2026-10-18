@@ -32,11 +32,12 @@ class Review3711Test {
         assertTrue(isSameRunResult(1L to 2L, 1L to 2L))
         assertFalse(isSameRunResult(1L to 2L, 1L to 3L))
         assertFalse(isSameRunResult(1L to 2L, 9L to 2L))
-        val b = listOf(listOf(0, 1)); val n = SameResultNote(3, 4, b)
-        assertTrue(sameResultVisible(n, 4, b))
-        assertFalse(sameResultVisible(n, 5, b))
-        assertFalse(sameResultVisible(n, 4, listOf(listOf(1, 1))))
-        assertFalse(sameResultVisible(null, 4, b))
+        // [3.716.0] 設定は状態指紋で照合（C# と同じ鍵）。
+        val b = listOf(listOf(0, 1)); val n = SameResultNote(3, 4L, b)
+        assertTrue(sameResultVisible(n, 4L, b))
+        assertFalse(sameResultVisible(n, 5L, b))
+        assertFalse(sameResultVisible(n, 4L, listOf(listOf(1, 1))))
+        assertFalse(sameResultVisible(null, 4L, b))
         assertEquals("同じ結果（盤面指紋 00000000000000ab）", OpLogText.sameResultLine(0xabL))
     }
 

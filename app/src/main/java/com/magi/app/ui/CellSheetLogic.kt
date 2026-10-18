@@ -406,18 +406,29 @@ internal data class HardListRow(val tourAt: Int, val name: String, val heading: 
 internal const val PROBLEM_LINE_MAX = 18
 
 /**
- * [3.714.0] 問題 1 件を 18 字までの 1 行に（族ごとの型）。[sym]＝その日の勤務、[nextSym]＝並びの翌日の勤務、[n]＝人数・回数。
- * 名前と日を前に付けて収まらなければ型だけ、それでも長ければ末尾を「…」。
+ * [3.714.0] 問題 1 件を 18 字までの 1 行に（族ごとの型）。[sym]＝その日の勤務、[nextSym]＝並びの翌日の勤務、[n]＝人数・回数、
+ * [syms]＝並びの全日の勤務（禁止の並びは「夜→夜→夜の並び」と全部つなぐ。null なら [sym]→[nextSym]）。
+ * [3.716.0] 名前と日の前置きは残し、収まらないときは型の側を「…」で切る（前置きを落とすと行の区別がつかない＝INV-01）。前置きだけで 17 字を超えれば前置きを切る。
  */
-internal fun problemLine(family: String, name: String, day: String, sym: String, nextSym: String? = null, n: Int = 1): String {
-    fun fit(prefix: String, body: String) = "$prefix $body".takeIf { prefix.isNotBlank() && it.length <= PROBLEM_LINE_MAX } ?: body
+internal fun problemLine(family: String, name: String, day: String, sym: String, nextSym: String? = null, n: Int = 1, syms: List<String>? = null): String {
+    fun fit(prefix: String, body: String): String {
+        if (prefix.isBlank()) return body
+        if (prefix.length > PROBLEM_LINE_MAX - 1) return prefix.take(PROBLEM_LINE_MAX - 1) + "…"
+        val room = PROBLEM_LINE_MAX - prefix.length - 1
+        return when {
+            body.length <= room -> "$prefix $body"
+            room >= 2 -> "$prefix ${body.take(room - 1)}…"
+            else -> "$prefix…"
+        }
+    }
+    val run = syms?.takeIf { it.size >= 2 } ?: listOfNotNull(sym, nextSym)
     val line = when (family) {
         "covU" -> "${day}の${sym}が${n}人不足"
         "c3w" -> fit(name, "$day 希望の前日")
         "low" -> fit(name, "${sym}があと${n}回不足")
         "high" -> fit(name, "${sym}が${n}回多い")
-        "c3n" -> fit(name, "${sym}の翌日が${nextSym ?: "?"}です")
-        "pref" -> fit("$name $day", "希望が重なっています")
+        "c3n" -> fit(name, if (run.size >= 2) "${run.joinToString("→")}の並び" else "禁止の並びです")
+        "pref" -> fit("$name $day", "希望と違う勤務です")
         "extWish" -> fit("$name $day", "拡張希望と違う勤務")
         "groupViol" -> fit("$name $day", "担当外の勤務")
         else -> fit("$name $day", breakdownLabels[family] ?: "必須違反")
@@ -425,9 +436,9 @@ internal fun problemLine(family: String, name: String, day: String, sym: String,
     return if (line.length <= PROBLEM_LINE_MAX) line else line.take(PROBLEM_LINE_MAX - 1) + "…"
 }
 
-/** 巡回の項目の 1 行（[problemLine]、並びは先頭の 2 日の勤務）。 */
+/** 巡回の項目の 1 行（[problemLine]、並びは全日の勤務をつなぐ）。 */
 internal fun tourProblemLine(it: TourItem, name: String): String =
-    problemLine(it.family, name, it.dayMd, it.syms.firstOrNull() ?: "?", it.syms.getOrNull(1))
+    problemLine(it.family, name, it.dayMd, it.syms.firstOrNull() ?: "?", it.syms.getOrNull(1), syms = it.syms)
 
 /** 必須違反の一覧（巡回の項目を 1 件 1 行）。希望どうしのぶつかり（関連セルがすべて [wishSelfKeys]）は「希望のまま」を付けて後ろへ。 */
 internal fun hardViolationRows(items: List<TourItem>, staffNames: List<String>, wishSelfKeys: Set<String>): List<HardListRow> =
@@ -1681,14 +1692,14 @@ private val homeActionsToAnalysis = setOf(HomeAction.SHOW_MOVE, HomeAction.SHOW_
 
 /**
  * ホームの主カードの並び（純関数）: 作成の 2 行 → 見出し → 札 → 状態（2 行まで）→ 主ボタン 1 つ → 補助 →「ほかの問題を見る」→
- * 詳細 → でき具合 → ⓘ → 下書きのリンク。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。
+ * 詳細 → でき具合 → ⓘ → 下書きのリンク。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。札は検査済み（checkRev>0）のときだけ。
  */
 internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = buildList {
     if (ui.running) { add(HomeSection.PROGRESS); return@buildList }
     val creation = ui.hasResult && ui.engineRan
     if (creation) add(HomeSection.CREATION)
     add(HomeSection.HEADLINE)
-    if (ui.hasResult) add(HomeSection.BADGES)
+    if (ui.hasResult && ui.checkRev > 0) add(HomeSection.BADGES)   // [3.716.0] 札は検査済みのときだけ（検査前に「満たしています」と言わない）
     add(HomeSection.STATUS)
     if (plan.primaryEnabled) add(HomeSection.PRIMARY)
     if (plan.helper != null || ui.hasResult) add(HomeSection.HELPER)

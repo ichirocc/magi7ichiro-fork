@@ -303,7 +303,7 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
         ui.running -> "勤務表をつくっています。表示は途中の値です。"
         !ui.hasResult -> "まだ作っていません。"
         !ui.engineRan && !ui.ranBeforeEdit -> "手で編集した勤務表です（自動作成はまだ）。"
-        hard > 0 || ui.bestSoft > 0 -> analysisCountLine(if (hard > 0) hardText(ui.breakdown, hard) else "0", unitTotals(ui.breakdown, MirrorKeys.soft) ?: "0")
+        hard > 0 || ui.bestSoft > 0 -> analysisCountLine(if (hard > 0) hardText(ui.breakdown, hard) else "0件", unitTotals(ui.breakdown, MirrorKeys.soft) ?: "0件")
         else -> "必須違反も要調整もありません。"
     }
     // [3.713.0] 件数は一文（「必須3件 · 要調整12件」）が言う＝点は変更案で直せる数だけ。
@@ -328,9 +328,9 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
 /** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */
 internal fun isSameRunResult(prev: Pair<Long, Long>?, now: Pair<Long, Long>): Boolean = prev != null && prev == now
 
-/** 盤面か設定が変わったら出さない。 */
-internal fun sameResultVisible(note: SameResultNote?, editRev: Int, schedule: List<List<Int>>): Boolean =
-    note != null && note.editRev == editRev && note.schedule == schedule
+/** 盤面か設定が変わったら出さない。[3.716.0] 設定は状態指紋で照合（C# と同じ。editRev だと色の変更で消え、元に戻すで同じ盤面に戻っても出ない）。 */
+internal fun sameResultVisible(note: SameResultNote?, stateKey: Long, schedule: List<List<Int>>): Boolean =
+    note != null && note.stateKey == stateKey && note.schedule == schedule
 
 internal fun sameResultNotice(hard: Int): String =
     if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。"
@@ -338,8 +338,9 @@ internal fun sameResultNotice(hard: Int): String =
 /** 同じ依頼（起点）・同じ盤面と設定で続いた案 0 件の回数。 */
 internal data class EmptySearchStreak(val origin: String, val board: Long, val state: Long, val count: Int)
 
-/** 案があれば途切れる（null）。起点・盤面・設定のどれかが違えば 1 から数え直す。 */
-internal fun nextEmptySearchStreak(prev: EmptySearchStreak?, origin: String, board: Long, state: Long, found: Int): EmptySearchStreak? = when {
+/** 案があれば途切れる（null）。起点・盤面・設定のどれかが違えば 1 から数え直す。[3.716.0] 自動の探索（[auto]）は数えも途切れさせもしない（人の操作の回数だけ）。 */
+internal fun nextEmptySearchStreak(prev: EmptySearchStreak?, origin: String, board: Long, state: Long, found: Int, auto: Boolean = false): EmptySearchStreak? = when {
+    auto -> prev
     found > 0 -> null
     prev != null && prev.origin == origin && prev.board == board && prev.state == state -> prev.copy(count = prev.count + 1)
     else -> EmptySearchStreak(origin, board, state, 1)
@@ -351,9 +352,15 @@ internal const val NO_FIX_TITLE = "案はありません"
 internal const val NO_FIX_LIST_BUTTON = "問題一覧"
 internal const val NO_FIX_CLOSE_BUTTON = "閉じる"
 internal const val NO_FIX_LINE = "設定か希望の確認が必要です"
+/** [3.716.0] 締切で打ち切られた探索の 1 行（設定の確認を求めない。理由の TIME の行は本文に残る）。 */
+internal const val NO_FIX_TIMEOUT_LINE = "時間内に見つかりませんでした"
 
-/** 案なしの説明の 1 行: 続けて空なら続けて空の行、そうでなければ定型の 1 行（3.711.0 の行を残す）。 */
-internal fun noFixLine(repeated: Boolean): String = if (repeated) REPEATED_EMPTY_LINE else NO_FIX_LINE
+/** 案なしの説明の 1 行: 締切で打ち切られたら時間の行、続けて空なら続けて空の行、そうでなければ定型の 1 行（3.711.0 の行を残す）。 */
+internal fun noFixLine(repeated: Boolean, timedOut: Boolean = false): String = when {
+    timedOut -> NO_FIX_TIMEOUT_LINE
+    repeated -> REPEATED_EMPTY_LINE
+    else -> NO_FIX_LINE
+}
 
 internal enum class RepeatedEmptyAction(val label: String) { WISHES("希望を見る"), SETTINGS("設定の確認を見る") }
 

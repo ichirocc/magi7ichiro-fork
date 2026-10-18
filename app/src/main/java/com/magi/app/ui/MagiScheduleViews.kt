@@ -2055,6 +2055,7 @@ internal fun FixSearchPanel(
     addressLabel: String? = null,   // その問題の名（「このセルの禁止の並び」）
     addressPending: Boolean = false,   // addresses の判定（正式な検査）がまだ＝「解消する案なし」と言わない
     singleProblem: String? = null,   // セルの問題が 1 つならその名（案が無いとき前後の日へ案内する）
+    primaryElsewhere: Boolean = false,   // [3.716.0] 同じシートに塗りの主ボタンがある（案なしの「問題一覧」を文字ボタンにする＝INV-09 塗りは 1 つ）
 ) {
     val cs = MaterialTheme.colorScheme
     // 開いた時点の職員を ID で覚え、並べ替え・削除のあとも同じ人を探す（統合仕様 5.1）。消えていれば探さない。
@@ -2062,9 +2063,11 @@ internal fun FixSearchPanel(
     val focus = resolveFixFocus(requested, pinned.first, pinned.second, ui.staffIds)
         ?: run { Text(FIX_STAFF_GONE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant); return }
     // 日は「他の人で補う」・人員の印・日別の職員に絞った探索で渡す（セルのシートは勤務が無い＝日は理由の読み取りにだけ使う）。
-    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, allDays = focus.allDays, quick = compact)) }
+    // [3.716.0] 開いたとき・盤面が変わったときの探索は自動（auto＝記録は「案を探す（自動）」、ためらいの回数と続けて 0 件に入れない）。もう一度探すは手の操作。
+    val findAs = { auto: Boolean -> onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, allDays = focus.allDays, quick = compact, auto = auto)) }
+    val find = { findAs(false) }
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
-    LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
+    LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) findAs(true) }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
     val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key, ui.fixCancelledKey)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2231,7 +2234,7 @@ internal fun FixSearchPanel(
                             if (!compact) Text(TIER2_HEADING, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                             t2.take(limit).forEachIndexed { n, x -> card(t1.size.coerceAtMost(limit) + n + 1, x.sug, x.explain) }
                         }
-                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem)
+                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem, primaryElsewhere)
                     }
                     fixing.isNotEmpty() -> {
                         // 同じ勤務のほかの日の過不足はここに 1 回だけ（カードごとに繰り返すと判断に要る行が下へ押し出される）。
@@ -2241,7 +2244,7 @@ internal fun FixSearchPanel(
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }
-                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem)
+                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem, primaryElsewhere)
                 }
                 @Composable fun fold(title: String, note: String, items: List<TieredFix>, startN: Int, purposeOverride: String? = null) {
                     var open by remember(focus.key, title) { mutableStateOf(false) }
@@ -2322,6 +2325,7 @@ private fun NoFixBlock(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, target: FixTarget?, label: String, compact: Boolean,
     nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit, onRetry: () -> Unit,
     singleProblem: String? = null,
+    primaryElsewhere: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val why = remember(ui.schedule, ui.wishes, focus.key, cv, ui.fixTimedOut) {
@@ -2331,9 +2335,14 @@ private fun NoFixBlock(
     val body = lines.filter { it != NO_FIX_SCOPE }
     // [3.713.0] 見出し「案はありません」と説明の 1 行（続けて空なら 3.711.0 の行）。
     Text(NO_FIX_TITLE, style = MaterialTheme.typography.titleSmall)
-    Text(noFixLine(ui.fixEmptyRepeatKey == focus.key), style = MaterialTheme.typography.bodySmall)
+    Text(noFixLine(ui.fixEmptyRepeatKey == focus.key, ui.fixTimedOut), style = MaterialTheme.typography.bodySmall)
     // [3.714.0] 主は「問題一覧」（巡回の先頭へ）、閉じるは文字。セルのシートは自分の ✕ があるので閉じるを出さない。
-    if (nav.onTour != null && nav.tourCount > 0) Button(onClick = { onApplied(); nav.onTour.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+    // [3.716.0] シートに塗りの主（足りない側の人探し）が別にあれば文字ボタン（塗りは 1 つ＝INV-09）。
+    if (nav.onTour != null && nav.tourCount > 0) {
+        val toTour = { onApplied(); nav.onTour.invoke() }
+        if (primaryElsewhere) TextButton(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+        else Button(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+    }
     if (!compact) TextButton(onClick = onApplied, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_CLOSE_BUTTON) }
     if (ui.fixEmptyRepeatKey == focus.key) {
         // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。

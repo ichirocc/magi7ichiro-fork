@@ -19,7 +19,7 @@ class Review3705Test {
         assertEquals("勤務表をつくっています。表示は途中の値です。", analysisSummary(made.copy(running = true), 2, null).sentence)
         assertEquals("手で編集した勤務表です（自動作成はまだ）。", analysisSummary(made.copy(engineRan = false), 2, null).sentence)
         assertEquals("必須2件 · 要調整5件", analysisSummary(made, 2, null).sentence)
-        assertEquals("必須0 · 要調整5件", analysisSummary(made.copy(bestHard = 0L, breakdown = mapOf("c1" to 5)), 0, null).sentence)
+        assertEquals("必須0件 · 要調整5件", analysisSummary(made.copy(bestHard = 0L, breakdown = mapOf("c1" to 5)), 0, null).sentence)
         assertEquals("必須違反も要調整もありません。", analysisSummary(made.copy(bestHard = 0L, bestSoft = 0L, breakdown = emptyMap()), 0, null).sentence)
         // 自動作成のあと手で変えた盤面は、上部の札と同じく「自動作成済み」の側。
         assertEquals("必須2件 · 要調整5件", analysisSummary(made.copy(engineRan = false, ranBeforeEdit = true), 2, null).sentence)
