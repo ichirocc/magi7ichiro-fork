@@ -21,9 +21,9 @@ class Review3714Test {
         assertEquals("夜勤があと1回不足", problemLine("low", "", "10/1", "夜勤"))
         assertEquals("福澤 夜勤があと2回不足", problemLine("low", "福澤", "10/1", "夜勤", n = 2))
         assertEquals("福澤 夜勤が1回多い", problemLine("high", "福澤", "10/1", "夜勤"))
-        assertEquals("夜勤の翌日が早番です", problemLine("c3n", "", "10/1", "夜勤", "早番"))
-        assertEquals("福澤 夜勤の翌日が早番です", problemLine("c3n", "福澤", "10/1", "夜勤", "早番"))
-        assertEquals("希望が重なっています", problemLine("pref", "福澤俊陽", "10/1", "A"))
+        assertEquals("夜勤→早番の並び", problemLine("c3n", "", "10/1", "夜勤", "早番"))
+        assertEquals("福澤 夜勤→早番の並び", problemLine("c3n", "福澤", "10/1", "夜勤", "早番"))
+        assertEquals("福澤 10/1 希望と違う勤務です", problemLine("pref", "福澤", "10/1", "A"))
         assertEquals("福澤 10/1 担当外の勤務", problemLine("groupViol", "福澤", "10/1", "A"))
     }
 

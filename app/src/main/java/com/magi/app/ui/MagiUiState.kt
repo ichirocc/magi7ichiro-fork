@@ -54,6 +54,8 @@ data class UiState(
      * 変わるが coverageDiag はまだ古い＝そこで候補を再有効化すると連打で covO/covU を同時に作れる）。
      */
     val checkRev: Long = 0,
+    /** [3.716.0] 検査した設定の状態指紋（`StateFingerprint.of`）。「前回と同じ結果」の照合に使う（C# `StateKey` と同じ）。 */
+    val stateKey: Long = 0L,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
     /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。
@@ -328,4 +330,4 @@ internal fun topFixResolvedLabels(ui: UiState): List<String> {
 }
 
 /** 前回と同じ結果の印。出したときの盤面と編集の世代を持ち、どちらかが変われば出さない。 */
-data class SameResultNote(val hard: Int, val editRev: Int, val schedule: List<List<Int>>)
+data class SameResultNote(val hard: Int, val stateKey: Long, val schedule: List<List<Int>>)

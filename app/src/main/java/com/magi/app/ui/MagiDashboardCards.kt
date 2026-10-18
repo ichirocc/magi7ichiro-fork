@@ -603,7 +603,7 @@ internal fun OperatorNextActionCard(
     onLanding: (EditLanding?) -> Unit = {},   // [UX監査 中4] 原因のある「データを見直す」は対応する区分・節へ（null＝編集の先頭）
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onApplyMove: (com.magi.app.v6.FixSuggestion) -> Unit = {},   // [3.643.0] カードに出した手をこの場で当てる（押した時点で選び直さない＝統合仕様 INV-01）
-    onAutoSearch: () -> Unit = {},  // [3.643.0] 必須違反が残り未探索なら 1 回だけ直し方を探す（旧 SmartActionCard の自動探索）
+    onAutoSearch: () -> Unit = {},  // [3.643.0] 必須違反が残り未探索なら 1 回だけ直し方を探す（旧 SmartActionCard の自動探索）。手の編集・元に戻すのあとも走る（auto＝ためらいの回数に入れない）
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を外して再作成」の結果（VM が鮮度を照合済み）
@@ -764,7 +764,7 @@ internal fun OperatorNextActionCard(
                     }
                 }
                 HomeSection.PRIMARY -> {
-                    ui.sameResult?.takeIf { sameResultVisible(it, ui.editRev, ui.schedule) }?.let { Text(sameResultNotice(it.hard), style = body, color = plan.fg) }
+                    ui.sameResult?.takeIf { sameResultVisible(it, ui.stateKey, ui.schedule) }?.let { Text(sameResultNotice(it.hard), style = body, color = plan.fg) }
                     val (bigBg, bigFg) = plan.bigColors ?: (cs.primary to cs.onPrimary)
                     Button(onClick = plan.bigAction, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = bigBg, contentColor = bigFg)) {

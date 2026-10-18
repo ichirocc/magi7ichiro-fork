@@ -11,7 +11,7 @@ import org.junit.Test
 /** 3.698.0: ホームの主カードを「見出し → 状態 2 行 → 主ボタン 1 つ」に（並びは純関数、対象は INV-01、単位は INV-07）。 */
 class Review3698Test {
     private fun ui(running: Boolean, hasResult: Boolean, hard0: Boolean, engineRan: Boolean = hasResult) =
-        UiState(loaded = true, running = running, hasResult = hasResult, bestHard = if (hard0) 0L else 3L, engineRan = engineRan)
+        UiState(loaded = true, running = running, hasResult = hasResult, bestHard = if (hard0) 0L else 3L, engineRan = engineRan, checkRev = if (hasResult) 1L else 0L)
 
     /** Review3690Test の表を使い回す: 段ごとに 見出し → 状態 → 主ボタン の順で、塗りの主は 1 つ、でき具合は結果があるときだけ。 */
     @Test fun homeCardSectionsOrderPerStage() {
