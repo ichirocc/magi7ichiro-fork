@@ -79,8 +79,6 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            SectionHeader("マスター設定")
-            Spacer(Modifier.height(6.dp))
             Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -100,7 +98,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 EditRowButton(onClick = {
                     if (newDays != null && newDays < v.days) dialog = Ws1Dialog.ConfirmShrink(newDays)
                     else if (newDays != null) onEvent(MagiEvent.Structure.ResizeDays(newDays))
-                }, enabled = !ui.running && okDays && newDays != v.days, text = "変更")
+                }, enabled = !ui.running && okDays && newDays != v.days, text = "日数を変える")
             }
             if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
@@ -132,8 +130,8 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                     Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            AddRowButton("シフト追加", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
-            AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
+            AddRowButton("シフトを追加する", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
+            AddRowButton("まとめて追加する", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
             Divider()
 
             // --- groups ---
@@ -151,7 +149,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                     Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            AddRowButton("グループ追加", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
+            AddRowButton("グループを追加する", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
             Divider()
 
             // [3.482.0 編集タブ簡素化] 旧「職員」節（氏名/所属の一覧・追加・一括追加・削除）は撤去し、

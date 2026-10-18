@@ -93,7 +93,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                     val (g, groupName) = gKey
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(groupName, style = MaterialTheme.typography.titleSmall)
-                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "全解除")
+                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "すべて解除する")
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         rows.forEach { gr ->
@@ -207,7 +207,7 @@ internal fun GroupRangeDialog(
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [決定 D9] 個人の上下限がある組にはグループの適切回数を使わない＝「同時に設定」とは言わない。
-                Text("全員の個人上下限に設定します（個人で設定済みの人は保持）。下限=上限のときはグループの適切回数も記録しますが、個人の上下限がある職員には使われません。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限に設定します（個人で設定済みの人は保持、両方「なし」で全員ぶん解除）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

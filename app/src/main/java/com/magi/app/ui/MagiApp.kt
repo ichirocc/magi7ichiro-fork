@@ -220,6 +220,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [3.718.0] 下のパネルの問題一覧（セルを開いていれば編集が優先＝`panelModeOf`）と、一覧の行で選んだセル（表をそのセルへ送って強調する）。
     var problemList by remember { mutableStateOf(false) }
     var listFocus by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var listPick by remember { mutableStateOf<Int?>(null) }   // [3.720.0] 問題一覧で押した行（同じマスの別の行と分ける）
     var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見。希望の説明はちら見に出ないので、希望の行からは全体で開く）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -621,7 +622,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         month = runCatching { java.time.LocalDate.parse(ui.startDate).let { "${it.year}年${it.monthValue}月" } }.getOrDefault(""),
         staff = ui.staffNames.size, shifts = ui.shiftSymbols.size, wish = editWish,
         needStdOk = ws1View?.shifts?.any { it.need1.isNotBlank() } == true, needExceptions = conditionsView.needDayOverrides.size,
-        issues = ui.settingIssues.size, wishConflicts = editHasConflicts),
+        issues = ui.settingIssues.size, wishConflicts = editHasConflicts,
+        rules = conditionsView.setupCounts.constraints, ranges = conditionsView.setupCounts.ranges,
+        shortShifts = remember(ui, conditionsView) { shortShiftCount(ui, conditionsView) }),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
         ranBeforeEdit = ui.hasResult && (ui.ranBeforeEdit || condEdited), running = ui.running)
     val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
@@ -634,7 +637,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editScope == 0 && editBarSecondary(editPlan)))
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)))
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
@@ -702,7 +705,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             if (!ui.loaded && tab != 4) {
                 // [⛏6] 「新規に作る」→ 最小データで開始し、編集タブ(年次マスター)へ誘導。
                 //   そこで E6 の折りたたみ節＋⛏12 の一括追加でシフト/グループ/スタッフを育てる。
-                EmptyStateCard(onOpen = openJson, onSample = loadSample, onNew = { vm.initBlankState(); tab = 2; editScope = 2 }, loading = ui.running)
+                EmptyStateCard(onOpen = openJson, onSample = loadSample, onNew = { vm.initBlankState(); tab = 2; editScope = 2; deepLinkEditSection = "yr_ws1" }, loading = ui.running)
             } else when (tab) {
                 0 -> {
                     InterruptedBanner(ui, onRerun = { vm.resumeInterruptedRun() }, onDismiss = { vm.dismissInterrupted() })
@@ -711,7 +714,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             staff = ui.staff, days = ui.days,
                             // [UX監査#3] 必要人数の既定はシフト編集(①、既定展開)・群単位の上書きは④・並びの制約は⑤と
                             //   複数節にまたがるため、節を決め打ちせず年間マスターの入口(①)までで留める。
-                            onGoEdit = { tab = 2; editScope = 2; showImportGuidance = false },
+                            onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_ws1"; showImportGuidance = false },
                             onDismiss = { showImportGuidance = false },
                         )
                     }
@@ -858,11 +861,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                 }
                 2 -> {
-                    // [見つけやすさ改善] 案内カードの「希望シフト」行タップで月次条件タブへ直行。
-                    //   WishCardは常時展開のカレンダー主導線のため、タブ切替のみで編集画面に到達する。
-                    val openWish: () -> Unit = { editScope = 0 }
-                    // [3.707.0 3a-1] 月次条件では SetupGuideCard を出さない（見出しカードが同じ点を持つ）。
-                    if (editScope != 0) SetupGuideCard(ui, conditionsView, editScope = editScope, onOpenWish = openWish)
+                    // [3.720.0 3c-1] SetupGuideCard はどの区分でも出さない（区分ごとの見出しカードが同じ点を持つ）。
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
                     // [3.714.0] タブの見出し＋1 行（区分ごとの説明は見出しカードの副題・SetupGuideCard）。
@@ -894,7 +893,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
                             //   年間マスター「③ 回数（1人あたり）」の StaffRangeCard へ=3.286.0 冗長性A）。
-                            ws1View?.let { StaffManageCard(ui, it, onEvent) }
+                            ScopeHeaderCard(editPlan)
+                            ws1View?.let { StaffManageCard(ui, it, onEvent, addFilled = editPlan.primary == EditHeaderPrimary.ADD_STAFF) }
                             // [3.286.0 冗長性A] StaffRangeCard は年間マスター「③ 回数（1人あたり）」へ一本化
                             //   （旧: 職員管理と③の2ドアに同一カード全体が重複＝編集タブ内で唯一のカード丸ごと重複だった。
                             //   回数設定は③が意味的定位置・職員管理は人の属性管理=入職/退職/改名/所属/スキルに純化）。
@@ -903,29 +903,23 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
                             ReviewMemoCard(ui, onEvent)
                             // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
+                            ScopeHeaderCard(editPlan, onPrimary = { deepLinkEditSection = "yr_ws1" })
                             StaffingRealityCard(ui, conditionsView)
-                            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                                // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
-                                Text("基本の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    style = MaterialTheme.typography.bodyMedium)
-                            }
-                            // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
+                            // [E6案A] 長大スクロールを畳んで削減。[3.720.0 3c-3] ①も既定で畳む（見出しカードの「基本設定を開く」で開く）。
                             // 編集画面はデータを引数で受け取るようになったので `key(ui.editRev)` の包みは全廃した
                             //   （3.190.0〜3.515.2 の再構成保証は「生の vm 読取」への対処だった）。editRev 自体は
                             //   Root が派生ビューを作り直す合図として残っている（`remember(ui)`）。
                             // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
-                            CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true, forceExpandKey = deepLinkEditSection,
+                            CollapsibleSection("① シフト・グループ", "yr_ws1", forceExpandKey = deepLinkEditSection,
                                 onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループと、グループ×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
+                                    SectionNote("勤務の種類・グループと、グループごとの担当を決めます。")
                                     ws1View?.let { Ws1Card(ui, it, onEvent) }
                                 }
                             }
                             CollapsibleSection("② スキルグループ", "yr_skillg") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("資格や対応できる業務などの“スキル”でまとめる単位です。勤務のグループとは別の切り口で分けます（例：採血できる人・リーダーできる人）。")
+                                    SectionNote("資格でまとめる単位です（例：採血できる人）。")
                                     ws1View?.let { SkillGroupCard(ui, it, constraintsView.skillFamilies.sumOf { f -> f.rows.size }, onEvent) }
                                 }
                             }
@@ -1051,10 +1045,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 ProblemListPanel(
-                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = listFocus,
+                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = problemPickedIndex(rows, listPick, listFocus),
                     covULine = hardListCovULine(rows.none { it.hard }, ui.breakdown["covU"] ?: 0),
                     onStart = { rows.firstOrNull { it.hard }?.tourAt?.let(goTourItem) },
-                    onRow = { r -> listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
+                    onRow = { idx, r -> listPick = idx; listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
                     onClose = closePanel,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                 )
@@ -1537,13 +1531,13 @@ internal fun HardListChip(hard: String, onOpen: () -> Unit) {
  * 行を押すとパネルは閉じずに表をそのセルへ送って強調し、選んだ行の 1 行をパネルの先頭に出す（目線を動かさない）。主は「直し方を見る」1 つ（INV-09）。
  */
 @Composable
-internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Pair<Int, Int>?, covULine: String?, onStart: () -> Unit,
-                              onRow: (ProblemRow) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Int?, covULine: String?, onStart: () -> Unit,
+                              onRow: (Int, ProblemRow) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val topCorner = MaterialTheme.shapes.extraLarge
     Surface(modifier = modifier, color = cs.surfaceContainerLow, shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)), tonalElevation = 2.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val pickedRow = picked?.let { c -> rows.firstOrNull { it.cell == c } }
+            val pickedRow = picked?.let { rows.getOrNull(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis,
                     color = if (pickedRow?.hard == true) cs.error else cs.onSurface, modifier = Modifier.weight(1f))
@@ -1556,8 +1550,8 @@ internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Pai
                     if (!r.hard && (idx == 0 || rows[idx - 1].hard)) softRowsHeading(softCount)?.let {
                         Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     }
-                    val sel = r.cell == picked
-                    Surface(onClick = { onRow(r) }, color = if (sel) cs.primaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small,
+                    val sel = idx == picked
+                    Surface(onClick = { onRow(idx, r) }, color = if (sel) cs.primaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -128,7 +128,7 @@ internal fun StaffShiftMatrixCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DeleteRowButton(onClick = { confirmResetApt = true },
-                    enabled = v.groupShiftApt.any { row -> row.any { it.isNotBlank() } }, text = "目標を全リセット")
+                    enabled = v.groupShiftApt.any { row -> row.any { it.isNotBlank() } }, text = "目標をすべて空欄に戻す")
             }
 
             Row(Modifier.fillMaxWidth()) {
@@ -373,13 +373,14 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
             // ⚠付きの解除と解決ボタンは 390dp 幅の1行に収まらない＝入らない分は次の行へ。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasRange) {
-                    DialogDangerButton("上下限を解除する", onClick = { commitApt(); onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
+                    DialogOptionButton("上下限を解除する", danger = true, onClick = { commitApt(); onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
                 }
                 if (vio == "vio-high") {
-                    DialogConfirmButton("上限を${count}に引き上げて解決", enabled = true,
+                    // [3.720.0 3c-6] 塗りは「変更を適用」だけ（INV-09）。1 タップで済むまま外枠に。
+                    DialogOptionButton(raiseCapButton(count),
                         onClick = { commitApt(); onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo0?.toString() ?: "", count.toString())); onDismiss() })
                 } else if (vio == "vio-low") {
-                    DialogConfirmButton("下限を${count}に下げて解決", enabled = true,
+                    DialogOptionButton(lowerFloorButton(count),
                         onClick = { commitApt(); onEvent(MagiEvent.Condition.SetStaffRange(i, k, count.toString(), hi0?.toString() ?: "")); onDismiss() })
                 }
             }

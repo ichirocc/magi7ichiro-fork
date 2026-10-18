@@ -1899,16 +1899,21 @@ internal data class EditHeaderCounts(
     val month: String = "", val staff: Int = 0, val shifts: Int = 0,
     val wish: WishEntryCounts = WishEntryCounts(0, 0, 0), val needStdOk: Boolean = false, val needExceptions: Int = 0,
     val issues: Int = 0, val wishConflicts: Boolean = false,
+    val rules: Int = 0, val ranges: Int = 0, val shortShifts: Int = 0,
 )
 
 internal data class EditHeaderPlan(
     val title: String, val subtitle: String, val points: List<String>,
     val primary: EditHeaderPrimary?, val secondary: EditHeaderSecondary?,
+    val notice: String? = null,
 )
 
 internal const val EDIT_SCOPE_MONTHLY_NOTE = "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
 internal const val EDIT_SCOPE_STAFF_NOTE = "入退職・所属・資格スキル（随時変更）。職員の一覧はここだけ"
-internal const val EDIT_SCOPE_MASTER_NOTE = "毎月は変えない基本の設定：シフト・ルール・人数（制度変更時のみ）"
+internal const val EDIT_SCOPE_MASTER_NOTE = "制度が変わったときだけ"
+internal const val EDIT_MASTER_EMPTY_NOTE = "まず①でシフトを追加しましょう"
+internal const val OPEN_MASTER_BUTTON = "基本設定を開く"
+internal const val ADD_STAFF_BUTTON = "職員を追加する"
 internal const val EDIT_NEED_BUTTON = "必要人数を編集する"
 internal const val WISH_CONFLICTS_BUTTON = "ぶつかっている希望を見る"
 
@@ -1931,7 +1936,7 @@ internal fun editHeaderPlan(scope: Int, counts: EditHeaderCounts, panelOpen: Boo
             "入力診断 " + (if (counts.issues == 0) "問題なし" else "見直し ${counts.issues}件"),
         )
         1 -> listOf("職員 ${counts.staff}人")
-        else -> listOf("シフト ${counts.shifts}種類")
+        else -> listOf("ルール ${counts.rules}件", "ひとりの回数の上限・下限 ${counts.ranges}件", "担当が足りないシフト ${counts.shortShifts}種類")
     }
     val primary = when {
         running -> null
@@ -1944,7 +1949,25 @@ internal fun editHeaderPlan(scope: Int, counts: EditHeaderCounts, panelOpen: Boo
         else -> EditHeaderPrimary.OPEN_MASTER
     }
     val secondary = if (scope == 0 && counts.wishConflicts) EditHeaderSecondary.WISH_CONFLICTS else null
-    return EditHeaderPlan(title, subtitle, points, primary, secondary)
+    val notice = if (scope == 2 && (counts.staff == 0 || counts.shifts == 0)) EDIT_MASTER_EMPTY_NOTE else null
+    return EditHeaderPlan(title, subtitle, points, primary, secondary, notice)
+}
+
+/** [3.720.0 3c-2] 体制の 1 行（人の単位だけ＝INV-07）。[slack]＝担当できる人数 − 1 日に要る最大の人数。 */
+internal fun staffingRowText(canDo: Int, maxNeed: Int): String {
+    val slack = canDo - maxNeed
+    return "担当${canDo}人・1日最大${maxNeed}人・" + when {
+        slack < 0 -> "${-slack}人足りない"
+        slack == 0 -> "欠勤の余裕なし"
+        else -> "余裕${slack}人"
+    }
+}
+
+/** [3.720.0] 問題一覧で選んだ行（同じマスに行が複数あっても押した行だけ＝INV-01）。行番号が今の [cell] を指さなければ、そのマスの先頭行。 */
+internal fun problemPickedIndex(rows: List<ProblemRow>, pickedIdx: Int?, cell: Pair<Int, Int>?): Int? {
+    if (cell == null) return null
+    if (pickedIdx != null && rows.getOrNull(pickedIdx)?.cell == cell) return pickedIdx
+    return rows.indexOfFirst { it.cell == cell }.takeIf { it >= 0 }
 }
 
 /** [3.707.0 3a-3] 下部バーの作成ボタンを外枠にするか（編集タブでは見出しの主が RERUN のときだけ塗り）。 */
@@ -1978,3 +2001,7 @@ internal fun editReturnProblem(shortfalls: List<com.magi.app.v6.CoverageShortfal
     if (shift == null || day == null) return null
     return shortfalls.firstOrNull { it.shiftIndex == shift && it.dayIndex == day }?.let { shortageHeadline(it).headline }
 }
+
+/** [3.720.0 3c-6] 回数のシートで違反を 1 タップで解く外枠ボタン（「回」を付ける）。 */
+internal fun raiseCapButton(n: Int): String = "上限を${n}回に上げて適用"
+internal fun lowerFloorButton(n: Int): String = "下限を${n}回に下げて適用"

@@ -74,7 +74,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
                     DeleteRowButton(onClick = { confirmDelete = g }, enabled = !ui.running)
                 }
             }
-            AddRowButton("スキルグループ追加", onClick = { dialog = SkillDlg.Add }, enabled = !ui.running)
+            AddRowButton("スキルグループを追加する", onClick = { dialog = SkillDlg.Add }, enabled = !ui.running)
 
             if (skills.isNotEmpty()) {
                 Divider()
