@@ -26,8 +26,13 @@ object ConstraintMus {
     /** IR: ユーザーが実際に1件ずつ緩められる制約の宣言。評価器は持たない（設計原則）。 */
     sealed interface Item
 
-    /** 実現可能な希望による固定（`Problem.wishLocked` 準拠＝実現不能な希望は含まれない）。 */
-    data class WishPin(val staff: Int, val day: Int, val shift: Int) : Item
+    /** セルの固定（`Problem.wishLocked` 準拠＝実現可能な希望、または手動固定 [manual]。実現不能な希望は含まれない）。
+     *  手動固定は最終盤面でも必ずその値＝日の証明では希望固定と同じに扱う（上限 0 のシフトでもその席に就ける・他の席には就けない）。 */
+    data class WishPin(val staff: Int, val day: Int, val shift: Int, val manual: Boolean = false) : Item
+
+    /** 日 j のセルの固定を [WishPin] に（手動固定は希望より強い＝[Problem.lockTo]）。 */
+    private fun lockedPin(p: Problem, i: Int, j: Int): WishPin? =
+        if (p.wishLocked(i, j)) WishPin(i, j, p.lockTo(i, j), manual = p.pinned(i, j)) else null
 
     /** 個人上限（staffRange hi、定義済みのみ）。 */
     data class RangeCap(val staff: Int, val shift: Int, val hi: Int) : Item
@@ -121,7 +126,7 @@ object ConstraintMus {
                 if (eff > 0) universe.add(DayNeed(j, k, eff))
             }
             if (universe.none { it is DayNeed }) continue
-            for (i in 0 until p.S) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            for (i in 0 until p.S) lockedPin(p, i, j)?.let { universe.add(it) }
             if (!dayProvablyInfeasible(p, universe)) continue
             val core = shrink(universe) { dayProvablyInfeasible(p, it) }
             if (core.isNotEmpty()) out.add(DayConflict(j, core))
@@ -140,7 +145,7 @@ object ConstraintMus {
                 if (eff > 0) universe.add(DayNeed(j, k, eff))
             }
             if (universe.isEmpty()) continue
-            for (i in 0 until p.S) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            for (i in 0 until p.S) lockedPin(p, i, j)?.let { universe.add(it) }
             if (dayProvablyInfeasible(p, universe, zeroCapExcluded = false)) out.add(j)
         }
         return out
@@ -222,7 +227,7 @@ object ConstraintMus {
         return false
     }
 
-    /** [3.692.0] 日の証明（[analyzeDayConflicts] と同じ判定＝上限 0 と希望固定を置けない側に数える）で、その日に最低いくつ席が空くか
+    /** [3.692.0] 日の証明（[analyzeDayConflicts] と同じ判定＝上限 0 と固定（希望・手動）を置けない側に数える）で、その日に最低いくつ席が空くか
      *  （最大マッチングの不足）とコアの必要人数のシフト。人員不足の診断（[V6PortAnalyzer.diagnoseCoverage]）が設定ミス診断と同じ根拠で「充足不可」を言うため。 */
     data class DayShortProof(val day: Int, val shifts: Set<Int>, val deficit: Int)
 
@@ -232,7 +237,7 @@ object ConstraintMus {
             val eff = effectiveLowerBound(p, k, dc.day)
             if (eff > 0) universe.add(DayNeed(dc.day, k, eff))
         }
-        for (i in 0 until p.S) if (p.wishFixed(i, dc.day)) universe.add(WishPin(i, dc.day, p.wish[i][dc.day]))
+        for (i in 0 until p.S) lockedPin(p, i, dc.day)?.let { universe.add(it) }
         DayShortProof(dc.day, dc.core.filterIsInstance<DayNeed>().map { it.shift }.toSet(), dayDeficit(p, universe).coerceAtLeast(1))
     }
 
@@ -254,7 +259,7 @@ object ConstraintMus {
         if (slots.size > p.S) return slots.size - p.S   // 席数が職員数を超える＝固定希望に関わらず埋め不能（健全）
         val staffMatch = IntArray(p.S) { -1 }   // staff -> slot
         val slotMatch = IntArray(slots.size) { -1 }
-        // 希望固定は mayPlace より優先（HardRepairCore.hf66DataHardening と同じ）＝上限 0 のシフトへの希望固定もその席に就ける。
+        // 固定（希望・手動）は mayPlace より優先（HardRepairCore.hf66DataHardening と同じ）＝上限 0 のシフトへの固定もその席に就ける。
         fun canServe(i: Int, shift: Int): Boolean {
             val pin = pinned[i] ?: return if (zeroCapExcluded) p.mayPlace(i, shift) else p.canDo(i, shift)
             return pin == shift

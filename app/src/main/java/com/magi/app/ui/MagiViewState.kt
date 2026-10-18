@@ -933,7 +933,8 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
                 w.staffIndex.takeIf { cell }, w.dayIndex.takeIf { cell }, wish = cell,
                 landing = if (!cell && w.staffIndex >= 0) EditLanding(0, null, wishStaff = w.staffIndex) else null))
         }
-        fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { it as? com.magi.app.v6.ConstraintMus.WishPin }
+        // 行を押して開くのは希望のセル（手動固定は勤務表で外すものなので飛ばさない）。
+        fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { (it as? com.magi.app.v6.ConstraintMus.WishPin)?.takeIf { w -> !w.manual } }
         for (d in s.dayProofs) pin(d.core).let { w ->
             val z = if (d.day in s.zeroCapProofDays) PRE_RUN_ZERO_CAP_TAG else ""
             add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,

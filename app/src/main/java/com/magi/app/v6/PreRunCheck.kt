@@ -77,7 +77,7 @@ object PreRunCheck {
         for (j in 0 until p.T) for (i in 0 until minOf(p.S, s.size)) {
             val k = s[i].getOrNull(j) ?: continue
             if (k !in 0 until p.K || k == p.restIdx || !p.canDo(i, k) || p.rangeHi[i][k] != 0) continue
-            if (p.wishFixed(i, j) && p.wish[i][j] == k) continue
+            if (p.wishLocked(i, j) && p.lockTo(i, j) == k) continue
             out += HandPlacedCell(i, j, k)
         }
         return out

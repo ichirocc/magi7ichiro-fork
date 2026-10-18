@@ -174,7 +174,7 @@ object V6SanityPort {
     }
 
     /**
-     * [S6 §14 Q5] 個人の上限 0 のシフトが手で置いてある（希望で固定したセルを除く）。本実行の入口の clear が外すので、
+     * [S6 §14 Q5] 個人の上限 0 のシフトが手で置いてある（希望・手動で固定したセルを除く）。本実行の入口の clear が外すので、
      * 再作成すると消える。盤面に依存するため [buildGuidance]（設定だけの診断）には入れない。
      */
     fun handPlacedUpperZeroIssue(state: MagiState, p: Problem, s: Array<IntArray>): SettingIssue? {
@@ -182,7 +182,7 @@ object V6SanityPort {
         for (i in 0 until minOf(p.S, s.size)) for (j in 0 until minOf(p.T, s[i].size)) {
             val k = s[i][j]
             if (k !in 0 until p.K || k == p.restIdx || !p.canDo(i, k) || p.rangeHi[i][k] != 0) continue
-            if (p.wishFixed(i, j) && p.wish[i][j] == k) continue
+            if (p.wishLocked(i, j) && p.lockTo(i, j) == k) continue
             cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${safeDayLabel(state.startDate, j)}「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
         }
         if (cells.isEmpty()) return null
@@ -206,6 +206,7 @@ object V6SanityPort {
         const val COUNT = "『年間マスター』の『③ 回数（1人あたり）』"
         const val HEAD = "『年間マスター』の『④ 人数と組み合わせ』"
         const val RULE = "『年間マスター』の『⑤ 並び・期間の制約』"
+        const val PIN = "勤務表タブ"
     }
 
     // 既定引数は cachedProblem(state)（build/aptBalances と同じ。p を渡さない呼出＝HfSwapPolish の
@@ -390,7 +391,7 @@ object V6SanityPort {
         for (k in 0 until p.K) {
             var cells = 0; var amount = 0
             for (j in 0 until p.T) {
-                val u = p.covUCell(k, j, placeableFor(p, k, j))   // [3.507.5] 置ける人数（上限 0 は除外、希望固定は含む）
+                val u = p.covUCell(k, j, placeableFor(p, k, j))   // [3.507.5] 置ける人数（上限 0 は除外、固定は含む）
                 if (u > 0) { cells++; amount += u }
             }
             if (amount > 0) {
@@ -408,7 +409,7 @@ object V6SanityPort {
      *  構造(assignability/need)のみ依存で最適化中に変化しないため一度だけ算出してよい。 */
     /** 上限0を数えなければ（canDo で数えると）不足が減る＝この配布不可に個人の上限0（入れない指定）が絡む。 */
     fun zeroCapInShortfall(p: Problem, f: ForcedCovU): Boolean = (0 until p.T).sumOf { j ->
-        maxOf(0, p.covUCell(f.shiftIndex, j, (0 until p.S).count { i -> p.canDo(i, f.shiftIndex) || (p.wishFixed(i, j) && p.wish[i][j] == f.shiftIndex) }))
+        maxOf(0, p.covUCell(f.shiftIndex, j, (0 until p.S).count { i -> p.canDo(i, f.shiftIndex) || (p.wishLocked(i, j) && p.lockTo(i, j) == f.shiftIndex) }))
     } < f.amount
 
     fun structuralHardFloor(state: MagiState, p: Problem = cachedProblem(state)): Int =
@@ -1402,7 +1403,7 @@ object V6SanityPort {
                 fun staffName(i: Int): String = nameOf(i)
                 fun itemLabel(it: ConstraintMus.Item): String = when (it) {
                     is ConstraintMus.WishPin ->
-                        "希望「${staffName(it.staff)} ${safeDayLabel(state.startDate, it.day)}=${sym(it.shift)}」"
+                        "${if (it.manual) "手動固定" else "希望"}「${staffName(it.staff)} ${safeDayLabel(state.startDate, it.day)}=${sym(it.shift)}」"
                     is ConstraintMus.RangeCap -> "個人上限「${sym(it.shift)}を最大${it.hi}回」"
                     is ConstraintMus.RangeFloor -> "個人下限「${sym(it.shift)}を最低${it.lo}回」"
                     is ConstraintMus.WindowRule -> "期間の制約「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」"
@@ -1410,14 +1411,14 @@ object V6SanityPort {
                 }
                 fun relaxHint(it: ConstraintMus.Item): String = when (it) {
                     is ConstraintMus.WishPin ->
-                        "${staffName(it.staff)}さんの${safeDayLabel(state.startDate, it.day)}の希望を調整する"
+                        "${staffName(it.staff)}さんの${safeDayLabel(state.startDate, it.day)}の${if (it.manual) "固定を外す" else "希望を調整する"}"
                     is ConstraintMus.RangeCap -> "「${sym(it.shift)}」の個人上限を上げる"
                     is ConstraintMus.RangeFloor -> "「${sym(it.shift)}」の個人下限を下げる"
                     is ConstraintMus.WindowRule -> "期間の制約「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」の回数を下げる"
                     is ConstraintMus.DayNeed -> "「${sym(it.shift)}」の必要人数を下げる"
                 }
                 fun relaxPlace(it: ConstraintMus.Item): String = when (it) {
-                    is ConstraintMus.WishPin -> Place.WISH
+                    is ConstraintMus.WishPin -> if (it.manual) Place.PIN else Place.WISH
                     is ConstraintMus.RangeCap, is ConstraintMus.RangeFloor -> Place.COUNT
                     is ConstraintMus.WindowRule -> Place.RULE
                     is ConstraintMus.DayNeed -> Place.NEED
@@ -1431,7 +1432,7 @@ object V6SanityPort {
                         "次の${sc.core.size}件は同時に成立しません: $labels",
                         "${Place.TAB}で、いずれか1件を緩めてください（例: $hints）"))
                 }
-                // 日別の証明（ConstraintMus の canServe）はコアで希望固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
+                // 日別の証明（ConstraintMus の canServe）はコアで固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
                 fun capZeroNote(dc: ConstraintMus.DayConflict): String {
                     val pinned = dc.core.filterIsInstance<ConstraintMus.WishPin>().map { it.staff }.toSet()
                     val parts = dc.core.filterIsInstance<ConstraintMus.DayNeed>().map { it.shift }.distinct().mapNotNull { k ->
@@ -1949,10 +1950,11 @@ object V6SanityPort {
  * 設定されていれば真（P2 単独定義セルも `covUCell`/`covOCell` は正しく評価する＝3.173.0 の規約）。
  * 値そのものは下の2関数が source of truth へ委譲するので、ここは「定義の有無」だけを見る。
  */
-/** [3.507.5] その日にシフト k を実際に置ける人数＝最適化器が置ける（`mayPlace`）職員＋その日の希望でそのシフトに固定された職員。
- *  3.507.0 で個人上限 0 の職員は最適化器が置かなくなったので、「担当できる人数」を canDo で数えると人員不足の必然を見落とす。 */
+/** [3.507.5] その日にシフト k を実際に置ける人数＝最適化器が置ける（`mayPlace`）職員＋その日のセルがそのシフトに固定（希望・手動）された職員。
+ *  3.507.0 で個人上限 0 の職員は最適化器が置かなくなったので、「担当できる人数」を canDo で数えると人員不足の必然を見落とす。
+ *  手動固定は最適化器が守る（`hf66DataHardening`）＝上限 0 のシフトでも席を埋める。 */
 private fun placeableFor(p: Problem, k: Int, j: Int): Int =
-    (0 until p.S).count { i -> p.mayPlace(i, k) || (p.wishFixed(i, j) && p.wish[i][j] == k) }
+    (0 until p.S).count { i -> p.mayPlace(i, k) || (p.wishLocked(i, j) && p.lockTo(i, j) == k) }
 
 private fun needDefined(p: Problem, k: Int, j: Int): Boolean =
     p.need1[k][j] >= 0 || (p.use2 && p.need2[k][j] >= 0)
