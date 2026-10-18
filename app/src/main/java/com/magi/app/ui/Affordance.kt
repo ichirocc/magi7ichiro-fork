@@ -37,11 +37,13 @@ private val CompactPad = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
 
 /** 一覧の「＋ ◯◯追加」: 追加と分かる外枠ボタン＋＋アイコン。 */
 @Composable
-fun AddRowButton(text: String, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp)) {
+fun AddRowButton(text: String, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, filled: Boolean = false) {
+    val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
         Text(text)
     }
+    if (filled) Button(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), content = content)
+    else OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), content = content)
 }
 
 /** 一覧行の「編集」: トーナル塗りで控えめだが明確に押せる。 */

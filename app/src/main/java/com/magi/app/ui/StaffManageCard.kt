@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
  * の CountsCard（StaffShiftMatrixCard, StaffShiftMatrix.kt）が担当。
  */
 @Composable
-internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
+internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit, addFilled: Boolean = true) {
     val skills = v.skillGroups
     val cs = MaterialTheme.colorScheme
     var edit by remember { mutableStateOf<Triple<Int, String, Int>?>(null) }   // (i, name, groupIdx)
@@ -49,8 +49,8 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
     var bulkOpen by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("職員一覧（${v.staff.size}名）", style = MaterialTheme.typography.titleMedium)
-            Text("タップで編集、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。",
+            Text("職員の一覧", style = MaterialTheme.typography.titleSmall)
+            Text("タップで編集、${DRAG_HANDLE_GLYPH}を長押しで並び替え。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             // [3.530.0] シフト種別/グループ（3.515.6）と同じ形へ統一（経緯: docs/history/3.4xx.md）。
             ReorderableRows(items = v.staff, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveStaff(from, to)) }) { i, st, dragHandle ->
@@ -94,8 +94,9 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             if (v.staff.size <= 1) {
                 Text("最後の1名は削除できません（勤務表の行が無くなるため）。先に別の職員を入職させると削除できます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-            AddRowButton("入職（職員追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
-            AddRowButton("一括追加（改行区切り）", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)
+            // [3.720.0 S-1] 職員管理の主ボタン（塗り）。下部の再作成が主の間は外枠（INV-09）。
+            AddRowButton(ADD_STAFF_BUTTON, onClick = { addOpen = true }, enabled = ui.loaded && !ui.running, filled = addFilled)
+            AddRowButton("まとめて追加する", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)
         }
     }
     if (bulkOpen) {

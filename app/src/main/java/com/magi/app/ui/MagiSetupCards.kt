@@ -642,13 +642,10 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
-            Text("シフトごとに「担当できる人数」で確かめます。余裕は、1人欠けても回るかどうかを表します。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            if (rows.any { it.q - it.maxNeed <= 0 }) Text("⚠・！のシフトは、下の『① シフト・グループ』の担当可否で担当できるグループを増やすか、「月次条件」の『必要人数設定』で人数を見直すと余裕が出ます。",
+            Text("足りないシフトは①で担当を増やすか、必要人数を見直します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             rows.forEach { r ->
                 val slack = r.q - r.maxNeed
-                val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
                 val (mark, col) = when {
                     slack < 0 -> "⚠" to cs.error
                     // [UD監査] 橙(2.7:1)は白地の文字色として不足→警告トークンの濃色(fg)へ。
@@ -659,12 +656,7 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
                     Text(mark, color = col, fontWeight = FontWeight.Bold)
                     Text(r.sym, fontWeight = FontWeight.Bold, modifier = Modifier.width(44.dp), maxLines = 1)
                     Text(
-                        "担当${r.q}人・月${r.d}人日（1人あたり${tenths / 10}.${tenths % 10}回）・" +
-                            when {
-                                slack < 0 -> "日最大${r.maxNeed}人 → 担当不足"
-                                slack == 0 -> "日最大${r.maxNeed}人 → 欠勤余裕なし"
-                                else -> "欠勤余裕${slack}人"
-                            },
+                        staffingRowText(r.q, r.maxNeed),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     )
                 }
@@ -690,7 +682,7 @@ internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
             ui.reviewMemos.forEachIndexed { idx, memo ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    DeleteRowButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, text = "済")
+                    DeleteRowButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, text = "済みにする")
                 }
             }
         }

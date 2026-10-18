@@ -93,7 +93,7 @@ internal fun ConstraintsCard(
                     }
                 }
                 // [3.483.0 E-10] 並び系は起点チップごとに「＋」があるため、末尾の「追加」は「新しい起点で追加」と区別。
-                AddRowButton(if (fam.key.startsWith("cons3") && fam.key != "cons3w") "新しい起点で追加" else "追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
+                AddRowButton(if (fam.key.startsWith("cons3") && fam.key != "cons3w") "新しい起点で追加する" else "追加する", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
                 Divider()
             }
         }
@@ -279,7 +279,7 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
                                 onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) })
                         }
                     }
-                    AddRowButton("追加", onClick = { addFamily = fam.key }, enabled = !ui.running)
+                    AddRowButton("追加する", onClick = { addFamily = fam.key }, enabled = !ui.running)
                     Divider()
                 }
             }
@@ -302,7 +302,7 @@ private fun ConstraintDialog(
     val shiftsOpt = listOf("") + shifts
     val init = remember(family, editIndex) { editIndex?.let { cv.rowValues(family, it) } }
     val mode = if (editIndex != null) "を変更" else "を追加"
-    val okLabel = if (editIndex != null) "変更" else "追加"
+    val okLabel = if (editIndex != null) "変更する" else "追加する"
     fun commit(values: List<String>, add: () -> Unit) {
         if (editIndex != null) onEvent(MagiEvent.Constraint.Update(family, editIndex, values)) else add()
         onClose()
