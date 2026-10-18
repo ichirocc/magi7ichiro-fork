@@ -1621,7 +1621,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val same = isSameRunResult(lastRunKeys, keys)
         lastRunKeys = keys
         if (same) logOp("I", OpLogText.sameResultLine(keys.second))
-        _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, keys.first, u.schedule) else null) }
+        val floor = if (same && hard > 0) try { PreRunCheck.build(st, sc).floorCount } catch (_: Exception) { 0 } else 0
+        _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, keys.first, u.schedule, floor) else null) }
     }
 
     private fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)

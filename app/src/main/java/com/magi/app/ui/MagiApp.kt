@@ -637,9 +637,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)))
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList)
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
-                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
+                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
                 }
                 MagiBottomNav(tab) { tab = it }
@@ -1326,7 +1326,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
 
 /** 停止/作成/もう一度の主ボタン（勤務表タブの統合バーと BottomCommandBar で同じ規則）。 */
 @Composable
-internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true, compact: Boolean = false, secondary: Boolean = false) {
+internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true, compact: Boolean = false, secondary: Boolean = false, onShowList: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     // 勤務表タブの統合バーは前後・元に戻す等と並んで残り幅が 90dp まで縮む（390dp 幅）。余白を詰めて 2 行まで折り返し、ラベルを切らない。
     val pad = if (compact) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding
@@ -1356,14 +1356,28 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
                 Text(label, style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             }
             val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
-            if (secondary) OutlinedButton(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
-            else Button(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
+            val same = ui.sameResult
+            val demoted = ui.hasResult && same != null && rerunDemoted(same.hard, same.floor, sameResultVisible(same, ui.stateKey, ui.schedule))
+            when (val mode = rerunFooter(demoted, secondary, ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 })) {
+                RerunFooter.OUTLINED -> OutlinedButton(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
+                RerunFooter.FILLED -> Button(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
+                // [3.721.0] 再作成しても同じ結果になる間は、塗りの主を変更案（案が無ければ問題一覧）へ譲る。
+                RerunFooter.FIX_SEARCH, RerunFooter.PROBLEM_LIST -> Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { vm.runV6FullOptimize() }, modifier = Modifier.weight(1f).heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp), contentPadding = pad) {
+                        Text(label, style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    }
+                    val fix = mode == RerunFooter.FIX_SEARCH
+                    Button(onClick = { if (fix) vm.findFixSuggestions() else onShowList() }, modifier = Modifier.weight(1f).heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp), contentPadding = pad) {
+                        Text(if (fix) PEEK_SEARCH_BUTTON else NO_FIX_LIST_BUTTON, style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false) {
+internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false, onShowList: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
     // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
@@ -1393,7 +1407,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary)
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
         }
         }
     }

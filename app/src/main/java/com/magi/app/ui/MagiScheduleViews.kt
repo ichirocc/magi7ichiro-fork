@@ -548,7 +548,7 @@ internal fun rememberScheduleNavState(): ScheduleNavState {
  * 左＝週送り（巡回モードのときは ◀違反 k/N・違反▶）、中＝元に戻す/やり直し（アイコン 48dp）、右＝主ボタン 60dp。
  */
 @Composable
-internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, violation: Boolean, onRevealGrid: () -> Unit = {}) {
+internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, violation: Boolean, onRevealGrid: () -> Unit = {}, onShowList: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val weeks = nav.weeks
     val vioDays = nav.vioDays
@@ -598,7 +598,7 @@ internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNav
                     Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null)
                 }
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f), showIcon = !showVio, compact = true)
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f), showIcon = !showVio, compact = true, onShowList = onShowList)
         }
     }
 }

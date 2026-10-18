@@ -330,4 +330,4 @@ internal fun topFixResolvedLabels(ui: UiState): List<String> {
 }
 
 /** 前回と同じ結果の印。出したときの盤面と編集の世代を持ち、どちらかが変われば出さない。 */
-data class SameResultNote(val hard: Int, val stateKey: Long, val schedule: List<List<Int>>)
+data class SameResultNote(val hard: Int, val stateKey: Long, val schedule: List<List<Int>>, val floor: Int = 0)
