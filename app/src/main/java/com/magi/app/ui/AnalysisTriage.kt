@@ -336,6 +336,20 @@ internal fun sameResultVisible(note: SameResultNote?, stateKey: Long, schedule: 
 internal fun sameResultNotice(hard: Int): String =
     if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。"
 
+/** 残る必須違反がすべて「何度つくっても残る」もので、前回から何も変わっていない（[fresh]＝[sameResultVisible]）。再作成しても同じ結果になる。 */
+internal fun rerunDemoted(hard: Int, floor: Int, fresh: Boolean): Boolean = fresh && hard > 0 && hard <= floor
+
+/** 下部の作成ボタンの出し方。[RerunFooter.FIX_SEARCH]・[RerunFooter.PROBLEM_LIST] は「再作成」を外枠にし、隣の塗りを主にする（塗りは 1 つ＝INV-09）。 */
+internal enum class RerunFooter { FILLED, OUTLINED, FIX_SEARCH, PROBLEM_LIST }
+
+/** [primaryElsewhere]＝画面に別の塗りの主がある。[noFixFound]＝変更案を探し終えて案が無い（問題一覧へ）。 */
+internal fun rerunFooter(demoted: Boolean, primaryElsewhere: Boolean, noFixFound: Boolean): RerunFooter = when {
+    primaryElsewhere -> RerunFooter.OUTLINED
+    !demoted -> RerunFooter.FILLED
+    noFixFound -> RerunFooter.PROBLEM_LIST
+    else -> RerunFooter.FIX_SEARCH
+}
+
 /** 同じ依頼（起点）・同じ盤面と設定で続いた案 0 件の回数。 */
 internal data class EmptySearchStreak(val origin: String, val board: Long, val state: Long, val count: Int)
 
