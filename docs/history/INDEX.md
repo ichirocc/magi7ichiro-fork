@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 停止説明の境界テスト（2026-10-18、3.721.2 上、テストのみ・版上げなし）: `StopExplanationBoundaryTest`（Kotlin・C# 1 対 1、4 件）。後処理で必須が減った／床の後に盤面が変わった／最終必須 0 の 3 境界で、文が採用した最終結果の数だけを言うことを固定。読んだ結果、不整合なし＝`remainingHard` は `finalReport.hard`（採用段）、breakdown も同じ採用レポート、入力維持の分岐は `stopSummary` を null のまま（両言語同じ）  → `docs/history/3.4xx.md`
 - サンプルデータのシフト色を 36 色パレット（大区分 6 色相×明度 6 段）から割り付け（2026-10-18、3.721.2、ユーザー指示「サンプルデータのシフト色を変更する」）: データのみ・出力不変（shiftColors は表示専用、指紋に入らない）。assets の sample_state_…
 - 問題一覧の選んだ行が別の問題へ飛ぶ不具合（2026-10-18、3.721.1）: `problemPickedIndex` に `pickedFamily` を足し、行番号のマス・族一致 → 同じマス・族の先頭 → そのマスの先頭の順で引く（`MagiApp` の `listPickFamily`）。画面のみ・出力不変  → `docs/history/3.4xx.md`
 - 探索の必須同数タイブレークを族の重みで（2026-10-18、測定のみ・コード不採用）: `PolishGate.searchHardFamilyTiebreak`（既定OFF）＝評価器（Kotlin `Evaluator`/`DeltaEvaluator`・C++ `fullEvalParts`/`SaChunk`、JNI meta[8]）が soft へ Σ(必須族の重み×件数) を足す。必須件数の桁は不変、静的上限 `Problem.hardTiebreakBound` が 5e8 以上なら無効。HandleOptimizeBench `hardtie` 6件×5seed×60秒＝hard 差 0/30・weighted 平均 −20 [−101,+61]・勝11/負12…（sample は +151 で一貫して悪化）、dev1017 300秒×3 は同一＝**既定OFF維持**（backlog #19 の 2 度目の否決）  → `docs/history/3.4xx.md`
