@@ -663,7 +663,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         editReturnLines(ret).take(2).forEach { line ->
-                            Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
                         }
                     }
                     TextButton(onClick = {
@@ -1298,7 +1298,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
@@ -1306,12 +1306,12 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     // 必須 0 でも要調整が残る＝「配布可」と言い切らず、配布前の確認へ案内する（2026-10-14 利用者レビュー）。
                     Surface(onClick = onPreDist, color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                            Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
                 } else Surface(color = bg, shape = MaterialTheme.shapes.small) {
-                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
@@ -1320,7 +1320,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End,
         ) {
-            if (statusLine != null) Text(statusLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+            if (statusLine != null) Text(statusLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             saveWordView()
         }
@@ -1511,7 +1511,7 @@ internal fun ScheduleStateRow(line: ScheduleStateLine, onTour: () -> Unit) {
     val color = if (line.hard) cs.error else cs.onSurfaceVariant
     val mod = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     Box(if (line.tourFirst) mod.clickable(onClick = onTour) else mod, contentAlignment = Alignment.CenterStart) {
-        Text(line.text, color = color, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(line.text, color = color, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1545,7 +1545,7 @@ internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Pai
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val pickedRow = picked?.let { c -> rows.firstOrNull { it.cell == c } }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis,
                     color = if (pickedRow?.hard == true) cs.error else cs.onSurface, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
             }
@@ -1561,7 +1561,7 @@ internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Pai
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
                         }
                     }

@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.stateDescription
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -422,8 +424,11 @@ internal fun ScheduleGrid(
         //   週ページングのスクロール量(cellWpx)も同じ値から計算＝ジャンプ位置は常にグリッドと整合。
         // [3.497.0/ユーザー指示「OPPO A5 5G(Android16)も動作できるようにする」] 名前列 80dp で 7日（36dp×7）が収まらない幅だけ名前列 56dp（D4）。
         //   maxWidth はカードの幅（端末−32dp）で、内容幅はさらに −32dp。端末 396dp 未満が 56dp（390dp は (326−56)/7≈38.6dp）、412dp は 80dp。
-        val gridNameW = if (this.maxWidth - 32.dp - 80.dp >= 36.dp * 7) 80.dp else 56.dp
-        val gridCellW = ((this.maxWidth - 32.dp - gridNameW) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding
+        // [3.719.0] 文字拡大 1.3× 超はセルも比例して広げる（`ScheduleLayoutMetrics.growth`）。1.3× までは寸法不変＝7 日が収まる。
+        val fontScale = LocalDensity.current.fontScale
+        val cellMin = ScheduleLayoutMetrics.cellMinDp(fontScale).dp
+        val gridNameW = if (this.maxWidth - 32.dp - 80.dp >= cellMin * 7) 80.dp else 56.dp
+        val gridCellW = ((this.maxWidth - 32.dp - gridNameW) / 7).coerceIn(cellMin, ScheduleLayoutMetrics.cellMaxDp(fontScale).dp)   // 32=Column水平padding
         val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
         // [3.481.0] 現在週の導出は ScheduleCommandBar（Scaffold 下部、旧 ScheduleNavBar）へ、日の範囲は名前列の左上（WeekCornerLabel）へ移動。ここはバーが必要とする
         //   セル幅(px)と週分割を共有状態へ書くだけ（SideEffect＝この合成が確定してから書く＝描画中の書換なし）。
@@ -750,7 +755,7 @@ internal fun ShiftColorChip(symbol: String, colorHex: String?, textHex: String?)
     val bg = hexToColor(colorHex ?: "")
     val fg = hexToColor(textHex ?: "")
     Box(
-        Modifier.height(32.dp).widthIn(min = 48.dp).background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp),
+        Modifier.heightIn(min = 32.dp).widthIn(min = 48.dp).background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(symbol, style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold, maxLines = 1)
@@ -1575,11 +1580,12 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     // [グループ色帯/Web試作の移植] 名前列の左端4dpにグループ色の帯。行の視線追跡と所属の一目把握を助ける。
     //   色は群の出現順に黄金角で自動割当（設定不要・群1つなら実質無地）。
     val groupOrder = remember(ui.staffGroupSymbols) { ui.staffGroupSymbols.distinct() }
-    // [悲観検証P2/フォント拡大] 記号はセル幅への物理フィット優先（cellW×0.40・上限15dp を dp→sp 変換）。
-    //   端末のフォント拡大(1.3x等)で 15sp→19.5dp となり全角2文字がセル(34〜48dp)からクリップして
-    //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
-    val symFontSize = with(LocalDensity.current) { minOf(cellW * 0.40f, 15.dp).toSp() }
-    val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
+    // [悲観検証P2/フォント拡大] 記号はセル幅への物理フィット優先＝全角 2 文字が収まる上限（(cellW−4dp)/2）を超えない。
+    //   旧: cellW×0.40・上限 15dp を dp→sp 変換＝拡大しても一切大きくならなかった（3.719.0）。今は 15dp×文字拡大を
+    //   目標にし、収まる上限で止める（36dp のセルで 1.3× → 16dp、クリップしない）。可読の代替は contentDescription と編集シート。
+    val fontScale = LocalDensity.current.fontScale
+    val symFontSize = with(LocalDensity.current) { minOf((cellW - 4.dp) / 2, 15.dp * fontScale).toSp() }
+    val headFontSize = with(LocalDensity.current) { minOf((cellW - 4.dp) / 2.5f, 12.dp * fontScale).toSp() }   // 曜日/▼N も同方針で列幅フィット
     // 日ごとの派生値（下線の段階・▼N・▲N）は MagiViewState が唯一の算出元。ここで別に数えると
     //   同じ「その日は過剰か」の別版ができ、片方だけ壊れても誰も気づけない（3.557.0・3.559.0）。
     val dayState = vs.days
@@ -1597,7 +1603,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
     // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
-    val cellH = ScheduleLayoutMetrics.ROW_DP.dp; val headH = ScheduleLayoutMetrics.DAY_HEADER_DP.dp   // nameW は引数（幅 390dp 未満の端末では 56dp、3.497.0）
+    val cellH = ScheduleLayoutMetrics.rowDp(fontScale).dp; val headH = ScheduleLayoutMetrics.dayHeaderDp(fontScale).dp   // nameW は引数（幅 390dp 未満の端末では 56dp、3.497.0）。1.3× 超は比例（3.719.0）
     // [3.481.0 勤務表タブ再設計①] 日ヘッダの固定。旧: 日ごとの Column の先頭にヘッダセルがあり、タブ全体の
     //   縦スクロールでヘッダが画面外へ消えると（30名×48dp=1440dp の下段）何日の列か分からなくなっていた
     //   （タップ時の行列クロスハイライトだけが頼り）。ヘッダを独立した Row にし、本体と同じ hScroll を共有
@@ -1743,7 +1749,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                         val nm = ui.staffNames.getOrNull(i) ?: "$i"
                         val hit = nameQuery.isNotBlank() && nm.contains(nameQuery, ignoreCase = true)
                         Text(nm, style = MaterialTheme.typography.bodySmall, color = if (hit) cs.primary else cs.onSurface,
-                            fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = a11yMaxLines(fontScale), overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false))
                         // 回数の族（下限・上限・適切回数・個人の合計）はセルを持たないので名前の横に小さく ▼/▲。
                         if (badge != null) Text(badge.glyph, fontSize = headFontSize, fontWeight = FontWeight.Normal, maxLines = 1,
@@ -1776,15 +1782,17 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             // 拡張希望: 0=無し・1=指定日・2=割当が禁止のシフト（違反）。
                             val extBans = ui.extBanned[VioKey.cell(i, d)]
                             val ext = when { extBans == null -> 0; k in extBans -> 2; else -> 1 }
+                            val inBand = vs.c1Band.getOrNull(i)?.getOrNull(d) == true
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${DayText.full(ui.startDate, d)} ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須" else if (vk >= 2) "・要調整" else "") +
+                                (if (inBand) "・期間の制約の窓" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
                                 (if (cellPinned) "・手動固定" else "") +
                                 (when (ext) { 2 -> "・拡張希望の違反"; 1 -> "・拡張希望（${extBans!!.sorted().joinToString("・") { ui.shiftSymbols.getOrNull(it) ?: "?" }}以外）"; else -> "" }) + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
                             val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
                             val secondC = vs.cellSecond.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, pinned = cellPinned, ext = ext, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, pinned = cellPinned, ext = ext, band = if (inBand) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
                         }
                     }
                 }
@@ -1956,12 +1964,16 @@ private fun FlatCell(
                     // [枠のハロー] 違反色と同系色のセル背景でも枠が埋没しないよう surface の縁取りを敷く。
                     vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp, halo = cs.surface)
                     vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp, halo = cs.surface)
-                    plainBorder -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))
+                    // [3.719.0] セル地が surface と見分けにくい（1.5:1 未満）ときは設定に関係なく輪郭を引く（白地に白いシフト色など）。
+                    plainBorder || lowContrastOutline(bg.luminance(), cs.surface.luminance()) -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))
                     else -> Modifier
                 })
                 .clickable(onClick = onClick)
-                // [a11y] 主操作セルを読み上げ対応（従来 contentDescription 無し）。氏名/日/シフト/違反/希望を1文で。
-                .semantics(mergeDescendants = true) { contentDescription = cd },
+                // [a11y] 主操作セルを読み上げ対応（従来 contentDescription 無し）。氏名/日/シフト/違反/希望を1文で。編集中・注目は状態として読む（3.719.0）。
+                .semantics(mergeDescendants = true) {
+                    contentDescription = cd
+                    if (editing) stateDescription = "編集中" else if (focused) stateDescription = "注目"
+                },
             contentAlignment = Alignment.Center,
         ) {
             // [コントラスト] 記号は太字＋セル幅フィットの物理サイズ(P2)で沈み込み/クリップを防ぐ。休(dim)は細字で後退。

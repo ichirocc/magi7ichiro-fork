@@ -1,5 +1,8 @@
 package com.magi.app.ui
 
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.platform.LocalDensity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -663,7 +666,8 @@ internal fun OperatorNextActionCard(
         wish = firstWish?.let { "${staffName(it.staff)} ${DayText.short(ui.startDate, it.day)}" },
         relax = relax?.let { relaxTarget(it.result, ui) }?.let { "${it.name} ${it.span}" },
         tour = tourNext ?: creation?.next)
-    val wishLabel = homeTargetLabel(HOME_WISH_BUTTON, nextTarget, null)
+    val fontScale = LocalDensity.current.fontScale
+    val wishLabel = homeTargetLabel(HOME_WISH_BUTTON, nextTarget, null, fontScale)
     val hardNow = hardText(ui.breakdown, ui.bestHard)
     val plan = when (kind) {
         // [校正] 「やめる」は下部コマンドバーに常設済み。見出し文は下の進捗行と重複のため出さない（ユーザー赤囲い指示）。
@@ -687,14 +691,14 @@ internal fun OperatorNextActionCard(
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す（段の順は homePlan）。
         HomePlanKind.GUIDED_FIX ->
             OpNextPlan(amber, onAmber, shortage?.headline ?: "",
-                homeTargetLabel("なおし方を見る", nextTarget, null), onFix, true, null, onSetup)
+                homeTargetLabel("なおし方を見る", nextTarget, null, fontScale), onFix, true, null, onSetup)
         HomePlanKind.APPLY_MOVE -> {
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
             val (hardLine, caution) = fixImpactLines(top)
             // 必須の変化（族ごと）と増える要調整だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。補助は確認の画面を開くだけ。
             OpNextPlan(amber, onAmber, homeFixHeadline(hardNow, topResolved),
-                homeTargetLabel("直す1手を見る", nextTarget, null), onShowMove, true, REVIEW_CHANGE_BUTTON, { onApplyMove(top) },
+                homeTargetLabel("直す1手を見る", nextTarget, null, fontScale), onShowMove, true, REVIEW_CHANGE_BUTTON, { onApplyMove(top) },
                 body = fixDisplayLabel(top.label),
                 note = (hardChangeLine(top.diff) ?: hardLine) + (caution?.let { "\n$it" } ?: ""))
         }
@@ -727,7 +731,8 @@ internal fun OperatorNextActionCard(
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             for (sec in sections) when (sec) {
-                HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // [3.719.0 読み上げ] 作成の終わり（CREATION_DONE_TITLE）・探索中の状態の行・進捗は liveRegion＝画面を触らなくても読み上げる。
+                HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     creationTopLines(nextTarget, creation.kept, headlineTarget = nextTarget).forEach { Text(it, style = body, color = plan.fg) }
                 }
                 HomeSection.HEADLINE -> Text(homeHeadline(kind), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
@@ -740,7 +745,8 @@ internal fun OperatorNextActionCard(
                         }
                     }
                 }
-                HomeSection.STATUS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                HomeSection.STATUS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = if (ui.running) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier) {
                     // 段の 1 文は大きく、保存の失敗の行（段に関係なく先頭）は本文の太字。
                     val lead = statusLines.indexOfFirst { it != HOME_SAVE_FAILED_LINE }
                     statusLines.forEachIndexed { i, l ->
@@ -756,7 +762,7 @@ internal fun OperatorNextActionCard(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
                         // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
-                        Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f))
+                        Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                     }
                     // [3.714.0] 作成中も相談の 1 行から一覧を開ける（文字ボタン、塗りは増やさない）。
                     if (consultLine != null) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -769,14 +775,14 @@ internal fun OperatorNextActionCard(
                     val (bigBg, bigFg) = plan.bigColors ?: (cs.primary to cs.onPrimary)
                     Button(onClick = plan.bigAction, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = bigBg, contentColor = bigFg)) {
-                        Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium, maxLines = a11yMaxLines(fontScale), overflow = TextOverflow.Ellipsis)
                     }
                 }
                 // [3.713.0] 補助操作は文字ボタン（塗りは主ボタン 1 つ）。段に補助が無ければ「表で全体を見る」。
                 HomeSection.HELPER -> TextButton(
                     onClick = if (plan.helperLabel != null) plan.helperAction else onSchedule,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, color = plan.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, color = plan.fg, maxLines = a11yMaxLines(fontScale), overflow = TextOverflow.Ellipsis) }
                 HomeSection.OTHERS -> if (creation != null) TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
                 HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     plan.body?.let { Text(it, style = body, color = plan.fg) }
@@ -1774,7 +1780,7 @@ internal fun AnalysisTriageCard(
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         t.searching.forEach { row ->
                             Row {
-                                Text("・${row.label}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("・${row.label}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
                                 Text("${row.count}${row.unit}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             }
                         }

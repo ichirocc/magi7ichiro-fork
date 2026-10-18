@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -65,7 +67,8 @@ fun DeleteRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String =
 @Composable
 fun DialogHeader(title: String, onClose: () -> Unit, compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        // [3.719.0 読み上げ] シート・ダイアログの題は見出し＝スクリーンリーダーの見出しジャンプで届く。
+        Text(title, style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).semantics { heading() })
         IconButton(onClick = onClose) {
             Icon(Icons.Filled.Close, contentDescription = "閉じる")
         }

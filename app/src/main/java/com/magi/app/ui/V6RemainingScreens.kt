@@ -66,7 +66,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         // 基準色の実効値（未設定なら既定＝必須は UD 赤 / 要調整はアンバー。ピッカーの defaultHex と同値）。
         // [色覚アクセシビリティ] 深紅×アンバーで明度差を最大化（P型/D型色覚でも判別しやすい配色、ユーザー指示）。
         val baseHard = ui.violationColorHex.ifBlank { "#B71C1C" }
-        val baseSoft = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
+        val baseSoft = ui.violationSoftColorHex.ifBlank { SOFT_VIO_DEFAULT_HEX }
         // [3.483.0 C-1] 基準色2チップを先頭に常時表示し、19種の族別チップは既定で折りたたむ
         //   （設定タブの大半を1節が占めていた実機所見。個別設定の入口は開閉行で残す）。
         Text("未設定の種別に使う基準色", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
@@ -110,7 +110,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         // [実機指摘] 未設定時にグレーの偽「現在の色」を出さないよう、実効の既定色を defaultHex で渡す
         //   （必須=UD赤 / 要調整=橙 / 族=その重大度の基準色）。ColorPickerDialog 側で✓も一致表示。
         val hardHex = ui.violationColorHex.ifBlank { "#B71C1C" }
-        val softHex = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
+        val softHex = ui.violationSoftColorHex.ifBlank { SOFT_VIO_DEFAULT_HEX }
         when (pf) {
             // [3.544.0] 違反色はシフト色と別パレット（ダイアログの形は 3.550.0 で両者同一）。
             "__hard__" -> ColorPickerDialog(
@@ -126,7 +126,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
             "__soft__" -> ColorPickerDialog(
                 kigou = "要調整（基準色）",
                 currentHex = ui.violationSoftColorHex,
-                defaultHex = "#F59E0B",
+                defaultHex = SOFT_VIO_DEFAULT_HEX,
                 onPick = { hex -> onEvent(MagiEvent.Condition.SetViolationSoftColor(hex)) },
                 onReset = { onEvent(MagiEvent.Condition.ResetViolationSoftColor) },
                 onClose = { pickFam = null },

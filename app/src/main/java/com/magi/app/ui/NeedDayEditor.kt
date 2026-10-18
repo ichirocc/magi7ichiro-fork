@@ -288,7 +288,7 @@ private fun NeedMonthGrid(
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { j ->
-                    if (j == null) Box(Modifier.weight(1f).height(64.dp))
+                    if (j == null) Box(Modifier.weight(1f).heightIn(min = 64.dp))
                     else {
                         val range = ranges[j]
                         val sel = (j + 1) in selectedDays
@@ -299,7 +299,7 @@ private fun NeedMonthGrid(
                             else -> "${range.first}–${range.second}"
                         }
                         Box(
-                            Modifier.weight(1f).height(64.dp)
+                            Modifier.weight(1f).heightIn(min = 64.dp)
                                 .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
                                 .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(j + 1) }
@@ -333,7 +333,7 @@ private fun NeedMonthGrid(
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(64.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).heightIn(min = 64.dp)) }
             }
         }
     }
