@@ -7,6 +7,7 @@ import com.magi.app.model.StateParser
 import com.magi.app.v6.EjectionChainPipeline
 import com.magi.app.v6.PolishGate
 import com.magi.app.v6.V6FinalPort
+import com.magi.app.v6.WishFloorMode
 import kotlinx.coroutines.runBlocking
 import java.io.File
 
@@ -19,7 +20,7 @@ fun main(args: Array<String>) {
     // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す（off 腕は短縮あり＝3.672.0 までの既定）
     //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
     //   後期演算の試行中の停止確認を切る（lateOpStopPropagation=false、入口の確認は残る）に戻す（docs/stall_escape.md §5.5）。
-    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。"floorup0"＝on 腕で上限0込みの希望衝突の床で頭打ち（PolishGate.floorCountsUpperZero）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
+    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。"floorup0"＝on 腕で上限0込みの希望衝突の床で頭打ち（PolishGate.floorCountsUpperZero）。"wishfloor"＝3 腕 off/E0A/E0B（handleOptimize の wishFloorMode）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
     val feature = System.getenv("MAGI_HO_FEATURE") ?: ""
     val fixtures = System.getenv("MAGI_HO_FIXTURES")?.split(',')?.filter { it.isNotBlank() }
         ?: listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
@@ -39,7 +40,7 @@ fun main(args: Array<String>) {
     val onFraction = System.getenv("MAGI_HO_FRACTION")?.toDoubleOrNull() ?: 0.5
 
     val w = java.io.FileWriter(out, false).buffered()
-    w.write("fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep\n")
+    w.write("fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep,hash\n")
     w.flush()
 
     for (fname in fixtures) {
@@ -47,7 +48,9 @@ fun main(args: Array<String>) {
         if (!f.exists()) { System.err.println("skip missing $fname"); continue }
         val st = StateParser.parse(f.readText())!!
         for (seed in seedList) for (rep in 1..repeats) {
-            for (armOn in listOf(false, true)) {
+            val arms = if (feature == "wishfloor") listOf(WishFloorMode.OFF, WishFloorMode.E0A, WishFloorMode.E0B) else listOf(null, null)
+            for ((ai, wfm) in arms.withIndex()) {
+                val armOn = ai > 0
                 // off 腕＝製品の既定（3.673.0 から c3n 壁の短縮なし）。"c3nwall" だけ off 腕が旧既定（短縮あり）。
                 PolishGate.c3nWallShortStall = feature == "c3nwall" && !armOn
                 // "floorstall"＝on 腕で必須違反の下限到達による短縮を外す（PolishGate.floorShortStall=false、通常閾値で粘る）。
@@ -80,13 +83,15 @@ fun main(args: Array<String>) {
                         st, st.schedule.map { it.toIntArray() }.toTypedArray(),
                         secondsRaw = if (feature == "budget" && armOn) onSeconds else secondsBudget, workers = workers, allowImpossible = true,
                         extraRefineRequirePostHardDrop = feature == "" && armOn,
+                        wishFloorMode = wfm ?: WishFloorMode.OFF,
                         seed = 1000L + seed,
                     )
                 }
                 val elapsed = System.currentTimeMillis() - t0
-                val arm = if (armOn) "on" else "off"
+                val arm = wfm?.name ?: if (armOn) "on" else "off"
+                val hash = res.schedule.contentDeepHashCode().toUInt().toString(16)
                 val line = "${fname.removeSuffix("_state.json").removeSuffix("_state_v6.json")},$seed,$arm,$elapsed," +
-                    "${res.report.hard},${res.report.weightedScore},${res.report.total},$rep"
+                    "${res.report.hard},${res.report.weightedScore},${res.report.total},$rep,$hash"
                 w.write(line + "\n"); w.flush()
                 System.err.println(line)
                 if (logTags.isNotEmpty() && logFile != null) {
