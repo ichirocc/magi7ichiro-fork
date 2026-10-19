@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -275,7 +277,7 @@ internal fun RelaxTrialDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(when (step) {
+        title = { Text(modifier = Modifier.semantics { heading() }, text = when (step) {
             RelaxApproval.Step.R1 -> t?.dialogTitle ?: "試算結果の確認"
             RelaxApproval.Step.R2 -> "変更内容の確認"
             RelaxApproval.Step.R3 -> "承認"
@@ -291,7 +293,7 @@ internal fun RelaxTrialDialog(
                         Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         valueRows()
                         Text("試算 ${flow.trialId}・データ ${flow.fingerprint}", style = small, color = cs.onSurfaceVariant)
-                        TextButton(onClick = { showCond = !showCond }, modifier = Modifier.heightIn(min = 48.dp)) { Text("試算の条件") }
+                        TextButton(onClick = { showCond = !showCond }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showCond) }) { Text("試算の条件") }
                         if (showCond) {
                             Text(RELAX_WISH_LINE, style = small)
                             Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
@@ -300,7 +302,7 @@ internal fun RelaxTrialDialog(
                             Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
                             t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant) }
                         }
-                        TextButton(onClick = { showSteps = !showSteps }, modifier = Modifier.heightIn(min = 48.dp)) { Text("手順（勤務表への当て方）") }
+                        TextButton(onClick = { showSteps = !showSteps }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showSteps) }) { Text("手順（勤務表への当て方）") }
                         if (showSteps) moves(false)
                         Text(RelaxApproval.NOT_APPROVAL_NOTE, style = small, color = cs.onSurfaceVariant)
                     }
@@ -321,13 +323,13 @@ internal fun RelaxTrialDialog(
                         Text("理由と変更は操作ログに残ります。", style = small, color = cs.onSurfaceVariant)
                     }
                     RelaxApproval.Step.R4 -> {
-                        Text((flow.end ?: RelaxApproval.EndReason.STALE).text, fontWeight = FontWeight.Bold)
+                        Text((flow.end ?: RelaxApproval.EndReason.STALE).text, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         flow.detail?.let { Text(it, style = small) }
                         Text(RelaxApproval.UNCHANGED_LINE, style = small, color = cs.onSurfaceVariant)
                     }
                     RelaxApproval.Step.R5 -> {
                         flow.applied.forEach { Text("・$it", style = small) }
-                        Text("反映後の確認: 必須違反 ${flow.postHard}件", fontWeight = FontWeight.Bold)
+                        Text("反映後の確認: 必須違反 ${flow.postHard}件", fontWeight = FontWeight.Bold, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         Text("決定 ${flow.decisionId ?: "-"}・${RelaxApproval.APPROVER_LINE}", style = small, color = cs.onSurfaceVariant)
                         Text(RelaxApproval.REBUILD_NOTE, style = small, color = cs.onSurfaceVariant)
                         Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
@@ -358,6 +360,9 @@ internal fun RelaxTrialDialog(
         },
     )
 }
+
+/** 畳みの切替ボタンの読み上げ状態（見た目のラベルは変えない）。 */
+private fun foldState(open: Boolean) = if (open) "開いています" else "閉じています"
 
 /** [UX監査 高2] ホームの「なおし方」の対象枠。ホームの文言とダイアログが必ず同じ枠を指すよう、ここ1か所で決める。 */
 internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShortfall? =
