@@ -16,7 +16,7 @@ class ScheduleWriteSitesTest {
         "startFullOptimize", "runSoftPolish", "applyBgResultGuarded", "opDays",   // 最適化の採用
         "generateSmartInitial", "applyAlternative", "applyWishes", // 下書き・別案・希望の反映
         "applyStructure", "applyStructureWithMessage",            // 編集タブ
-        "relaxAndApply",                                          // 設定の緩和
+        "relaxAndApply", "restoreBeforeRelax",                    // 設定の緩和と、その事後確認・保存失敗の復旧
         "applyFixSuggestion",                                     // 改善手（FixApplyGate を通る）
     )
     private val write = Regex("""(\bcurrentSchedule\s*=[^=]|[(,\s]schedule\s*=\s*[a-zA-Z]|MagiEvent\.Board\.SetCell\()""")

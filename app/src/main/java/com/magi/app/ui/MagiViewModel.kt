@@ -2351,14 +2351,65 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 
-    /** 確定「上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
-    internal fun relaxAndApply(token: RelaxToken) {
-        val st = state ?: return
-        val b = currentSchedule ?: return
-        if (runBlockedByInFlight("設定の緩和")) return
-        if (stateKey(st) != token.stateKey || boardKey(b) != token.boardKey) {
-            _ui.update { it.copy(messageIsError = true, message = "勤務表か設定が変わりました。もう一度試算してください。") }
+    /** 承認フローを開く（§15）。いまのデータの試算だけを R1 に出し、それ以外は理由つきの R4。 */
+    internal fun openRelaxFlow() {
+        val c = relaxCtx
+        val now = relaxCtxNow()
+        val fresh = c != null && c == now
+        val outcome = relaxResult ?: if (relaxStoppedCtx != null && relaxStoppedCtx == now) RelaxTrial.Stopped else null
+        val k = c ?: now ?: RelaxCtx(0L, 0L)
+        _ui.update { it.copy(relaxFlow = RelaxApproval.start(outcome, fresh, RelaxApproval.trialId(k.stateKey, k.boardKey), RelaxApproval.fingerprint(k.stateKey, k.boardKey))) }
+    }
+
+    internal fun relaxFlowNext() {
+        val f = _ui.value.relaxFlow ?: return
+        _ui.update { it.copy(relaxFlow = RelaxApproval.next(f, relaxTrialFor() != null)) }
+    }
+
+    internal fun relaxFlowDecline() {
+        val f = _ui.value.relaxFlow ?: return
+        _ui.update { it.copy(relaxFlow = RelaxApproval.decline(f)) }
+    }
+
+    internal fun closeRelaxFlow() { _ui.update { it.copy(relaxFlow = null) } }
+
+    /** R3「承認して反映する」。理由が空・古い・押し済みなら何もしない。承認を記録してから反映し、結果で R5 か R4。 */
+    internal fun approveRelax(reason: String) {
+        val f = _ui.value.relaxFlow ?: return
+        val token = relaxTrialFor()
+        if (!RelaxApproval.canApprove(reason, token?.result, token != null)) {
+            if (f.step == RelaxApproval.Step.R3 && token == null) _ui.update { it.copy(relaxFlow = RelaxApproval.finish(f, RelaxApproval.Verdict.Stale)) }
             return
+        }
+        val r = token!!.result
+        val names = _ui.value
+        val changes = (r.prerequisite + r.relaxes).map { x -> "${names.staffNames.getOrNull(x.staff) ?: "職員${x.staff + 1}"} ${names.shiftSymbols.getOrNull(x.shift) ?: "?"} 上限0→${x.newHi}" } +
+            listOf("手順${r.moves.size}セル")
+        val pressed = RelaxApproval.press(f, RelaxApproval.decisionId(f.trialId, System.currentTimeMillis()))?.copy(applied = changes) ?: return
+        _ui.update { it.copy(relaxFlow = pressed) }
+        logOp("I", RelaxApproval.approvalLog(pressed.decisionId!!, pressed.trialId, reason, changes))
+        val v = relaxAndApply(token)
+        _ui.update { it.copy(relaxFlow = RelaxApproval.finish(pressed, v)) }
+    }
+
+    /** 反映の前の (state, 盤面) へ戻し、積んだ Undo 段を外す（事後確認の不一致・保存失敗）。 */
+    private fun restoreBeforeRelax(st: MagiState, b: Array<IntArray>) {
+        undoStack.removeLastOrNull()
+        state = st
+        currentSchedule = b.copy2D()
+        relaxDone = null
+        _ui.update { it.copy(canUndo = undoStack.isNotEmpty(), relaxedBoard = false, editRev = it.editRev + 1, schedule = b.map { row -> row.toList() }) }
+        refreshCheck()
+    }
+
+    /** 確定「上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
+    internal fun relaxAndApply(token: RelaxToken): RelaxApproval.Verdict {
+        val st = state ?: return RelaxApproval.Verdict.Stale
+        val b = currentSchedule ?: return RelaxApproval.Verdict.Stale
+        if (runBlockedByInFlight("設定の緩和")) return RelaxApproval.Verdict.Blocked
+        if (stateKey(st) != token.stateKey || boardKey(b) != token.boardKey) {
+            logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=データが変わった")
+            return RelaxApproval.Verdict.Stale
         }
         val r = token.result
         val ns0 = RelaxTrial.apply(st, r.prerequisite + r.relaxes)
@@ -2366,24 +2417,37 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val nb = RelaxTrial.applyMoves(b, r.moves) { i, j -> i in 0 until pinP.S && j in 0 until pinP.T && pinP.pinned(i, j) }
         val got = nb?.let { UnifiedViolationChecker.check(ns0, it.copy2D()).hard }
         if (nb == null || got != r.rr) {
-            logOp("W", "S6 確定を見送り: 手順を当てた必須 $got ≠ 試算 ${r.rr}")
-            _ui.update { it.copy(messageIsError = true, message = "試算の手順を適用しても同じ結果になりませんでした。勤務表と設定はそのままです。") }
-            return
+            logOp("W", RelaxApproval.applyLog("失敗", got ?: -1) + " 理由=手順を当てた必須 $got ≠ 試算 ${r.rr}")
+            return RelaxApproval.Verdict.NotReproduced
         }
-        if (!ensureValidForRun(ns0, nb, "設定の緩和")) return
+        if (!ensureValidForRun(ns0, nb, "設定の緩和")) return RelaxApproval.Verdict.Blocked
         cancelRelaxTrial()
-        pushUndo("設定を緩めて、手順を当てる")
+        val before = b.copy2D()
+        if (!pushUndo("設定を緩めて、手順を当てる")) return RelaxApproval.Verdict.Blocked
         val ns = ns0.withSchedule(nb)
         state = ns
         currentSchedule = nb
         resultSchedule = null
-        relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, got)
+        val post = UnifiedViolationChecker.check(ns, nb.copy2D()).hard
+        if (!RelaxApproval.postCheckOk(r.rr, post)) {
+            restoreBeforeRelax(st, before)
+            logOp("W", RelaxApproval.applyLog("復旧", post) + " 理由=反映後の必須 $post ≠ 試算 ${r.rr}")
+            return RelaxApproval.Verdict.Applied(post)
+        }
+        relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, post)
         _ui.update { it.copy(messageIsError = false, hasResult = true, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, relaxedBoard = true, structureEdited = true, editRev = it.editRev + 1,
             schedule = nb.map { row -> row.toList() }, runSummary = null, stopSummary = null) }
-        postOpNotice("設定を緩めて手順を適用しました（元に戻せます）")
-        logOp("I", "S6 確定: 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$got")
         refreshCheck()
         saveNow()
+        if (hydrated && _ui.value.saveState == SaveState.Failed) {
+            restoreBeforeRelax(st, before)
+            logOp("W", RelaxApproval.applyLog("復旧", post) + " 理由=保存に失敗")
+            autoSave()
+            return RelaxApproval.Verdict.SaveFailed
+        }
+        postOpNotice("設定を緩めて手順を適用しました（元に戻せます）")
+        logOp("I", RelaxApproval.applyLog("成功", post) + " 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$post")
+        return RelaxApproval.Verdict.Applied(post)
     }
 
     /** 元に戻す・やり直しで確定前の (state, 盤面) に戻ったときの stalledHardFamilies（§14 D）。 */
