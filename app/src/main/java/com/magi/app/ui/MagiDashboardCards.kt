@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -239,56 +240,120 @@ private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。
+/** [S6] 設定を緩める候補の承認フロー R1〜R5（`docs/s6_relax_trial.md` §5・§15）。盤面は見せず手順を言葉で出し、承認して押したときだけ当てる。
  *  確定の前に全部の変更（設定・手順の全セル）を読める＝窓の外の手も畳むだけで隠さない。 */
 @Composable
 internal fun RelaxTrialDialog(
     ui: UiState,
+    flow: RelaxApproval.Flow,
     token: RelaxToken?,
+    onNext: () -> Unit,
+    onDecline: () -> Unit,
+    onApprove: (String) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (RelaxToken) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
     val t = if (token == null) null else remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
     var showAll by remember(token) { mutableStateOf(false) }
+    var showCond by remember(flow.trialId) { mutableStateOf(false) }
+    var showSteps by remember(flow.trialId) { mutableStateOf(false) }
+    var reason by remember(flow.trialId) { mutableStateOf("") }
+    val step = if (t == null && flow.step != RelaxApproval.Step.R4 && flow.step != RelaxApproval.Step.R5) RelaxApproval.Step.R4 else flow.step
+    @Composable fun moves(all: Boolean) {
+        if (t == null) return
+        t.moveLines.forEach { Text(it, style = small) }
+        if (t.otherMoves > 0) {
+            if (all || showAll) t.otherMoveLines.forEach { Text(it, style = small) }
+            else TextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほか ${t.otherMoves}セル（タップですべて表示）") }
+        }
+    }
+    @Composable fun valueRows() {
+        if (t == null) return
+        t.prerequisiteRows.forEach { Text("・$it", style = small) }
+        t.rows.forEach { Text("・$it", style = small) }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t?.dialogTitle ?: "例外として上限を緩める候補") },
+        title = { Text(when (step) {
+            RelaxApproval.Step.R1 -> t?.dialogTitle ?: "試算結果の確認"
+            RelaxApproval.Step.R2 -> "変更内容の確認"
+            RelaxApproval.Step.R3 -> "承認"
+            RelaxApproval.Step.R4 -> "終了"
+            RelaxApproval.Step.R5 -> "反映しました"
+        }) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (token == null || t == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
-                else {
-                    Text(RELAX_WISH_LINE, fontWeight = FontWeight.Bold)
-                    Text(t.hardLine, fontWeight = FontWeight.Bold)
-                    Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
-                    if (t.prerequisiteRows.isNotEmpty()) {
-                        Text(RELAX_PREREQ_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                        Text(RELAX_PREREQ_WHY, style = small, color = cs.onSurfaceVariant)
-                        t.prerequisiteRows.forEach { Text("・$it", style = small) }
-                    }
-                    Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                    Text(t.lead, style = MaterialTheme.typography.bodyMedium)
-                    t.rows.forEach { Text("・$it", style = small) }
-                    Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
-                    Text("手順", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                    t.moveLines.forEach { Text(it, style = small) }
-                    if (t.otherMoves > 0) {
-                        if (showAll) t.otherMoveLines.forEach { Text(it, style = small) }
-                        else TextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("ほか ${t.otherMoves}セル（タップですべて表示）")
+                when (step) {
+                    RelaxApproval.Step.R1 -> if (t != null) {
+                        Text(RelaxApproval.READ_ONLY_HEAD, fontWeight = FontWeight.Bold)
+                        Text(t.hardLine, fontWeight = FontWeight.Bold)
+                        Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        valueRows()
+                        Text("試算 ${flow.trialId}・データ ${flow.fingerprint}", style = small, color = cs.onSurfaceVariant)
+                        TextButton(onClick = { showCond = !showCond }, modifier = Modifier.heightIn(min = 48.dp)) { Text("試算の条件") }
+                        if (showCond) {
+                            Text(RELAX_WISH_LINE, style = small)
+                            Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
+                            if (t.prerequisiteRows.isNotEmpty()) Text(RELAX_PREREQ_WHY, style = small, color = cs.onSurfaceVariant)
+                            Text(t.lead, style = small)
+                            Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
+                            t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant) }
                         }
+                        TextButton(onClick = { showSteps = !showSteps }, modifier = Modifier.heightIn(min = 48.dp)) { Text("手順（勤務表への当て方）") }
+                        if (showSteps) moves(false)
+                        Text(RelaxApproval.NOT_APPROVAL_NOTE, style = small, color = cs.onSurfaceVariant)
                     }
-                    t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
-                    Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
+                    RelaxApproval.Step.R2 -> if (t != null) {
+                        Text(RELAX_SET_HEAD + "（変更前→変更後）", fontWeight = FontWeight.Bold)
+                        valueRows()
+                        Text("勤務表に当てる手順（${t.scaleLine.substringAfter("、")}）", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        moves(true)
+                        Text(t.hardLine, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text(t.solveNote, style = small)
+                        t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant) }
+                        Text("値はここでは変えられません。変えるときはもう一度試算してください。", style = small, color = cs.onSurfaceVariant)
+                        Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
+                    }
+                    RelaxApproval.Step.R3 -> {
+                        OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("承認の理由（必須）") }, modifier = Modifier.fillMaxWidth())
+                        Text(RelaxApproval.APPROVER_LINE, style = small, color = cs.onSurfaceVariant)
+                        Text("理由と変更は操作ログに残ります。", style = small, color = cs.onSurfaceVariant)
+                    }
+                    RelaxApproval.Step.R4 -> {
+                        Text((flow.end ?: RelaxApproval.EndReason.STALE).text, fontWeight = FontWeight.Bold)
+                        flow.detail?.let { Text(it, style = small) }
+                        Text(RelaxApproval.UNCHANGED_LINE, style = small, color = cs.onSurfaceVariant)
+                    }
+                    RelaxApproval.Step.R5 -> {
+                        flow.applied.forEach { Text("・$it", style = small) }
+                        Text("反映後の確認: 必須違反 ${flow.postHard}件", fontWeight = FontWeight.Bold)
+                        Text("決定 ${flow.decisionId ?: "-"}・${RelaxApproval.APPROVER_LINE}", style = small, color = cs.onSurfaceVariant)
+                        Text(RelaxApproval.REBUILD_NOTE, style = small, color = cs.onSurfaceVariant)
+                        Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
+                    }
                 }
             }
         },
-        // 主ボタンは confirmButton の列の先頭（3.704.0 G-3: スクロールの中に置かない）。
+        // 主ボタンは confirmButton の列の先頭（3.704.0 G-3: スクロールの中に置かない）。状態ごとに塗りの主ボタンは 1 つだけ（INV-09）。
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (token != null && t != null) DialogConfirmButton("上限を緩め、手順を当てる", onClick = { onConfirm(token) }, enabled = !ui.running)
-                DialogDismissButton(onClick = onDismiss, text = "閉じる")
+                when (step) {
+                    RelaxApproval.Step.R1 -> {
+                        DialogConfirmButton(RelaxApproval.TO_REVIEW, onClick = onNext, enabled = !ui.running)
+                        DialogDismissButton(onClick = onDismiss, text = RelaxApproval.CLOSE)
+                    }
+                    RelaxApproval.Step.R2 -> {
+                        DialogConfirmButton(RelaxApproval.TO_APPROVAL, onClick = onNext, enabled = !ui.running)
+                        DialogDismissButton(onClick = onDecline, text = RelaxApproval.DECLINE)
+                    }
+                    RelaxApproval.Step.R3 -> {
+                        DialogConfirmButton(RelaxApproval.APPROVE, onClick = { onApprove(reason) },
+                            enabled = !ui.running && flow.pressedId == null && RelaxApproval.canApprove(reason, token?.result, token != null))
+                        DialogDismissButton(onClick = onDecline, text = RelaxApproval.DECLINE)
+                    }
+                    else -> DialogDismissButton(onClick = onDismiss, text = RelaxApproval.CLOSE)
+                }
             }
         },
     )

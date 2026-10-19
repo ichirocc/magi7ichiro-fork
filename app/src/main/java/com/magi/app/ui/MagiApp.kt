@@ -258,7 +258,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var showImportGuidance by rememberSaveable { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおし方を見る」対話
-    var relaxDialog by remember { mutableStateOf(false) }            // [S6] 設定を緩める候補
     var relaxFrom by remember { mutableStateOf<Pair<Int, Int>?>(null) } // [S6] セルから開いたとき、確定後に選び直すセル
     var preDist by remember { mutableStateOf(false) }                // [仕様 §10] 配布前確認
     var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧
@@ -749,7 +748,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         savedLine = vm.csvSavedLine(),
                         consultLine = consultLine(ui.consults),
                         relax = vm.relaxTrialFor(),
-                        onShowRelax = { relaxFrom = null; relaxDialog = true },
+                        onShowRelax = { relaxFrom = null; vm.openRelaxFlow() },
                         onStopRelax = { vm.cancelRelaxTrial() },
                         relaxStopped = vm.relaxStopped(),
                         relaxFailed = vm.relaxFailed(),
@@ -1096,7 +1095,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     relaxStopped = vm.relaxStopped(),
                     relaxUnavailable = vm.relaxUnavailable(),
                     relaxFailed = vm.relaxFailed(),
-                    onShowRelax = { relaxFrom = cell; relaxDialog = true },
+                    onShowRelax = { relaxFrom = cell; vm.openRelaxFlow() },
                     onRetryRelax = { vm.retryRelaxTrial() },
                     mode = sheetMode,
                     onMode = { sheetMode = it },
@@ -1118,12 +1117,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 consulted = isConsulted(ui.consults, consultChain(p)), onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview(afterConsult = true) })
         }
         ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
-        if (relaxDialog) {
-            RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->
-                relaxDialog = false; vm.relaxAndApply(token)
-                relaxFrom?.let { c -> tab = 1; editingCell = c; sheetMode = 0; sheetExpanded = false }
-                relaxFrom = null
-            })
+        ui.relaxFlow?.let { f ->
+            RelaxTrialDialog(ui, f, vm.relaxTrialFor(), onNext = { vm.relaxFlowNext() }, onDecline = { vm.relaxFlowDecline() },
+                onApprove = { reason -> vm.approveRelax(reason) },
+                onDismiss = {
+                    val applied = f.step == RelaxApproval.Step.R5
+                    vm.closeRelaxFlow()
+                    if (applied) relaxFrom?.let { c -> tab = 1; editingCell = c; sheetMode = 0; sheetExpanded = false }
+                    relaxFrom = null
+                })
         }
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
@@ -1156,7 +1158,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 wishConflicts = false; vm.cancelWishAndRebuild(token)
             }, onRebuild = {
                 wishConflicts = false; onEvent(MagiEvent.Run.Optimize)
-            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxFrom = null; relaxDialog = true })
+            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxFrom = null; vm.openRelaxFlow() })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

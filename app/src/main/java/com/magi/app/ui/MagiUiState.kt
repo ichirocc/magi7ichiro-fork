@@ -148,6 +148,7 @@ data class UiState(
     val hardWishConflict: Int = 0,                  // 必須のうち希望どうしのぶつかり（計算では消せない）の件数
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
+    val relaxFlow: RelaxApproval.Flow? = null,    // [S6] 承認フロー R1〜R5（null＝閉じている）
     val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）
     val relaxSearching: Boolean = false,            // [S6] 背景で設定の壁を探している
     val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して再作成」の結果（表示は vm.wishCancelOutcomeLine）
