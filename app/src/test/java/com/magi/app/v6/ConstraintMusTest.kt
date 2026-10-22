@@ -3,6 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.C1Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.ManualPin
 import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
@@ -62,6 +63,30 @@ class ConstraintMusTest {
         assertEquals(3, core.size)
         assertEquals(1, core.countOf(ConstraintMus.RangeCap::class.java))
         assertEquals(2, core.countOf(ConstraintMus.WishPin::class.java))
+    }
+
+    /** 職員1人の証明も手動固定を数える（最適化器が必ず守る＝希望固定と同じ需要）。上限1に 2 日固定なら同時に成立しない。 */
+    @Test
+    fun staffMusCountsManualPinsLikeWishes() {
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
+        val st = state(days = 5, shifts = shifts, staffRange = mapOf("0,1" to Range("", "1")))
+            .copy(manualPins = listOf(ManualPin(0, 0, 1), ManualPin(0, 2, 1)))
+        val res = ConstraintMus.analyzeStaffConflicts(Problem(st))
+        assertEquals(1, res.size)
+        val pins = res[0].core.filterIsInstance<ConstraintMus.WishPin>()
+        assertEquals(2, pins.size)
+        assertTrue("コアの固定は手動固定として名指しする（案内は「固定を外す」）", pins.all { it.manual })
+        assertEquals(1, res[0].core.countOf(ConstraintMus.RangeCap::class.java))
+    }
+
+    /** 希望と手動固定が混ざっても同じ数え方（どちらも 1 日分の需要）。 */
+    @Test
+    fun staffMusMixesWishAndManualPin() {
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
+        val st = state(days = 5, shifts = shifts, wishes = mapOf("0,0" to 1), staffRange = mapOf("0,1" to Range("", "1")))
+            .copy(manualPins = listOf(ManualPin(0, 3, 1)))
+        val pins = ConstraintMus.analyzeStaffConflicts(Problem(st)).single().core.filterIsInstance<ConstraintMus.WishPin>()
+        assertEquals(listOf(false, true), pins.sortedBy { it.day }.map { it.manual })
     }
 
     @Test

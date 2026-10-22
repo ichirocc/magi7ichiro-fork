@@ -709,6 +709,21 @@ object V6SanityPort {
                 if (parts.size < 2 || parts.any { it != parts[0] }) return null
                 return parts[0] to parts.size
             }
+            // 複数シフトの並びは「先頭を置いたら残りが続く」を求める（Evaluator.c3check）＝中に禁止の並びがあれば先頭を置くたびに
+            //   どちらかが違反になる。単一シフト連どうしは下の連続数の比較が受け持つ。
+            fun seqText(seq: IntArray) = seq.joinToString("→") { symOf(it) }
+            fun containsRun(hay: IntArray, needle: IntArray): Boolean =
+                needle.isNotEmpty() && (0..hay.size - needle.size).any { o -> needle.indices.all { hay[o + it] == needle[it] } }
+            for ((famRaw, list) in listOf("c3" to p.cons3, "c3m" to p.cons3m)) for (c in list) {
+                if (C3Run.isSingleShiftSeq(c.seq)) continue
+                val n = p.cons3n.firstOrNull { containsRun(c.seq, it.seq) } ?: continue
+                val famJp = c3FamilyJp(famRaw)
+                out.add(SettingIssue(IssueKind.CONSTRAINT,
+                    "「${seqText(c.seq)}」の並び（$famJp / 禁止の並び「${seqText(n.seq)}」）",
+                    "$famJp「${seqText(c.seq)}」の中に禁止の並び「${seqText(n.seq)}」が入っているため両立できません" +
+                        "（「${symOf(c.seq[0])}」を置くと、続けて並べれば禁止の並び、並べなければこの$famJp の違反になります）",
+                    "${Place.EDIT}${Place.RULE}の「$famJp」か「禁止の並び」を見直すか、どちらかの行を削除してください"))
+            }
             val forbidLen = HashMap<String, Int>()
             for (row in state.cons3n) {
                 val (sym, n) = singleShiftRun(row) ?: continue

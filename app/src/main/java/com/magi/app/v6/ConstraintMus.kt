@@ -83,7 +83,7 @@ object ConstraintMus {
     /**
      * 職員1人スコープの証明可能矛盾を全職員について検出し、各々を極小コアへ縮約して返す。
      * 証明ルール（active な Item のみを使用＝MUSの意味論を保証）:
-     *  A) シフト x の需要下限 demand_x = max(下限, 窓の厳密最小日数, xへの固定希望数) > 上限 cap_x
+     *  A) シフト x の需要下限 demand_x = max(下限, 窓の厳密最小日数, xへの固定（希望・手動）の数) > 上限 cap_x
      *  B) 鳩の巣: Σ_x demand_x > T（各日はちょうど1シフト＝計T日しかない）
      *  C) 強制下限: 他の全担当シフトに上限がある場合、count_x ≥ T−Σ他上限 > cap_x
      */
@@ -104,7 +104,7 @@ object ConstraintMus {
                 val hi = p.rangeHi[i][k]
                 if (hi != Int.MAX_VALUE) universe.add(RangeCap(i, k, hi))
             }
-            for (j in 0 until p.T) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            for (j in 0 until p.T) lockedPin(p, i, j)?.let { universe.add(it) }
             if (universe.isEmpty()) continue
             if (!staffProvablyInfeasible(p, allowed, universe)) continue
             val core = shrink(universe) { staffProvablyInfeasible(p, allowed, it) }
