@@ -370,6 +370,11 @@ P2c 済み（2026-10-22）: 玉突きの 11 項目（4 択の写像・入れ替�
 書き込み口: エンジン内の書き込みは 0。残るのは設定画面（VM のセッターと `MagiUiState` の強さ・玉突きの適用）と背景 Worker の `PolishGate.restore` だけで、
 restore は P2d で残りのフラグ（`personSwapKick` など、まだ `PolishGate` から読む）を片付けた後に `EngineConfig` の復元へ置き換える。
 P2d で消す 5 本（`hardEjectionChainEarly` など）は移さず `PolishGate` のまま。
+P2d は 4 コミットに分ける: ① 到達不能の玉突き 5 本と測定用の変数（flag_inventory 4 章 B） ② 定着フラグを常に ON（A と決定 1・2・7）
+③ 否決の腕の削除（B′ と決定 3〜5） ④ `quantitativeRangeEval`（決定 6、C++ も同じコミット、C# は §9.1）。各コミットで P0 スナップショット一致。
+P2d-① 済み（2026-10-22）: `hardEjectionChainEarly`・`allEjectionChainEarly`・`allEjectionChainFinal`・`hardEjectionChainRetry`・
+`allEjectionChainAfterRepair` の 4 分岐と宣言・snapshot/restore の鍵、`C1EjectionChainPolish.defaultMaxDepth`/`defaultNarrow`（既定値を定数へ）、
+`EjectionChainScope.NEARBY`（画面に出ていない・保存しない）。LoopBench の 5 腕、ExtWishOptimizeTest の鍵。P0 スナップショット一致。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

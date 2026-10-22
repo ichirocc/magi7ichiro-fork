@@ -169,3 +169,7 @@
 6. quantitativeRangeEval は評価器・C++・C# にまたがるので、P2 の最後の別コミット（P2d）で消す。
 7. 定着フラグの OFF 比較腕（PersonSwapBench・floorup0 など）は消す。挙動を確かめるテストは ON の経路の検証に書き換えて残す。
 いずれも既定の出力は不変。lnsAdaptive を常に ON にすると `PostOptimizationParams()` を素で作るベンチ・テストの出力が変わるので、それらは本番と同じ既定へ揃える。
+
+## 進捗（この表は 2026-10-22 の棚卸しのまま。片付けた項目をここに足す）
+- P2a〜P2c: 1 章 #10〜#16・#23・#24・#25・#28・#29・#33〜#35・#37〜#39 と玉突きの範囲 2 つを `EngineConfig` へ移した（エンジンは入口の写しだけを読む）。
+- P2d-①: #17〜#21、`defaultNarrow`・`defaultMaxDepth`、`EjectionChainScope.NEARBY` を削除。

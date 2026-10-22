@@ -262,9 +262,9 @@ data class WishCancelOutcome(
 )
 
 /** 設定画面「玉突きで直す」。PolishGate の 2 フラグへ振り分ける（同じ段で重複実行しないので 3 択）。 */
-/** 設定画面「玉突きで探す範囲」。2 手目以降の候補を月全体か前後 7 日に絞るか（既定 BY_KIND）。 */
+/** 設定画面「玉突きで探す範囲」。2 手目以降の候補を月全体にするか、必須以外の起点だけ前後 7 日に絞るか（既定 BY_KIND）。 */
 enum class EjectionChainScope {
-    MONTH, BY_KIND, NEARBY;
+    MONTH, BY_KIND;
 
     fun apply() {
         com.magi.app.v6.C1EjectionChainPolish.defaultHoleFocus = this != MONTH

@@ -433,13 +433,11 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
     }
 }
 
-/** 画面に出す範囲。「前後7日」は必須を増やした組があり BY_KIND が上位互換なので出さない。 */
-internal val EJECTION_CHAIN_SCOPES_SHOWN = listOf(EjectionChainScope.MONTH, EjectionChainScope.BY_KIND)
+internal val EJECTION_CHAIN_SCOPES_SHOWN = EjectionChainScope.entries
 
 internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
     EjectionChainScope.MONTH -> "月全体"
     EjectionChainScope.BY_KIND -> "必須は月全体・他は前後7日"
-    EjectionChainScope.NEARBY -> "前後7日"
 }
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)

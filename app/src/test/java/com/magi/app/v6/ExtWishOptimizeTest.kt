@@ -112,9 +112,7 @@ class ExtWishOptimizeTest {
         val saved = PolishGate.snapshot()
         val savedCascade = PolishGate.softCascade
         try {
-            PolishGate.restore(saved.mapValues { (_, v) -> if (v is Boolean) true else v } + mapOf(
-                "hardEjectionChainEarly" to true, "allEjectionChainEarly" to true, "allEjectionChainFinal" to true,
-                "hardEjectionChainRetry" to true, "allEjectionChainAfterRepair" to true))
+            PolishGate.restore(saved.mapValues { (_, v) -> if (v is Boolean) true else v })
             PolishGate.softCascade = true
             for (file in listOf("sample_state_v6.json", "sept2026_state.json")) {
                 val st0 = load(file)

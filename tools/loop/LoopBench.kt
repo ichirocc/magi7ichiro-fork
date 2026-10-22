@@ -206,12 +206,6 @@ fun main(args: Array<String>) {
                 //   pipehardvsroundsendk だけは両腕とも探し直し ON（既定）で、新腕に必須の焦点を足す。
                 PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) pf == "pipehardvsroundsend" || (arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend")) else true
                 PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend", "pipehardvsroundsend")
-                PolishGate.hardEjectionChainEarly = feature == "ejectionearlyhard" && arm == "new"
-                PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
-                PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"
-                PolishGate.allEjectionChainFinal = feature == "ejectionfinalall" && arm == "new"
-                PolishGate.allEjectionChainAfterRepair = (feature == "ejectionafterrepair" && arm == "new") || feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft" ||
-                    ((pf == "pipevsfullallend" || pf == "pipecombovsfullend") && arm == "old")
                 // ejectionafterrepairhole: 両腕とも修復後の玉突きを ON にし、新腕だけ穴に絞った候補生成（旧腕＝月全体の総当たり）。
                 //   従来の玉突きの腕と *end までのパイプラインの腕は月全体で測った（再現のため据え置き）。それ以外は範囲の既定のまま。
                 val monthScope = feature.startsWith("ejection") || (feature.startsWith("pipe") && !byKind)

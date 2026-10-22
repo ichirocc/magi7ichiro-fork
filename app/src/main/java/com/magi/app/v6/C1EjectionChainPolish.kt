@@ -21,9 +21,9 @@ import kotlin.random.Random
 internal object C1EjectionChainPolish {
 
     data class Config(
-        val maxDepth: Int = defaultMaxDepth,
-        /** 深さごとの分岐数（尽きたら最後の値）。[defaultNarrow] では 2,1,1…＝深さ 8 で展開 15 回（従来 4,3,2,2,1 は 233 回）。 */
-        val branching: IntArray = if (defaultNarrow) intArrayOf(2, 1) else intArrayOf(4, 3, 2, 2, 1),
+        val maxDepth: Int = 8,
+        /** 深さごとの分岐数（尽きたら最後の値）。 */
+        val branching: IntArray = intArrayOf(4, 3, 2, 2, 1),
         /** 途中の盤面で許す HARD の増分。 */
         val hardSlack: Int = 2,
         val maxMillis: Long = 3_000L,
@@ -41,7 +41,7 @@ internal object C1EjectionChainPolish {
         /** ALL: 1 巡で起点にする違反箇所の族ごとの上限（巡ごとにずらす）。起点づくりの評価で予算を使い切らない。 */
         val unitsPerFamily: Int = 6,
         /** 起点 1 つの連鎖に使う評価数の上限（0 以下＝無制限）。1 つの起点が全予算を使わないため。 */
-        val perSeedEvaluations: Long = if (defaultNarrow) 0L else 30_000L,
+        val perSeedEvaluations: Long = 30_000L,
         /** 族越え（v2/ALL）で、1 セルの変更に加えて同日の 2 人・同じ職員の 2 日の入れ替えも 1 手として探す。 */
         val swapMoves: Boolean = true,
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
@@ -84,12 +84,6 @@ internal object C1EjectionChainPolish {
     @Volatile internal var defaultHoleFocus: Boolean = true
 
     @Volatile internal var defaultHoleSoftOnly: Boolean = true
-
-    /** 測定用の切替（深さ 2〜3 の短い連鎖を同条件で比べる）。 */
-    @Volatile internal var defaultMaxDepth: Int = 8
-
-    /** 測定用: 分岐を 2,1,1… に絞り、起点ごとの評価上限を外す（展開回数×1 回の候補数で自然に有界）。 */
-    @Volatile internal var defaultNarrow: Boolean = false
 
     class Stats {
         var seeds = 0; var candidates = 0L; var evaluations = 0L; var chainsTried = 0; var accepted = 0
