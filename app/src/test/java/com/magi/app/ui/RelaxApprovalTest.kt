@@ -82,4 +82,14 @@ class RelaxApprovalTest {
         assertTrue(l.startsWith("S6承認 decisionId=d1 trial=t1 理由=確認済み 前→後 A 夜 上限0→1"))
         assertEquals("S6反映 結果=復旧 check=2", RelaxApproval.applyLog("復旧", 2))
     }
+
+    @Test fun searchingAndFailedTrialsGetTheirOwnReasonsNotStale() {
+        val a = RelaxApproval.start(null, true, "t", "f", searching = true)
+        val b = RelaxApproval.start(null, true, "t", "f", failed = true)
+        assertEquals(RelaxApproval.EndReason.SEARCHING, a.end)
+        assertEquals(RelaxApproval.EndReason.FAILED, b.end)
+        listOf(a, b).forEach { assertEquals(RelaxApproval.Step.R4, it.step) }
+        assertEquals(RelaxApproval.EndReason.STALE, RelaxApproval.start(null, false, "t", "f", searching = true, failed = true).end)
+        assertEquals(RelaxApproval.Step.R1, RelaxApproval.start(result(), true, "t", "f", searching = true).step)
+    }
 }

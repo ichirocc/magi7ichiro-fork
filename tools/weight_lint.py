@@ -63,6 +63,10 @@ MIRROR_CORE = os.path.join(ENGINE_DIR, "MirrorCore.kt")
 #   値は (対象族名のタプル, 理由)。族名を書いた行は「その族の“現在の”重みと一致する値がまだそこにあるか」
 #   まで毎回検証する（族名タプルが空＝族と無関係な偶然の一致＝値そのものの追跡はしない、下の「偽陽性」節）。
 WEIGHT_LINT_EXEMPT = {
+    ("app/src/main/java/com/magi/app/v6/V6FinalPort.kt", "n < 10_000 ->"):
+        (("covU",), "重みではない。fmtIter の「万」の桁の閾値が covU(10000) と同値なだけ"),
+    ("app/src/main/java/com/magi/app/v6/V6FinalPort.kt", "format(n / 10_000)"):
+        (("covU",), "重みではない。fmtIter の「万」への換算"),
     ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 120L"):
         (("low",), "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける"),
     ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 25L"):
@@ -204,9 +208,12 @@ def _strip_kotlin_file(lines):
 #   ありふれた整数代入まで拾うと雑音になりすぎる。weights map の値は常に Double リテラルなので、
 #   複製された定数も同じ形＝ `= 9000.0` になっているはずという前提）。
 _OP = r'(?:\*|/|%|\+|-|==|!=|<=|>=|<|>|->|\bto\b)'
-RE_NUM_AFTER_OP = re.compile(_OP + r'\s*(\d+(?:\.\d+)?)(L)?\b')
-RE_NUM_BEFORE_OP = re.compile(r'\b(\d+(?:\.\d+)?)(L)?\s*' + _OP)
-RE_NUM_EQ_DOUBLE = re.compile(r'=\s*(\d+\.\d+)\b')
+# 数値リテラル: `_` 区切り（10_000）・指数（1e4 / 1.0E4）・L/f/F/d/D 接尾辞も拾う（U-03）。
+_NUM = r'(\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)'
+_SUF = r'([LfFdD])?'
+RE_NUM_AFTER_OP = re.compile(_OP + r'\s*' + _NUM + _SUF + r'\b')
+RE_NUM_BEFORE_OP = re.compile(r'\b' + _NUM + _SUF + r'\s*' + _OP)
+RE_NUM_EQ_DOUBLE = re.compile(r'=\s*(\d[\d_]*(?:\.\d[\d_]*(?:[eE][+-]?\d+)?|[eE][+-]?\d+))' + _SUF + r'\b')
 
 
 def _candidates(code):
@@ -219,13 +226,13 @@ def _candidates(code):
             if span in seen:
                 continue
             seen.add(span)
-            out.append((m.group(1), float(m.group(1)), span[0]))
+            out.append((m.group(1), float(m.group(1).replace('_', '')), span[0]))
     for m in RE_NUM_EQ_DOUBLE.finditer(code):
         span = m.span(1)
         if span in seen:
             continue
         seen.add(span)
-        out.append((m.group(1), float(m.group(1)), span[0]))
+        out.append((m.group(1), float(m.group(1).replace('_', '')), span[0]))
     return out
 
 

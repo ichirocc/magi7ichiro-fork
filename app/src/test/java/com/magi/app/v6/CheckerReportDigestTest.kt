@@ -3,6 +3,9 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 import com.magi.app.model.StateParser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.security.MessageDigest
 import kotlin.random.Random
@@ -50,6 +53,19 @@ class CheckerReportDigestTest {
         }
         val hex = md.digest().joinToString("") { "%02x".format(it) }
         assertEquals(EXPECTED, hex)
+    }
+
+    /** backlog#42(h)⑤: 1 件のクラス列も読み取り専用（蓄積用の ArrayList を外へ出さない）。 */
+    @Test
+    fun singleClassFamilyListsAreReadOnly() {
+        val st = load("oct2026_grid_state.json")
+        val r = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        val singles = (r.cellFamilies.values + r.countFamilies.values + r.needFamilies.values).filter { it.size == 1 }
+        assertTrue(singles.isNotEmpty())
+        for (l in singles) {
+            assertFalse(l is java.util.ArrayList<*>)
+            assertThrows(UnsupportedOperationException::class.java) { (l as MutableList<String>).add("x") }
+        }
     }
 
     private companion object {

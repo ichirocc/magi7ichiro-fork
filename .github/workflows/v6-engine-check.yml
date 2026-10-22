@@ -101,6 +101,8 @@ jobs:
       #   v6/*.kt に生の数値リテラルとして紛れ込んでいないかを静的検査する（tools/weight_lint.py）。
       - name: Weight lint (MirrorKeys.weights source-of-truth check)
         run: python3 tools/weight_lint.py
+      - name: Weight lint self-test
+        run: python3 -m unittest tools/test_weight_lint.py
 
       - name: Run unit tests (engine + v6)
         shell: bash

@@ -700,7 +700,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     if (cont.isActive) cont.resume(f)
                 }, { it.run() })
             }
-            if (failed && bgRunId == runId) {
+            if (com.magi.app.work.asyncEnqueueFailureCleansUp(failed, bgRunId, runId)) {
                 handleEnqueueFailed()
                 _ui.update { it.copy(running = false) }
             }
@@ -1222,9 +1222,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         rollback = null
                         lastRunKeys = null   // [3.716.0] 次の実行を前のデータの結果と比べない
                         // 確定後なので中止で途切れさせない。成功したときだけ復元可能にする（3.289.0、既存の退避があれば維持）。
+                        var prevNonAtomic = false
                         val prevSaved = prevJson != null && withContext(NonCancellable + Dispatchers.IO) {
-                            runCatching { writeFileAtomically(prevBackupFile, prevJson) }.getOrDefault(false)
+                            runCatching { writeFileAtomically(prevBackupFile, prevJson, onNonAtomic = { prevNonAtomic = true }) }.getOrDefault(false)
                         }
+                        if (prevNonAtomic) logOp("W", "前のデータの退避で原子置換が使えず直接書き込みました（書き込み中に強制終了すると退避が壊れる可能性があります）")
                         if (prevSaved) _ui.update { it.copy(prevBackupAvailable = true) }
                         alternativeScheds = emptyList()
                         clearUndo()
@@ -2133,39 +2135,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var cancelOutcomeCtx: TrialCtx? = null
     // [3.643.0] 直し方を当てた結果の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
     private var fixOutcomeCtx: TrialCtx? = null
-    /**
-     * [3.644.0/UX-05・仕様 5.4] 勤務表 CSV の文脈。書き出した**文字列**（のハッシュ）と、その時の state・盤面を持つ。保存の成功は
-     * 書き出し時の文脈に結ぶ＝書き出しのあと（ピッカーや書き込みの間）に盤面が変わっても、変わった盤面を「保存済み」と言わない。
-     */
-    private class CsvCtx(val st: MagiState, val boardKey: Long, val textHash: Int)
-    private var csvExportCtx: CsvCtx? = null
-    private var csvSavedCtx: CsvCtx? = null
-    private var csvCheckKey: Pair<MagiState, Long>? = null
-    private var csvCheckHash = 0
-    internal fun noteCsvExport(st: MagiState, sched: Array<IntArray>, csv: String) { csvExportCtx = CsvCtx(st, boardKey(sched), csv.hashCode()) }
-    /** 今の内容が保存した CSV と同じか。state と盤面が同じなら作らずに同じ、違えば CSV をもう一度作って比べる（設定だけの変更は CSV を変えない）。 */
-    private fun csvSavedMatches(c: CsvCtx): Boolean {
-        val st = state ?: return false
-        val b = currentSchedule ?: return false
-        val bk = boardKey(b)
-        if (c.st === st && c.boardKey == bk) return true
-        if (csvCheckKey?.first !== st || csvCheckKey?.second != bk) { csvCheckKey = st to bk; csvCheckHash = ScheduleCsvBridge.build(st, b).hashCode() }
-        return csvCheckHash == c.textHash
-    }
+    /** [3.644.0/仕様 5.4] 勤務表 CSV の保存済みの印（純粋な部分は `CsvSavedMark`）。 */
+    private val csvMark = CsvSavedMark()
+    internal fun noteCsvExport(st: MagiState, sched: Array<IntArray>, csv: String) = csvMark.noteExport(st, sched, csv)
     /** 別のデータや別の月に移ったら、前の CSV の保存は今の内容と関係がない＝印を消す。 */
-    internal fun clearCsvSaved() { csvExportCtx = null; csvSavedCtx = null; _ui.update { it.copy(csvSavedAt = null) } }
+    internal fun clearCsvSaved() { csvMark.clear(); _ui.update { it.copy(csvSavedAt = null) } }
     /** 「なおし方を見る」で 1 人を入れた直後に覚えておく枠。再検査の結果（pushReport）でその枠がまだ足りないかを見て 1 行にする。 */
     private data class GuidedFixNote(val dayIndex: Int, val shiftIndex: Int, val dayLabel: String, val shiftSymbol: String)
     private var pendingGuided: GuidedFixNote? = null
     internal fun noteGuidedFix(dayIndex: Int, shiftIndex: Int, dayLabel: String, shiftSymbol: String) { pendingGuided = GuidedFixNote(dayIndex, shiftIndex, dayLabel, shiftSymbol) }
     internal fun fixOutcomeLine(): String? = _ui.value.fixOutcome?.takeIf { ctxMatches(fixOutcomeCtx) }?.line
     /** 保存した内容と今の内容を区別する（仕様 5.4）: 同じなら「この内容で保存済み」、違えば「保存した CSV は今の内容と違う」。 */
-    internal fun csvSavedLine(): String? {
-        val at = _ui.value.csvSavedAt ?: return null
-        val c = csvSavedCtx ?: return null
-        return if (csvSavedMatches(c)) "この内容で勤務表CSVを保存済みです（$at）。"
-        else "$at に保存した勤務表CSVは、今の内容と違います（配るなら保存し直してください）。"
-    }
+    internal fun csvSavedLine(): String? = csvMark.line(_ui.value.csvSavedAt, state, currentSchedule)
     internal fun setMonthMovePrompt(p: MonthMovePlan?) { _ui.update { it.copy(monthMovePrompt = p) } }
     private fun resolvePendingGuidedFix(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, diag: CoverageDiagnosis?) {
         val g = pendingGuided ?: return
@@ -2357,8 +2338,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val now = relaxCtxNow()
         val fresh = c != null && c == now
         val outcome = relaxResult ?: if (relaxStoppedCtx != null && relaxStoppedCtx == now) RelaxTrial.Stopped else null
+        val searching = fresh && relaxResult == null && relaxJob?.isActive == true
+        val failed = relaxFailed()
         val k = c ?: now ?: RelaxCtx(0L, 0L)
-        _ui.update { it.copy(relaxFlow = RelaxApproval.start(outcome, fresh, RelaxApproval.trialId(k.stateKey, k.boardKey), RelaxApproval.fingerprint(k.stateKey, k.boardKey))) }
+        _ui.update { it.copy(relaxFlow = RelaxApproval.start(outcome, fresh, RelaxApproval.trialId(k.stateKey, k.boardKey), RelaxApproval.fingerprint(k.stateKey, k.boardKey), searching, failed)) }
     }
 
     internal fun relaxFlowNext() {
@@ -2392,21 +2375,32 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(relaxFlow = RelaxApproval.finish(pressed, v)) }
     }
 
-    /** 反映の前の (state, 盤面) へ戻し、積んだ Undo 段を外す（事後確認の不一致・保存失敗）。 */
-    private fun restoreBeforeRelax(st: MagiState, b: Array<IntArray>) {
-        undoStack.removeLastOrNull()
+    private class AltsBackup(val scheds: List<Array<IntArray>>, val boardKey: Long, val stateKey: Long)
+
+    /** 反映の前の (state, 盤面) と、反映が書き換えた画面の欄・段・結果盤面・他の案・確定の 1 行へ戻す（事後確認の不一致・保存失敗）。 */
+    private fun restoreBeforeRelax(st: MagiState, b: Array<IntArray>, rb: RelaxRollback<UndoSnap, Array<IntArray>, AltsBackup>, done: Pair<RelaxCtx, String>?) {
+        rb.restoreStacks(undoStack, redoStack)
         state = st
         currentSchedule = b.copy2D()
-        relaxDone = null
-        _ui.update { it.copy(canUndo = undoStack.isNotEmpty(), relaxedBoard = false, editRev = it.editRev + 1, schedule = b.map { row -> row.toList() }) }
+        resultSchedule = rb.resultSchedule
+        alternativeScheds = rb.alts.scheds; altBoardKey = rb.alts.boardKey; altStateKey = rb.alts.stateKey
+        relaxDone = done
+        _ui.update { rb.restore(it) }
         refreshCheck()
     }
 
     /** 確定「上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
     internal fun relaxAndApply(token: RelaxToken): RelaxApproval.Verdict {
-        val st = state ?: return RelaxApproval.Verdict.Stale
-        val b = currentSchedule ?: return RelaxApproval.Verdict.Stale
-        if (runBlockedByInFlight("設定の緩和")) return RelaxApproval.Verdict.Blocked
+        val st = state
+        val b = currentSchedule
+        if (st == null || b == null) {
+            logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=データがない")
+            return RelaxApproval.Verdict.Stale
+        }
+        if (runBlockedByInFlight("設定の緩和")) {
+            logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=実行中")
+            return RelaxApproval.Verdict.Blocked
+        }
         if (stateKey(st) != token.stateKey || boardKey(b) != token.boardKey) {
             logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=データが変わった")
             return RelaxApproval.Verdict.Stale
@@ -2420,17 +2414,25 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             logOp("W", RelaxApproval.applyLog("失敗", got ?: -1) + " 理由=手順を当てた必須 $got ≠ 試算 ${r.rr}")
             return RelaxApproval.Verdict.NotReproduced
         }
-        if (!ensureValidForRun(ns0, nb, "設定の緩和")) return RelaxApproval.Verdict.Blocked
+        if (!ensureValidForRun(ns0, nb, "設定の緩和")) {
+            logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=データに問題")
+            return RelaxApproval.Verdict.Blocked
+        }
         cancelRelaxTrial()
         val before = b.copy2D()
-        if (!pushUndo("設定を緩めて、手順を当てる")) return RelaxApproval.Verdict.Blocked
+        val rb = RelaxRollback(_ui.value, undoStack.toList(), redoStack.toList(), resultSchedule, AltsBackup(alternativeScheds, altBoardKey, altStateKey))
+        val doneBefore = relaxDone
+        if (!pushUndo("設定を緩めて、手順を当てる")) {
+            logOp("W", RelaxApproval.applyLog("失敗", -1) + " 理由=元に戻す段を積めない")
+            return RelaxApproval.Verdict.Blocked
+        }
         val ns = ns0.withSchedule(nb)
         state = ns
         currentSchedule = nb
         resultSchedule = null
         val post = UnifiedViolationChecker.check(ns, nb.copy2D()).hard
         if (!RelaxApproval.postCheckOk(r.rr, post)) {
-            restoreBeforeRelax(st, before)
+            restoreBeforeRelax(st, before, rb, doneBefore)
             logOp("W", RelaxApproval.applyLog("復旧", post) + " 理由=反映後の必須 $post ≠ 試算 ${r.rr}")
             return RelaxApproval.Verdict.Applied(post)
         }
@@ -2440,7 +2442,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         refreshCheck()
         saveNow()
         if (hydrated && _ui.value.saveState == SaveState.Failed) {
-            restoreBeforeRelax(st, before)
+            restoreBeforeRelax(st, before, rb, doneBefore)
             logOp("W", RelaxApproval.applyLog("復旧", post) + " 理由=保存に失敗")
             autoSave()
             return RelaxApproval.Verdict.SaveFailed
@@ -3715,8 +3717,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 notify("${what}を保存しました")
                 // [3.643.0] 勤務表 CSV は「この内容を保存した」事実をホームに残す（内容が変われば消える＝配布の判断の材料）。
                 if (what == "勤務表CSV") {
-                    // 書き出した文字列の文脈に結ぶ（exportCsv が記録）。無ければ今の内容（旧経路の互換）。
-                    csvSavedCtx = csvExportCtx ?: state?.let { st -> currentSchedule?.let { b -> CsvCtx(st, boardKey(b), ScheduleCsvBridge.build(st, b).hashCode()) } }
+                    csvMark.noteSaved(state, currentSchedule)
                     _ui.update { it.copy(csvSavedAt = java.time.LocalTime.now().toString().take(5)) }
                 }
             },

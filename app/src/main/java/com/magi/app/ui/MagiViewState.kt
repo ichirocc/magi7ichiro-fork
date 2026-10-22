@@ -916,6 +916,18 @@ internal const val PRE_RUN_ZERO_CAP_TAG = "（入れないシフトの指定が�
 internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、対象外（上限0）の人を数えないために残ります。希望のせいではありません。パート等の意図した指定なら、このままで構いません。"
 internal const val PRE_RUN_RERUN_NOTE = "今の勤務表に個人の上限（0回）のシフトが入っています。つくると外されます。"
 
+/** 証明の核に入っている固定の出どころの呼び名（希望だけ／手動固定だけ／両方）。 */
+internal fun pinSourceWord(core: List<com.magi.app.v6.ConstraintMus.Item>): String {
+    val pins = core.filterIsInstance<com.magi.app.v6.ConstraintMus.WishPin>()
+    val manual = pins.any { it.manual }
+    val wish = pins.any { !it.manual }
+    return when {
+        manual && wish -> "希望と手で固定したマス"
+        manual -> "手で固定したマス"
+        else -> "本人の希望"
+    }
+}
+
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
@@ -938,12 +950,12 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { (it as? com.magi.app.v6.ConstraintMus.WishPin)?.takeIf { w -> !w.manual } }
         for (d in s.dayProofs) pin(d.core).let { w ->
             val z = if (d.day in s.zeroCapProofDays) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
+            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と${pinSourceWord(d.core)}の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
                 landing = if (w == null) landingForProofCore(d.core, d.day in s.zeroCapProofDays) else null))
         }
         for (c in s.staffProofs) pin(c.core).let { w ->
             val z = if (s.zeroCapStaffProof(c)) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
+            add(PreRunRow("${name(c.staff)} ${pinSourceWord(c.core)}と条件の組合せ（${c.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
                 landing = if (w == null) landingForProofCore(c.core, s.zeroCapStaffProof(c)) else null))
         }
         for (f in s.forcedShortfalls) {
