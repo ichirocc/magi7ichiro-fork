@@ -324,7 +324,8 @@ class OptimizationWorker(
             //   `optimizeInFlight()`（編集・実行の可否を判定する唯一の関数、3.336.0）は true のまま固着し、
             //   以後の編集・Undo/Redo・新規実行が理由の見えないまま拒否され続ける（プロセス再起動まで）。
             //   `catch (Throwable)` 側は元から `releasedByMe = true` を立てており、ここだけ非対称だった。
-            if (owned) { reportClear("停止"); releasedByMe = true }
+            if (owned) reportClear("停止")
+            releasedByMe = releasedByMe || cancelPathReleases(owned)
             // [3.412.0/B-08] 停止経路だけがバブルを片付けていなかった。完了・失敗は postDone で
             //   進行中(ongoing)を解いて自動消去できる形にするのに、停止すると「計算中…」の
             //   バブルが**画面に残り続ける**（`setOngoing(true)` はユーザーが払えない）。
@@ -356,7 +357,7 @@ class OptimizationWorker(
             //   旧実行がここを通ると、まだ動いている新実行の「実行中」を消してしまう。
             // [3.333.0] `releasedByMe` は「自分が正常完了してマーカーを消した」＝実行中を降ろすのが
             //   正しい経路。ここを見ないと完了後に実行中が残り続けた（上のコメント参照）。
-            if (releasedByMe || ownsFiles()) OptimizationRepository.setRunning(false)
+            if (shouldReleaseRunning(releasedByMe, ::ownsFiles)) OptimizationRepository.setRunning(false)
             // [3.387.0] 3.382.0 と同じ保証＝どの経路を通っても終端行が1つは残る。
             //   ここへ落ちたら「想定外の経路」（Error など catch(Exception) が拾わないもの）を疑う。
             terminal("終了: 完了・停止・失敗のいずれも記録されませんでした（想定外の経路。Error(OOM等)や停止処理自体の失敗が疑われます）", "W")

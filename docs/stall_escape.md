@@ -256,6 +256,13 @@ reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_
 - 役割内部の workers は 1。開始前に停止・締切を確認し、戻った成果を**回収してから**締切を判定して break（3.600.0。回収前に break すると締切間際の改善解を捨てる）。
 - globalBest と自己 elite は別管理。採用は `betterReport` と配置保護を通す。
 
+### 6.4 設計指針: 業務重みと、腕選択・予算配分の基準を分ける（backlog#26、3.723.2）
+
+- 業務重み（`MirrorKeys.weights`）は正式スコア `betterReport`（hard→weightedScore→total）のためだけにある。HF77 の対象で、探索の都合では変えない。
+- 腕の選択・再配属・エポック量子・研磨の発火条件は「正式比較で改善したか」（6.2 の `improvedThisEpoch`）と対象違反の breakdown 生値（`targetFamiliesRemain`）で決める。探索スケジューラ用の重み表は作らない。
+- 腕の自己申告カウンタ（`TuningTelemetry.*`）や腕の内部重みは判定に使わない。腕の内部重みが業務重みと食い違っても、採否は正式比較が決めるので結果は正しい（例: `C42FlowPolish` の pc*1000、backlog#42(h)①）。
+- 予算配分を変える案は「業務重みを変えずに」測る（同一入力・同一 seed 群・同一総予算、`tools/loop`）。重みの変更で探索を速くしようとしない。
+
 ## 7. 層 C — RSI の focus 切替と打ち切り
 
 ### 7.1 HF63 の学習範囲

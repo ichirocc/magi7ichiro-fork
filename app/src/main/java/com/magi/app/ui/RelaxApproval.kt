@@ -15,6 +15,8 @@ object RelaxApproval {
         STOPPED("試算を途中で止めたので、結果はありません。"),
         UNAVAILABLE("この勤務表では試算できません。"),
         NO_GAIN("試算しても必須違反は減りませんでした。"),
+        SEARCHING("試算がまだ終わっていません。"),
+        FAILED("試算に失敗しました。もう一度試算してください。"),
         STALE("勤務表か設定が変わりました。もう一度試算してください。"),
         NOT_REPRODUCED("試算の手順を当てても同じ結果になりませんでした。もう一度試算してください。"),
         BLOCKED("いまは反映できません（実行中か、データに問題があります）。"),
@@ -71,10 +73,12 @@ object RelaxApproval {
 
     fun improves(outcome: RelaxTrial.Outcome?): Boolean = outcome is RelaxTrial.Result && outcome.rr < outcome.h0
 
-    /** 開いたときの状態。改善のある Result だけが R1、他は理由の分かれた R4。 */
-    fun start(outcome: RelaxTrial.Outcome?, fresh: Boolean, trialId: String, fingerprint: String): Flow {
+    /** 開いたときの状態。改善のある Result だけが R1、他は理由の分かれた R4。結果の無い今のデータの試算は [searching]（走っている）・[failed]（失敗）を STALE と分ける。 */
+    fun start(outcome: RelaxTrial.Outcome?, fresh: Boolean, trialId: String, fingerprint: String, searching: Boolean = false, failed: Boolean = false): Flow {
         val base = Flow(Step.R1, trialId, fingerprint, expectedHard = (outcome as? RelaxTrial.Result)?.rr ?: -1)
         return when {
+            fresh && outcome == null && searching -> base.copy(step = Step.R4, end = EndReason.SEARCHING)
+            fresh && outcome == null && failed -> base.copy(step = Step.R4, end = EndReason.FAILED)
             !fresh || outcome == null -> base.copy(step = Step.R4, end = EndReason.STALE)
             outcome is RelaxTrial.NoWall -> base.copy(step = Step.R4, end = EndReason.NO_WALL)
             outcome is RelaxTrial.Stopped -> base.copy(step = Step.R4, end = EndReason.STOPPED)

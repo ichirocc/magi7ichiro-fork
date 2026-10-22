@@ -38,3 +38,12 @@ internal suspend fun clearAfterSaved(save: suspend () -> Boolean, clear: () -> U
     clear()
     return true
 }
+
+/** [3.438.0] 停止経路で実行中を降ろす責任を引き受けるか。片付けでマーカーが消えた後の再判定に頼らない（ReviewFixes3442Test 参照）。 */
+internal fun cancelPathReleases(ownedAtCancel: Boolean): Boolean = ownedAtCancel
+
+/** finally で `setRunning(false)` を呼ぶか。`ownsNow` は引き受け済みなら読まない。 */
+internal fun shouldReleaseRunning(releasedByMe: Boolean, ownsNow: () -> Boolean): Boolean = releasedByMe || ownsNow()
+
+/** [3.592.0] 非同期の enqueue 失敗を片付けるか。置き換え済み（別の runId が進行中）なら新しい実行に触れない。 */
+internal fun asyncEnqueueFailureCleansUp(failed: Boolean, currentRunId: Long, runId: Long): Boolean = failed && currentRunId == runId

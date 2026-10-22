@@ -60,4 +60,17 @@ class PreRunCheckTextTest {
         assertEquals(EditLanding(2, "yr_count", label = LANDING_ZERO_CAP), t.wallLanding)
         assertTrue("セルのある行は着地先を持たない（セルへ行く）", t.floorRows.filter { it.staff != null }.all { it.landing == null })
     }
+
+    /** 手動固定だけ／希望だけ／両方で、衝突の行の呼び名を分ける。 */
+    @Test fun pinSourceWord_distinguishesWishAndManualPin() {
+        val w = com.magi.app.v6.ConstraintMus.WishPin(0, 1, 2)
+        val m = com.magi.app.v6.ConstraintMus.WishPin(1, 1, 2, manual = true)
+        assertEquals("本人の希望", pinSourceWord(listOf(w)))
+        assertEquals("手で固定したマス", pinSourceWord(listOf(m)))
+        assertEquals("希望と手で固定したマス", pinSourceWord(listOf(w, m)))
+        val base = PreRunCheck.build(st, board)
+        val d = base.dayProofs.first()
+        val t = preRunSheetText(base.copy(dayProofs = listOf(d.copy(core = listOf(m))), staffProofs = emptyList()), ui)
+        assertTrue(t.floorRows.any { it.text.contains("必要人数と手で固定したマスの衝突（1件") })
+    }
 }

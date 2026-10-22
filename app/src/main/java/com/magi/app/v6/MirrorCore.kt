@@ -511,25 +511,26 @@ object UnifiedViolationChecker {
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
         val level = if (total == 0) "I" else "W"
         // [Set化] クラス列を重み降順に整列（安定ソート＝同重みはマーク順維持 → 先頭は violations[key] と常に一致）。
+        //   1 件の列も listOf で包み直す＝蓄積用の可変 ArrayList を外へ出さない（型の契約、出力は同じ）。
         scratch.cellHint = cellFams.size; scratch.countHint = countFams.size; scratch.needHint = needFams.size
         val violations = LinkedHashMap<String, String>(mapCapacity(cellFams.size))
         for (e in cellFams.entries) {
             val ck = e.key; val cv = e.value
-            val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
+            val sorted = if (cv.size <= 1) listOf(cv[0]) else cv.sortedByDescending { classWeight[it] ?: 0.0 }
             e.setValue(sorted)
             violations[ck] = sorted[0]   // [3.395.0] 最重1クラス＝整列済み先頭（旧 mark() と同値）
         }
         val countViolations = LinkedHashMap<String, String>(mapCapacity(countFams.size))
         for (e in countFams.entries) {
             val ck = e.key; val cv = e.value
-            val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
+            val sorted = if (cv.size <= 1) listOf(cv[0]) else cv.sortedByDescending { classWeight[it] ?: 0.0 }
             e.setValue(sorted)
             countViolations[ck] = sorted[0]
         }
         val needViolations = LinkedHashMap<String, String>(mapCapacity(needFams.size))
         for (e in needFams.entries) {
             val ck = e.key; val cv = e.value
-            val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
+            val sorted = if (cv.size <= 1) listOf(cv[0]) else cv.sortedByDescending { classWeight[it] ?: 0.0 }
             e.setValue(sorted)
             needViolations[ck] = sorted[0]
         }

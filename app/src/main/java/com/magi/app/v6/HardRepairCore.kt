@@ -102,6 +102,7 @@ internal object HardRepairCore {
 
         repeat(3) {
             val cov = coverage(p, out)
+            // 回数表は巡の頭で 1 回だけ作り、巡内の割当では更新しない（意図的・3 巡で追い直す。C++ も同じ。backlog#32）。
             val counts = countMatrix(p, out)
             for (j in 0 until p.T) for (k in 0 until p.K) {
                 // [N1a] 充填量は per-cell 実需要（#4b: OR/AND）。旧 need1 のみ基準では P2 で救済済みの
