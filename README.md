@@ -19,6 +19,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み21種）・エラー方針（**業務ルールの正解**） |
 | [`docs/overhaul_design.md`](./docs/overhaul_design.md) | 段階的全面改修の設計書（完全版 v2、2026-10-22。定義・意義と受け入れ基準 S1〜S6・ゲート G1〜G16・一括置き換え・段階 P0〜P9、付録に Q-05/Q-06 調査） |
 | [`docs/safety_inventory.md`](./docs/safety_inventory.md) | 安全機構の棚卸し（責務・コード・固定テスト・CI）と 28 項目の分類（2026-10-22、Q-02/Q-07） |
+| [`docs/flag_inventory.md`](./docs/flag_inventory.md) | エンジン・探索フラグの棚卸しと整理の決定（2026-10-22。定着＝外す・否決＝消す・じっくり／画面＝EngineConfig） |
 | [`docs/data-models.md`](./docs/data-models.md) | エンティティ定義・項目名と型（**存在しない項目を創作しない**） |
 | [`docs/screen_spec.md`](./docs/screen_spec.md) | 画面仕様（挙動・実寸・違反/希望の表示） |
 | [`docs/DESIGN.md`](./docs/DESIGN.md) | デザイン憲法・design_lint の禁止事項・§4b 片手の可動域・導線・目線 |

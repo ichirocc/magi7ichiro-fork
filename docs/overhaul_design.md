@@ -190,6 +190,7 @@
 | P2 | P2a | `EngineConfig`（39 フィールド・既定値の表テスト）と `snapshot()`。`normalStallFraction`・`floorCountsUpperZero` を引数で読む |
 | | P2b | 停滞・床・壁の系統（`floorShortStall`・`c3nWall*`・`adaptiveStall`・`wishConflictFloorMode`）と後処理の系統（`lnsAdaptive`・`prePostDescent`・`postChainRollbackCountsZero` ほか） |
 | | P2c | 玉突きの系統（`ejection*`・`*EjectionChain*`・`softCascade`）と残り。最後に `PolishGate` への書き込み口を設定画面だけに絞る |
+| | P2d | フラグ整理（`docs/flag_inventory.md` の決定）: 定着 → 外す、否決で到達不能 → 消す、`quantitativeRangeEval` の撤去（評価器・C++・C# の引数）。1 件ずつ盤面ハッシュ一致を確かめる |
 | P3 | P3a | `TimeBudget` 型と `V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）を移す |
 | | P3b | `V6NativeOptimizer`（`SaParams`）・`C1JointLnsPolish`（60 s 固定）・`EjectionChainPipeline`・`CombinatorialRepair` を子予算へ |
 | P4 | P4a〜P4e | `Stage` 型とパイプライン → 前段（入口・hf66/67）→ 中段（各 Polish・共同 LNS）→ 修復（`ViolationComponentRepair`・退避）→ 終段（玉突き・最終番兵の前）。各 PR で `PostStageRecord` の並びが同じこと |
