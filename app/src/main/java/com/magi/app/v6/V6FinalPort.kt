@@ -565,7 +565,7 @@ object V6FinalPort {
             is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
         }
         val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true),   // [HF532移植] optFlags.rectSwap 既定ON
-            seed = seed ?: opts.seed)
+            seed = seed ?: opts.seed, config = config)
         lastOptimizerSeed = optsR.seed
         // [review: 予算一本化] optimize() + runPostOptimization() を一つの予算で管理する。
         // 後処理は元々 deadline も progress も持たず、optimize が予算を使い切った後も走り続け、
@@ -718,7 +718,7 @@ object V6FinalPort {
                         !(diag.hasRuns && diag.allBlocked) -> false
                         // 根拠の段階化（[PolishGate.c3nWallDeepCheck]）: 希望固定だけの壁は証明相当。探索手の全滅だけの壁は、
                         //   1 手探索（上限 2 s）でも必須を減らす手が無いときだけ壁とみなす。
-                        !PolishGate.c3nWallDeepCheck || diag.allBlockedCertified -> true
+                        !config.c3nWallDeepCheck || diag.allBlockedCertified -> true
                         V6PortAnalyzer.c3nWallRefutedByOneMove(state, arr) -> { deepRefuted.incrementAndGet(); false }
                         else -> { deepConfirmed.incrementAndGet(); true }
                     }
@@ -768,7 +768,7 @@ object V6FinalPort {
         }
         // 壁の証拠の選択: 既定は生存盤面の報告が最良の報告と同じ参照のときだけ使う（[C3nWallProof.bound]）。
         //   測定の基準腕（[PolishGate.c3nWallLegacy]）は HEAD と同じ判定（[C3nWallProof.legacy]）。
-        fun c3nWallProven(): Boolean = if (PolishGate.c3nWallLegacy) wallProof.legacy() else wallProof.bound()
+        fun c3nWallProven(): Boolean = if (config.c3nWallLegacy) wallProof.legacy() else wallProof.bound()
         val shouldStop = {
             val now = EngineClock.nowMs()
             val gen = wd.bestVersion.get()   // 判定の世代。発火はこの世代のままだった場合だけ確定する（§5.4）
@@ -781,14 +781,14 @@ object V6FinalPort {
             //   plateau（解けないHARD）として stallHardMs へ移行（実機ログの「c3n=1のまま150s無改善でも
             //   270s閾値のため発火不能」を解消）。診断は停滞が stallHardMs を超えてから遅延実行（~20ms/世代1回）。
             val nonCovU = wd.bestNonCovUHard.get()
-            val wall = PolishGate.c3nWallShortStall && nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
+            val wall = config.c3nWallShortStall && nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
                 wd.bestHard.get() <= hardFloor + nonCovU &&
                 now - wd.lastBestImproveMs.get() > stallHardMs && c3nWallProven()
             val effStall = effectiveStallMs(
                 wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
                 wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached(),
-                adaptiveMs = if (PolishGate.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
-                floorShort = PolishGate.floorShortStall,
+                adaptiveMs = if (config.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
+                floorShort = config.floorShortStall,
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true
@@ -871,15 +871,8 @@ object V6FinalPort {
         )
         val tIntegration1 = EngineClock.nowMs()
 
-        // [3.587.0] PolishGateは1回だけ読んでpostParamsに固定する（実行中にUIから値が変わっても
-        //   この実行はこのスナップショットのまま走る＝下のtuningLogも同じ値を使う）。
-        val postParams = V6HotfixPasses.PostOptimizationParams(
-            quantitativeRangeEval = quantitativeRangeEval,
-            combineExhaustPairs = PolishGate.combineExhaustPairs,
-            lnsAdaptive = PolishGate.lnsAdaptive,
-            aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
-            countChainEnabled = PolishGate.countChainPolish,
-        )
+        // 実行開始時の写し（config）から作る＝下の tuningLog も同じ値を使う。
+        val postParams = config.postParams(quantitativeRangeEval)
         // [E0B] 希望衝突の床で頭打ちしたら後処理の研磨を丸ごと省き、検査・HF70 だけにする（最終番兵は下で通常どおり）。
         val post = if (e0bSkip()) V6HotfixPasses.minimalPost(state, integrated.schedule, label.tech, quantitativeRangeEval)
         else V6HotfixPasses.runPostOptimization(
@@ -1006,7 +999,7 @@ object V6FinalPort {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
             val gapsEnd = wd.recentGaps()
-            val adaptiveEnd = if (PolishGate.adaptiveStall) adaptiveStallMs(gapsEnd, stallHardMs, stallMs) else null
+            val adaptiveEnd = if (config.adaptiveStall) adaptiveStallMs(gapsEnd, stallHardMs, stallMs) else null
             val kind = when {
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
@@ -1014,7 +1007,7 @@ object V6FinalPort {
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s" + (adaptiveEnd?.takeIf { it < stallMs }?.let { "→適応${it / 1000}s" } ?: "")
             }
-            val adaptNote = if (PolishGate.adaptiveStall)
+            val adaptNote = if (config.adaptiveStall)
                 "・適応閾値=${adaptiveEnd?.let { "${it / 1000}s" } ?: "なし"}（改善間隔${gapsEnd.size}個" +
                     (gapsEnd.maxOrNull()?.let { "・最大${it / 1000}s×$ADAPTIVE_STALL_FACTOR" } ?: "") + "・通常分岐だけ）" else ""
             // [3.375.2/実測で判明] 発火しなかったとき**どの条件が塞いだか**を出す。実測(golden・150s予算)で

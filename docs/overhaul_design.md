@@ -361,6 +361,9 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 
 P2a 済み（2026-10-22）: `EngineConfig`（`normalStallFraction`・`floorCountsUpperZero`）と `EngineConfig.snapshot()`。`handleOptimize(config = snapshot())`
 が入口で 1 回だけ写し、`watchdogBudget`・床の判定はそこから読む。`normalStallMs`/`watchdogBudget` の省略時は PolishGate でなく本番既定。T-6 は `EngineConfigTest`。
+P2b 済み（2026-10-22）: 停滞・床・壁（`c3nWallShortStall`・`floorShortStall`・`c3nWallLegacy`・`c3nWallDeepCheck`・`adaptiveStall`）と後処理
+（`combineExhaustPairs`・`lnsAdaptive`・`aptFairSoftTolerance`・`countChainPolish`）を `EngineConfig` へ。`postParams()` が `PostOptimizationParams` を作り、
+`V6OptimizerOptions.config` で探索側（研磨の注入）にも同じ写しを渡す。エンジン内でこの 9 項目を `PolishGate` から読む箇所は 0。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

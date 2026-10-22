@@ -67,6 +67,8 @@ data class V6OptimizerOptions(
     /** [測定中/backlog#28] `RsiFocusSelection`のapt/covO周期枠(`round%3`)を`runRsi`呼出し単位でなく
      *  `sharedHf63`が持続するカウンタで計る。既定OFF＝短いRSI呼出しの繰返しで枠が回らない条件の対策（経緯はdocs/history）。 */
     val rsiFocusRotationPersist: Boolean = false,
+    /** 既定は作った時点の [PolishGate] の写し。`handleOptimize` は入口の写しを渡す。 */
+    val config: EngineConfig = EngineConfig.snapshot(),
 )
 
 data class V6OptimizerResult(
@@ -891,13 +893,7 @@ object V6NativeOptimizer {
             var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L; var firstFailure: String? = null
             // 再試行の待ちは最終試行時刻から数える（全体最良の最終改善時刻 lastGlobalImproveMs とは別）。
             var lastTryMs = 0L
-            val postParams = V6HotfixPasses.PostOptimizationParams(
-                quantitativeRangeEval = options.quantitativeRangeEval,
-                combineExhaustPairs = PolishGate.combineExhaustPairs,
-                lnsAdaptive = PolishGate.lnsAdaptive,
-                aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
-                countChainEnabled = PolishGate.countChainPolish,
-            )
+            val postParams = options.config.postParams(options.quantitativeRangeEval)
             while (!workersDone.get() && nowMs() < deadline) {
                 kotlinx.coroutines.delay(500L)
                 val now = nowMs()
