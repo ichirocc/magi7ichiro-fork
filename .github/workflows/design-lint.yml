@@ -38,7 +38,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Run design lint (P5/P6/P7 fail the job)
         shell: bash
         run: python3 tools/design_lint.py
+
+      - name: Check versionCode/versionName (U-04)
+        if: github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          git fetch -q origin main
+          python3 tools/check_version.py origin/main
