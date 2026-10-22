@@ -17,7 +17,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/design.md`](./docs/design.md) | 設計。主要インタフェースと処理フロー（どう作られているか） |
 | [`docs/architecture.md`](./docs/architecture.md) | レイヤー構成・依存関係・どのファイルが何を担当するか（地図） |
 | [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み21種）・エラー方針（**業務ルールの正解**） |
-| [`docs/overhaul_design.md`](./docs/overhaul_design.md) | 全面改修の設計書（完全版・最終 v4・机上検証済み、2026-10-22。用語・現状の構造・定義・意義と受け入れ基準 S1〜S6 と追跡表・ゲート G1〜G16・一括置き換え・段階 P0〜P9・机上検証の記録、付録に Q-05/Q-06 調査） |
+| [`docs/overhaul_design.md`](./docs/overhaul_design.md) | 全面改修の設計書（完全版・最終 v5・机上検証済み、2026-10-22。改修の背景・変えない前提・網羅性チェック（例外・境界・非機能・テスト）・用語・現状の構造・定義・意義と受け入れ基準 S1〜S6 と追跡表・ゲート G1〜G16・一括置き換え・段階 P0〜P9・机上検証の記録、付録に Q-05/Q-06 調査） |
 | [`docs/safety_inventory.md`](./docs/safety_inventory.md) | 安全機構の棚卸し（責務・コード・固定テスト・CI）と 28 項目の分類（2026-10-22、Q-02/Q-07） |
 | [`docs/flag_inventory.md`](./docs/flag_inventory.md) | エンジン・探索フラグの棚卸しと整理の決定（2026-10-22。定着＝外す・否決＝消す・じっくり／画面＝EngineConfig） |
 | [`docs/data-models.md`](./docs/data-models.md) | エンティティ定義・項目名と型（**存在しない項目を創作しない**） |
