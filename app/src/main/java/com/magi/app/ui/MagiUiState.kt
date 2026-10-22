@@ -109,7 +109,6 @@ data class UiState(
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
     val blockSwapC3nFilter: Boolean = true,     // [3.298.0/3.518.0/3.649.0] ブロック巡回交換で必須が正味で増える候補を候補生成段階で捨てるか（必ず却下される候補だけ）
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
-    val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val aptFairToleranceUnguarded: Boolean = false,  // !AptFairPolish.heavySoftGuard（測定用・既定OFF）。じっくりの容認 6% でだけ効く。保存しない
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない

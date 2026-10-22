@@ -46,21 +46,15 @@ class ManualPinTest {
         for (m in st.manualPins) assertEquals("$msg: (${m.staff},${m.day})", m.shift, s[m.staff][m.day])
     }
 
-    // 受け入れ 1・3: 最適化（入口→探索→後処理→最終番兵）のあとも固定の値のまま。規則 A の ON/OFF・アルゴリズムを問わない。
-    @Test fun optimizeKeepsPinnedValuesAcrossFlagsAndAlgorithms() = runBlocking {
+    // 受け入れ 1・3: 最適化（入口→探索→後処理→最終番兵）のあとも固定の値のまま。アルゴリズムを問わない。
+    @Test fun optimizeKeepsPinnedValuesAcrossAlgorithms() = runBlocking {
         val f = fixture()
-        val original = PolishGate.wishPinStrict
-        try {
-            for (strict in listOf(true, false)) for (algo in listOf(V6Algorithm.V5, V6Algorithm.ALNS)) {
-                PolishGate.wishPinStrict = strict
-                val res = V6FinalPort.handleOptimize(f.st, f.board.copy2D(), secondsRaw = 2, workers = 1,
-                    requestedAlgorithm = algo, allowImpossible = true, seed = 11L)
-                assertPinsHeld("strict=$strict $algo", f.st, res.schedule)
-                val (ci, cj) = f.conflict
-                assertTrue("手動固定は希望へ戻さない", res.schedule[ci][cj] != Problem(f.st).wish[ci][cj])
-            }
-        } finally {
-            PolishGate.wishPinStrict = original
+        for (algo in listOf(V6Algorithm.V5, V6Algorithm.ALNS)) {
+            val res = V6FinalPort.handleOptimize(f.st, f.board.copy2D(), secondsRaw = 2, workers = 1,
+                requestedAlgorithm = algo, allowImpossible = true, seed = 11L)
+            assertPinsHeld("$algo", f.st, res.schedule)
+            val (ci, cj) = f.conflict
+            assertTrue("手動固定は希望へ戻さない", res.schedule[ci][cj] != Problem(f.st).wish[ci][cj])
         }
     }
 
@@ -92,20 +86,19 @@ class ManualPinTest {
         val (ci, cj) = f.conflict
         val cur = f.board[ci][cj]
         assertTrue(p.wishLocked(ci, cj)); assertEquals(cur, p.lockTo(ci, cj))
-        assertFalse("未反映の希望セルでも手動固定なら希望へ戻さない", p.wishMoveAllowed(ci, cj, cur, p.wish[ci][cj], strict = true))
-        assertFalse("規則 A を切っても手動固定は動かない", p.wishMoveAllowed(ci, cj, cur, p.wish[ci][cj], strict = false))
-        assertTrue(p.wishMoveAllowed(ci, cj, cur, cur, strict = false))
+        assertFalse("未反映の希望セルでも手動固定なら希望へ戻さない", p.wishMoveAllowed(ci, cj, cur, p.wish[ci][cj]))
+        assertTrue(p.wishMoveAllowed(ci, cj, cur, cur))
         val cand = f.board.copy2D().also { it[ci][cj] = p.wish[ci][cj] }
-        assertFalse(p.keepsWishPins(f.board, cand, strict = false))
-        assertTrue(p.keepsWishPins(f.board, f.board, strict = false))
+        assertFalse(p.keepsWishPins(f.board, cand))
+        assertTrue(p.keepsWishPins(f.board, f.board))
     }
 
-    @Test fun personSwapKickSkipsPinnedDaysEvenWithTheWishGateOff() {
+    @Test fun personSwapKickSkipsPinnedDays() {
         val f = fixture()
         val p = Problem(f.st)
         for (seed in 1L..4L) {
             val b = f.board.copy2D()
-            V6NativeOptimizer.personSwapKick(p, b, Random(seed), pairs = 3, wishPinStrict = false)
+            V6NativeOptimizer.personSwapKick(p, b, Random(seed), pairs = 3)
             assertPinsHeld("seed=$seed", f.st, b)
         }
     }

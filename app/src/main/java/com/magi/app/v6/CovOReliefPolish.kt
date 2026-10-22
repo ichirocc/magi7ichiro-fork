@@ -20,7 +20,6 @@ internal object CovOReliefPolish {
         state: MagiState, schedule: Array<IntArray>,
         maxMoves: Int = 64, maxEvaluations: Int = 3_000,
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Result {
         val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
@@ -51,7 +50,7 @@ internal object CovOReliefPolish {
                     var tried = false
                     for (m in p.allowedShiftsForStaff(i)) {
                         if (m == k || p.extBanned(i, j, m) || p.makesForbiddenRun(work, i, j, m)) continue
-                        if (!p.wishMoveAllowed(i, j, k, m, wishPinStrict)) continue   // 未反映の希望固定セルは希望へだけ
+                        if (!p.wishMoveAllowed(i, j, k, m)) continue   // 未反映の希望固定セルは希望へだけ
                         if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 受け皿なし
                         if (evaluations >= maxEvaluations) break
                         tried = true; evaluations++

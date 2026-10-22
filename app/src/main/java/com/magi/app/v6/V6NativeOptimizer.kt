@@ -1151,7 +1151,7 @@ object V6NativeOptimizer {
      * 総当たりでなく「fair 負担が大きい職員」優先（経緯・実証データは `docs/history/3.4xx.md` 3.517.0）。
      * [希望固定の徹底] [wishPinStrict] の間は、どちらかのセルが希望固定の日は交換しない（その日だけ行が残る）。
      */
-    internal fun personSwapKick(p: Problem, out: Array<IntArray>, rng: Random, pairs: Int, wishPinStrict: Boolean = PolishGate.wishPinStrict) {
+    internal fun personSwapKick(p: Problem, out: Array<IntArray>, rng: Random, pairs: Int) {
         if (p.S < 2 || p.T == 0) return
         val counts = Array(p.S) { IntArray(p.K) }
         for (i in 0 until p.S) for (j in 0 until p.T) {
@@ -1182,7 +1182,7 @@ object V6NativeOptimizer {
             if (candidates.isEmpty()) { swapped[a] = true; continue }
             val b = candidates.maxByOrNull { burden[it] } ?: continue
             for (j in 0 until p.T) {
-                if ((wishPinStrict && (p.wishLocked(a, j) || p.wishLocked(b, j))) || p.pinned(a, j) || p.pinned(b, j)) continue
+                if (p.wishLocked(a, j) || p.wishLocked(b, j) || p.pinned(a, j) || p.pinned(b, j)) continue
                 // 個人上限0は職員ごと＝同じ群でも相手の勤務を置けない日がある（mayPlace、3.507.0）。その日は交換しない。
                 val ka = out[a][j]; val kb = out[b][j]
                 if ((kb in 0 until p.K && !p.mayPlace(a, kb)) || (ka in 0 until p.K && !p.mayPlace(b, ka))) continue

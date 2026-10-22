@@ -229,28 +229,6 @@ object PolishGate {
     @Volatile var combineExhaustPairs: Boolean = false
 
     /**
-     * [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。
-     * 既定 **true**（3.518.0で確定。根拠・数値は `docs/algorithm_portfolio.md`「既定ONへ昇格」参照）。
-     */
-    @Volatile var lnsAdaptive: Boolean = true
-
-    /**
-     * [希望固定の徹底] 規則 A（利用者決定 2026-09-25）: 最適化器は希望固定セル（`wishLocked`）を「希望へ」か「今のまま」にしか
-     * しない＝希望どおりのセルは動かさない・未反映のセルは希望へ戻してよい（あとから足した希望も従来どおり載る）・
-     * 未反映のセルを希望でも今の値でもない値へは動かさない。判定は `Problem.wishMoveAllowed`（セル）と
-     * `Problem.keepsWishPins`（盤面）。多くの経路は元から希望固定セルを動かさないか希望の値しか書かない
-     * （経路ごとの分類は docs/history/3.4xx.md「希望固定セルの規則 A」）。このフラグが効くのは、それ以外の経路:
-     * `EliteRelinking.elitePathRelink`（希望以外は写さない）・`V6NativeOptimizer.personSwapKick`（希望固定の日は交換しない）・
-     * `EliteIntegrationPolish`（規則 A を破るエリート/中間解を採らない）・`CovOReliefPolish` と RSI の free 系
-     * （「希望どおりの値だけ固定」だった）・入口 hf66/`clearCappedCells`（外すセルは埋めシフトでなく希望へ）。
-     * 採否（pref=HARD）だけでは守れない: 希望どうしの衝突では c3n(9000)→pref(8000) が HARD 件数を変えず
-     * weighted だけ下げ、未反映のセルを別の値へ動かしても pref は変わらないので、keep-best は崩した盤面を採る。
-     * 手で変えたセルが残ることは保証しない（希望へ戻すのは可＝明示の手動固定は別課題）。
-     * 既定 **true**。false は旧挙動（tools/loop の A/B 用、UI トグルは無し）。
-     */
-    @Volatile var wishPinStrict: Boolean = true
-
-    /**
      * [3.535.0/HF77明示数値指示] `AptFairPolish.applyAptPolish`/`applyFairPolish`の採否で、対象家族
      * (apt/fair)以外のSOFT合計比+6%まで悪化を容認する（累積予算、`AptFairPolish.toleratedBetter`参照。
      * HARDの不増加・keep-bestの根幹は不変）。既定 **false**（詳細は`docs/algorithm_portfolio.md`参照）。
@@ -294,8 +272,8 @@ object PolishGate {
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name,
         "ejectionPipelineRounds" to ejectionPipelineRounds, "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
         "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "normalStallFraction" to normalStallFraction, "ejectionUseLeftover" to ejectionUseLeftover,
-        "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive,
-        "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
+        "combineExhaustPairs" to combineExhaustPairs,
+        "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall,
@@ -315,8 +293,8 @@ object PolishGate {
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
         b("ejectionUseLeftover") { ejectionUseLeftover = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
-        b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }
-        b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
+        b("combineExhaustPairs") { combineExhaustPairs = it }
+        b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
         b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }
@@ -404,29 +382,28 @@ object TuningTelemetry {
 
     /** [3.694.0] 9 項目の語と並びの単一ソース。「設定の効き」（[summary]）と「設定の開始時」（[startSettings]）が同じ語を使う。 */
     fun toggleWords(native: String, parity: String, filter: String, wide: String, softPolish: String,
-                    combine: String, lns: String, aptFair: String, countChain: String, settingSuffix: String = ""): String =
+                    combine: String, aptFair: String, countChain: String, settingSuffix: String = ""): String =
         "ネイティブ加速$settingSuffix=$native" +
             " / Kotlin照合$settingSuffix=$parity" +
             " / 必須が増える候補の事前フィルタ=$filter" +
             " / 禁止連続の崩し範囲=$wide" +
             " / 仕上げ最適化=$softPolish" +
             " / 結合探索を粘り強く=$combine" +
-            " / 一括見直しの自動調整=$lns" +
             " / 公平化/適切回数の他ソフト許容(6%)=$aptFair" +
             " / 回数連鎖研磨=$countChain"
 
     /** 実行の開始点で読んだ設定を ON/OFF だけで出す。「（設定）」は利用者の選択＝実際に使えたかは [summary]（設定の効き）が示す。 */
     fun startSettings(nativeOn: Boolean, parityOn: Boolean, filterOn: Boolean, wideOn: Boolean, softPolishOn: Boolean,
-                      combineOn: Boolean, lnsOn: Boolean, aptFairOn: Boolean, countChainOn: Boolean): String {
+                      combineOn: Boolean, aptFairOn: Boolean, countChainOn: Boolean): String {
         fun w(b: Boolean) = if (b) "ON" else "OFF"
-        return toggleWords(w(nativeOn), w(parityOn), w(filterOn), w(wideOn), w(softPolishOn), w(combineOn), w(lnsOn), w(aptFairOn), w(countChainOn), settingSuffix = "（設定）")
+        return toggleWords(w(nativeOn), w(parityOn), w(filterOn), w(wideOn), w(softPolishOn), w(combineOn), w(aptFairOn), w(countChainOn), settingSuffix = "（設定）")
     }
 
     /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。
      *  [3.587.0] 4トグルは呼び出し元が実行に使ったスナップショットをそのまま渡す（`PolishGate`直読みだと表示が食い違いうる）。 */
     fun summary(
         nativeOn: Boolean, parityOn: Boolean, softPolishOn: Boolean,
-        combineExhaustPairs: Boolean, lnsAdaptive: Boolean, aptFairSoftTolerance: Boolean, countChainPolish: Boolean,
+        combineExhaustPairs: Boolean, aptFairSoftTolerance: Boolean, countChainPolish: Boolean,
     ): String {
         fun eff(on: Boolean, n: Int, unit: String): String =
             if (!on) "OFF" else if (n > 0) "ON($n$unit)" else "ON(この実行では観測なし)"
@@ -448,7 +425,6 @@ object TuningTelemetry {
             wide = wide,
             softPolish = eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替"),
             combine = if (combineExhaustPairs) "ON" else "OFF",
-            lns = if (lnsAdaptive) "ON" else "OFF",
             aptFair = eff(aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用"),
             countChain = eff(countChainPolish, countChainApplied.get(), "連鎖を採用"),
         )
@@ -529,29 +505,15 @@ object V6HotfixPasses {
         val personalLnsMaxMs: Long = 6_000L,
         val remainingClampMs: Long = 100_000L,
         val passLogTopN: Int = 8,
-        /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。3.505.1 でハイブリッド併用＝既定 ON。 */
-        val componentRepairEnabled: Boolean = true,
         val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
-        /** 人員過剰(covO)の退避研磨（CovOReliefPolish）を最終段（成分修復の後）に置く。 */
-        val covOReliefEnabled: Boolean = true,
         /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
          *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
         val restZeroWindowLnsEnabled: Boolean = false,
         /** [測定中] 全SOFT玉突き連鎖（SoftCascadePolish）を後処理の最後の盤面変更（退避の直後・HF70 の前）に置く。既定 OFF。 */
         val softCascadeEnabled: Boolean = PolishGate.softCascade,
         val softCascade: SoftCascadePolish.Config = SoftCascadePolish.Config(),
-        /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
-         *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
-         *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
-         *  最上位の `pickBestStage`（V6FinalPort、4 マクロ段）とは独立・併用＝チェーン内部の粒度を補完するだけ。
-         *  構造的 covU 床（`V6SanityPort.structuralHardFloor`）が 0 より大きい盤面では働かない
-         *  （必須件数が増えた試行はすべて構造的に充足不能なケースだった）。既定 ON（3.610.0、tools/loop 許容ON 同士
-         *  230 ペアで勝108/負54・必須退行0・必須増0）。許容 OFF ではチェーンが単調＝巻き戻しが起きず出力不変。 */
-        val postChainRunningKeepBest: Boolean = true,
         /** [N9] 巻き戻したパスの採用数を 0 と数える（巡の打ち切り判定・停滞検知へ流れる値）。既定は [PolishGate.postChainRollbackCountsZero]。 */
         val postChainRollbackCountsZero: Boolean = PolishGate.postChainRollbackCountsZero,
-        /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
-        val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
          *  ベンチと再現性の検証用（実機は既定 false＝予算を使い切る）。外部の shouldStop は常に尊重する。 */
         val deterministic: Boolean = false,
@@ -563,8 +525,6 @@ object V6HotfixPasses {
         val c3nMarginLnsReactivate: Boolean = false,
         val c3nMarginLnsMarginDays: Int = 2,
         val c3nMarginLnsEvaluations: Int = 3_000,
-        /** [3.510.2/測定中] 共同 LNS を「短い試行→採用があったときだけ本予算で続行」にする（backlog #14(a)）。既定 OFF。 */
-        val lnsAdaptive: Boolean = false,
         val c1LnsFirstEvaluations: Int = 20_000,
         val personalLnsFirstEvaluations: Int = 15_000,
         val c1LnsFirstMs: Long = 1_500L,
@@ -631,21 +591,21 @@ object V6HotfixPasses {
      * 後処理チェーンの作業域＝盤面・ログ・パス別所要・ピン帰属の合流点。
      * 各パスは必ず [adopt] を通す＝「pinBlocks の合流を書き忘れる」（3.350.0・3.409.9 で実際に起きた）を構造的に防ぐ。
      */
-    /** [postChainRunningKeepBest テスト用] visibility は internal＝`DeterministicPostChainTest` から直接駆動して検証する。 */
+    /** visibility は internal＝`DeterministicPostChainTest` から直接駆動して検証する。
+     *  [3.608.0/3.610.0] チェーン内の走行 keep-best: 畳み込むたびにチェーン内の最良と比べ、悪化していれば次のパスの前に巻き戻す
+     *  （構造的 covU 床が 0 より大きい盤面では働かない）。P2d で常時。 */
     internal class PostChain(
         private val onPhase: (String) -> Unit,
         schedule: Array<IntArray>,
         private val state: MagiState,
         private val quantitativeRangeEval: Boolean,
-        /** [postChainRunningKeepBest] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
-        runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
         private val rollbackCountsZero: Boolean = false,
         /** [aptFairSoftTolerance] ON のとき apt/fair 研磨の畳み込みだけ [AptFairPolish.toleratedBetter] で判定する（OFF＝従来どおり betterReport）。 */
         private val aptFairSoftTolerance: Boolean = false,
     ) {
         private val runningKeepBest: Boolean =
-            runningKeepBest && V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
+            V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
 
         var work: Array<IntArray> = schedule.copy2D()
             private set
@@ -658,7 +618,7 @@ object V6HotfixPasses {
         /** [Iteration 2] 巡の中で各パスが残した拒否候補。巡の末尾で違反連結成分修復へ渡して空にする。 */
         val rejectedPool = ArrayList<CombinatorialRepair.Candidate>()
 
-        /** [postChainRunningKeepBest] チェーン内で到達した最良盤面・報告書（flag OFF なら未使用のまま）。 */
+        /** [走行 keep-best] チェーン内で到達した最良盤面・報告書（構造的 covU 床が正なら未使用のまま）。 */
         private var bestWork: Array<IntArray> = work.copy2D()
         private var bestReport: ViolationReport? = initialReport
         private var lastFoldRolledBack = false
@@ -683,7 +643,7 @@ object V6HotfixPasses {
         }
 
         /**
-         * [postChainRunningKeepBest] 直前に畳み込んだ [work] を、パス自身が既に評価済みの [report]
+         * [走行 keep-best] 直前に畳み込んだ [work] を、パス自身が既に評価済みの [report]
          * （なければ安価な再チェック）でチェーン最良と比較する。悪化していれば最良盤面へ巻き戻し、
          * [passLogs] は棄却マーカー付きで返す（ログは落とさない＝`annotateStaleLogsIfRegressed` と同じ方針）。
          * flag OFF のときは何もせず [passLogs] をそのまま返す＝挙動完全不変。
@@ -744,7 +704,7 @@ object V6HotfixPasses {
             /** 測定・テスト用: 段を畳むたびに (段のキー, 畳んだ後の盤面) を受け取る。本番では null。 */
             @Volatile internal var stageProbe: ((String, Array<IntArray>) -> Unit)? = null
 
-            /** [postChainRunningKeepBest] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
+            /** [走行 keep-best] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
              *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
             const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
         }
@@ -769,7 +729,7 @@ object V6HotfixPasses {
         params: PostOptimizationParams = PostOptimizationParams(),
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
-        val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
+        val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, report0,
             rollbackCountsZero = params.postChainRollbackCountsZero, aptFairSoftTolerance = params.aptFairSoftTolerance)
         // 玉突きパイプラインが有効なら、従来の玉突き（どの置き場所も）は走らせない。
         val ej = params.ejection
@@ -845,16 +805,13 @@ object V6HotfixPasses {
             val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
             val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
                 else C1JointLnsPolish.Config(maxMillis = cap)
-            if (!params.lnsAdaptive) C1RepairOperators.jointLns(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
+            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
+            val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            if (r1.applied == 0) r1
             else {
-                // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
-                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
-                val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                if (r1.applied == 0) r1
-                else {
-                    val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-                }
+                val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
             }
         })
         if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
@@ -871,15 +828,12 @@ object V6HotfixPasses {
             val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
             val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
                 else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
-            if (!params.lnsAdaptive) PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
+            val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            if (r1.applied == 0) r1
             else {
-                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
-                val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                if (r1.applied == 0) r1
-                else {
-                    val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-                }
+                val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
             }
         })
 
@@ -894,7 +848,7 @@ object V6HotfixPasses {
             })
         }
 
-        if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
+        if (!shouldStop()) {
             // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
             val remainingFinal = EngineClock.remainingMs(deadlineMs)
             val base = params.componentRepair
@@ -918,7 +872,7 @@ object V6HotfixPasses {
             chain.replaceBoard(r.newSchedule, r.logs, r.report)
         }
 
-        if (params.covOReliefEnabled && !shouldStop()) {
+        if (!shouldStop()) {
             // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
             val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
             val r = chain.timed("後処理 人員過剰の退避(最終)", "CovORelief") { work ->
@@ -1140,7 +1094,7 @@ object V6HotfixPasses {
             }, toleranceFamily = "fair")
             // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
-            if (params.componentRepairEnabled && pool.size >= 2) {
+            if (pool.size >= 2) {
                 take("成分修復", chain.timed("後処理 違反連結成分修復$tag", "ComponentRepair") { work ->
                     ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
@@ -1284,7 +1238,7 @@ object V6HotfixPasses {
         val pinBlocks: PinBlockAttribution? = null,
         /** [Iteration 2] このパスが単独では不採用にし、結合にも使わなかった候補（違反連結成分修復の材料）。 */
         val rejectedCandidates: List<CombinatorialRepair.Candidate> = emptyList(),
-        /** [postChainRunningKeepBest] このパスが自身の keep-best ループで既に評価済みの `newSchedule` に対応する報告書。
+        /** [走行 keep-best] このパスが自身の keep-best ループで既に評価済みの `newSchedule` に対応する報告書。
          * 未設定(null)のパスは `PostChain` 側で安価な再チェックにフォールバックする。 */
         val report: ViolationReport? = null,
     )

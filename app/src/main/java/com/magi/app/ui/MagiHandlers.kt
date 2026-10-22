@@ -161,7 +161,6 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetEjectionUseLeftover -> vm.setEjectionUseLeftover(e.on)
             is MagiEvent.Settings.SetC3nWallShortStall -> vm.setC3nWallShortStall(e.on)
             is MagiEvent.Settings.SetStallPolishInjection -> vm.setStallPolishInjection(e.on)
-            is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
         }
         true
     },

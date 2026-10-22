@@ -35,13 +35,11 @@ class LoopFeatureRegressionTest {
     private fun sh(k: String, need: String = "") = Shift(k, k, need, "")
     private fun sched(s: MagiState) = s.schedule.map { it.toIntArray() }.toTypedArray()
 
-    /** 両腕で後処理を走らせ、各結果に [check] を当てる。旧腕＝成分修復 OFF、新腕＝ON。 */
+    /** 後処理を走らせ、結果に [check] を当てる（成分修復は P2d で常に ON。旧腕の OFF は外した）。 */
     private fun both(s: MagiState, shouldStop: () -> Boolean = { false }, check: (String, V6PostOptimizationResult) -> Unit) {
-        for ((arm, on) in listOf("旧" to false, "新" to true)) {
-            val r = V6HotfixPasses.runPostOptimization(s, sched(s), "feature", seed = 11L, shouldStop = shouldStop,
-                deadlineMs = EngineClock.nowMs() + 4000L, params = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = on))
-            check(arm, r)
-        }
+        val r = V6HotfixPasses.runPostOptimization(s, sched(s), "feature", seed = 11L, shouldStop = shouldStop,
+            deadlineMs = EngineClock.nowMs() + 4000L, params = V6HotfixPasses.PostOptimizationParams())
+        check("新", r)
     }
     private fun bd(r: V6PostOptimizationResult, key: String) = r.report.breakdown[key] ?: 0
 
@@ -114,13 +112,11 @@ class LoopFeatureRegressionTest {
 
     @Test fun f11_inputIsLeftUntouchedForUndo() {
         val s = st(listOf(rest, sh("A", "1")), listOf(Staff("X", 0), Staff("Y", 0)), listOf(listOf(1, 1)), listOf(listOf(1, 0), listOf(0, 0)))
-        for (on in listOf(false, true)) {
-            val input = sched(s); val copy = input.copy2D()
-            val r = V6HotfixPasses.runPostOptimization(s, input, "feature", seed = 11L, deadlineMs = EngineClock.nowMs() + 4000L,
-                params = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = on))
-            assertTrue("入力は変えない（元に戻す用）", input.contentDeepEquals(copy))
-            assertTrue("結果は別配列", r.schedule !== input)
-        }
+        val input = sched(s); val copy = input.copy2D()
+        val r = V6HotfixPasses.runPostOptimization(s, input, "feature", seed = 11L, deadlineMs = EngineClock.nowMs() + 4000L,
+            params = V6HotfixPasses.PostOptimizationParams())
+        assertTrue("入力は変えない（元に戻す用）", input.contentDeepEquals(copy))
+        assertTrue("結果は別配列", r.schedule !== input)
     }
 
     @Test fun f12_stopReturnsPromptlyWithoutWorsening() {

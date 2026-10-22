@@ -103,15 +103,13 @@ fun main(args: Array<String>) {
     // Iteration 2: 旧＝3.504.x のチェーン（成分修復なし）、新＝巡末尾に違反起点のトランザクション修復を足したもの（3.505.1 で既定）。
     // [Iteration 7] MAGI_BENCH_DETERMINISTIC=1 で両腕とも決定的モード（回数上限で止める＝再現性を仕様にする）。
     val det = System.getenv("MAGI_BENCH_DETERMINISTIC") == "1"
-    // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ。既定（未設定）は Iteration 2 以来の「成分修復の有無」。
+    // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ（必須）。
     val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
     val (oldP, newP) = when (feature) {
         "c3nmargin" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsEnabled = true)
-        "lnsadaptive" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true)
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
         "restzero" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, restZeroWindowLnsEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "covorelief" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
         "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
         "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
@@ -133,16 +131,6 @@ fun main(args: Array<String>) {
         // [3.597.0/backlog#30] 日ごと厳密割当の対角(自分の現シフト)を常に有限にし、置けない職員/スロットが
         //   ある日も残りを研磨できるようにする。
         "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
-        // [3.608.0/backlog#34] チェーン内走行keep-best。パス単体の改善が同一チェーン内の別パスの
-        //   悪化に道連れで捨てられる問題への対処＝postChainRunningKeepBestのA/B。
-        "runningkeepbest" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = true)
-        //   既定設定では各パスが自前の keep-best でチェーンが単調＝巻き戻しが構造的に起きない（230/230 盤面一致）。
-        //   非単調になるのは aptFairSoftTolerance（他ソフト悪化を許容）ON のとき＝実機で道連れ棄却が起きた設定。
-        "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装。許容 ON 同士。
-        "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
         //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
         "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
@@ -158,13 +146,11 @@ fun main(args: Array<String>) {
         "piperoundsendk", "pipehardendk", "pipecomboendk", "pipecombovsfullendk", "pipehardvsroundsendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
-        "ejectionearlyhard", "ejectionearlyall", "ejectionfinalall", "ejectionearlyallretry", "ejectionafterrepair", "ejectionafterrepairhole", "ejectionafterrepairholesoft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [2026-10-07] 後処理チェーン先頭の局所降下（PolishGate.prePostDescent）。大域フラグなので腕ごとに切り替える（下のループ）。
         "prepostdescent" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
+        else -> error("MAGI_BENCH_FEATURE を指定する（既定の比較だった成分修復の有無は P2d で常に ON）: $feature")
     }
-    System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
+    System.err.println("feature=$feature deterministic=$det")
     // [3.507.6] 再開可能: 既存 CSV の (case,seed,arm) を読み、済みの行は飛ばして追記する（VM 再起動で JVM が消えても続きから）。
     val done = HashSet<String>()
     if (out.exists()) out.readLines().drop(1).forEach { l -> val c = l.split(","); if (c.size > 4) done.add(c[0] + "|" + c[3] + "|" + c[4]) }

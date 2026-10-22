@@ -141,7 +141,7 @@ class ViolationComponentRepairTest {
         val st = combineTwoRejectedState()
         val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
         val before = UnifiedViolationChecker.check(st, sched)
-        val params = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, maxRounds = 1)
+        val params = V6HotfixPasses.PostOptimizationParams(maxRounds = 1)
         val r = V6HotfixPasses.runPostOptimization(st, sched.map { it.clone() }.toTypedArray(), "t", seed = 7L, params = params)
         assertTrue(r.report.hard <= before.hard)
         assertTrue(!betterReport(before, r.report))

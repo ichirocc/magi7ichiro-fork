@@ -380,6 +380,13 @@ P2d-②a 済み（2026-10-22）: 常に ON にしてフラグを外した＝`rot
 `ejectionPipelineAfterRepair`（前の置き場所の分岐ごと）・`personSwapKick`（7 役割のローテーション固定）・`floorCountsUpperZero`（床は常に上限0込み）・
 `C1JointLnsPolish.deltaChildEvalDefault`（Config の引数ごと）・`C1EjectionChainPolish.defaultCrossFamily`（v1 の候補生成ごと）・`FixSuggester.restoreWishLocked`。
 OFF 比較のテストは ON の経路の検証（再現性・正式評価との一致・HARD を増やさない）へ書き換え、`PersonSwapBench`・`WasteRemovalProbe` と OFF 腕を削除。P0 スナップショット一致。
+P2d-②b 済み（2026-10-22）: `PostOptimizationParams` の `componentRepairEnabled`・`componentRepairFinal`・`covOReliefEnabled`・`postChainRunningKeepBest`
+（`PostChain` の引数ごと）・`lnsAdaptive`（`PolishGate`・`EngineConfig`・UI の非表示イベントとセッター・「設定の効き」の語ごと）を外した。
+`PostOptimizationParams()` を素で作るベンチ・テストも本番と同じ共同 LNS の自動調整になる（§10 の注意）。P0 の盤面ハッシュはこれで変わらない
+（基準版 `4e8fe3a` で lnsAdaptive=true にして作り直した期待値が md5 で同一＝作り直し不要を確認）。LoopBench の既定比較は廃止（機能名の指定が必須）。
+P2d-②c 済み（2026-10-22）: `wishPinStrict`（規則 A、利用者決定 2026-09-25）を常時に。`Problem.wishMoveAllowed`・`keepsWishPins` の `strict` 引数と、
+7 ファイル（V6NativeOptimizer・HardRepairCore・RsiHypothesisOperators・EliteIntegrationPolish・EliteRelinking・CovOReliefPolish・V6PortAnalyzer）の
+`wishPinStrict` 引数を外した。`WishPinStrictTest`・`ManualPinTest`・`V6PortAnalyzerTest` の旧挙動（OFF）の比較は削除し、ON の検査だけ残す。P0 スナップショット一致。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

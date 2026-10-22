@@ -1160,7 +1160,6 @@ object V6FinalPort {
             parityOn = NativeBridge.available && NativeGate.userEnabled && NativeGate.parityCheckEnabled,
             softPolishOn = softPolish,
             combineExhaustPairs = postParams.combineExhaustPairs,
-            lnsAdaptive = postParams.lnsAdaptive,
             aptFairSoftTolerance = postParams.aptFairSoftTolerance,
             countChainPolish = postParams.countChainEnabled,
         ))

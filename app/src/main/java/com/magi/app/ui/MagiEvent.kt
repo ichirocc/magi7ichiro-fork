@@ -202,7 +202,6 @@ internal sealed interface MagiEvent {
         data class SetEjectionUseLeftover(val on: Boolean) : Settings
         data class SetC3nWallShortStall(val on: Boolean) : Settings
         data class SetStallPolishInjection(val on: Boolean) : Settings
-        data class SetLnsAdaptive(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */

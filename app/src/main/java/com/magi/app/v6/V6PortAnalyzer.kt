@@ -766,7 +766,7 @@ object V6PortAnalyzer {
         val cell = diagnoseForbiddenCellMoves(state, p, norm, cov, i, j, cur)
         // 希望固定の徹底（wishPinStrict）の間、探索・研磨は希望どおりのセルを動かさない。崩せる手が見つかっても
         //   それは希望を変える手＝利用者の操作なので、「探索未到達」に見せず希望固定として返す。
-        val wishHeld = PolishGate.wishPinStrict && p.wishLocked(i, j) && p.lockTo(i, j) == cur
+        val wishHeld = p.wishLocked(i, j) && p.lockTo(i, j) == cur
         return if (wishHeld && cell.escape in setOf(ForbiddenCellEscape.FREE, ForbiddenCellEscape.CHAIN, ForbiddenCellEscape.ADJACENT))
             cell.copy(escape = ForbiddenCellEscape.PINNED,
                 detail = "本人希望=${cell.shiftSymbol}（勤務表づくりは希望を動かしません。この希望を1件変えれば崩せます）")

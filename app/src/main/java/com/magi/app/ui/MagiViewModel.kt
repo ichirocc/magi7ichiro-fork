@@ -1424,15 +1424,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
-    /**
-     * [3.514.0] 個人回数・期間の一括見直し（共同LNS）を「短時間試行→改善時だけ拡張」にする。
-     * iter9実測: 退行0・品質±0・速度はデータにより変わる（平均+10%/実データ−23%）。
-     */
-    fun setLnsAdaptive(on: Boolean) {
-        com.magi.app.v6.PolishGate.lnsAdaptive = on
-        _ui.update { it.copy(lnsAdaptive = on) }
-        logOp("I", "設定変更: 一括見直しの自動調整 → ${if (on) "ON" else "OFF"}")
-    }
 
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
@@ -1635,7 +1626,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         nativeOn = _ui.value.nativeAccel, parityOn = _ui.value.nativeParity,
         filterOn = com.magi.app.v6.PolishGate.filterC3nIncrease, wideOn = com.magi.app.v6.PolishGate.wideC3nBreakDays,
         softPolishOn = _ui.value.softPolish, combineOn = com.magi.app.v6.PolishGate.combineExhaustPairs,
-        lnsOn = com.magi.app.v6.PolishGate.lnsAdaptive, aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance,
+        aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance,
         countChainOn = com.magi.app.v6.PolishGate.countChainPolish,
     )
 

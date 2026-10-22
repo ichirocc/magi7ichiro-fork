@@ -56,7 +56,6 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         config: Config = Config(),
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
         quantitativeRangeEval: Boolean = false,
     ): Result {
         val p = cachedProblem(state, quantitativeRangeEval)
@@ -96,7 +95,7 @@ internal object EliteIntegrationPolish {
         for (candidate in candidates.drop(1)) {
             if (candidate.bridge || stopped(shouldStop, deadlineMs)) continue
             val checked = UnifiedViolationChecker.check(state, candidate.schedule, quantitativeRangeEval = quantitativeRangeEval)
-            if (better(checked, bestReport) && pinsHold(p, root, candidate.schedule, wishPinStrict)) {
+            if (better(checked, bestReport) && pinsHold(p, root, candidate.schedule)) {
                 bestSchedule = candidate.schedule.copy2D()
                 bestReport = checked
             }
@@ -116,7 +115,7 @@ internal object EliteIntegrationPolish {
                     relinkPaths++
                     val improved = relinkOnePath(
                         state, p, root, source, target, variant, shouldStop, deadlineMs,
-                        bestReport, wishPinStrict, quantitativeRangeEval,
+                        bestReport, quantitativeRangeEval,
                     )
                     if (improved != null && better(improved.second, bestReport)) {
                         bestSchedule = improved.first
@@ -149,7 +148,6 @@ internal object EliteIntegrationPolish {
                 shouldStop = shouldStop,
                 deadlineMs = deadlineMs,
                 config = config,
-                wishPinStrict = wishPinStrict,
             )
             if (improved != null && better(improved.second, bestReport)) {
                 bestSchedule = improved.first
@@ -159,7 +157,7 @@ internal object EliteIntegrationPolish {
         }
 
         val checked = UnifiedViolationChecker.check(state, bestSchedule, quantitativeRangeEval = quantitativeRangeEval)
-        val valid = better(checked, rootReport) && pinsHold(p, root, bestSchedule, wishPinStrict)
+        val valid = better(checked, rootReport) && pinsHold(p, root, bestSchedule)
         val chosen = if (valid) bestSchedule.copy2D() else root.copy2D()
         val chosenReport = if (valid) checked else rootReport
         val log = MirrorLog(
@@ -190,7 +188,6 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         incumbentReport: ViolationReport,
-        wishPinStrict: Boolean,
         quantitativeRangeEval: Boolean,
     ): Pair<Array<IntArray>, ViolationReport>? {
         val current = source.schedule.copy2D()
@@ -224,7 +221,7 @@ internal object EliteIntegrationPolish {
             if (!p.mayPlace(i, k) || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
             current[i][j] = k
             val report = UnifiedViolationChecker.check(state, current, quantitativeRangeEval = quantitativeRangeEval)
-            if (better(report, bestReport) && pinsHold(p, rootSchedule, current, wishPinStrict)) {
+            if (better(report, bestReport) && pinsHold(p, rootSchedule, current)) {
                 bestSchedule = current.copy2D()
                 bestReport = report
             }
@@ -243,7 +240,6 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         config: Config,
-        wishPinStrict: Boolean,
     ): Pair<Array<IntArray>, ViolationReport>? {
         if (group.size < 2) return null
         // [賢く再構成] relinkOnePathと同じ3階層(c1違反セル最優先)。maxFusionCellsの枠がc1改善に
@@ -294,7 +290,7 @@ internal object EliteIntegrationPolish {
                     if (!withinDebt(report, currentBestReport, config)) continue
                     val child = BeamNode(schedule, report, changed)
                     next.add(child)
-                    if (better(report, bestReport) && pinsHold(p, rootSchedule, schedule, wishPinStrict)) {
+                    if (better(report, bestReport) && pinsHold(p, rootSchedule, schedule)) {
                         bestSchedule = schedule.copy2D()
                         bestReport = report
                     }
@@ -314,8 +310,8 @@ internal object EliteIntegrationPolish {
      * `wishLocked` 判定だけでは、端点の採用と崩れたエリートを起点にした relink から希望の崩れが持ち込まれる。
      * 拡張希望の禁止も同じ理由で root との差分セルを判定する（[Problem.keepsExtBan]）。
      */
-    private fun pinsHold(p: Problem, root: Array<IntArray>, s: Array<IntArray>, wishPinStrict: Boolean): Boolean =
-        !exactPinRegression(p, root, s) && p.keepsWishPins(root, s, wishPinStrict) && p.keepsExtBan(root, s)
+    private fun pinsHold(p: Problem, root: Array<IntArray>, s: Array<IntArray>): Boolean =
+        !exactPinRegression(p, root, s) && p.keepsWishPins(root, s) && p.keepsExtBan(root, s)
 
     /**
      * ビーム中間ノードの許容幅。[baseline] は**呼出時点の現在最良**（`fuseGroup` の

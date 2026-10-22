@@ -14,7 +14,6 @@ class EngineConfigTest {
         assertEquals(false, d.c3nWallDeepCheck)
         assertEquals(false, d.adaptiveStall)
         assertEquals(false, d.combineExhaustPairs)
-        assertEquals(true, d.lnsAdaptive)
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
         assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
@@ -24,13 +23,12 @@ class EngineConfigTest {
     }
 
     @Test fun postParamsCarryTheSnapshottedPostFlags() {
-        val p = EngineConfig(combineExhaustPairs = true, lnsAdaptive = false, aptFairSoftTolerance = true, countChainPolish = true)
+        val p = EngineConfig(combineExhaustPairs = true, aptFairSoftTolerance = true, countChainPolish = true)
             .postParams(quantitativeRangeEval = false)
         assertEquals(true, p.combineExhaustPairs)
-        assertEquals(false, p.lnsAdaptive)
         assertEquals(true, p.aptFairSoftTolerance)
         assertEquals(true, p.countChainEnabled)
-        assertEquals(V6HotfixPasses.PostOptimizationParams(lnsAdaptive = true), EngineConfig().postParams(false))
+        assertEquals(V6HotfixPasses.PostOptimizationParams(), EngineConfig().postParams(false))
     }
 
     @Test fun snapshotIsFixedAtTheStartOfTheRun() {

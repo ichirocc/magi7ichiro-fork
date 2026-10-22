@@ -323,8 +323,6 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Switch(checked = ui.nativeParity, onCheckedChange = null, enabled = !ui.running && ui.nativeAccel)
         }
-        // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
-        //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {

@@ -37,7 +37,6 @@ internal object EliteRelinking {
         alternatives: List<Array<IntArray>>,
         shouldStop: () -> Boolean,
         quantitativeRangeEval: Boolean = false,
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Pair<Array<IntArray>, ViolationReport> {
         val p = cachedProblem(state, quantitativeRangeEval)
         var bestSched = best.copy2D()
@@ -63,7 +62,7 @@ internal object EliteRelinking {
             for ((i, j) in diffs) {
                 if (shouldStop()) break
                 // [希望固定の徹底] 希望固定セルへ希望以外の値は写さない（希望どうしの衝突では崩した方が keep-best に勝つ）。
-                if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) continue
+                if (p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) continue
                 if (p.extBanned(i, j, alt[i][j])) continue   // 拡張希望の禁止は写さない
                 cur[i][j] = alt[i][j]                 // alt へ向けた強制マーチ
                 curRep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval)

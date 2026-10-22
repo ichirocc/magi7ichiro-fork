@@ -15,7 +15,6 @@ data class EngineConfig(
     val adaptiveStall: Boolean = false,
     // 後処理（PostOptimizationParams へ渡す。じっくりで ON になる 3 つを含む）
     val combineExhaustPairs: Boolean = false,
-    val lnsAdaptive: Boolean = true,
     val aptFairSoftTolerance: Boolean = false,
     val countChainPolish: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
@@ -23,7 +22,6 @@ data class EngineConfig(
     fun postParams(quantitativeRangeEval: Boolean) = V6HotfixPasses.PostOptimizationParams(
         quantitativeRangeEval = quantitativeRangeEval,
         combineExhaustPairs = combineExhaustPairs,
-        lnsAdaptive = lnsAdaptive,
         aptFairSoftTolerance = aptFairSoftTolerance,
         countChainEnabled = countChainPolish,
         ejection = ejection,
@@ -39,7 +37,6 @@ data class EngineConfig(
             c3nWallDeepCheck = PolishGate.c3nWallDeepCheck,
             adaptiveStall = PolishGate.adaptiveStall,
             combineExhaustPairs = PolishGate.combineExhaustPairs,
-            lnsAdaptive = PolishGate.lnsAdaptive,
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainPolish = PolishGate.countChainPolish,
             ejection = EjectionFlags(

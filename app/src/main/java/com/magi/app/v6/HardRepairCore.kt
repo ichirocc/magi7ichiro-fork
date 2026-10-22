@@ -27,7 +27,6 @@ internal object HardRepairCore {
     /** [3.428.0/#30] 埋めシフト規則の委譲を直接固定するため internal（本番の可視性要件は private のまま）。 */
     internal fun hf66DataHardening(
         state: MagiState, schedule: Array<IntArray>, tag: String, quantitativeRangeEval: Boolean = false,
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Array<IntArray> {
         val p = cachedProblem(state, quantitativeRangeEval)
         val out = normalizeSchedule(schedule, p)
@@ -46,7 +45,7 @@ internal object HardRepairCore {
                 val k = out[i][j]
                 // [3.507.0] 個人上限 0 のセル（希望でそのシフトに固定されたものは除く）も入口で外す＝探索は置き直しから始める。
                 val capped = k in 0 until p.K && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.lockTo(i, j) == k)
-                if (k !in 0 until p.K || !p.canDo(i, k) || capped) out[i][j] = refill(p, i, j, fallback, wishPinStrict)
+                if (k !in 0 until p.K || !p.canDo(i, k) || capped) out[i][j] = refill(p, i, j, fallback)
             }
         }
         return out
@@ -57,7 +56,6 @@ internal object HardRepairCore {
      *  （群外セルは触らない＝従来の基準のまま）。 */
     internal fun clearCappedCells(
         state: MagiState, schedule: Array<IntArray>, quantitativeRangeEval: Boolean = false,
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Pair<Array<IntArray>, Int> {
         val p = cachedProblem(state, quantitativeRangeEval)
         val out = schedule.copy2D()
@@ -67,7 +65,7 @@ internal object HardRepairCore {
             val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
                 val k = out[i][j]
-                if (p.isCapZeroCell(i, j, k)) { out[i][j] = refill(p, i, j, fallback, wishPinStrict); n++ }
+                if (p.isCapZeroCell(i, j, k)) { out[i][j] = refill(p, i, j, fallback); n++ }
             }
         }
         return out to n
@@ -75,8 +73,8 @@ internal object HardRepairCore {
 
     /** 外したセルを何で埋めるか。[希望固定の徹底] 規則 A の間は、希望固定セル（未反映）は埋めシフトでなく希望へ戻す
      *  （希望でも今の値でもない値へは動かさない）。 */
-    private fun refill(p: Problem, i: Int, j: Int, fallback: Int, wishPinStrict: Boolean): Int =
-        if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j)) p.lockTo(i, j)
+    private fun refill(p: Problem, i: Int, j: Int, fallback: Int): Int =
+        if (p.wishLocked(i, j)) p.lockTo(i, j)
         else if (!p.extBanned(i, j, fallback)) fallback
         // 拡張希望でその日に埋めシフトが禁止なら、置けるシフトのうち禁止でない先頭。全部禁止なら埋めシフトのまま。
         else p.allowedShiftsForStaff(i).firstOrNull { !p.extBanned(i, j, it) } ?: fallback
