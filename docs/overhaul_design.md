@@ -359,6 +359,9 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 | P2c | 玉突きの系統を移す。`PolishGate` への書き込み口を設定画面だけに絞る |
 | P2d | フラグ整理（§10）。1 件ずつ盤面ハッシュの一致を確かめる |
 
+P2a 済み（2026-10-22）: `EngineConfig`（`normalStallFraction`・`floorCountsUpperZero`）と `EngineConfig.snapshot()`。`handleOptimize(config = snapshot())`
+が入口で 1 回だけ写し、`watchdogBudget`・床の判定はそこから読む。`normalStallMs`/`watchdogBudget` の省略時は PolishGate でなく本番既定。T-6 は `EngineConfigTest`。
+
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
 |---|---|

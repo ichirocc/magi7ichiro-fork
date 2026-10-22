@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P2a（2026-10-22、版なし・出力不変）: `EngineConfig` 新設（normalStallFraction・floorCountsUpperZero）、`handleOptimize` の入口で PolishGate を 1 回だけ写す。`EngineConfigTest`（T-6）  → `docs/overhaul_design.md` §6.3
 - 全面改修 P0 安全網・P1 テストの穴埋め（2026-10-22、版なし・出力不変）: CheckerSnapshot/DiagnosisSnapshot/BoardHashFixture の期待値を main 4e8fe3a から生成（盤面ハッシュは seed 1 本・fixture 読込の javaClass 不具合を修正）。`NativeGate.chunkConsistent`/`parityMismatch` へ 2 層番兵の判定を切り出し 8 か所を置換、`SaveFailNotifier.report`（SaveOutcome）へ保存結果の反映を切り出し。`NativeGateFallbackTest`・`SaveRetryWiringTest`  → `docs/overhaul_design.md` §6.1・§6.2
 - 全面改修の詳細設計仕様書を新設（2026-10-22、ユーザーのひな形 5 観点、版なし）: docs/overhaul_detailed_spec.md。課題 W1〜W7 と新設計の対比・選定根拠、前処理 P-1〜P-8・PostPipeline の状態遷移・計算量、入出力の写像と EngineConfig/TimeBudget/ConstraintCatalog の型、境界 B-1〜B-11・例外 E-1〜E-9 の机上検証（段の例外を捨てて続ける案は出力が変わるので改修の外へ）、性能目標・テスト観点 T-1〜T-19・DoD。机上検証で計画の帯を訂正（AUTO の 31〜210 秒は RSI→ALNS）。
 - 全面改修の設計書を v5 に（2026-10-22、ユーザーが示した 4 観点「背景と課題・目指す状態と完了基準・変えない前提・網羅性チェック」、版なし）: §2.7 改修の背景と課題（ボトルネックは安全に変えられる速さ）、§2.8 変えない前提（入出力・業務ルール・採用基準・探索の動き・規模・実行環境・3 実装・画面・番兵）、§2.9 網羅性チェック（例外・境界・非機能・テスト要件）、完了の定義に両者を追加。

@@ -252,14 +252,13 @@ object V6FinalPort {
      *  既定変更はしない（2.55.0/3.310.1/3.341.1）ため、予算基準を復元し到達不能帯だけを直す形へ。
      *  60秒帯（3.423.0 の A/B で測った帯）はフォールバック側＝挙動不変。
      *
-     *  `fraction` は既定で `PolishGate.normalStallFraction` を読む（デフォルト引数は呼び出し時評価＝
-     *  `filterC3nIncrease` と同じ配線）。**(0,1) 排他・有限のみ受け付ける**: fraction>=1.0 は
+     *  `fraction` は呼び出し側が [EngineConfig] から渡す（省略時は本番既定）。**(0,1) 排他・有限のみ受け付ける**: fraction>=1.0 は
      *  「閾値>=探索区間」＝Part A が直した到達不能バグの再現、NaN は `toLong()=0`→20秒床＝最凶の
      *  早期終了へ静かに化けるため、丸めず落とす（`GlsPenalty.decay` の require と同じ型）。 */
     internal fun normalStallMs(
         budgetMs: Long,
         searchWindowMs: Long,
-        fraction: Double = PolishGate.normalStallFraction,
+        fraction: Double = EngineConfig().normalStallFraction,
     ): Long {
         require(fraction.isFinite() && fraction > 0.0 && fraction < 1.0) {
             "normalStallFraction は (0,1) の有限値のみ: $fraction"
@@ -277,7 +276,7 @@ object V6FinalPort {
 
     internal fun watchdogBudget(
         budgetMs: Long, startMs: Long, hardDeadlineMs: Long,
-        fraction: Double = PolishGate.normalStallFraction,
+        fraction: Double = EngineConfig().normalStallFraction,
         postReserveFixedMs: Long? = null,
     ): WatchdogBudget {
         val minRunMs = (budgetMs / 6).coerceIn(8_000L, 45_000L).coerceAtMost(budgetMs)
@@ -516,6 +515,8 @@ object V6FinalPort {
         /** ベンチ用の乱数種。null（既定）は従来どおり [V6OptimizerOptions.seed]=0＝時刻由来。0 も時刻由来。
          *  種を固定しても、ワーカー並列と壁時計の予算・後処理の時刻由来の種があるため盤面の再現は保証しない。 */
         seed: Long? = null,
+        /** 既定は呼び出し時の [PolishGate] の写し＝この実行の間は変わらない。 */
+        config: EngineConfig = EngineConfig.snapshot(),
         onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
@@ -604,7 +605,7 @@ object V6FinalPort {
         //   指定すると minRunMs / postReserveMs が予算を上回り、searchDeadlineMs が hardDeadlineMs を
         //   追い越して**要求したタイムアウトを超えて**いた。予算そのものでクランプして searchDeadline
         //   <= hardDeadline を構造的に保証する（10 秒以上では minRunMs が支配するため結果は不変）。
-        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs, postReserveFixedMs = postReserveFixedMs)
+        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs, config.normalStallFraction, postReserveFixedMs = postReserveFixedMs)
         val minRunMs = wdb.minRunMs   // 最初の猶予（早すぎる停止を防ぐ）
         // [後処理予約] 探索が予算を使い切ると後処理(平準化/fair等のkeep-best研磨)が時間切れ(実機8ms)になる。
         //   末尾に postReserveMs を予約し、探索は searchDeadlineMs で止め、後処理は hardDeadlineMs まで走らせる。
@@ -629,7 +630,7 @@ object V6FinalPort {
         //   （多仮説＋HF80 戦略的振動）で HARD クリアを試みる。旧 budgetMs/6(=300s予算で50s) は早すぎ、
         //   実機ログで HARD=1 のまま 50s で早期終了し残り 250s を捨てていた。→ budgetMs*9/10(=270s)。
         //   改善が続く限り lastBestImproveMs がリセットされるので、生産的な探索は自然に締切まで走る。
-        // [3.422.0 Part B・3.424.0で基準是正] 固定 9/10 を `PolishGate.normalStallFraction`
+        // [3.422.0 Part B・3.424.0で基準是正] 固定 9/10 を `EngineConfig.normalStallFraction`
         //   （既定 0.9＝旧値と同一）へ外出しし、算出は `normalStallMs`（純関数・同一 object 内）へ委譲。
         //   意味論=予算×割合、予算基準の値が探索区間内で発火し得ない帯（実測60秒帯）だけ探索区間×割合へ
         //   フォールバック。既定では到達可能な帯の値は旧来と1ミリ秒も変わらない。詳細は関数 KDoc 参照。
@@ -652,7 +653,7 @@ object V6FinalPort {
         val wishPartsMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true) } catch (_: Exception) { 0 to 0 }
         val wishFloorMp = wishPartsMp.first + wishPartsMp.second
         // [3.692.0] floorCountsUpperZero＝頭打ちの床を上限0込みにする（最適化器は上限0へ置かない＝mayPlace を守る盤面では健全）。
-        val floorUp0 = PolishGate.floorCountsUpperZero
+        val floorUp0 = config.floorCountsUpperZero
         val wishParts = if (floorUp0) wishPartsMp else try { V6SanityPort.wishConflictFloorParts(wishP) } catch (_: Exception) { 0 to 0 }
         val wishFloorLogged = wishParts.first + wishParts.second
         val wishOn = wishFloorMode != WishFloorMode.OFF || floorUp0

@@ -184,6 +184,7 @@ ViewModel ハブ
   Delta は差分評価。`SaOptimizer` が Delta×Full の整合チェック（安全網）を行うため**両者は常に一致させる**。
 - `C3Run.kt` — `isSingleShiftSeq(seq)`, `rowDeficit(a,i,k,L)`（単一シフト連の不足評価）。
 - `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
+- `EngineConfig.kt` — 1 回の実行で使うエンジン設定。`handleOptimize` の入口で `PolishGate` から 1 回だけ写す（全面改修 P2、項目は段階的に移す）。
   最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
 - `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
 - `RestZeroWindowLns.kt` — **休0日の窓LNS**（3.555.0、既定 OFF＝`PostOptimizationParams.restZeroWindowLnsEnabled`）。休の必要人数を明示した日に

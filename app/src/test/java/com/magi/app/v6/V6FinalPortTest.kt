@@ -199,15 +199,13 @@ class V6FinalPortTest {
         assertEquals(30_000L, V6FinalPort.normalStallMs(100_000L, 92_000L, fraction = 0.3))
     }
 
-    @Test fun normalStallMsReadsPolishGateByDefault() {
-        // 引数を省略すると PolishGate.normalStallFraction を読む（filterC3nIncrease と同じ
-        //   「デフォルト引数は呼び出し時評価」の配線パターン）。テスト後は必ず既定値へ復元する。
+    @Test fun normalStallMsIgnoresPolishGateWhenTheFractionIsOmitted() {
+        // エンジンは PolishGate を読まない（EngineConfig 経由だけ）。省略時は本番既定 0.9。
         val saved = PolishGate.normalStallFraction
         try {
             PolishGate.normalStallFraction = 0.5
-            assertEquals(150_000L, V6FinalPort.normalStallMs(300_000L, 275_000L))
-            PolishGate.normalStallFraction = 0.9
             assertEquals(270_000L, V6FinalPort.normalStallMs(300_000L, 275_000L))
+            assertEquals(150_000L, V6FinalPort.normalStallMs(300_000L, 275_000L, EngineConfig.snapshot().normalStallFraction))
         } finally {
             PolishGate.normalStallFraction = saved
         }
