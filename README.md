@@ -16,6 +16,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/requirements.md`](./docs/requirements.md) | 要件定義。ユーザーストーリーと受け入れ条件（なぜ存在するか） |
 | [`docs/design.md`](./docs/design.md) | 設計。主要インタフェースと処理フロー（どう作られているか） |
 | [`docs/architecture.md`](./docs/architecture.md) | レイヤー構成・依存関係・どのファイルが何を担当するか（地図） |
+| [`docs/overhaul_design.md`](./docs/overhaul_design.md) | 段階的全面改修の設計書（下書き、2026-10-22。ゲート・段階 P0〜P7・最初の 3 PR、付録に Q-05/Q-06 調査） |
 | [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み20種）・エラー方針（**業務ルールの正解**） |
 | [`docs/data-models.md`](./docs/data-models.md) | エンティティ定義・項目名と型（**存在しない項目を創作しない**） |
 | [`docs/screen_spec.md`](./docs/screen_spec.md) | 画面仕様（挙動・実寸・違反/希望の表示） |
