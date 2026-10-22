@@ -26,9 +26,9 @@ import com.magi.app.model.MagiState
 internal object HardRepairCore {
     /** [3.428.0/#30] 埋めシフト規則の委譲を直接固定するため internal（本番の可視性要件は private のまま）。 */
     internal fun hf66DataHardening(
-        state: MagiState, schedule: Array<IntArray>, tag: String, quantitativeRangeEval: Boolean = false,
+        state: MagiState, schedule: Array<IntArray>, tag: String,
     ): Array<IntArray> {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val out = normalizeSchedule(schedule, p)
         for (i in 0 until p.S) {
             val allowed = p.allowedShiftsForStaff(i)
@@ -55,9 +55,9 @@ internal object HardRepairCore {
     /** [3.507.0] 個人上限 0 のセル（希望固定を除く）だけを置けるシフトへ戻した盤面と、その件数。最終番兵の「入力」基準に使う
      *  （群外セルは触らない＝従来の基準のまま）。 */
     internal fun clearCappedCells(
-        state: MagiState, schedule: Array<IntArray>, quantitativeRangeEval: Boolean = false,
+        state: MagiState, schedule: Array<IntArray>,
     ): Pair<Array<IntArray>, Int> {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val out = schedule.copy2D()
         var n = 0
         for (i in 0 until p.S) {
@@ -82,9 +82,9 @@ internal object HardRepairCore {
     internal data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
 
 
-    internal fun hf67HardRepair(state: MagiState, schedule: Array<IntArray>, rng: Random, quantitativeRangeEval: Boolean = false): RepairResult {
-        val p = cachedProblem(state, quantitativeRangeEval)
-        val out = hf66DataHardening(state, schedule, "hf67", quantitativeRangeEval)
+    internal fun hf67HardRepair(state: MagiState, schedule: Array<IntArray>, rng: Random): RepairResult {
+        val p = cachedProblem(state)
+        val out = hf66DataHardening(state, schedule, "hf67")
         val logs = ArrayList<MirrorLog>()
         var changed = 0
 

@@ -128,15 +128,14 @@ internal object AdaptiveBlockSwapPolish {
         mode: WindowMode = WindowMode.PARTIAL_MOVABLE_DAYS,
         strictMaxLen: Int = 7,
         strictLongLen: Int = 14,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult = when (mode) {
         WindowMode.STRICT_WHOLE_WINDOW -> applyStrictWholeWindow(
-            state, schedule, StrictParams(maxPasses, maxEvaluations, strictMaxLen, strictLongLen), shouldStop, quantitativeRangeEval,
+            state, schedule, StrictParams(maxPasses, maxEvaluations, strictMaxLen, strictLongLen), shouldStop,
         )
         WindowMode.PARTIAL_MOVABLE_DAYS -> applyAdaptiveBlockSwapPolish(
             state, schedule,
             CyclicParams(blockLens, maxPasses, candidatesPerLength, maxEvaluations, maxFocusStaff, maxCycle, maxCycleVisits),
-            shouldStop, quantitativeRangeEval,
+            shouldStop,
         )
     }
 
@@ -146,8 +145,7 @@ internal object AdaptiveBlockSwapPolish {
         schedule: Array<IntArray>,
         params: CyclicParams,
         shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
-    ): V6HotfixPasses.CyclicSwapResult = CyclicSession(state, schedule, params, shouldStop, quantitativeRangeEval).run()
+    ): V6HotfixPasses.CyclicSwapResult = CyclicSession(state, schedule, params, shouldStop).run()
 
     /** 違反アンカー型・可変長窓の一括交換。詳細は [StrictSession]。 */
     fun applyStrictWholeWindow(
@@ -155,8 +153,7 @@ internal object AdaptiveBlockSwapPolish {
         schedule: Array<IntArray>,
         params: StrictParams,
         shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
-    ): V6HotfixPasses.CyclicSwapResult = StrictSession(state, schedule, params, shouldStop, quantitativeRangeEval).run()
+    ): V6HotfixPasses.CyclicSwapResult = StrictSession(state, schedule, params, shouldStop).run()
 
     // ===== 両モード共通の部品 =====
 
@@ -249,7 +246,6 @@ internal object AdaptiveBlockSwapPolish {
         private val shouldStop: () -> Boolean,
         private val pinBlocks: PinBlockAttribution,
         private val rejects: RejectStats,
-        private val quantitativeRangeEval: Boolean = false,
     ) {
         var evaluated = 0
             private set
@@ -265,7 +261,7 @@ internal object AdaptiveBlockSwapPolish {
                 val report: ViolationReport
                 val pinRegression: Boolean
                 try {
-                    report = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                    report = UnifiedViolationChecker.check(state, work)
                     pinRegression = exactPinRegression(p, base, work)
                     if (pinRegression && betterReport(report, bestRep)) pinBlocks.record(p, base, work)
                 } finally {
@@ -320,15 +316,14 @@ internal object AdaptiveBlockSwapPolish {
         schedule: Array<IntArray>,
         private val params: CyclicParams,
         private val shouldStop: () -> Boolean,
-        private val quantitativeRangeEval: Boolean = false,
     ) {
-        private val p = Problem(state, quantitativeRangeEval)
+        private val p = Problem(state)
         private val work = normalizeSchedule(schedule, p)
-        private val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        private val before = UnifiedViolationChecker.check(state, work)
         private val penalty = PersonalPenalty(p)
         private val pinBlocks = PinBlockAttribution()
         private val rejects = RejectStats()
-        private val keepBest = KeepBest(state, p, work, params.maxEvaluations, shouldStop, pinBlocks, rejects, quantitativeRangeEval)
+        private val keepBest = KeepBest(state, p, work, params.maxEvaluations, shouldStop, pinBlocks, rejects)
         private val lengths = params.blockLens.asSequence().filter { it in 1..p.T }.distinct().sorted().toList()
         private val cycleCap = params.maxCycle.coerceAtLeast(2).coerceAtMost(MAX_PACKED_CYCLE)
         /** プールは (ブロック長 × 巡回人数 2..cycleCap) ごと。 */
@@ -731,15 +726,14 @@ internal object AdaptiveBlockSwapPolish {
         schedule: Array<IntArray>,
         private val params: StrictParams,
         private val shouldStop: () -> Boolean,
-        private val quantitativeRangeEval: Boolean = false,
     ) {
-        private val p = Problem(state, quantitativeRangeEval)
+        private val p = Problem(state)
         private val work = normalizeSchedule(schedule, p)
-        private val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        private val before = UnifiedViolationChecker.check(state, work)
         private val penalty = PersonalPenalty(p)
         private val pinBlocks = PinBlockAttribution()
         private val rejects = RejectStats()
-        private val keepBest = KeepBest(state, p, work, params.maxEvaluations, shouldStop, pinBlocks, rejects, quantitativeRangeEval)
+        private val keepBest = KeepBest(state, p, work, params.maxEvaluations, shouldStop, pinBlocks, rejects)
         private val lMax = min(params.maxLen.coerceAtLeast(1), p.T)
         private val lLong = min(params.longLen.coerceAtLeast(lMax), p.T)
         /** 規則由来の窓長: c1 の窓長・連続規則のパターン長・7（週）。 */

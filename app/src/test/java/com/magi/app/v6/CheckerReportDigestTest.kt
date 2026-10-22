@@ -49,7 +49,7 @@ class CheckerReportDigestTest {
                 val j = rnd.nextInt(s[i].size)
                 s[i][j] = rnd.nextInt(-1, k)
             }
-            md.update(canon(UnifiedViolationChecker.check(st, s, quantitativeRangeEval = n % 7 == 0)).toByteArray())
+            md.update(canon(UnifiedViolationChecker.check(st, s)).toByteArray())
         }
         val hex = md.digest().joinToString("") { "%02x".format(it) }
         assertEquals(EXPECTED, hex)

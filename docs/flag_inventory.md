@@ -178,3 +178,4 @@
 - P2d-②c: #27 wishPinStrict を常時にしてフラグと引数を外した。
 - P2d-②d: #3 filterC3nIncrease（UI 残骸ごと）・#12 ejectionPipelineRounds・#14 ejectionChainSwapMoves を常時、#16 ejectionUseLeftover・#33 c3nWallShortStall・#35 c3nWallLegacy を削除（決定 1）。
 - P2d-③: #2 c1MoveARepair・#22 softCascade・#30 postChainRollbackCountsZero・#31 stallPolishInjection・#32 prePostDescent・#38 adaptiveStall、2 章の c2Polish*・c42FlowPolish*・c1ComponentRepair*・c3nMarginLns*・countChainReactivate・restZeroWindowLnsEnabled・fairAchievementDirection・dayAssignIdentityFallback、3 章 rsiFocusRotationPersist を削除。
+- P2d-④: 2 章 quantitativeRangeEval を Kotlin・C++ から撤去（JNI meta[7] は 0 固定）。

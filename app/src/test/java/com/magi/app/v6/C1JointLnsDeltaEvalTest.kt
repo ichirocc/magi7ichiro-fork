@@ -71,21 +71,21 @@ class C1JointLnsDeltaEvalTest {
     }
 
     private fun assertBundlesMatch(label: String, st: MagiState, board: Array<IntArray>, q: Boolean, n: Int, seed: Long) {
-        val p = cachedProblem(st, q)
+        val p = cachedProblem(st)
         val rng = Random(seed)
         val bundles = List(n) { randomBundle(rng, board, p.K) }
         val got = C1JointLnsPolish.DeltaPool(p).evaluate(board, bundles)
         for ((idx, cells) in bundles.withIndex()) {
             val next = board.copy2D()
             for (c in cells.indices step 3) next[cells[c]][cells[c + 1]] = cells[c + 2]
-            val want = UnifiedViolationChecker.check(st, next, quantitativeRangeEval = q)
+            val want = UnifiedViolationChecker.check(st, next)
             val tag = "$label q=$q bundle#$idx ${cells.toList()}"
             for (fam in MirrorKeys.all) assertEquals("$tag $fam", want.breakdown[fam] ?: 0, got[idx].breakdown[fam] ?: 0)
             assertEquals("$tag hard", want.hard, got[idx].hard)
             assertEquals("$tag total", want.total, got[idx].total)
             assertEquals("$tag weighted", want.weightedScore, got[idx].weightedScore, 0.0)
-            assertEquals("$tag worstWorsened", worstWorsenedFamily(want, UnifiedViolationChecker.check(st, board, quantitativeRangeEval = q)),
-                worstWorsenedFamily(got[idx], UnifiedViolationChecker.check(st, board, quantitativeRangeEval = q)))
+            assertEquals("$tag worstWorsened", worstWorsenedFamily(want, UnifiedViolationChecker.check(st, board)),
+                worstWorsenedFamily(got[idx], UnifiedViolationChecker.check(st, board)))
         }
     }
 
@@ -94,7 +94,7 @@ class C1JointLnsDeltaEvalTest {
         for (name in fixtures) {
             val st = load(name)
             val board = normalizeSchedule(st.schedule.toIntArray2D(), cachedProblem(st))
-            for (q in listOf(false, true)) assertBundlesMatch(name, st, board, q, 300, name.hashCode().toLong())
+            for (q in listOf(false)) assertBundlesMatch(name, st, board, q, 300, name.hashCode().toLong())
         }
     }
 
@@ -103,7 +103,7 @@ class C1JointLnsDeltaEvalTest {
         for (seed in 1L..6L) {
             val st = synthetic(seed)
             val board = normalizeSchedule(st.schedule.toIntArray2D(), cachedProblem(st))
-            for (q in listOf(false, true)) assertBundlesMatch("synthetic$seed", st, board, q, 400, seed * 31)
+            for (q in listOf(false)) assertBundlesMatch("synthetic$seed", st, board, q, 400, seed * 31)
         }
     }
 
@@ -111,7 +111,6 @@ class C1JointLnsDeltaEvalTest {
         fun run() = C1JointLnsPolish.apply(
             st, board.copy2D(),
             C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = evals),
-            quantitativeRangeEval = q,
         )
         return run() to run()
     }
@@ -119,7 +118,7 @@ class C1JointLnsDeltaEvalTest {
     private fun assertReproducedAndChecked(label: String, st: MagiState, q: Boolean, a: V6HotfixPasses.CyclicSwapResult, b: V6HotfixPasses.CyclicSwapResult) {
         assertTrue("$label board", a.newSchedule.contentDeepEquals(b.newSchedule))
         assertEquals("$label applied", a.applied, b.applied)
-        val rep = UnifiedViolationChecker.check(st, b.newSchedule, quantitativeRangeEval = q)
+        val rep = UnifiedViolationChecker.check(st, b.newSchedule)
         assertEquals("$label breakdown", rep.breakdown, b.report!!.breakdown)
         assertEquals("$label weighted", rep.weightedScore, b.report!!.weightedScore, 0.0)
     }
@@ -135,7 +134,7 @@ class C1JointLnsDeltaEvalTest {
         }
         for (seed in 1L..4L) {
             val st = synthetic(seed)
-            for (q in listOf(false, true)) {
+            for (q in listOf(false)) {
                 val (a, b) = runTwice(st, st.schedule.toIntArray2D(), q, 1500)
                 assertReproducedAndChecked("synthetic$seed q=$q", st, q, a, b)
                 applied += b.applied

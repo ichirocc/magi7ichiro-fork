@@ -70,11 +70,10 @@ internal object PersonalBalanceJointLnsPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xA97B4L,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val rootSchedule = normalizeSchedule(schedule, p)
-        val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
+        val rootReport = UnifiedViolationChecker.check(state, rootSchedule)
         if (p.S <= 0 || p.T <= 0 || p.K <= 0) return noOp(rootSchedule, rootReport, "対象なし")
         if (config.beamWidth <= 0 || config.maxDepth <= 0 || config.maxRestarts <= 0 ||
             config.maxFocusStaff <= 0 || config.maxGoals <= 0 || config.maxVariantsPerGoal <= 0 ||
@@ -139,7 +138,7 @@ internal object PersonalBalanceJointLnsPolish {
                     while (from < pending.size && !haltNow()) {
                         val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
                         val evaluated = mapParallel(chunk) {
-                            UnifiedViolationChecker.check(state, it.schedule, quantitativeRangeEval = quantitativeRangeEval) to personalPenaltyByStaff(p, it.schedule)
+                            UnifiedViolationChecker.check(state, it.schedule) to personalPenaltyByStaff(p, it.schedule)
                         }
                         generated += chunk.size; evaluations += chunk.size
                         from += chunk.size
@@ -185,7 +184,7 @@ internal object PersonalBalanceJointLnsPolish {
             System.nanoTime() >= deadline -> "期限"
             else -> null
         }
-        val checked = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
+        val checked = UnifiedViolationChecker.check(state, best.schedule)
         val checkedPersonal = personalPenaltyByStaff(p, best.schedule)
         // [receiving-code-review] focusTotal は「悪化させない(<=)」まで緩和。以前は狭義減少(<)を
         // 要求しており、docstring が明記する「下限到達済みの違反は、同じ下限値の別配置が正式目的

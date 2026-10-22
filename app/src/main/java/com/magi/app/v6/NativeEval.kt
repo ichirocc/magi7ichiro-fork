@@ -11,7 +11,7 @@ object NativeEval {
         if (!NativeBridge.available) return 0L
         val s = p.S; val t = p.T; val k = p.K; val g = p.G
         // [3.603.0] JNI meta 配列は Int 固定＝休が無い設定は -1 を渡す（C++ 側の「休なし」センチネルと同じ扱い）。
-        val meta = intArrayOf(s, t, k, g, p.restIdx ?: -1, p.dow0, if (p.use2) 1 else 0, if (p.quantitativeRangeEval) 1 else 0)
+        val meta = intArrayOf(s, t, k, g, p.restIdx ?: -1, p.dow0, if (p.use2) 1 else 0, 0)   // meta[7]＝旧 quantitativeRangeEval（P2d で撤去、ABI のため 0 固定）
         val staff = IntArray(2 * s) { if (it < s) p.sgrp[it] else p.ssk[it - s] }
         val canDo = IntArray(s * k)
         for (i in 0 until s) for (kk in 0 until k) canDo[i * k + kk] = if (p.canDo(i, kk)) 1 else 0

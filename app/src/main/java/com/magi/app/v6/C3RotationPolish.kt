@@ -19,12 +19,12 @@ internal object C3RotationPolish {
      * パターンが入れ替わり、2〜3日にわたる並びを直せる。実目的関数で評価し改善時のみ採用（keep-best＝
      * 退化なし）。isBetter は HARD を最優先するため、c3n(禁止=HARD) の解消も同時に拾う。
      */
-    fun applyC3SequencePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3SequencePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数
@@ -44,7 +44,7 @@ internal object C3RotationPolish {
             //   "vio-c3/c3m/c3mn"が消える。該当職員の全マーク位置が同様にシャドーイングされていると
             //   anchorStaffから丸ごと漏れ、一度も研磨が試されない。cellFamilies（1セルの全クラス保持）
             //   に切替え、上書きされても検出できるようにする。起点が広がるだけの後方互換な修正。
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
             val anchorStaff = HashSet<Int>()
             for ((key, fams) in rep0.cellFamilies) {
                 if (fams.any { it == "vio-c3" || it == "vio-c3m" || it == "vio-c3mn" }) anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
@@ -80,7 +80,7 @@ internal object C3RotationPolish {
                                 val postObjective = staffObjective(p, work, i) + staffObjective(p, work, i2)
                                 if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }; skipped++; continue }
                             }
-                            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                            val rep = UnifiedViolationChecker.check(state, work)
                             if (adoptionGate(p, workBeforeBlock, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                             else for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }   // 巻き戻し
                         }
@@ -113,12 +113,12 @@ internal object C3RotationPolish {
      * 採用（keep-best＝退化なし）。c1・c3系どちらの違反起点にも使える汎用版。重み・パラメータ不変。
      * 2回の2者交換に分解すると中間で悪化するため山登りでは越えられない局面を、回転1手で跨ぐのが狙い。
      */
-    fun applyBlockRotationPolish(state: MagiState, schedule: Array<IntArray>, anchorClasses: Set<String>, tag: String, maxPasses: Int = 2, shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyBlockRotationPolish(state: MagiState, schedule: Array<IntArray>, anchorClasses: Set<String>, tag: String, maxPasses: Int = 2, shouldStop: () -> Boolean = { false }): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数(有効性ログ用)
@@ -142,7 +142,7 @@ internal object C3RotationPolish {
             //   anchorClassesのマーク位置に更に重い他族が同居する場合そのセルの分類が上書きされ検出漏れ
             //   になる。cellFamilies（1セルの全クラス保持）に切替え、上書きされても検出できるようにする。
             //   起点が広がるだけの後方互換な修正（C1Rotate/C3Rotate 両呼出に共通して適用される）。
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
             if (de != null && !deltaKeyMatches(de, rep0)) de = null
             val anchorStaff = HashSet<Int>()
             for ((key, fams) in rep0.cellFamilies) {
@@ -199,7 +199,7 @@ internal object C3RotationPolish {
                                     if (!deltaKeyBetter(key, bestRep)) {
                                         // 抜き取り検査: 際どい手と一定数ごとの手は正式評価でキーを照合し、食い違えばこの研磨の残りは差分評価を使わない。
                                         if (prescreenNeedsVerify(key, bestRep, prescreened)) {
-                                            val full = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                                            val full = UnifiedViolationChecker.check(state, work)
                                             if (!deltaKeyMatches(d, full)) { de = null; d = null; verified = full; prescreenMismatches++ }
                                         }
                                         if (d != null) {
@@ -208,7 +208,7 @@ internal object C3RotationPolish {
                                         }
                                     }
                                 }
-                                val rep = verified ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                                val rep = verified ?: UnifiedViolationChecker.check(state, work)
                                 if (adoptionGate(p, workBeforeRotate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                                 else {
                                     for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し

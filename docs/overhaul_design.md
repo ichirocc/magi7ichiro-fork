@@ -399,6 +399,11 @@ P2d-③ 済み（2026-10-22、決定 2〜5）: 否決・測定用の腕をコー
 `solveComponent` は単独窓修復と分析テストが使うので残す）、`fairAchievementDirection`、`dayAssignIdentityFallback`、各 `Reactivate` と `targetFamiliesRemain`、
 UI の非表示イベント・セッター・状態 2 つ（`c1MoveARepair`・`stallPolishInjection`）、`PortfolioBudgetBench`。`countChainEnabled`（じっくり）は残す。
 戻すときはこの直前のコミットから取り出す。P0 スナップショット一致・影響クラス 62 件合格。残り: `C3nWallProof.bound()` 系（②d で本番から外れた）は ④ の後に片付ける。
+P2d-④ 済み（2026-10-22、決定 6）: `quantitativeRangeEval`（c2・c41・c41s の量的評価、3.512.0 否決・本番は常に false）を撤去。チェッカー・評価器・Δ評価器・
+C++（`magi_native.cpp` の三項 8 か所・`c2Amount`/`rangeDistance`、TOC 再生成）の分岐を false 側へ畳み、`Problem`・`cachedProblem`・`ProblemCache` の鍵・
+45 ファイルの引数と `PostOptimizationParams`/`V6OptimizerOptions`/`handleOptimize` の引数を外した。JNI の meta[7] は ABI を保つため 0 固定で渡し、C++ は読まない。
+`QuantitativeRangeEvalTest` を削除。`CheckerReportDigestTest` の期待値は基準版 `4e8fe3a` を qre=false だけで走らせても同じ（作り直し不要）。
+P0 スナップショット・チェッカー等価・Δ評価・ネイティブ期待値（ホストの g++ で native-parity と同じ手順、0 不一致）を確認。C# は §9.1 #11。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

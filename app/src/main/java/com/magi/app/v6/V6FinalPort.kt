@@ -474,7 +474,6 @@ object V6FinalPort {
         softPolish: Boolean = false,
         requestedAlgorithm: V6Algorithm = V6Algorithm.AUTO,
         allowImpossible: Boolean = false,
-        quantitativeRangeEval: Boolean = false,
         /** [測定中/backlog#35] ExtraRefineを、後処理後の残りHARDが構造的に解けないと証明済み（covU床のみ／
          *  ForbiddenDiag確定のc3n壁）のときだけ省略する。改善可能なHARD残・HARD=0では従来どおり実行。既定OFF。 */
         extraRefineRequirePostHardDrop: Boolean = false,
@@ -504,15 +503,15 @@ object V6FinalPort {
         val gate = confirmDespiteImpossibleWishes(state, allowImpossible)
         if (!gate.allowed) error(gate.message)
         // [最終番兵用] 入力の評価を保持。万一パイプラインが入力より悪い結果を出した場合に復帰する（多重防御）。
-        val baseProblem = cachedProblem(state, quantitativeRangeEval)
+        val baseProblem = cachedProblem(state)
         // [#41] 手動固定セルは入口で固定の値に合わせる（画面の編集で常に揃っているので通常は同じ盤面）。
         val normInput = baseProblem.withManualPins(normalizeSchedule(schedule, baseProblem))
         // [3.507.0] 番兵の基準は「個人上限 0 のセルを外した入力」。上限 0 のセルは最適化器が置かない（mayPlace）ので、
         //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
-        val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput, quantitativeRangeEval)
-        val inputReport = UnifiedViolationChecker.check(state, cappedInput, quantitativeRangeEval = quantitativeRangeEval)
+        val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput)
+        val inputReport = UnifiedViolationChecker.check(state, cappedInput)
         val capZero = if (cappedCount > 0) CapZeroNotice(cappedCount,
-            UnifiedViolationChecker.check(state, normInput, quantitativeRangeEval = quantitativeRangeEval).hard, inputReport.hard) else null
+            UnifiedViolationChecker.check(state, normInput).hard, inputReport.hard) else null
         val cappedLog = if (capZero != null) listOf(MirrorLog(tag = "CapZero", message = capZero.logLine())) else emptyList()
         val label = runLabel(requestedAlgorithm, seconds)
         val plan = optimizationPlan(seconds)
@@ -526,12 +525,12 @@ object V6FinalPort {
         // full requested budget. AUTO keeps the time-budget-based plan. [review #3] postPolish=false
         // so optimize() does NOT polish internally — the single post chain below owns polishing.
         val opts = if (requestedAlgorithm != V6Algorithm.AUTO) {
-            V6OptimizerOptions(requestedAlgorithm, seconds.coerceAtLeast(1), workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
+            V6OptimizerOptions(requestedAlgorithm, seconds.coerceAtLeast(1), workers, softPolish, restarts = 2, postPolish = false)
         } else when (plan) {
-            is OptimizationPlan.V5 -> V6OptimizerOptions(V6Algorithm.V5, plan.seconds, workers, softPolish, restarts = 1, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
-            is OptimizationPlan.ALNS -> V6OptimizerOptions(V6Algorithm.ALNS, plan.seconds, workers, softPolish, restarts = plan.restarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
-            is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
-            is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
+            is OptimizationPlan.V5 -> V6OptimizerOptions(V6Algorithm.V5, plan.seconds, workers, softPolish, restarts = 1, postPolish = false)
+            is OptimizationPlan.ALNS -> V6OptimizerOptions(V6Algorithm.ALNS, plan.seconds, workers, softPolish, restarts = plan.restarts, postPolish = false)
+            is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false)
+            is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false)
         }
         val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true),   // [HF532移植] optFlags.rectSwap 既定ON
             seed = seed ?: opts.seed, config = config)
@@ -628,7 +627,7 @@ object V6FinalPort {
         val e0Fired = java.util.concurrent.atomic.AtomicBoolean(false)
         fun wishReachedOn(board: Array<IntArray>?, hard: Int): Boolean = board != null && wishFloorReached(hard, wishFloorLogged) {
             try {
-                val r = UnifiedViolationChecker.check(state, board, quantitativeRangeEval = quantitativeRangeEval)
+                val r = UnifiedViolationChecker.check(state, board)
                 r.hard == wishFloorLogged && V6SanityPort.hardAllWishOrigin(wishP, board, r, wishParts.second)
             } catch (_: Exception) { false }
         }
@@ -728,7 +727,7 @@ object V6FinalPort {
                 val ok = wishReachedOn(board, hb)
                 // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
                 val fresh = ok || hb != wishFloorLogged || (board != null &&
-                    runCatching { UnifiedViolationChecker.check(state, board, quantitativeRangeEval = quantitativeRangeEval).hard == hb }.getOrDefault(false))
+                    runCatching { UnifiedViolationChecker.check(state, board).hard == hb }.getOrDefault(false))
                 if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return ok
             }
             return wishReachedCache.get().second
@@ -814,7 +813,7 @@ object V6FinalPort {
             chained.alternatives.mapIndexed { index, sched ->
                 AdaptiveElite(
                     schedule = sched.copy2D(),
-                    report = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = quantitativeRangeEval),
+                    report = UnifiedViolationChecker.check(state, sched),
                     role = HypothesisEpochRole.ELITE_RELINK,
                     worker = index,
                     epoch = 0,
@@ -828,14 +827,13 @@ object V6FinalPort {
             elites = fusionElites,
             shouldStop = integrationStop,
             deadlineMs = integrationDeadline,
-            quantitativeRangeEval = quantitativeRangeEval,
         )
         val tIntegration1 = EngineClock.nowMs()
 
         // 実行開始時の写し（config）から作る＝下の tuningLog も同じ値を使う。
-        val postParams = config.postParams(quantitativeRangeEval)
+        val postParams = config.postParams()
         // [E0B] 希望衝突の床で頭打ちしたら後処理の研磨を丸ごと省き、検査・HF70 だけにする（最終番兵は下で通常どおり）。
-        val post = if (e0bSkip()) V6HotfixPasses.minimalPost(state, integrated.schedule, label.tech, quantitativeRangeEval)
+        val post = if (e0bSkip()) V6HotfixPasses.minimalPost(state, integrated.schedule, label.tech)
         else V6HotfixPasses.runPostOptimization(
             state, integrated.schedule, label.tech,
             shouldStop = postShouldStop,
@@ -1043,10 +1041,10 @@ object V6FinalPort {
             message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
             capZeroLogs(state, baseProblem, pinSafeStages)
         val capSafeStages = excludeCapZeroStages(baseProblem, pinSafeStages) +
-            clearedCapZeroStages(state, baseProblem, pinSafeStages, quantitativeRangeEval)
+            clearedCapZeroStages(state, baseProblem, pinSafeStages)
         val extLog = extBanLogs(state, baseProblem, cappedInput, capSafeStages)
         val safeStages = excludeExtBanStages(baseProblem, cappedInput, capSafeStages) +
-            revertedExtBanStages(state, baseProblem, cappedInput, capSafeStages, quantitativeRangeEval)
+            revertedExtBanStages(state, baseProblem, cappedInput, capSafeStages)
         val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
@@ -1413,13 +1411,13 @@ object V6FinalPort {
      *  探索が上限0のセルを抱えたまま進むと全段が [excludeCapZeroStages] で外れ、入口の盤面へ戻って探索の成果を丸ごと失う。
      *  これを候補に足すだけなので選ばれる結果は悪化しない。外し切れない盤面・手動固定を崩す盤面は足さない。 */
     internal fun clearedCapZeroStages(
-        state: MagiState, p: Problem, stages: List<StageCandidate>, quantitativeRangeEval: Boolean,
+        state: MagiState, p: Problem, stages: List<StageCandidate>,
     ): List<StageCandidate> =
         stages.drop(1).filter { p.capZeroCells(it.sched).isNotEmpty() }.mapNotNull { st ->
-            val cleared = HardRepairCore.clearCappedCells(state, st.sched, quantitativeRangeEval).first
+            val cleared = HardRepairCore.clearCappedCells(state, st.sched).first
             if (p.capZeroCells(cleared).isNotEmpty() || !p.holdsManualPins(cleared)) null
             else StageCandidate("${st.label}（上限0を外す）", cleared,
-                UnifiedViolationChecker.check(state, cleared, quantitativeRangeEval = quantitativeRangeEval))
+                UnifiedViolationChecker.check(state, cleared))
         }
 
     /** [excludeCapZeroStages] で外した段ごとの W ログ（違反セルは先頭 5 件）。 */
@@ -1439,7 +1437,7 @@ object V6FinalPort {
 
     /** 禁止を新しく置いた段（入力以外）から、そのセルを入力の値へ戻した盤面を作る。候補に足すだけなので選ばれる結果は悪化しない。 */
     internal fun revertedExtBanStages(
-        state: MagiState, p: Problem, input: Array<IntArray>, stages: List<StageCandidate>, quantitativeRangeEval: Boolean,
+        state: MagiState, p: Problem, input: Array<IntArray>, stages: List<StageCandidate>,
     ): List<StageCandidate> =
         stages.drop(1).mapNotNull { st ->
             val cells = p.extBanNewCells(input, st.sched)
@@ -1448,7 +1446,7 @@ object V6FinalPort {
             for ((i, j) in cells) back[i][j] = input[i][j]
             if (!p.keepsExtBan(input, back) || !p.holdsManualPins(back) || p.capZeroCells(back).isNotEmpty()) null
             else StageCandidate("${st.label}（拡張希望の禁止を戻す）", back,
-                UnifiedViolationChecker.check(state, back, quantitativeRangeEval = quantitativeRangeEval))
+                UnifiedViolationChecker.check(state, back))
         }
 
     /** [excludeExtBanStages] で外した段ごとの W ログ（候補生成の漏れの目印。セルは先頭 5 件）。 */

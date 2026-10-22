@@ -46,7 +46,7 @@ object RelaxTrial {
 
     /** 緩める候補の母集団: 担当できて、休み以外で、個人の上限が 0 の (職員, シフト)。 */
     fun upperZeroWalls(state: MagiState): List<Pair<Int, Int>> {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         val out = ArrayList<Pair<Int, Int>>()
         for (i in 0 until p.S) for (k in 0 until p.K)
             if (k != p.restIdx && p.canDo(i, k) && p.rangeHi[i][k] == 0) out += i to k
@@ -55,7 +55,7 @@ object RelaxTrial {
 
     /** 勤務表に手で置いてある上限 0 の勤務（希望で固定したセルは除く）。本実行の入口の clear がこれを外す。 */
     fun handPlaced(state: MagiState, schedule: Array<IntArray>): List<Relax> {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         return usedWalls(p, upperZeroWalls(state), schedule)
     }
 
@@ -88,7 +88,7 @@ object RelaxTrial {
         val window = anchorWindow(state, rep0, staff, day) ?: return null
         val walls = upperZeroWalls(state)
         if (walls.isEmpty()) return NoWall
-        val p0 = cachedProblem(state, false)
+        val p0 = cachedProblem(state)
         val pre = usedWalls(p0, walls, schedule)
         val control = search(state, schedule, window, shouldStop) ?: return unavailableOrStopped(shouldStop)
         val stH = apply(state, pre)
@@ -122,7 +122,7 @@ object RelaxTrial {
     fun anchors(state: MagiState, schedule: Array<IntArray>, max: Int = 3): List<Pair<Int, Int>> {
         val rep = UnifiedViolationChecker.check(state, schedule.copy2D())
         val self = V6SanityPort.wishSelfConflicts(state).flatMapTo(HashSet()) { it.wishKeys }
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         val out = ArrayList<Pair<Int, Int>>()
         for (i in 0 until p.S) {
             var j = 0
@@ -166,7 +166,7 @@ object RelaxTrial {
 
     /** 起点の窓: 起点の職員の、起点の日を含む連続した必須違反セルの日の範囲 ±1。起点が必須違反でなければ null。 */
     internal fun anchorWindow(state: MagiState, rep: ViolationReport, staff: Int, day: Int): IntRange? {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         fun isHard(j: Int) = rep.cellFamilies["$staff,$j"]?.any { it in HARD_CELL } == true
         if (staff !in 0 until p.S || day !in 0 until p.T || !isHard(day)) return null
         var a = day; var b = day
@@ -184,7 +184,7 @@ object RelaxTrial {
      * 1 つを先に当ててから VCR。いちばん良い盤面（keep-best と同じ比較）を返す。clear が例外なら null。
      */
     internal fun search(state: MagiState, schedule: Array<IntArray>, window: IntRange, shouldStop: () -> Boolean): Found? {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         val base = try { HardRepairCore.clearCappedCells(state, schedule.copy2D()).first } catch (e: Exception) { return null }
         val baseHard = UnifiedViolationChecker.check(state, base.copy2D()).hard
         var best = vcr(state, base, shouldStop)
@@ -203,7 +203,7 @@ object RelaxTrial {
     }
 
     private fun vcr(state: MagiState, board: Array<IntArray>, shouldStop: () -> Boolean): Array<IntArray> =
-        ViolationComponentRepair.repair(state, board.copy2D(), emptyList(), ViolationComponentRepair.Params(), shouldStop, quantitativeRangeEval = false).newSchedule
+        ViolationComponentRepair.repair(state, board.copy2D(), emptyList(), ViolationComponentRepair.Params(), shouldStop).newSchedule
 
     /** [board] が上限 0 の (職員, シフト) を使っている組（希望で固定したセルは除く）。上げ幅は最小の 1（`mayPlace` は上限 0 だけを外す）。 */
     private fun usedWalls(p: Problem, walls: List<Pair<Int, Int>>, board: Array<IntArray>): List<Relax> =
@@ -220,7 +220,7 @@ object RelaxTrial {
         if (shouldStop()) Stopped else Unavailable("休みシフトが設定されていません")
 
     private fun unavailableReason(state: MagiState, schedule: Array<IntArray>): String? {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         if (schedule.size != p.S || schedule.any { it.size != p.T }) return "勤務表の大きさが設定と合いません"
         if (schedule.any { row -> row.any { it !in 0 until p.K } }) return "未割当のセルがあります"
         return null

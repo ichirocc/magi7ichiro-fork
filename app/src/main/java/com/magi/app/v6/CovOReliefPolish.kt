@@ -19,11 +19,11 @@ internal object CovOReliefPolish {
     fun apply(
         state: MagiState, schedule: Array<IntArray>,
         maxMoves: Int = 64, maxEvaluations: Int = 3_000,
-        shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
+        shouldStop: () -> Boolean = { false },
     ): Result {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0; var evaluations = 0
         val adopted = ArrayList<String>()
@@ -55,7 +55,7 @@ internal object CovOReliefPolish {
                         if (evaluations >= maxEvaluations) break
                         tried = true; evaluations++
                         work[i][j] = m
-                        val after = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                        val after = UnifiedViolationChecker.check(state, work)
                         work[i][j] = k
                         if (betterReport(after, bestAfter ?: bestRep)) { bestI = i; bestM = m; bestAfter = after }
                         else worstWorsenedFamily(after, bestRep)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }

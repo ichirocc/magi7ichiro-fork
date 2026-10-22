@@ -32,9 +32,9 @@ class EliteIntegrationQuantitativeTest {
         val days = 5
         val state = buildState(List(4) { List(days) { 0 } })
         val root = Array(4) { IntArray(days) }
-        val res = EliteIntegrationPolish.apply(state, root, emptyList(), { false }, EngineClock.nowMs() + 60_000L, quantitativeRangeEval = true)
+        val res = EliteIntegrationPolish.apply(state, root, emptyList(), { false }, EngineClock.nowMs() + 60_000L)
         assertEquals(12, res.report.breakdown["c2"])
-        val quant = UnifiedViolationChecker.check(state, res.schedule, quantitativeRangeEval = true)
+        val quant = UnifiedViolationChecker.check(state, res.schedule)
         assertEquals(quant.weightedScore, res.report.weightedScore, 0.0)
         assertTrue("この盤面は評価モードで差が出る（二値は 4）",
             UnifiedViolationChecker.check(state, res.schedule).breakdown["c2"] != res.report.breakdown["c2"])

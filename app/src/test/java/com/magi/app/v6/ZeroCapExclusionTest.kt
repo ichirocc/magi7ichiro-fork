@@ -143,7 +143,7 @@ class ZeroCapExclusionTest {
     @Test
     fun clearedCapZeroStagesAddsTheStageWithCappedCellsRemoved() {
         val s = state()
-        val p = cachedProblem(s, false)
+        val p = cachedProblem(s)
         val raw = s.schedule.map { it.toIntArray() }.toTypedArray()
         val cleared = HardRepairCore.clearCappedCells(s, raw).first
         val rep = { b: Array<IntArray> -> UnifiedViolationChecker.check(s, b) }
@@ -152,7 +152,7 @@ class ZeroCapExclusionTest {
             V6FinalPort.StageCandidate("探索", raw, rep(raw)),
             V6FinalPort.StageCandidate("統合", cleared, rep(cleared)),
         )
-        val added = V6FinalPort.clearedCapZeroStages(s, p, stages, false)
+        val added = V6FinalPort.clearedCapZeroStages(s, p, stages)
         assertEquals(listOf("探索（上限0を外す）"), added.map { it.label })
         assertEquals(0, countA(added[0].sched, 0))
         assertTrue(p.capZeroCells(added[0].sched).isEmpty())
@@ -162,7 +162,7 @@ class ZeroCapExclusionTest {
     @Test
     fun personSwapKickDoesNotMoveCappedShiftOntoCappedStaff() {
         val s = state()
-        val p = cachedProblem(s, false)
+        val p = cachedProblem(s)
         for (seed in 1L..5L) {
             val b = arrayOf(intArrayOf(0, 0, 0, 0), intArrayOf(1, 1, 1, 1), intArrayOf(1, 1, 1, 1))
             V6NativeOptimizer.personSwapKick(p, b, java.util.Random(seed), pairs = 1)

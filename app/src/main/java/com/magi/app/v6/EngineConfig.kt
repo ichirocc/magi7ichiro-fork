@@ -16,8 +16,7 @@ data class EngineConfig(
     val countChainPolish: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
 ) {
-    fun postParams(quantitativeRangeEval: Boolean) = V6HotfixPasses.PostOptimizationParams(
-        quantitativeRangeEval = quantitativeRangeEval,
+    fun postParams() = V6HotfixPasses.PostOptimizationParams(
         combineExhaustPairs = combineExhaustPairs,
         aptFairSoftTolerance = aptFairSoftTolerance,
         countChainEnabled = countChainPolish,

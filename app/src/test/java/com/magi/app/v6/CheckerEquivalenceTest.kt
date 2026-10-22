@@ -35,8 +35,8 @@ class CheckerEquivalenceTest {
     }
 
     private fun assertSame(label: String, st: MagiState, s: Array<IntArray>, q: Boolean) {
-        val want = canon(CheckerReferenceV0.check(st, s, quantitativeRangeEval = q))
-        val got = canon(UnifiedViolationChecker.check(st, s, quantitativeRangeEval = q))
+        val want = canon(CheckerReferenceV0.check(st, s))
+        val got = canon(UnifiedViolationChecker.check(st, s))
         assertEquals(label, want, got)
     }
 
@@ -78,7 +78,7 @@ class CheckerEquivalenceTest {
         val names = listOf("oct2026_grid_state.json", "golden_state.json", "sept2026_state.json", "sample_state_v6.json",
             "full_coverage_state.json", "blocked_covu_state.json")
         val fixtures = names.map(::load)
-        for ((name, st) in names.zip(fixtures)) for (q in listOf(false, true)) assertSame("$name q=$q", st, st.schedule.toIntArray2D(), q)
+        for ((name, st) in names.zip(fixtures)) for (q in listOf(false)) assertSame("$name q=$q", st, st.schedule.toIntArray2D(), q)
         val rnd = Random(20261003)
         repeat(4000) { n ->
             val st = fixtures[n % fixtures.size]

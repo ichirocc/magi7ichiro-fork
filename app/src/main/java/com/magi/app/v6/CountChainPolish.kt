@@ -40,12 +40,11 @@ internal object CountChainPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC0C4L,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         var evaluations = 0
@@ -218,7 +217,7 @@ internal object CountChainPolish {
                 // 回数族が正味で悪化していない連鎖だけ正式採点する（他族は checker が決める）。
                 if (depth > 0 && d <= 0.0) {
                     evaluations++
-                    val rep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval)
+                    val rep = UnifiedViolationChecker.check(state, cur)
                     if (betterReport(rep, bestChainRep)) {
                         if (exactPinRegression(p, work, cur)) pinBlocks.record(p, work, cur)
                         else { bestChainRep = rep; bestBoard = cur.copy2D() }

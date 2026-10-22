@@ -112,13 +112,13 @@ internal object C1EjectionChainPolish {
 
     fun apply(
         state: MagiState, schedule: Array<IntArray>, config: Config = Config(),
-        shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false, stats: Stats = Stats(),
+        shouldStop: () -> Boolean = { false }, stats: Stats = Stats(),
         indexOnly: ((List<SeedKey>) -> Unit)? = null, collect: ((PathCandidate) -> Unit)? = null,
     ): V6HotfixPasses.CyclicSwapResult {
         val t0 = EngineClock.nowMs()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        var rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        var rep = UnifiedViolationChecker.check(state, work)
         val before = rep
         entryProbe?.invoke(Array(p.S) { work[it].copyOf() })
         val all = config.origin != Origin.C1
@@ -442,7 +442,7 @@ internal object C1EjectionChainPolish {
                 if (bestPath.isEmpty() || compareReportKey(bestKey, baseKey) >= 0) continue
                 val prev = Array(p.S) { work[it].copyOf() }
                 for (m in bestPath) move(m[0], m[1], m[3])
-                val rep2 = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                val rep2 = UnifiedViolationChecker.check(state, work)
                 deltaMismatch(de, rep2)?.let { diff ->
                     // 差分評価が正式評価と食い違った＝この経路の判断は信用できない。採らずに止め、最後の正式評価済み盤面を返す。
                     stats.mismatch = "起点=${seed.family}(${si},${sj}->${sx}) 手順=" + bestPath.joinToString(";") { "${it[0]},${it[1]}:${it[2]}->${it[3]}" } + " " + diff

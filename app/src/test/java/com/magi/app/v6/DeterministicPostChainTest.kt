@@ -71,7 +71,7 @@ class DeterministicPostChainTest {
         val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 1 }
         val regressedReport = UnifiedViolationChecker.check(s, regressed)
 
-        val chainOn = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+        val chainOn = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s,
             initialReport = report0)
         chainOn.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
         chainOn.adopt(makeCyclicSwapResult(regressed, regressedReport, "Bad"))
@@ -89,7 +89,7 @@ class DeterministicPostChainTest {
         val report0 = UnifiedViolationChecker.check(s, work0)
         val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
         val improvedReport = UnifiedViolationChecker.check(s, improved)
-        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s,
             initialReport = report0)
         chain.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
         chain.adopt(makeCyclicSwapResult(improved.map { it.copyOf() }.toTypedArray(), improvedReport, "Noop"))
@@ -106,7 +106,7 @@ class DeterministicPostChainTest {
         val report0 = UnifiedViolationChecker.check(s, work0)
         val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
         val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 0; it[0][0] = 0 }
-        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s,
             initialReport = report0)
         chain.adopt(makeCyclicSwapResult(improved, UnifiedViolationChecker.check(s, improved), "Good"))
         chain.adopt(makeCyclicSwapResult(regressed, UnifiedViolationChecker.check(s, regressed), "Bad"))
@@ -127,7 +127,7 @@ class DeterministicPostChainTest {
         val lateralReport = UnifiedViolationChecker.check(s, lateral)
         assertTrue(!betterReport(lateralReport, improvedReport) && !betterReport(improvedReport, lateralReport))
         assertTrue(!lateral.contentDeepEquals(improved))
-        val c = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+        val c = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s,
             initialReport = report0)
         c.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
         c.adopt(makeCyclicSwapResult(lateral, lateralReport, "Last"))
@@ -151,7 +151,7 @@ class DeterministicPostChainTest {
         val moved = repOf("apt" to 4, "c2" to 53)
         assertTrue("テスト前提: 素の betterReport は却下", !betterReport(moved, base))
         val after = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
-        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s,
             initialReport = base, aptFairSoftTolerance = tolerance)
         chain.adopt(makeCyclicSwapResult(after, moved, "AptPolish"), toleranceFamily = "apt")
         return chain

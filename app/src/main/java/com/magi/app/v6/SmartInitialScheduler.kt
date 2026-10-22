@@ -27,9 +27,9 @@ object SmartInitialScheduler {
      */
     private const val MAX_DP_STATES = 200_000
 
-    fun generate(state: MagiState, seed: Long = 0x517A2L, quantitativeRangeEval: Boolean = false): ScheduleRunResult {
+    fun generate(state: MagiState, seed: Long = 0x517A2L): ScheduleRunResult {
         val t0 = System.nanoTime()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
         // [3.603.0] 休シフト未設定はここも入口＝ブロックする。
         val restK = restShiftIndex(state) ?: throw IllegalArgumentException("休みシフトが設定されていません")
@@ -169,7 +169,7 @@ object SmartInitialScheduler {
             }
         }
 
-        val report = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval)
+        val report = UnifiedViolationChecker.check(state, schedule)
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
         val log = MirrorLog(
             tag = "SmartInitial",

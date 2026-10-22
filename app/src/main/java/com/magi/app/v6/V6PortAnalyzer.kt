@@ -366,7 +366,6 @@ object V6PortAnalyzer {
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
-        quantitativeRangeEval: Boolean = false,
         /** [3.515.0] surplus(covO)診断は他2呼出元（ViolationComponentRepair・V6FinalPortの残存分析）が
          *  shortfalls しか読まないのに毎回計算していた無駄。falseで丸ごと省く（既定trueで挙動不変）。 */
         includeSurplus: Boolean = true,
@@ -374,7 +373,7 @@ object V6PortAnalyzer {
          *  深追いする（数秒かかりうるためライブ診断では既定false、経緯: history 3.515.0）。 */
         deepSurplus: Boolean = false,
     ): CoverageDiagnosis {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
         val shortfalls = diagnoseShortfalls(state, p, norm, cov)
@@ -597,7 +596,7 @@ object V6PortAnalyzer {
                                 probeBudget--
                                 probedAny = true
                                 probe[i][j] = m
-                                val after = UnifiedViolationChecker.check(state, probe, quantitativeRangeEval = p.quantitativeRangeEval)
+                                val after = UnifiedViolationChecker.check(state, probe)
                                 probe[i][j] = k
                                 if (betterReport(after, report)) { freeImproving++; improvedHere = true; break }
                                 worstWorsenedFamily(after, report)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }

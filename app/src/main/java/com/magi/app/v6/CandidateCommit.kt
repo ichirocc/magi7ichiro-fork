@@ -52,17 +52,16 @@ internal object CandidateCommit {
     internal fun commitBestMove(
         state: MagiState, sched: Array<IntArray>,
         baseline: ViolationReport, candidates: List<List<IntArray>>,
-        quantitativeRangeEval: Boolean = false,
     ): ViolationReport? {
         var bestOps: List<IntArray>? = null
         var bestRep: ViolationReport? = null
-        val p = if (candidates.isEmpty()) null else cachedProblem(state, quantitativeRangeEval)
+        val p = if (candidates.isEmpty()) null else cachedProblem(state)
         for (ops in candidates) {
             // 拡張希望: 値が変わるセルに禁止の値を置く候補は捨てる
             if (p != null && p.hasExtBan && ops.any { it[2] != sched[it[0]][it[1]] && p.extBanned(it[0], it[1], it[2]) }) continue
             val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
             for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-            val rep = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = quantitativeRangeEval)
+            val rep = UnifiedViolationChecker.check(state, sched)
             for (idx in ops.indices) sched[ops[idx][0]][ops[idx][1]] = saved[idx]
             if (betterReport(rep, baseline) && (bestRep == null || betterReport(rep, bestRep!!))) {
                 bestOps = ops; bestRep = rep

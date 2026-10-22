@@ -12,9 +12,9 @@ class PostWasteRemovalTest {
 
     /** 3 者回転を盤面に当てたあとの差分キーが、正式評価の (hard, weightedScore, total) と毎手一致する（群をまたぐ組も含む）。 */
     @Test fun deltaKeyAgreesWithCheckerOnRotations() {
-        for (q in listOf(false, true)) {
+        for (q in listOf(false)) {
             val st = load("sept2026_state.json")
-            val p = Problem(st, q)
+            val p = Problem(st)
             val work = normalizeSchedule(st.schedule.toIntArray2D(), p)
             val de = DeltaEvaluator(p); de.reset(work)
             val rng = kotlin.random.Random(23)
@@ -29,7 +29,7 @@ class PostWasteRemovalTest {
                     work[a][j + t] = sb; work[b][j + t] = sc; work[c][j + t] = sa
                     de.apply(a, j + t, sb); de.apply(b, j + t, sc); de.apply(c, j + t, sa)
                 }
-                val rep = UnifiedViolationChecker.check(st, work, quantitativeRangeEval = q)
+                val rep = UnifiedViolationChecker.check(st, work)
                 assertTrue("q=$q", C3RotationPolish.deltaKeyMatches(de, rep))
                 assertArrayEquals(longArrayOf(rep.hard.toLong(), rep.weightedScore.toLong(), rep.total.toLong()), de.reportKey())
                 assertEquals(false, C3RotationPolish.deltaKeyBetter(de.reportKey(), rep))
@@ -71,11 +71,11 @@ class PostWasteRemovalTest {
             if (n > 0 && "$i,$k" !in ranges) ranges["$i,$k"] = com.magi.app.model.Range("$n", "")
         }
         val st = st0.copy(staffRange = ranges)
-        for (q in listOf(false, true)) {
-            assertEquals(0, UnifiedViolationChecker.check(st, normalizeSchedule(s0, Problem(st, q)), quantitativeRangeEval = q).breakdown["low"] ?: 0)
+        for (q in listOf(false)) {
+            assertEquals(0, UnifiedViolationChecker.check(st, normalizeSchedule(s0, Problem(st))).breakdown["low"] ?: 0)
             val anchors = setOf("vio-c3", "vio-c3m", "vio-c3mn", "vio-c1")
-            val on = C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1, quantitativeRangeEval = q)
-            on.report?.let { assertEquals("q=$q", UnifiedViolationChecker.check(st, on.newSchedule, quantitativeRangeEval = q).weightedScore, it.weightedScore, 0.0) }
+            val on = C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1)
+            on.report?.let { assertEquals("q=$q", UnifiedViolationChecker.check(st, on.newSchedule).weightedScore, it.weightedScore, 0.0) }
             assertTrue("q=$q 食い違いで止めていない", on.logs.none { "食い違い" in it.message })
         }
     }

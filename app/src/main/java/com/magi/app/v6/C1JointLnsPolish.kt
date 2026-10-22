@@ -97,11 +97,10 @@ internal object C1JointLnsPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC1A11L,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val rootSchedule = normalizeSchedule(schedule, p)
-        val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
+        val rootReport = UnifiedViolationChecker.check(state, rootSchedule)
         val rootC1 = rootReport.breakdown["c1"] ?: 0
         if (p.cons1.isEmpty() || rootC1 <= 0 || p.T <= 0 || p.S <= 0) {
             return V6HotfixPasses.CyclicSwapResult(
@@ -206,7 +205,7 @@ internal object C1JointLnsPolish {
                     while (from < pending.size && !haltNow()) {
                         val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
                         val reports = if (deltaPool != null) deltaPool.evaluate(parent.schedule, chunk.map { it.cells!! })
-                            else mapParallel(chunk) { UnifiedViolationChecker.check(state, it.next!!, quantitativeRangeEval = quantitativeRangeEval) }
+                            else mapParallel(chunk) { UnifiedViolationChecker.check(state, it.next!!) }
                         generated += chunk.size; evaluations += chunk.size
                         from += chunk.size
                         for ((idx, pair) in chunk.withIndex()) {
@@ -269,7 +268,7 @@ internal object C1JointLnsPolish {
         }
 
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
-        val finalReport = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
+        val finalReport = UnifiedViolationChecker.check(state, best.schedule)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
         val valid = best !== root && finalC1 < rootC1 && better(finalReport, rootReport) &&
             !pinBlocks.blocksImproving(p, rootSchedule, best.schedule)

@@ -31,10 +31,9 @@ internal object CheckerReferenceV0 {
     fun check(
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
-        quantitativeRangeEval: Boolean = false,
     ): ViolationReport {
         val t0 = System.nanoTime()
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val scratch = RefScratch(p)
         val s = scratch.normalize(schedule, p)
         // [3.395.0/高速化] 集計は添字加算の IntArray で行い、最後に `MirrorKeys.all` の順で Map へ起こす
@@ -129,10 +128,7 @@ internal object CheckerReferenceV0 {
         for (c in p.cons2) {
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
-                if (p.quantitativeRangeEval) {
-                    val amt = c2Amount(counts[i][c.shiftIdx], c.count)
-                    if (amt > 0) { inc("c2", amt.toInt()); markCount(i, c.shiftIdx, "c2") }
-                } else if (counts[i][c.shiftIdx] < c.count) {
+                if (counts[i][c.shiftIdx] < c.count) {
                     inc("c2")
                     markCount(i, c.shiftIdx, "c2")
                 }
@@ -143,10 +139,7 @@ internal object CheckerReferenceV0 {
             for (j in 0 until p.T) {
                 var z = 0
                 for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
-                if (p.quantitativeRangeEval) {
-                    val amt = rangeDistance(z, c.l, c.u)
-                    if (amt > 0) { inc("c41", amt.toInt()); markNeed(c.shiftIdx, j, "c41") }
-                } else if (z < c.l || z > c.u) {
+                if (z < c.l || z > c.u) {
                     inc("c41")
                     markNeed(c.shiftIdx, j, "c41")
                 }
@@ -187,10 +180,7 @@ internal object CheckerReferenceV0 {
             for (j in 0 until p.T) {
                 var z = 0
                 for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
-                if (p.quantitativeRangeEval) {
-                    val amt = rangeDistance(z, c.l, c.u)
-                    if (amt > 0) { inc("c41s", amt.toInt()); markNeed(c.shiftIdx, j, "c41s") }
-                } else if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
+                if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
             }
         }
         for (c in p.cons42s) {

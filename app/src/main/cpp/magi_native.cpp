@@ -20,82 +20,80 @@
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
 // ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
-//  L  103  fn     jround
-//  L  105  struct C1r
-//  L  106  struct C2r
-//  L  107  struct C41r
-//  L  108  struct C42r
-//  L  114  fn     c42PairCount
-//  L  119  fn     c2Amount
-//  L  123  fn     rangeDistance
-//  L  126  struct C3r
-//  L  127  struct C3wr
-//  L  129  struct MagiProblem
-//  L  221  fn     consIndicesValidN
-//  L  254  fn     weeklyDevOfBucket
-//  L  267  fn     fairDevOfBucket
-//  L  309  fn     rowDeficit
-//  L  326  fn     c3check
-//  L  362  fn     fullEvalParts
-//  L  569  const  SCORE_HARD_UNIT
-//  L  572  const  ACCEPT_REJECT_DELTA
-//  L  574  fn     fullEvalCombined
-//  L  585  struct SaChunk
+//  L  101  fn     jround
+//  L  103  struct C1r
+//  L  104  struct C2r
+//  L  105  struct C41r
+//  L  106  struct C42r
+//  L  112  fn     c42PairCount
+//  L  115  struct C3r
+//  L  116  struct C3wr
+//  L  118  struct MagiProblem
+//  L  214  fn     consIndicesValidN
+//  L  247  fn     weeklyDevOfBucket
+//  L  260  fn     fairDevOfBucket
+//  L  302  fn     rowDeficit
+//  L  319  fn     c3check
+//  L  355  fn     fullEvalParts
+//  L  568  const  SCORE_HARD_UNIT
+//  L  571  const  ACCEPT_REJECT_DELTA
+//  L  573  fn     fullEvalCombined
+//  L  584  struct SaChunk
 //  L  879  fn     wishLockedN
 //  L  886  fn     lockToN
 //  L  892  fn     runSaChunk
-//  L 1025  struct LahcState
-//  L 1044  fn     runLahcChunk
-//  L 1169  fn     collectViolationCells
-//  L 1272  struct GlsPenaltyN
-//  L 1317  fn     glsAcceptN
-//  L 1335  fn     rnInt
-//  L 1343  fn     weeklyMarginalN
-//  L 1361  fn     fairMarginalN
-//  L 1376  fn     reservoirTieN
-//  L 1390  fn     staffCountPenaltyAtN
-//  L 1401  fn     randomAllowedCellN
-//  L 1412  fn     destroyRepairDayAtN
-//  L 1487  fn     destroyRepairStaffAtN
-//  L 1546  fn     destroyRepairViolationsN
-//  L 1592  struct Fix
-//  L 1594  fn     findCovOFixN
-//  L 1621  fn     findC2FixN
-//  L 1638  fn     findRangeLowFixN
-//  L 1662  fn     findRangeHighFixN
-//  L 1693  fn     findC41FamFixN
-//  L 1726  fn     findC3WantFixN
-//  L 1756  fn     findAptFixN
-//  L 1788  fn     findTargetedFixN
-//  L 1813  fn     coverageShortageCostN
-//  L 1821  fn     bestStaffForCoverageN
-//  L 1836  fn     hf67HardRepairN
-//  L 1911  fn     rouletteSelectN
-//  L 1919  fn     thompsonSelectN
-//  L 1933  fn     greatDelugeLevelN
-//  L 1942  struct AlnsState
-//  L 1985  fn     runAlnsChunk
-//  L 2182  struct PolishState
-//  L 2205  fn     polishAcceptN
-//  L 2215  fn     runPolishChunk
-//  L 2327  fn     readIntArray
-//  L 2338  JNI    nativeAbiVersion
-//  L 2345  JNI    nativeAlnsCreate
-//  L 2359  JNI    nativeAlnsDestroy
-//  L 2365  JNI    nativeAlnsChunk
-//  L 2379  JNI    nativeAlnsRead
-//  L 2391  JNI    nativePolishCreate
-//  L 2404  JNI    nativePolishDestroy
-//  L 2410  JNI    nativePolishChunk
-//  L 2423  JNI    nativePolishRead
-//  L 2435  JNI    nativeLahcCreate
-//  L 2448  JNI    nativeLahcDestroy
-//  L 2454  JNI    nativeLahcChunk
-//  L 2467  JNI    nativeLahcRead
-//  L 2481  JNI    nativeSaChunk
-//  L 2511  JNI    nativeCreateProblem
-//  L 2672  JNI    nativeDestroyProblem
-//  L 2678  JNI    nativeFullEval
+//  L 1028  struct LahcState
+//  L 1047  fn     runLahcChunk
+//  L 1174  fn     collectViolationCells
+//  L 1278  struct GlsPenaltyN
+//  L 1323  fn     glsAcceptN
+//  L 1341  fn     rnInt
+//  L 1349  fn     weeklyMarginalN
+//  L 1367  fn     fairMarginalN
+//  L 1382  fn     reservoirTieN
+//  L 1396  fn     staffCountPenaltyAtN
+//  L 1407  fn     randomAllowedCellN
+//  L 1420  fn     destroyRepairDayAtN
+//  L 1495  fn     destroyRepairStaffAtN
+//  L 1554  fn     destroyRepairViolationsN
+//  L 1600  struct Fix
+//  L 1602  fn     findCovOFixN
+//  L 1629  fn     findC2FixN
+//  L 1646  fn     findRangeLowFixN
+//  L 1670  fn     findRangeHighFixN
+//  L 1701  fn     findC41FamFixN
+//  L 1734  fn     findC3WantFixN
+//  L 1764  fn     findAptFixN
+//  L 1796  fn     findTargetedFixN
+//  L 1821  fn     coverageShortageCostN
+//  L 1829  fn     bestStaffForCoverageN
+//  L 1844  fn     hf67HardRepairN
+//  L 1924  fn     rouletteSelectN
+//  L 1932  fn     thompsonSelectN
+//  L 1946  fn     greatDelugeLevelN
+//  L 1955  struct AlnsState
+//  L 1998  fn     runAlnsChunk
+//  L 2198  struct PolishState
+//  L 2221  fn     polishAcceptN
+//  L 2231  fn     runPolishChunk
+//  L 2346  fn     readIntArray
+//  L 2357  JNI    nativeAbiVersion
+//  L 2364  JNI    nativeAlnsCreate
+//  L 2378  JNI    nativeAlnsDestroy
+//  L 2384  JNI    nativeAlnsChunk
+//  L 2398  JNI    nativeAlnsRead
+//  L 2410  JNI    nativePolishCreate
+//  L 2423  JNI    nativePolishDestroy
+//  L 2429  JNI    nativePolishChunk
+//  L 2442  JNI    nativePolishRead
+//  L 2454  JNI    nativeLahcCreate
+//  L 2467  JNI    nativeLahcDestroy
+//  L 2473  JNI    nativeLahcChunk
+//  L 2486  JNI    nativeLahcRead
+//  L 2500  JNI    nativeSaChunk
+//  L 2530  JNI    nativeCreateProblem
+//  L 2699  JNI    nativeDestroyProblem
+//  L 2705  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
@@ -114,23 +112,12 @@ struct C42r { int g1, s1, g2, s2; };
 static inline long long c42PairCount(bool sameSet, long long n1, long long n2) {
     return sameSet ? n1 * (n1 - 1) / 2 : n1 * n2;
 }
-// [backlog #12(a)・実験段階] Kotlin の c2Amount(Evaluator.kt) と同一の式。quantitativeRangeEval が
-//   true のときだけ、二値(#件)の代わりにこの不足量を使う。既定は呼ばない。
-static inline long long c2Amount(long long z, long long count) {
-    return z < count ? (count - z) : 0;
-}
-// [backlog #12(a)・実験段階] Kotlin の rangeDistance(Evaluator.kt) と同一の式。用途は c2Amount と同じ。
-static inline long long rangeDistance(long long z, long long l, long long u) {
-    return (z < l ? (l - z) : 0) + (z > u ? (z - u) : 0);
-}
 struct C3r { std::vector<int> seq; bool singleRun; };
 struct C3wr { int wishK, prevK; };   // 希望で固定した wishK の前日に prevK を禁止（Kotlin C3w, HARD, 3.542.0）
 
 struct MagiProblem {
     int S = 0, T = 0, K = 0, G = 0, restIdx = 0, dow0 = 0;
     bool use2 = false;
-    // [backlog #12(a)・実験段階] Kotlin Problem.quantitativeRangeEval と同義。既定false=挙動不変。
-    bool quantitativeRangeEval = false;
     std::vector<int> sgrp, ssk;              // S
     std::vector<uint8_t> canDo;              // S*K
     std::vector<int> wish;                   // S*T (-1 = none)
@@ -396,7 +383,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 const int* row = a + (size_t)i * T;
                 int z = 0;
                 for (int j = 0; j < T; j++) if (row[j] == c.si) z++;
-                raw += p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0);
+                raw += (z < c.c ? 1 : 0);
             }
         }
         soft += raw * 4; if (bd) bd[1] += raw;  // [3.522.0] c2 1→4
@@ -409,7 +396,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
             for (int j = 0; j < T; j++) {
                 int z = 0;
                 for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-                raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
+                raw += (z < c.l || c.u < z ? 1 : 0);
             }
         }
         soft += raw * 9; if (bd) bd[6] += raw;
@@ -438,7 +425,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
             for (int j = 0; j < T; j++) {
                 int z = 0;
                 for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-                raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
+                raw += (z < c.l || c.u < z ? 1 : 0);
             }
         }
         soft += raw * 10; if (bd) bd[8] += raw;
@@ -687,7 +674,7 @@ struct SaChunk {
         for (const auto& c : p.cons2) {
             if (!p.cd(i, c.si)) continue;
             long long z = ssn[(size_t)i * K + c.si];
-            v += (p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0)) * 4;
+            v += ((z < c.c ? 1 : 0)) * 4;
         }
         return v;
     }
@@ -780,7 +767,7 @@ struct SaChunk {
             const uint64_t* dm = &dayShiftMask[(size_t)j * K];
             for (const auto& c : p.cons41) {
                 int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
-                v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 9;
+                v += ((z < c.l || c.u < z ? 1 : 0)) * 9;
             }
             for (const auto& c : p.cons42) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
@@ -789,7 +776,7 @@ struct SaChunk {
             }
             for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
                 int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
-                v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 10;
+                v += ((z < c.l || c.u < z ? 1 : 0)) * 10;
             }
             for (const auto& c : p.cons42s) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
@@ -801,7 +788,7 @@ struct SaChunk {
         for (const auto& c : p.cons41) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 9;
+            v += ((z < c.l || c.u < z ? 1 : 0)) * 9;
         }
         for (const auto& c : p.cons42) {
             long long n1 = 0, n2 = 0;
@@ -815,7 +802,7 @@ struct SaChunk {
         for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
             int z = 0;
             for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 10;
+            v += ((z < c.l || c.u < z ? 1 : 0)) * 10;
         }
         for (const auto& c : p.cons42s) {
             long long n1 = 0, n2 = 0;
@@ -2552,7 +2539,7 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     p->S = meta[0]; p->T = meta[1]; p->K = meta[2]; p->G = meta[3];
     p->restIdx = meta[4]; p->dow0 = meta[5]; p->use2 = meta[6] != 0;
     // [backlog #12(a)・実験段階] 旧レイアウト(7要素)との互換のため、8要素目が無ければ既定false。
-    p->quantitativeRangeEval = meta.size() >= 8 && meta[7] != 0;
+    // meta[7] は旧 quantitativeRangeEval（P2d で撤去）。ABI を保つため受け取って読まない。
     const int S = p->S, T = p->T, K = p->K, G = p->G;
     if (S <= 0 || T <= 0 || K <= 0 || G < 0) { delete p; return 0; }
 

@@ -33,13 +33,12 @@ internal object CyclicSwapWeeklyPolish {
         kTrialsPerDay: Int = 20,
         seed: Long = 0L,
         shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         // [監査で発見・3.270.0] p.wish[i][j]<0 は「希望が一切ない」判定で、実現不能な希望
@@ -73,7 +72,7 @@ internal object CyclicSwapWeeklyPolish {
                         if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b), intArrayOf(sa, sb)) > 0) {
                             work[a][j] = sa; work[b][j] = sb; continue
                         }
-                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                        val rep = UnifiedViolationChecker.check(state, work)
                         if (adoptionGate(p, workBeforeSwap2, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                         else { work[a][j] = sa; work[b][j] = sb }
                     }
@@ -98,7 +97,7 @@ internal object CyclicSwapWeeklyPolish {
                                 if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b, c), intArrayOf(sa, sb, sc)) > 0) {
                                     work[a][j] = sa; work[b][j] = sb; work[c][j] = sc; continue
                                 }
-                                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                                val rep = UnifiedViolationChecker.check(state, work)
                                 if (adoptionGate(p, workBeforeRotate3, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; continue }
                                 work[a][j] = sa; work[b][j] = sb; work[c][j] = sc
                             }
@@ -120,7 +119,7 @@ internal object CyclicSwapWeeklyPolish {
                         if ((0 until k).any { p.extBanned(idx[it], j, vals[(it + 1) % k]) }) continue
                         val workBeforeRotateN = work.copy2D()
                         for (t in 0 until k) work[idx[t]][j] = vals[(t + 1) % k]
-                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                        val rep = UnifiedViolationChecker.check(state, work)
                         if (adoptionGate(p, workBeforeRotateN, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                         else for (t in 0 until k) work[idx[t]][j] = vals[t]
                     }
@@ -164,13 +163,12 @@ internal object CyclicSwapWeeklyPolish {
      */
     fun applyWeeklyRebalancePolish(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
@@ -236,7 +234,7 @@ internal object CyclicSwapWeeklyPolish {
                                 //   exactPinRegression ガードをここにも追加（3.256.0の retrofit 漏れ）。
                                 val workBeforeRect = work.copy2D()
                                 work[i][j1] = z; work[i][j2] = x; work[ip][j1] = x; work[ip][j2] = y
-                                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                                val rep = UnifiedViolationChecker.check(state, work)
                                 if (adoptionGate(p, workBeforeRect, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
                                 work[i][j1] = x; work[i][j2] = y; work[ip][j1] = z; work[ip][j2] = x
                             }
