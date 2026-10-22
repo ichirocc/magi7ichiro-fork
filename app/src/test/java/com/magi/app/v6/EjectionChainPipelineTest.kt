@@ -145,18 +145,20 @@ class EjectionChainPipelineTest {
     // 有効なとき、同じ位置の従来の玉突きは走らせない。
     @Test fun postChainRunsThePipelineInsteadOfTheOldChain() {
         val st = swapState()
-        val oldC1 = PolishGate.c1EjectionChain
-        val oldFocus = PolishGate.ejectionPipelineFocus
-        try {
-            PolishGate.c1EjectionChain = true
-            PolishGate.ejectionPipelineFocus = EjectionChainPipeline.Focus.C1
-            val r = V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "pipe", seed = 3L,
-                deadlineMs = EngineClock.nowMs() + 10_000L, params = V6HotfixPasses.PostOptimizationParams(deterministic = true))
-            assertTrue(r.stageRecords.any { it.key == "玉突きパイプライン" })
-            assertFalse(r.stageRecords.any { it.key == "C1玉突き連鎖" })
-        } finally {
-            PolishGate.c1EjectionChain = oldC1
-            PolishGate.ejectionPipelineFocus = oldFocus
-        }
+        val ej = EjectionFlags(c1Chain = true, pipelineFocus = EjectionChainPipeline.Focus.C1)
+        val r = V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "pipe", seed = 3L,
+            deadlineMs = EngineClock.nowMs() + 10_000L, params = V6HotfixPasses.PostOptimizationParams(deterministic = true, ejection = ej))
+        assertTrue(r.stageRecords.any { it.key == "玉突きパイプライン" })
+        assertFalse(r.stageRecords.any { it.key == "C1玉突き連鎖" })
+    }
+
+    // パイプラインを切ると従来の玉突きが走る＝設定は PolishGate でなく params から届く。
+    @Test fun postChainReadsTheEjectionModeFromParams() {
+        val st = swapState()
+        val ej = EjectionFlags(c1Chain = true, pipelineFocus = EjectionChainPipeline.Focus.OFF)
+        val r = V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "pipe", seed = 3L,
+            deadlineMs = EngineClock.nowMs() + 10_000L, params = V6HotfixPasses.PostOptimizationParams(deterministic = true, ejection = ej))
+        assertFalse(r.stageRecords.any { it.key == "玉突きパイプライン" })
+        assertTrue(r.stageRecords.any { it.key == "C1玉突き連鎖" })
     }
 }

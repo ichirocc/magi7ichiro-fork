@@ -47,11 +47,11 @@ internal object C1EjectionChainPolish {
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
         val maxCandidates: Long = 0L,
         /** 2 手目以降の候補を、ここまでに動かしたセルの「穴」（同じ日の全職員・同じ職員の前後 [holeRadius] 日）に絞る。
-         *  false は月全体を総当たり。既定 [defaultHoleFocus]。 */
-        val holeFocus: Boolean = defaultHoleFocus,
+         *  false は月全体を総当たり。エンジンは [EjectionFlags.holeFocus] を渡す。 */
+        val holeFocus: Boolean = true,
         val holeRadius: Int = 7,
-        /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。既定 [defaultHoleSoftOnly]。 */
-        val holeSoftOnly: Boolean = defaultHoleSoftOnly,
+        /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。エンジンは [EjectionFlags.holeSoftOnly] を渡す。 */
+        val holeSoftOnly: Boolean = true,
         /** 起点をこの並びに限る（null＝巡ごとに生成）。パイプラインの索引が作る。 */
         val seedList: List<SeedKey>? = null,
         /** SOFT・ALL の起点に c1 不足窓の起点を入れない（パイプラインの BOTH の SOFT 側。c1 は C1 側が受け持つ）。 */
@@ -80,7 +80,7 @@ internal object C1EjectionChainPolish {
 
     private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish")
 
-    /** 測定用の切替（穴に絞った候補生成を同条件で比べる）。 */
+    /** 設定タブ「玉突きの範囲」の書き込み先。読むのは [EngineConfig.snapshot] だけ。 */
     @Volatile internal var defaultHoleFocus: Boolean = true
 
     @Volatile internal var defaultHoleSoftOnly: Boolean = true

@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P2c（2026-10-22、版なし・出力不変）: 玉突きの 11 項目を `EjectionFlags` へ（`EngineConfig.ejection`→`PostOptimizationParams.ejection`→パイプライン・従来の玉突き・手直し提案）。Config の既定は定数、`EjectionChainPipeline` を public に。エンジン内の PolishGate 書き込み 0  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2b（2026-10-22、版なし・出力不変）: 停滞・床・壁の 5 項目と後処理の 4 項目を `EngineConfig` へ、`EngineConfig.postParams()`、`V6OptimizerOptions.config`  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2a（2026-10-22、版なし・出力不変）: `EngineConfig` 新設（normalStallFraction・floorCountsUpperZero）、`handleOptimize` の入口で PolishGate を 1 回だけ写す。`EngineConfigTest`（T-6）  → `docs/overhaul_design.md` §6.3
 - 全面改修 P0 安全網・P1 テストの穴埋め（2026-10-22、版なし・出力不変）: CheckerSnapshot/DiagnosisSnapshot/BoardHashFixture の期待値を main 4e8fe3a から生成（盤面ハッシュは seed 1 本・fixture 読込の javaClass 不具合を修正）。`NativeGate.chunkConsistent`/`parityMismatch` へ 2 層番兵の判定を切り出し 8 か所を置換、`SaveFailNotifier.report`（SaveOutcome）へ保存結果の反映を切り出し。`NativeGateFallbackTest`・`SaveRetryWiringTest`  → `docs/overhaul_design.md` §6.1・§6.2

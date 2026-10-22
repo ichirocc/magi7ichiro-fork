@@ -60,10 +60,12 @@ object FixSuggester {
         deadlineMs: Long = 8000L,
         ejectionChain: Boolean = false,
         strictNewHard: Boolean = true,
+        /** 既定は呼び出し時の設定の写し。 */
+        ejection: EjectionFlags = EngineConfig.snapshot().ejection,
     ): List<FixSuggestion> {
         val p = Problem(state)
         if (p.S < 1 || p.T < 1) return emptyList()
-        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain, strictNewHard).run(maxResults)
+        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain, strictNewHard, ejection).run(maxResults)
     }
 
     private class Quad(val sug: FixSuggestion, val dHard: Int, val dTotal: Int, val dWeighted: Double)
@@ -74,6 +76,7 @@ object FixSuggester {
         private val focus: Int?, private val focusShift: Int?, private val deadlineMs: Long,
         private val ejectionChain: Boolean = false,
         private val strictNewHard: Boolean = true,
+        private val ejection: EjectionFlags = EjectionFlags(),
     ) {
         private val base = UnifiedViolationChecker.check(state, s)
         private val baseHardKeys = ViolationIdentity.keys(base, hardOnly = true)
@@ -273,10 +276,10 @@ object FixSuggester {
 
         /** Phase 6b: 多段の玉突き連鎖（後処理と同じ機構）。残り時間の半分・設定の上限秒まで。結果の盤面差分を 1 手として出す。 */
         private fun ejection() {
-            val budget = minOf((deadlineMs - (EngineClock.nowMs() - start)) / 2, PolishGate.ejectionChainMaxMillis)
+            val budget = minOf((deadlineMs - (EngineClock.nowMs() - start)) / 2, ejection.maxMillis)
             if (budget <= 0) return
             val r = C1EjectionChainPolish.apply(state, s.copy2D(),
-                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = budget))
+                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ejection.swapMoves, holeFocus = ejection.holeFocus, holeSoftOnly = ejection.holeSoftOnly, maxMillis = budget))
             val ops = ArrayList<FixCell>()
             for (i in 0 until p.S) for (j in 0 until p.T) if (r.newSchedule[i][j] != s[i][j]) ops.add(FixCell(i, j, r.newSchedule[i][j]))
             if (ops.size < 2 || (focus != null && ops.none { it.staff == focus })) return

@@ -647,6 +647,8 @@ object V6HotfixPasses {
         /** [3.597.0/測定中/backlog#30] 日ごと厳密割当で「自分の現シフトを保つ」対角を常に有限にする。
          *  恒等割当が常に実行可能になり、置けない職員/スロットがある日も残りを研磨できる。既定 OFF。 */
         val dayAssignIdentityFallback: Boolean = false,
+        /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
+        val ejection: EjectionFlags = EjectionFlags(),
     )
 
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
@@ -824,12 +826,15 @@ object V6HotfixPasses {
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
             rollbackCountsZero = params.postChainRollbackCountsZero, aptFairSoftTolerance = params.aptFairSoftTolerance)
         // 玉突きパイプラインが有効なら、従来の玉突き（どの置き場所も）は走らせない。
-        val pipelineFocus = PolishGate.ejectionPipelineFocus
+        val ej = params.ejection
+        val pipelineFocus = ej.pipelineFocus
         val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
-        val pipelineAtEnd = PolishGate.ejectionPipelineAfterRepair
+        val pipelineAtEnd = ej.pipelineAfterRepair
         fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
             EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
-                deepMaxMillis = if (PolishGate.ejectionUseLeftover) maxOf(PolishGate.ejectionChainMaxMillis, EngineClock.remainingMs(deadlineMs)) else PolishGate.ejectionChainMaxMillis),
+                deepMaxMillis = if (ej.useLeftover) maxOf(ej.maxMillis, EngineClock.remainingMs(deadlineMs)) else ej.maxMillis,
+                swapMoves = ej.swapMoves, repeatRounds = ej.pipelineRounds, hardLeg = ej.pipelineHardLeg,
+                holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
             previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
             shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
         val t0 = EngineClock.nowMs()
@@ -868,8 +873,8 @@ object V6HotfixPasses {
             val tHe = EngineClock.nowMs()
             val earlyOrigin = if (PolishGate.allEjectionChainEarly) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.HARD
             chain.adopt(chain.timed("後処理 前段の玉突き連鎖", "前段玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -920,12 +925,12 @@ object V6HotfixPasses {
         })
         if (pipelineOn && !pipelineAtEnd) {
             chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき)", "玉突きパイプライン") { work -> runPipeline(work) })
-        } else if (!pipelineOn && (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain)) {
+        } else if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
             val tEj = EngineClock.nowMs()
-            val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
+            val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = origin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -961,8 +966,8 @@ object V6HotfixPasses {
             UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval).hard > 0) {
             val tEr = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 必須が残ったときの玉突き連鎖", "必須再玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEr) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEr) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -970,8 +975,8 @@ object V6HotfixPasses {
         if (!pipelineOn && PolishGate.allEjectionChainFinal && !shouldStop()) {
             val tEf = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 最終段の玉突き連鎖", "最終段玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEf) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEf) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -995,8 +1000,8 @@ object V6HotfixPasses {
         if (!pipelineOn && PolishGate.allEjectionChainAfterRepair && !shouldStop()) {
             val tEa = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 修復後の玉突き連鎖", "修復後玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEa) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEa) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }

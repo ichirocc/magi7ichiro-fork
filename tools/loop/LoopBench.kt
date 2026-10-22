@@ -223,7 +223,7 @@ fun main(args: Array<String>) {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
                     var exc = 0; var res: V6PostOptimizationResult? = null
-                    try { res = V6HotfixPasses.runPostOptimization(st, init.copy2D(), "bench", seed = seed.toLong() * 1000003L + 17, deadlineMs = EngineClock.nowMs() + sp.budgetMs, params = prm) }
+                    try { res = V6HotfixPasses.runPostOptimization(st, init.copy2D(), "bench", seed = seed.toLong() * 1000003L + 17, deadlineMs = EngineClock.nowMs() + sp.budgetMs, params = prm.copy(ejection = EngineConfig.snapshot().ejection)) }
                     catch (e: Throwable) { exc = 1 }
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     val peak = peakHeap() / (1024 * 1024)

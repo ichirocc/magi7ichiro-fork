@@ -364,6 +364,12 @@ P2a 済み（2026-10-22）: `EngineConfig`（`normalStallFraction`・`floorCount
 P2b 済み（2026-10-22）: 停滞・床・壁（`c3nWallShortStall`・`floorShortStall`・`c3nWallLegacy`・`c3nWallDeepCheck`・`adaptiveStall`）と後処理
 （`combineExhaustPairs`・`lnsAdaptive`・`aptFairSoftTolerance`・`countChainPolish`）を `EngineConfig` へ。`postParams()` が `PostOptimizationParams` を作り、
 `V6OptimizerOptions.config` で探索側（研磨の注入）にも同じ写しを渡す。エンジン内でこの 9 項目を `PolishGate` から読む箇所は 0。
+P2c 済み（2026-10-22）: 玉突きの 11 項目（4 択の写像・入れ替え・探し直し・必須から・余った時間・秒数・範囲 2 つ）を `EjectionFlags` にまとめ、
+`EngineConfig.ejection` → `PostOptimizationParams.ejection` → パイプライン・従来の玉突き・手直し提案（`FixSuggester.suggest(ejection=)`）へ引数で渡す。
+`EjectionChainPipeline.Config`・`C1EjectionChainPolish.Config` の既定は大域でなく定数。`EjectionChainPipeline` は `EngineConfig` が型を持つため public に。
+書き込み口: エンジン内の書き込みは 0。残るのは設定画面（VM のセッターと `MagiUiState` の強さ・玉突きの適用）と背景 Worker の `PolishGate.restore` だけで、
+restore は P2d で残りのフラグ（`personSwapKick` など、まだ `PolishGate` から読む）を片付けた後に `EngineConfig` の復元へ置き換える。
+P2d で消す 5 本（`hardEjectionChainEarly` など）は移さず `PolishGate` のまま。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

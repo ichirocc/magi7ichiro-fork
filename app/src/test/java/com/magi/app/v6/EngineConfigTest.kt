@@ -18,6 +18,9 @@ class EngineConfigTest {
         assertEquals(true, d.lnsAdaptive)
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
+        assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
+            pipelineAfterRepair = true, pipelineRounds = true, pipelineHardLeg = false, swapMoves = true, maxMillis = 10_000L,
+            useLeftover = false, holeFocus = true, holeSoftOnly = true), d.ejection)
         assertEquals(d, EngineConfig.snapshot())
     }
 

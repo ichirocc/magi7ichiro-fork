@@ -2,7 +2,7 @@ package com.magi.app.v6
 
 /**
  * 1 回の「つくる」で使うエンジン設定（`docs/overhaul_detailed_spec.md` §3.2）。実行の開始時に [snapshot] で 1 回だけ作り、
- * 以後は変えない＝実行中に [PolishGate] が書き換わってもその実行には効かない。項目は P2a〜P2c で段階的に移す（P2b まで: 停滞・床・壁と後処理）。
+ * 以後は変えない＝実行中に [PolishGate] が書き換わってもその実行には効かない。項目は P2a〜P2c で移した（停滞・床・壁、後処理、玉突き）。
  */
 data class EngineConfig(
     /** 停滞の閾値＝予算×この割合（[V6FinalPort.normalStallMs]）。0.9 は 3.447.0 で据え置き確定（HF77）。 */
@@ -20,6 +20,7 @@ data class EngineConfig(
     val lnsAdaptive: Boolean = true,
     val aptFairSoftTolerance: Boolean = false,
     val countChainPolish: Boolean = false,
+    val ejection: EjectionFlags = EjectionFlags(),
 ) {
     fun postParams(quantitativeRangeEval: Boolean) = V6HotfixPasses.PostOptimizationParams(
         quantitativeRangeEval = quantitativeRangeEval,
@@ -27,6 +28,7 @@ data class EngineConfig(
         lnsAdaptive = lnsAdaptive,
         aptFairSoftTolerance = aptFairSoftTolerance,
         countChainEnabled = countChainPolish,
+        ejection = ejection,
     )
 
     companion object {
@@ -43,6 +45,34 @@ data class EngineConfig(
             lnsAdaptive = PolishGate.lnsAdaptive,
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainPolish = PolishGate.countChainPolish,
+            ejection = EjectionFlags(
+                c1Chain = PolishGate.c1EjectionChain,
+                allFamilyChain = PolishGate.allFamilyEjectionChain,
+                pipelineFocus = PolishGate.ejectionPipelineFocus,
+                pipelineAfterRepair = PolishGate.ejectionPipelineAfterRepair,
+                pipelineRounds = PolishGate.ejectionPipelineRounds,
+                pipelineHardLeg = PolishGate.ejectionPipelineHardLeg,
+                swapMoves = PolishGate.ejectionChainSwapMoves,
+                maxMillis = PolishGate.ejectionChainMaxMillis,
+                useLeftover = PolishGate.ejectionUseLeftover,
+                holeFocus = C1EjectionChainPolish.defaultHoleFocus,
+                holeSoftOnly = C1EjectionChainPolish.defaultHoleSoftOnly,
+            ),
         )
     }
 }
+
+/** 玉突きの設定（設定タブの「玉突きで直す」4 択・入れ替え・採れたら探し直す・必須から・余った時間・秒数・範囲）。既定は本番の既定。 */
+data class EjectionFlags(
+    val c1Chain: Boolean = false,
+    val allFamilyChain: Boolean = false,
+    val pipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH,
+    val pipelineAfterRepair: Boolean = true,
+    val pipelineRounds: Boolean = true,
+    val pipelineHardLeg: Boolean = false,
+    val swapMoves: Boolean = true,
+    val maxMillis: Long = CHAIN_RESERVE_SEC * 1000L,
+    val useLeftover: Boolean = false,
+    val holeFocus: Boolean = true,
+    val holeSoftOnly: Boolean = true,
+)
