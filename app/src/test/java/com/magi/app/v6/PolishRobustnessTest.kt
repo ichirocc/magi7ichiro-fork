@@ -186,11 +186,9 @@ class PolishRobustnessTest {
     @Test
     fun tuningSummaryDistinguishesOffFromOnWithNoObservedEffect() {
         val wide = PolishGate.wideC3nBreakDays
-        val filter = PolishGate.filterC3nIncrease
         try {
             TuningTelemetry.reset()
             PolishGate.wideC3nBreakDays = false
-            PolishGate.filterC3nIncrease = true
             val off = TuningTelemetry.summary(nativeOn = false, parityOn = false, softPolishOn = false,
                 combineExhaustPairs = false, aptFairSoftTolerance = false, countChainPolish = false)
             assertTrue(off, off.contains("禁止連続の崩し範囲=OFF"))
@@ -207,7 +205,6 @@ class PolishRobustnessTest {
                 .contains("必須が増える候補の事前フィルタ=ON(この実行では観測なし)"))
         } finally {
             PolishGate.wideC3nBreakDays = wide
-            PolishGate.filterC3nIncrease = filter
             TuningTelemetry.reset()
         }
     }

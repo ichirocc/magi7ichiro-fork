@@ -384,8 +384,7 @@ object V6FinalPort {
 
     /** c3n 壁の証明（`docs/stall_escape.md` §5.3）。依存を注入し、段の境界・診断中の入れ替わりを単体で検査できる形にする。
      *  [bound]（既定）: 生存盤面の報告が最良の報告と同じ参照のときだけ診断を使う。対応が取れない間は、同じ最良版で
-     *  対応が取れていた判定だけを持ち越す（段の境界で生存盤面が空になっても判定を失わないため）。
-     *  [legacy]（測定の基準腕）: HEAD と同じ。版ごとに一度、生存盤面を一致の検査なしに診断する。 */
+     *  対応が取れていた判定だけを持ち越す（段の境界で生存盤面が空になっても判定を失わないため）。 */
     internal class C3nWallProof(
         private val bestVersion: () -> Int,
         private val bestReport: () -> ViolationReport?,
@@ -394,7 +393,6 @@ object V6FinalPort {
     ) {
         private val cache = BoardKeyedFlag()
         private val carried = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
-        private val legacyCache = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
         private val lastCounted = java.util.concurrent.atomic.AtomicReference<Any?>(null)
 
         /** 生存盤面の更新ごとの確認回数と、その報告が最良の報告と対応しなかった回数（ログ用。呼び出しごとには数えない）。 */
@@ -419,15 +417,6 @@ object V6FinalPort {
                 }
             }
             return carried.get()?.let { it.first == v && it.second } ?: false
-        }
-
-        fun legacy(): Boolean {
-            val v = bestVersion()
-            if (legacyCache.get()?.first != v) {
-                val board = liveSnapshot()?.board
-                legacyCache.set(v to (board != null && diagnose(board)))
-            }
-            return legacyCache.get()?.second ?: false
         }
 
         /** 最終盤面の診断（残存分析の注記用）。盤面の内容で鍵をとる。 */
@@ -764,9 +753,6 @@ object V6FinalPort {
             }
             return wishReachedCache.get().second
         }
-        // 壁の証拠の選択: 既定は生存盤面の報告が最良の報告と同じ参照のときだけ使う（[C3nWallProof.bound]）。
-        //   測定の基準腕（[PolishGate.c3nWallLegacy]）は HEAD と同じ判定（[C3nWallProof.legacy]）。
-        fun c3nWallProven(): Boolean = if (config.c3nWallLegacy) wallProof.legacy() else wallProof.bound()
         val shouldStop = {
             val now = EngineClock.nowMs()
             val gen = wd.bestVersion.get()   // 判定の世代。発火はこの世代のままだった場合だけ確定する（§5.4）
@@ -779,11 +765,9 @@ object V6FinalPort {
             //   plateau（解けないHARD）として stallHardMs へ移行（実機ログの「c3n=1のまま150s無改善でも
             //   270s閾値のため発火不能」を解消）。診断は停滞が stallHardMs を超えてから遅延実行（~20ms/世代1回）。
             val nonCovU = wd.bestNonCovUHard.get()
-            val wall = config.c3nWallShortStall && nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
-                wd.bestHard.get() <= hardFloor + nonCovU &&
-                now - wd.lastBestImproveMs.get() > stallHardMs && c3nWallProven()
+            // c3n 壁での短縮は 3.673.0 で既定 OFF・P2d で撤去（c3nWallProven=false）。
             val effStall = effectiveStallMs(
-                wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
+                wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), false, stallHardMs, stallMs,
                 wd.bestHard.get() == wishFloorLogged && bestWishReached(),
                 adaptiveMs = if (config.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
                 floorShort = config.floorShortStall,
@@ -793,7 +777,7 @@ object V6FinalPort {
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, wd.lastBestImproveMs.get(), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
                     val fired = synchronized(progressLock) {
-                        wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = wall)
+                        wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = false)
                     }
                     if (fired) e0Fired.set(wd.bestHard.get() == wishFloorLogged && bestWishReached())
                     fired

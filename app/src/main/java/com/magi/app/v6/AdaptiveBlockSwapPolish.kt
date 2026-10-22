@@ -58,9 +58,8 @@ internal object AdaptiveBlockSwapPolish {
      * - [maxEvaluations] は **pass ごと**の正式評価枠。[maxCycleVisits] も全体予算でなく (ブロック長, 開始日) ごとの
      *   DFS 分岐上限（共通予算にすると後ろのブロックが一切探索されない。実測で DFS は 88万件/77ms＝ボトルネックでない）。
      * - [maxCycle] は 2..8 に丸める（巡回の署名を 8bit×人数で Long に詰めるため。既定 5＝到達しない防御、3.469.0）。
-     * - [filterC3nIncrease]: 必須(HARD)が正味で増える候補を候補生成の段階で捨てるか（名前は 3.295.0 の c3n 版の名残）。既定は
-     *   [PolishGate.filterC3nIncrease]（既定 **true**、3.518.0）。判定は [HardDelta] の厳密な正味差分＝正式採否（HARD が先頭）が
-     *   必ず却下する候補だけを捨てる。捨てた候補は評価枠を使わないので、その枠は残りの候補の評価に回る。
+     * - 必須(HARD)が正味で増える候補は候補生成の段階で捨てる（3.518.0 で既定、P2d で常時）。判定は [HardDelta] の厳密な正味差分＝
+     *   正式採否（HARD が先頭）が必ず却下する候補だけ。捨てた候補は評価枠を使わないので、その枠は残りの候補の評価に回る。
      * - [stageOneWidthFactor]: 見積りキーだけで選別する第1段プールの幅＝`candidatesPerLength × この係数`。
      *   見積り上位が実候補化で落ちる（交換成立日が1日以下）ことは巡回人数が増えるほど起きやすく、幅が狭いと
      *   その下の成立候補まで失うため段②より広く取る（3.291.0 実測で 8）。
@@ -74,7 +73,6 @@ internal object AdaptiveBlockSwapPolish {
         val maxFocusStaff: Int = 16,
         val maxCycle: Int = 5,
         val maxCycleVisits: Int = 50_000,
-        val filterC3nIncrease: Boolean = PolishGate.filterC3nIncrease,
         val stageOneWidthFactor: Int = 8,
         val maxPinSlots: Int = 31,
     )
@@ -114,7 +112,7 @@ internal object AdaptiveBlockSwapPolish {
     /**
      * 従来シグネチャ（既存の呼び出し元・テストはこちら）。[mode] で [CyclicParams]／[StrictParams] のどちらに束ねるかが決まる。
      * [strictMaxLen]/[strictLongLen] は STRICT 専用（巡回では無視）、[blockLens]/[candidatesPerLength]/[maxFocusStaff]/
-     * [maxCycle]/[maxCycleVisits]/[filterC3nIncrease] は巡回専用（STRICT では無視）＝従来どおり。
+     * [maxCycle]/[maxCycleVisits] は巡回専用（STRICT では無視）＝従来どおり。
      */
     fun applyAdaptiveBlockSwapPolish(
         state: MagiState,
@@ -126,7 +124,6 @@ internal object AdaptiveBlockSwapPolish {
         maxFocusStaff: Int = 16,
         maxCycle: Int = 5,
         maxCycleVisits: Int = 50_000,
-        filterC3nIncrease: Boolean = PolishGate.filterC3nIncrease,
         shouldStop: () -> Boolean = { false },
         mode: WindowMode = WindowMode.PARTIAL_MOVABLE_DAYS,
         strictMaxLen: Int = 7,
@@ -138,7 +135,7 @@ internal object AdaptiveBlockSwapPolish {
         )
         WindowMode.PARTIAL_MOVABLE_DAYS -> applyAdaptiveBlockSwapPolish(
             state, schedule,
-            CyclicParams(blockLens, maxPasses, candidatesPerLength, maxEvaluations, maxFocusStaff, maxCycle, maxCycleVisits, filterC3nIncrease),
+            CyclicParams(blockLens, maxPasses, candidatesPerLength, maxEvaluations, maxFocusStaff, maxCycle, maxCycleVisits),
             shouldStop, quantitativeRangeEval,
         )
     }
@@ -588,7 +585,7 @@ internal object AdaptiveBlockSwapPolish {
             // [3.294.0 ピン保存交換] 3.293.0 の不採用内訳で、採用0の55〜80%が exactPinRegression のピン破りと判明した
             //   （実データは10名中9名の「休」が厳密ピン＝長いブロックを丸ごと交換すると必ず回数が動く）。
             if (!balancePinnedDays(cycle, swapDays, counts)) return null
-            if (params.filterC3nIncrease && hardIncreases(cycle, swapDays)) {
+            if (hardIncreases(cycle, swapDays)) {
                 TuningTelemetry.c3nFilterSkipped.incrementAndGet()
                 return null
             }

@@ -40,8 +40,6 @@ internal object C1EjectionChainPolish {
         val unitsPerFamily: Int = 6,
         /** 起点 1 つの連鎖に使う評価数の上限（0 以下＝無制限）。1 つの起点が全予算を使わないため。 */
         val perSeedEvaluations: Long = 30_000L,
-        /** 族越え（v2/ALL）で、1 セルの変更に加えて同日の 2 人・同じ職員の 2 日の入れ替えも 1 手として探す。 */
-        val swapMoves: Boolean = true,
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
         val maxCandidates: Long = 0L,
         /** 2 手目以降の候補を、ここまでに動かしたセルの「穴」（同じ日の全職員・同じ職員の前後 [holeRadius] 日）に絞る。
@@ -379,22 +377,18 @@ internal object C1EjectionChainPolish {
                         var c = hole.nextSetBit(0)
                         while (c >= 0) { consider(c / p.T, c % p.T); c = hole.nextSetBit(c + 1) }
                         if (out() || seedSpent()) return
-                        if (config.swapMoves) {
-                            c = hole.nextSetBit(0)
-                            while (c >= 0) {
-                                val ci = c / p.T; val cj = c % p.T
-                                // 相手も穴なら番号の小さい側からだけ数える（同じ組を二度評価しない）。
-                                for (b in 0 until p.S) if (b != ci && (!hole.get(b * p.T + cj) || b > ci)) considerSwap(ci, cj, b, cj)
-                                for (d in 0 until p.T) if (d != cj && (!hole.get(ci * p.T + d) || d > cj)) considerSwap(ci, cj, ci, d)
-                                c = hole.nextSetBit(c + 1)
-                            }
+                        c = hole.nextSetBit(0)
+                        while (c >= 0) {
+                            val ci = c / p.T; val cj = c % p.T
+                            // 相手も穴なら番号の小さい側からだけ数える（同じ組を二度評価しない）。
+                            for (b in 0 until p.S) if (b != ci && (!hole.get(b * p.T + cj) || b > ci)) considerSwap(ci, cj, b, cj)
+                            for (d in 0 until p.T) if (d != cj && (!hole.get(ci * p.T + d) || d > cj)) considerSwap(ci, cj, ci, d)
+                            c = hole.nextSetBit(c + 1)
                         }
                     } else {
                         for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
-                        if (config.swapMoves) {
-                            for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
-                            for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
-                        }
+                        for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
+                        for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
                     }
                     cand.sortWith(CAND_ORDER)
                     val famNow = familyWeighted(de)

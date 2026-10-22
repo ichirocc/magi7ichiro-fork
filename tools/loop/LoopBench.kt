@@ -187,9 +187,7 @@ fun main(args: Array<String>) {
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
                 EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
-                // [3.657.0] パイプラインの腕は 1 巡だけ・必須の焦点なしを基準に新腕だけ足す（3.656.0 までの腕の再現）。それ以外の機能は既定（探し直し ON）のまま測る。
-                //   pipehardvsroundsendk だけは両腕とも探し直し ON（既定）で、新腕に必須の焦点を足す。
-                PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) pf == "pipehardvsroundsend" || (arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend")) else true
+                // [3.657.0] 探し直しは P2d で常に ON。新腕だけ必須の焦点を足す。
                 PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend", "pipehardvsroundsend")
                 // ejectionafterrepairhole: 両腕とも修復後の玉突きを ON にし、新腕だけ穴に絞った候補生成（旧腕＝月全体の総当たり）。
                 //   従来の玉突きの腕と *end までのパイプラインの腕は月全体で測った（再現のため据え置き）。それ以外は範囲の既定のまま。

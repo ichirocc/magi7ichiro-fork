@@ -47,16 +47,16 @@ class EjectionChainPipelineTest {
     )
 
     private fun run(st: MagiState, focus: EjectionChainPipeline.Focus, tel: MutableList<EjectionChainPipeline.Telemetry>,
-        repeatRounds: Boolean = false, hardLeg: Boolean = false) =
+        hardLeg: Boolean = false) =
         EjectionChainPipeline.apply(st, st.schedule.toIntArray2D(),
-            EjectionChainPipeline.Config(focus = focus, deterministic = true, repeatRounds = repeatRounds, hardLeg = hardLeg), telemetry = tel)
+            EjectionChainPipeline.Config(focus = focus, deterministic = true, hardLeg = hardLeg), telemetry = tel)
 
     @Test fun probeHitIsCommittedAndDeepSearchRunsOnlyWithHits() {
         val st = swapState()
         val rep0 = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         val tel = ArrayList<EjectionChainPipeline.Telemetry>()
         val r = run(st, EjectionChainPipeline.Focus.C1, tel)
-        val t = tel.single()
+        val t = tel.first()
         assertTrue(t.line(), t.shallowHits + t.midHits > 0)
         assertTrue(t.line(), t.deepRan)
         assertTrue(t.line(), t.committed > 0)
@@ -105,7 +105,7 @@ class EjectionChainPipelineTest {
         val st = swapState()
         val tel = ArrayList<EjectionChainPipeline.Telemetry>()
         run(st, EjectionChainPipeline.Focus.BOTH, tel)
-        assertEquals(listOf("C1", "SOFT"), tel.map { it.focus })
+        assertEquals(listOf("C1", "SOFT"), tel.filter { it.round == 1 }.map { it.focus })
         val soft = tel[1]
         val b = soft.before!!
         assertEquals(b.total - b.hard - (b.breakdown["c1"] ?: 0), soft.residual)
@@ -115,15 +115,13 @@ class EjectionChainPipelineTest {
     // 探し直し: 採用があった巡のあとだけ次の巡を回し、採用が無い巡で止まる。2 巡目以降の記録行に「巡N」。
     @Test fun repeatRoundsReindexesOnlyAfterACommit() {
         val st = swapState()
-        val one = run(st, EjectionChainPipeline.Focus.C1, ArrayList())
         val tel = ArrayList<EjectionChainPipeline.Telemetry>()
-        val r = run(st, EjectionChainPipeline.Focus.C1, tel, repeatRounds = true)
+        run(st, EjectionChainPipeline.Focus.C1, tel)
         assertEquals(listOf(1, 2), tel.map { it.round })
         assertTrue(tel[0].line(), tel[0].committed > 0)
         assertEquals("no_residual", tel[1].endReason)
         assertTrue(tel[1].line().contains("巡2 "))
         assertFalse(tel[0].line().contains("巡1"))
-        assertTrue(r.newSchedule.contentDeepEquals(one.newSchedule))
     }
 
     // 必須の焦点: BOTH の先頭に走り、人員不足を起点に直す。既定（OFF）では必須の焦点を走らせない。
@@ -132,10 +130,10 @@ class EjectionChainPipelineTest {
         assertEquals(1, UnifiedViolationChecker.check(st, st.schedule.toIntArray2D()).hard)
         val offTel = ArrayList<EjectionChainPipeline.Telemetry>()
         run(st, EjectionChainPipeline.Focus.BOTH, offTel)
-        assertEquals(listOf("C1", "SOFT"), offTel.map { it.focus })
+        assertEquals(listOf("C1", "SOFT"), offTel.filter { it.round == 1 }.map { it.focus })
         val tel = ArrayList<EjectionChainPipeline.Telemetry>()
         val r = run(st, EjectionChainPipeline.Focus.BOTH, tel, hardLeg = true)
-        assertEquals(listOf("HARD", "C1", "SOFT"), tel.map { it.focus })
+        assertEquals(listOf("HARD", "C1", "SOFT"), tel.filter { it.round == 1 }.map { it.focus })
         assertEquals(1, tel[0].residual)
         assertTrue(tel[0].line(), tel[0].committed > 0)
         assertEquals(0, r.report!!.hard)

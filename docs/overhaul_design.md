@@ -387,6 +387,12 @@ P2d-②b 済み（2026-10-22）: `PostOptimizationParams` の `componentRepairEn
 P2d-②c 済み（2026-10-22）: `wishPinStrict`（規則 A、利用者決定 2026-09-25）を常時に。`Problem.wishMoveAllowed`・`keepsWishPins` の `strict` 引数と、
 7 ファイル（V6NativeOptimizer・HardRepairCore・RsiHypothesisOperators・EliteIntegrationPolish・EliteRelinking・CovOReliefPolish・V6PortAnalyzer）の
 `wishPinStrict` 引数を外した。`WishPinStrictTest`・`ManualPinTest`・`V6PortAnalyzerTest` の旧挙動（OFF）の比較は削除し、ON の検査だけ残す。P0 スナップショット一致。
+P2d-②d 済み（2026-10-22、決定 1・A）: 画面のスイッチ 4 つを外した＝定着の「入れ替えも1手として使う」（`ejectionChainSwapMoves`、`C1EjectionChainPolish.Config.swapMoves` ごと常時）・
+「採れたら探し直す」（`ejectionPipelineRounds`、`EjectionChainPipeline.Config.repeatRounds` ごと常時）、否決の「余った時間も玉突きに使う」（`ejectionUseLeftover`）・
+「禁止の並びだけ残ったら早めに切り上げる」（`c3nWallShortStall`）。後者で到達しなくなった `c3nWallLegacy`・`c3nWallProven()`・`C3nWallProof.legacy()` も削除
+（`c3nWallDeepCheck` は残存診断 `diagnoseBoard` から届くので残す。純関数 `effectiveStallMs` の壁の引数は仕様テストのため据え置き、本番は false を渡す。
+`C3nWallProof.bound()` はテストからだけ呼ばれる＝③で片付ける）。非表示の `blockSwapC3nFilter`（`filterC3nIncrease`）は常時にしてイベント・セッター・状態ごと削除、
+「設定の開始時」の事前フィルタは常に ON と出す。UI の状態・イベント・ハンドラ・説明文の定数も削除。P0 スナップショット一致・影響クラス 81 件合格。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

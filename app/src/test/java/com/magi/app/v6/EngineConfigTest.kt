@@ -8,17 +8,14 @@ class EngineConfigTest {
     @Test fun defaultsMatchTheProductionDefaults() {
         val d = EngineConfig()
         assertEquals(0.9, d.normalStallFraction, 0.0)
-        assertEquals(false, d.c3nWallShortStall)
         assertEquals(true, d.floorShortStall)
-        assertEquals(false, d.c3nWallLegacy)
         assertEquals(false, d.c3nWallDeepCheck)
         assertEquals(false, d.adaptiveStall)
         assertEquals(false, d.combineExhaustPairs)
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
         assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
-            pipelineRounds = true, pipelineHardLeg = false, swapMoves = true, maxMillis = 10_000L,
-            useLeftover = false, holeFocus = true, holeSoftOnly = true), d.ejection)
+            pipelineHardLeg = false, maxMillis = 10_000L, holeFocus = true, holeSoftOnly = true), d.ejection)
         assertEquals(d, EngineConfig.snapshot())
     }
 

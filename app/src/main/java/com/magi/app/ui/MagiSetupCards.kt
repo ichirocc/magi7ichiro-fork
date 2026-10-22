@@ -366,43 +366,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionChainSwap, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("入れ替えも1手として使う", style = MaterialTheme.typography.bodyMedium)
-                    Text("同じ日の2人、同じ人の2日を入れ替える手も試します（既定はON）",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionChainSwap, onCheckedChange = null, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
-            }
-            // 次の 2 つはパイプライン（「見込みのある所だけ」）にだけ効く。
+            // 次はパイプライン（「見込みのある所だけ」）にだけ効く。
             val pipelineOn = !ui.running && ui.ejectionChain == EjectionChainMode.PIPELINE
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineRounds, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineRounds(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("採れたら探し直す", style = MaterialTheme.typography.bodyMedium)
-                    Text(EJECTION_ROUNDS_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionPipelineRounds, onCheckedChange = null, enabled = pipelineOn)
-            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineHardLeg, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("必須の違反からも始める", style = MaterialTheme.typography.bodyMedium)
                     Text(EJECTION_HARD_LEG_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = null, enabled = pipelineOn)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionUseLeftover, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionUseLeftover(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("余った時間も玉突きに使う", style = MaterialTheme.typography.bodyMedium)
-                    Text(EJECTION_LEFTOVER_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionUseLeftover, onCheckedChange = null, enabled = pipelineOn)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.c3nWallShortStall, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetC3nWallShortStall(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("禁止の並びだけ残ったら早めに切り上げる", style = MaterialTheme.typography.bodyMedium)
-                    Text(C3N_WALL_SHORT_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.c3nWallShortStall, onCheckedChange = null, enabled = !ui.running)
             }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -440,9 +411,6 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」のときに働きます"
-internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」のときに働きます"
-internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、組むのを早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」のときに働きます"
 internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */

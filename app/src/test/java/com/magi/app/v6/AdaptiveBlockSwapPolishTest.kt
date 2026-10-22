@@ -377,16 +377,14 @@ class AdaptiveBlockSwapPolishTest {
         val st = wishEveState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         assertEquals(2, before.breakdown["c3w"] ?: 0)
-        for (filter in listOf(true, false)) {
-            val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = filter)
-            val after = UnifiedViolationChecker.check(st, res.newSchedule)
-            assertEquals("filter=$filter: 交換を採って必須 2→1", 1, after.hard)
-            assertEquals("filter=$filter", 0, after.breakdown["c3w"] ?: 0)
-            assertEquals("filter=$filter", 1, after.breakdown["c3n"] ?: 0)
-        }
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D())
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+        assertEquals("交換を採って必須 2→1", 1, after.hard)
+        assertEquals(0, after.breakdown["c3w"] ?: 0)
+        assertEquals(1, after.breakdown["c3n"] ?: 0)
     }
 
-    /** 必須が正味で増える交換は評価前に捨てる＝ON は正式評価に回さず、OFF は評価して却下する。どちらも盤面は変わらない。
+    /** 必須が正味で増える交換は評価前に捨てる（正式評価に回さない）。盤面は変わらない。
      *  B は 2 日目（0 始まり 1）に N を希望して固定。交換できる日は 0・5 日目だけで、交換すると B が N,N になる＝必須が 1 増えるだけ。 */
     @Test
     fun aSwapThatOnlyAddsAForbiddenRunIsSkippedBeforeTheCheckerWithTheSameResult() {
@@ -396,12 +394,10 @@ class AdaptiveBlockSwapPolishTest {
         )
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         TuningTelemetry.reset()
-        val on = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = true)
+        val on = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D())
         val skipped = TuningTelemetry.c3nFilterSkipped.get()
-        val off = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = false)
         TuningTelemetry.reset()
-        assertTrue("ON は必須が増える候補を評価前に捨てる", skipped > 0)
+        assertTrue("必須が増える候補を評価前に捨てる", skipped > 0)
         assertEquals(before.hard, UnifiedViolationChecker.check(st, on.newSchedule).hard)
-        assertTrue("ON と OFF は同じ盤面", on.newSchedule.contentDeepEquals(off.newSchedule))
     }
 }

@@ -148,18 +148,13 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetAlgorithm -> vm.setV6Algorithm(e.algorithm)
             is MagiEvent.Settings.SetNativeAccel -> vm.setNativeAccel(e.on)
             is MagiEvent.Settings.SetNativeParity -> vm.setNativeParity(e.on)
-            is MagiEvent.Settings.SetBlockSwapC3nFilter -> vm.setBlockSwapC3nFilter(e.on)
             is MagiEvent.Settings.SetSearchStrength -> vm.setSearchStrength(e.strength)
             is MagiEvent.Settings.SetAptFairToleranceUnguarded -> vm.setAptFairToleranceUnguarded(e.on)
             is MagiEvent.Settings.SetC1MoveARepair -> vm.setC1MoveARepair(e.on)
             is MagiEvent.Settings.SetEjectionChain -> vm.setEjectionChain(e.mode)
-            is MagiEvent.Settings.SetEjectionChainSwap -> vm.setEjectionChainSwap(e.on)
             is MagiEvent.Settings.SetEjectionChainSeconds -> vm.setEjectionChainSeconds(e.seconds)
             is MagiEvent.Settings.SetEjectionChainScope -> vm.setEjectionChainScope(e.scope)
-            is MagiEvent.Settings.SetEjectionPipelineRounds -> vm.setEjectionPipelineRounds(e.on)
             is MagiEvent.Settings.SetEjectionPipelineHardLeg -> vm.setEjectionPipelineHardLeg(e.on)
-            is MagiEvent.Settings.SetEjectionUseLeftover -> vm.setEjectionUseLeftover(e.on)
-            is MagiEvent.Settings.SetC3nWallShortStall -> vm.setC3nWallShortStall(e.on)
             is MagiEvent.Settings.SetStallPolishInjection -> vm.setStallPolishInjection(e.on)
         }
         true

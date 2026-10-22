@@ -107,17 +107,12 @@ data class UiState(
     val budgetSec: Int = 60,   // 探索の時間。後処理は POST_RESERVE_SEC を後ろに足す（3.659.0 利用者指示: 既定 300→60）
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
-    val blockSwapC3nFilter: Boolean = true,     // [3.298.0/3.518.0/3.649.0] ブロック巡回交換で必須が正味で増える候補を候補生成段階で捨てるか（必ず却下される候補だけ）
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val aptFairToleranceUnguarded: Boolean = false,  // !AptFairPolish.heavySoftGuard（測定用・既定OFF）。じっくりの容認 6% でだけ効く。保存しない
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
-    val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
-    val ejectionPipelineRounds: Boolean = true,  // PolishGate.ejectionPipelineRounds（既定ON）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
-    val ejectionUseLeftover: Boolean = false,  // PolishGate.ejectionUseLeftover（測定中）。保存しない
-    val c3nWallShortStall: Boolean = false,  // PolishGate.c3nWallShortStall（既定OFF＝3.673.0）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない

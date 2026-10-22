@@ -1339,16 +1339,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp(if (on) "I" else "W", "設定変更: Kotlinパリティ照合 → ${if (on) "ON" else "OFF（純ネイティブ・誤結果の可能性）"}")
     }
 
-    /**
-     * [3.298.0 配線] ブロック巡回交換の事前フィルタ ON/OFF（既定 **ON**、3.518.0。設定画面には出さない＝3.528.0）。
-     * [3.649.0] 必須が正味で増える候補（正式採否が必ず却下する）だけを捨て、評価枠を残りの候補へ回す。
-     */
-    fun setBlockSwapC3nFilter(on: Boolean) {
-        com.magi.app.v6.PolishGate.filterC3nIncrease = on
-        _ui.update { it.copy(blockSwapC3nFilter = on) }
-        logOp("I", "設定変更: 必須が増える候補の事前フィルタ → ${if (on) "ON" else "OFF"}")
-    }
-
     fun setSearchStrength(strength: SearchStrength) {
         strength.apply()
         _ui.update { it.copy(searchStrength = strength) }
@@ -1373,12 +1363,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで直す → ${ejectionChainLabel(mode)}")
     }
 
-    fun setEjectionChainSwap(on: Boolean) {
-        com.magi.app.v6.PolishGate.ejectionChainSwapMoves = on
-        _ui.update { it.copy(ejectionChainSwap = on) }
-        logOp("I", "設定変更: 玉突きで入れ替えも使う → ${if (on) "ON" else "OFF"}")
-    }
-
     fun setEjectionChainSeconds(seconds: Int) {
         com.magi.app.v6.PolishGate.ejectionChainMaxMillis = seconds * 1000L
         _ui.update { it.copy(ejectionChainSeconds = seconds) }
@@ -1391,28 +1375,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで探す範囲 → ${ejectionChainScopeLabel(scope)}")
     }
 
-    fun setEjectionPipelineRounds(on: Boolean) {
-        com.magi.app.v6.PolishGate.ejectionPipelineRounds = on
-        _ui.update { it.copy(ejectionPipelineRounds = on) }
-        logOp("I", "設定変更: 玉突きで採れたら探し直す → ${if (on) "ON" else "OFF"}")
-    }
-
     fun setEjectionPipelineHardLeg(on: Boolean) {
         com.magi.app.v6.PolishGate.ejectionPipelineHardLeg = on
         _ui.update { it.copy(ejectionPipelineHardLeg = on) }
         logOp("I", "設定変更: 玉突きを必須の違反からも始める → ${if (on) "ON" else "OFF"}")
-    }
-
-    fun setEjectionUseLeftover(on: Boolean) {
-        com.magi.app.v6.PolishGate.ejectionUseLeftover = on
-        _ui.update { it.copy(ejectionUseLeftover = on) }
-        logOp("I", "設定変更: 余った時間も玉突きに使う → ${if (on) "ON" else "OFF"}")
-    }
-
-    fun setC3nWallShortStall(on: Boolean) {
-        com.magi.app.v6.PolishGate.c3nWallShortStall = on
-        _ui.update { it.copy(c3nWallShortStall = on) }
-        logOp("I", "設定変更: 禁止の並びだけ残ったら早めに切り上げる → ${if (on) "ON" else "OFF"}")
     }
 
     fun setStallPolishInjection(on: Boolean) {
@@ -1624,7 +1590,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** [3.694.0] 実行の開始点で 1 回だけ読む設定（利用者の設定値と PolishGate の現在値）。語は「設定の効き」と同じ源（`TuningTelemetry.toggleWords`）。 */
     private fun settingsStartWords(): String = com.magi.app.v6.TuningTelemetry.startSettings(
         nativeOn = _ui.value.nativeAccel, parityOn = _ui.value.nativeParity,
-        filterOn = com.magi.app.v6.PolishGate.filterC3nIncrease, wideOn = com.magi.app.v6.PolishGate.wideC3nBreakDays,
+        wideOn = com.magi.app.v6.PolishGate.wideC3nBreakDays,
         softPolishOn = _ui.value.softPolish, combineOn = com.magi.app.v6.PolishGate.combineExhaustPairs,
         aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance,
         countChainOn = com.magi.app.v6.PolishGate.countChainPolish,

@@ -170,8 +170,6 @@ class StallEscapeSpecTest {
         assertFalse(PolishGate.stallPolishInjection)
         assertFalse(PolishGate.postChainRollbackCountsZero)
         assertEquals(WishFloorMode.OFF, PolishGate.wishConflictFloorMode)
-        assertFalse("c3n 壁で短縮しない（3.673.0 で既定 OFF）", PolishGate.c3nWallShortStall)
-        assertFalse("基準腕（HEAD の壁判定）は既定で使わない", PolishGate.c3nWallLegacy)
         assertFalse("1 手探索の反証は既定で使わない（測定中）", PolishGate.c3nWallDeepCheck)
         assertFalse("適応閾値は既定で使わない（測定中）", PolishGate.adaptiveStall)
         assertEquals(2, V6FinalPort.STALL_OVERRIDE_FACTOR)
@@ -185,15 +183,12 @@ class StallEscapeSpecTest {
     @Test fun wallMeasurementSwitchesRoundTripThroughSnapshot() {
         val saved = PolishGate.snapshot()
         try {
-            PolishGate.c3nWallLegacy = true
             PolishGate.c3nWallDeepCheck = true
             PolishGate.adaptiveStall = true
             val snap = PolishGate.snapshot()
-            PolishGate.c3nWallLegacy = false
             PolishGate.c3nWallDeepCheck = false
             PolishGate.adaptiveStall = false
             PolishGate.restore(snap)
-            assertTrue("c3nWallLegacy は往復する", PolishGate.c3nWallLegacy)
             assertTrue("c3nWallDeepCheck は往復する", PolishGate.c3nWallDeepCheck)
             assertTrue("adaptiveStall は往復する", PolishGate.adaptiveStall)
         } finally { PolishGate.restore(saved) }
@@ -322,25 +317,6 @@ class StallEscapeSpecTest {
             diagnose = { live = V6NativeOptimizer.LiveBestSnapshot(best, listOf(listOf(9))); true },
         )
         assertFalse("診断の間に入れ替わったら判定を使わない", proof.bound())
-    }
-
-    // 測定の基準腕は HEAD の判定: 報告の参照を見ず、生存盤面の盤面を版ごとに一度だけ診断する
-    @Test fun c3nWallLegacyArmDiagnosesTheLiveBoardOncePerVersion() {
-        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val other = rep(2, 18000.0, 4, "c3n" to 1, "pref" to 1)
-        var version = 1
-        var diagCalls = 0
-        val proof = V6FinalPort.C3nWallProof(
-            bestVersion = { version }, bestReport = { best },
-            liveSnapshot = { V6NativeOptimizer.LiveBestSnapshot(other, listOf(listOf(1))) },
-            diagnose = { diagCalls++; true },
-        )
-        assertTrue(proof.legacy())
-        assertTrue(proof.legacy())
-        assertEquals("同じ版では一度だけ診断する", 1, diagCalls)
-        version = 2
-        proof.legacy()
-        assertEquals(2, diagCalls)
     }
 
     // ログの件数は呼び出し回数ではなく、生存盤面の更新ごとに数える

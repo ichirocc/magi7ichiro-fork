@@ -8,9 +8,7 @@ data class EngineConfig(
     /** 停滞の閾値＝予算×この割合（[V6FinalPort.normalStallMs]）。0.9 は 3.447.0 で据え置き確定（HF77）。 */
     val normalStallFraction: Double = 0.9,
     // 停滞・床・壁（`docs/stall_escape.md`。意味は PolishGate の同名の KDoc）
-    val c3nWallShortStall: Boolean = false,
     val floorShortStall: Boolean = true,
-    val c3nWallLegacy: Boolean = false,
     val c3nWallDeepCheck: Boolean = false,
     val adaptiveStall: Boolean = false,
     // 後処理（PostOptimizationParams へ渡す。じっくりで ON になる 3 つを含む）
@@ -31,9 +29,7 @@ data class EngineConfig(
         /** 設定画面・背景 Worker の復元が書いた [PolishGate] を写す。エンジンの入口でだけ呼ぶ。 */
         fun snapshot(): EngineConfig = EngineConfig(
             normalStallFraction = PolishGate.normalStallFraction,
-            c3nWallShortStall = PolishGate.c3nWallShortStall,
             floorShortStall = PolishGate.floorShortStall,
-            c3nWallLegacy = PolishGate.c3nWallLegacy,
             c3nWallDeepCheck = PolishGate.c3nWallDeepCheck,
             adaptiveStall = PolishGate.adaptiveStall,
             combineExhaustPairs = PolishGate.combineExhaustPairs,
@@ -43,11 +39,8 @@ data class EngineConfig(
                 c1Chain = PolishGate.c1EjectionChain,
                 allFamilyChain = PolishGate.allFamilyEjectionChain,
                 pipelineFocus = PolishGate.ejectionPipelineFocus,
-                pipelineRounds = PolishGate.ejectionPipelineRounds,
                 pipelineHardLeg = PolishGate.ejectionPipelineHardLeg,
-                swapMoves = PolishGate.ejectionChainSwapMoves,
                 maxMillis = PolishGate.ejectionChainMaxMillis,
-                useLeftover = PolishGate.ejectionUseLeftover,
                 holeFocus = C1EjectionChainPolish.defaultHoleFocus,
                 holeSoftOnly = C1EjectionChainPolish.defaultHoleSoftOnly,
             ),
@@ -55,16 +48,13 @@ data class EngineConfig(
     }
 }
 
-/** 玉突きの設定（設定タブの「玉突きで直す」4 択・入れ替え・採れたら探し直す・必須から・余った時間・秒数・範囲）。既定は本番の既定。 */
+/** 玉突きの設定（設定タブの「玉突きで直す」4 択・必須から・秒数・範囲）。既定は本番の既定。入れ替えと探し直しは P2d で常時。 */
 data class EjectionFlags(
     val c1Chain: Boolean = false,
     val allFamilyChain: Boolean = false,
     val pipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH,
-    val pipelineRounds: Boolean = true,
     val pipelineHardLeg: Boolean = false,
-    val swapMoves: Boolean = true,
     val maxMillis: Long = CHAIN_RESERVE_SEC * 1000L,
-    val useLeftover: Boolean = false,
     val holeFocus: Boolean = true,
     val holeSoftOnly: Boolean = true,
 )

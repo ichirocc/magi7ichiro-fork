@@ -24,9 +24,6 @@ class SearchStrengthTest {
             assertEquals(false, PolishGate.c1EjectionChain)
             assertEquals(false, PolishGate.allFamilyEjectionChain)
             assertEquals(com.magi.app.v6.EjectionChainPipeline.Focus.BOTH, PolishGate.ejectionPipelineFocus)
-            assertEquals(true, UiState().ejectionChainSwap)
-            assertEquals(true, PolishGate.ejectionChainSwapMoves)
-            assertEquals(PolishGate.ejectionPipelineRounds, UiState().ejectionPipelineRounds)
             assertEquals(PolishGate.ejectionPipelineHardLeg, UiState().ejectionPipelineHardLeg)
         } finally {
             PolishGate.combineExhaustPairs = saved[0]; PolishGate.wideC3nBreakDays = saved[1]

@@ -276,7 +276,7 @@ object FixSuggester {
             val budget = minOf((deadlineMs - (EngineClock.nowMs() - start)) / 2, ejection.maxMillis)
             if (budget <= 0) return
             val r = C1EjectionChainPolish.apply(state, s.copy2D(),
-                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = ejection.swapMoves, holeFocus = ejection.holeFocus, holeSoftOnly = ejection.holeSoftOnly, maxMillis = budget))
+                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, holeFocus = ejection.holeFocus, holeSoftOnly = ejection.holeSoftOnly, maxMillis = budget))
             val ops = ArrayList<FixCell>()
             for (i in 0 until p.S) for (j in 0 until p.T) if (r.newSchedule[i][j] != s[i][j]) ops.add(FixCell(i, j, r.newSchedule[i][j]))
             if (ops.size < 2 || (focus != null && ops.none { it.staff == focus })) return

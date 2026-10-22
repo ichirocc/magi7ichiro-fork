@@ -87,8 +87,8 @@ class OpLogTextTest {
     }
 
     @Test fun settingsStartLineUsesTheSameWordsAsTuningSummary() {
-        val words = com.magi.app.v6.TuningTelemetry.startSettings(true, true, false, false, true, false, false, true)
-        assertEquals("設定の開始時: ネイティブ加速（設定）=ON / Kotlin照合（設定）=ON / 必須が増える候補の事前フィルタ=OFF / 禁止連続の崩し範囲=OFF / 仕上げ最適化=ON" +
+        val words = com.magi.app.v6.TuningTelemetry.startSettings(true, true, false, true, false, false, true)
+        assertEquals("設定の開始時: ネイティブ加速（設定）=ON / Kotlin照合（設定）=ON / 必須が増える候補の事前フィルタ=ON / 禁止連続の崩し範囲=OFF / 仕上げ最適化=ON" +
             " / 結合探索を粘り強く=OFF / 公平化/適切回数の他ソフト許容(6%)=OFF / 回数連鎖研磨=ON", OpLogText.settingsStartLine(words))
     }
 

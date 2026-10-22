@@ -189,18 +189,13 @@ internal sealed interface MagiEvent {
         data class SetAlgorithm(val algorithm: V6Algorithm) : Settings
         data class SetNativeAccel(val on: Boolean) : Settings
         data class SetNativeParity(val on: Boolean) : Settings
-        data class SetBlockSwapC3nFilter(val on: Boolean) : Settings
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetAptFairToleranceUnguarded(val on: Boolean) : Settings
         data class SetC1MoveARepair(val on: Boolean) : Settings
         data class SetEjectionChain(val mode: EjectionChainMode) : Settings
-        data class SetEjectionChainSwap(val on: Boolean) : Settings
         data class SetEjectionChainSeconds(val seconds: Int) : Settings
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
-        data class SetEjectionPipelineRounds(val on: Boolean) : Settings
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
-        data class SetEjectionUseLeftover(val on: Boolean) : Settings
-        data class SetC3nWallShortStall(val on: Boolean) : Settings
         data class SetStallPolishInjection(val on: Boolean) : Settings
     }
 

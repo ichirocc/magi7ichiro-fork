@@ -144,16 +144,6 @@ object PolishGate {
     //   escape = ON5/OFF10（中立〜OFF寄り。3.306.0 の n=24 と合わせ2度目の中立）。
     //   hard 中央値はどちらも全データセットで不変。docs/algorithm_portfolio.md「廃止・統合済み」参照。
 
-    /**
-     * ブロック巡回交換で、必須(HARD)が正味で増える候補を**候補生成の段階で**捨てるか。既定 **true**（3.518.0）。
-     *
-     * [3.649.0] 判定は `HardDelta` の厳密な正味差分＝正式採否（HARD が先頭）が必ず却下する候補だけを捨てる。捨てた候補は
-     * 評価枠を使わないので、その枠は残りの候補へ回る（評価枠を使い切る盤面では OFF と採用が変わり得る＝OFF より悪くはならない）。
-     * 旧（3.295.0〜3.648.0）は c3n の増加だけで捨てていたため、c3w（3.542.0）や担当外シフトが減って必須の合計が減る候補まで
-     * 落としていた（`AdaptiveBlockSwapPolishTest` の反例。名前の C3n はその名残）。
-     */
-    @Volatile var filterC3nIncrease: Boolean = true
-
     /** [E0/測定中] 前面の「つくる」で HARD が希望衝突の床に到達したら頭打ち（E0A＝後処理は通常／E0B＝研磨を省いて時間を返す）。
      *  既定 OFF＝実データ A/B を見て利用者が決める（docs/history 3.613.0）。背景 Worker には渡さない。 */
     @Volatile var wishConflictFloorMode: WishFloorMode = WishFloorMode.OFF
@@ -168,23 +158,12 @@ object PolishGate {
      *  既定 **BOTH**（3.656.0 で昇格＝docs/history）。 */
     @Volatile internal var ejectionPipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH
 
-    /** パイプラインで採用があった巡のあと、索引を作り直してもう一巡する（最大 4 巡）。設定タブ「採れたら探し直す」。
-     *  既定 **true**（3.657.0、決定的 LoopBench で現行比 勝45/負0・必須増 0＝docs/history）。 */
-    @Volatile var ejectionPipelineRounds: Boolean = true
-
     /** パイプラインの BOTH の先頭に、必須の族の違反を起点にする焦点を足す。設定タブ「必須の違反からも始める」。
      *  既定 false（単独では必須増 2 で統計ゲート不合格＝docs/history 3.657.0）。 */
     @Volatile var ejectionPipelineHardLeg: Boolean = false
 
-    /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
-    @Volatile var ejectionChainSwapMoves: Boolean = true
-
     /** 玉突き連鎖 1 段あたりの上限ミリ秒（実時間モード）。残り時間の 1/4 との小さい方を使う。値は HF77 の明示指示で決める。 */
     @Volatile var ejectionChainMaxMillis: Long = CHAIN_RESERVE_SEC * 1000L   // 3.659.0 利用者指示: 6 秒→10 秒
-
-    /** [測定中] 玉突きパイプラインの深い探索の上限を「締切までの残り」まで広げる（探索が早く止まって余った時間を後半で使う）。
-     *  上限より残りが短ければ従来どおり。既定 false（2026-10-14 利用者「60秒で悪化するので、その分を後半処理で取り返します」→ 測って採否）。 */
-    @Volatile var ejectionUseLeftover: Boolean = false
 
     /** [測定中] 全SOFT玉突き連鎖（`SoftCascadePolish`）を後処理の最後に置く。既定 **false**（測定が終わるまで）。 */
     @Volatile var softCascade: Boolean = false
@@ -247,16 +226,9 @@ object PolishGate {
     /** 後処理チェーンの先頭で貪欲な局所降下（`PrePostDescent`）をかける。既定 **false**（測定中）。 */
     @Volatile var prePostDescent: Boolean = false
 
-    /** `docs/stall_escape.md` §5.3: c3n 壁（ForbiddenDiag の限定した手の壁判定）で停滞閾値を短縮するか。false＝c3n だけが残っても通常閾値で粘る。
-     *  既定 **false**（3.673.0: 60 s の予算では短縮が損＝sample 24 対で +95.7・区間 [+40.6, +153.8]、利用者「60秒の損失を取り返す方法を採用する」）。 */
-    @Volatile var c3nWallShortStall: Boolean = false
-
     /** 必須違反が構造の下限に届いたら停滞閾値を短縮する（`effectiveStallMs` の basePlateau）。false＝下限に届いても通常閾値で粘る。
      *  既定 **true**＝従来どおり（実機ログ 2026-10-15: 300 s 予算で 59 s に終わった件の測定用。採否は測ってから）。 */
     @Volatile var floorShortStall: Boolean = true
-
-    /** 測定用の基準腕（`docs/stall_escape.md` §5.3）: true＝HEAD の壁判定（版ごとに固定・生存盤面の診断・一致の検査なし）。既定 **false**。 */
-    @Volatile var c3nWallLegacy: Boolean = false
 
     /** 根拠の精度（`docs/stall_escape.md` §5.3、3.643.0）: 経験的な c3n 壁（探索手の全滅）は、1 手探索（`FixSuggester`、上限 2 s）でも必須を減らす手が
      *  無いときだけ短縮に使う。希望固定だけの壁（証明相当）は従来どおり。既定 **false**（計測は経験的な壁のフィクスチャ待ち＝ベンチの腕 `deep`、`docs/stall_escape.md` §11）。 */
@@ -267,37 +239,35 @@ object PolishGate {
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
         "wideC3nBreakDays" to wideC3nBreakDays, "c1MoveARepair" to c1MoveARepair,
-        "filterC3nIncrease" to filterC3nIncrease,
+        
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name,
-        "ejectionPipelineRounds" to ejectionPipelineRounds, "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
-        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "normalStallFraction" to normalStallFraction, "ejectionUseLeftover" to ejectionUseLeftover,
+        "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
+        "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs,
         "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
     fun restore(m: Map<String, Any?>) {
         fun b(k: String, set: (Boolean) -> Unit) { (m[k] as? Boolean)?.let(set) }
         b("wideC3nBreakDays") { wideC3nBreakDays = it }; b("c1MoveARepair") { c1MoveARepair = it }
-        b("filterC3nIncrease") { filterC3nIncrease = it }
+        
         (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
         (m["ejectionPipelineFocus"] as? String)?.let { n -> EjectionChainPipeline.Focus.entries.firstOrNull { it.name == n }?.let { ejectionPipelineFocus = it } }
-        b("ejectionPipelineRounds") { ejectionPipelineRounds = it }; b("ejectionPipelineHardLeg") { ejectionPipelineHardLeg = it }
-        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }
+        b("ejectionPipelineHardLeg") { ejectionPipelineHardLeg = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
-        b("ejectionUseLeftover") { ejectionUseLeftover = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }
         b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }
     }
 }
 
@@ -393,10 +363,10 @@ object TuningTelemetry {
             " / 回数連鎖研磨=$countChain"
 
     /** 実行の開始点で読んだ設定を ON/OFF だけで出す。「（設定）」は利用者の選択＝実際に使えたかは [summary]（設定の効き）が示す。 */
-    fun startSettings(nativeOn: Boolean, parityOn: Boolean, filterOn: Boolean, wideOn: Boolean, softPolishOn: Boolean,
+    fun startSettings(nativeOn: Boolean, parityOn: Boolean, wideOn: Boolean, softPolishOn: Boolean,
                       combineOn: Boolean, aptFairOn: Boolean, countChainOn: Boolean): String {
         fun w(b: Boolean) = if (b) "ON" else "OFF"
-        return toggleWords(w(nativeOn), w(parityOn), w(filterOn), w(wideOn), w(softPolishOn), w(combineOn), w(aptFairOn), w(countChainOn), settingSuffix = "（設定）")
+        return toggleWords(w(nativeOn), w(parityOn), w(true), w(wideOn), w(softPolishOn), w(combineOn), w(aptFairOn), w(countChainOn), settingSuffix = "（設定）")
     }
 
     /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。
@@ -421,7 +391,7 @@ object TuningTelemetry {
         return toggleWords(
             native = if (nativeOn) "ON" else "OFF",
             parity = eff(parityOn, parityChecks.get(), "回"),
-            filter = eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の必ず却下される検査を省略"),
+            filter = eff(true, c3nFilterSkipped.get(), "件の必ず却下される検査を省略"),
             wide = wide,
             softPolish = eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替"),
             combine = if (combineExhaustPairs) "ON" else "OFF",
@@ -737,8 +707,7 @@ object V6HotfixPasses {
         val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
         fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
             EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
-                deepMaxMillis = if (ej.useLeftover) maxOf(ej.maxMillis, EngineClock.remainingMs(deadlineMs)) else ej.maxMillis,
-                swapMoves = ej.swapMoves, repeatRounds = ej.pipelineRounds, hardLeg = ej.pipelineHardLeg,
+                deepMaxMillis = ej.maxMillis, hardLeg = ej.pipelineHardLeg,
                 holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
             previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
             shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
@@ -818,8 +787,8 @@ object V6HotfixPasses {
             val tEj = EngineClock.nowMs()
             val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, swapMoves = ej.swapMoves, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, ej.maxMillis))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
