@@ -268,7 +268,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     return AnalysisTriage(
         computed = computed,
         blockers = blockers,
-        issues = aggregateIssues(ui.settingIssues),
+        issues = aggregateIssues(com.magi.app.v6.fixItems(ui.settingIssues)),
         searching = searching,
         okFamilies = ok,
         busyFamilies = busy,

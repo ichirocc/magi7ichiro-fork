@@ -416,7 +416,7 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
         return
     }
     logOp("I", "各制約CSV取込: ${res.accepted}件を反映（制約一式を置換）")
-    applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人の回数の下限・上限は置換）")
+    applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人の回数の下限・上限は置換）" + periodOverflowNote(res.state))
 }
 
 /** [コンポーネント別取込/3.547.0] シフト種別の色CSV（記号,色）。掲載された記号だけ upsert で更新、

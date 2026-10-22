@@ -1216,7 +1216,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixFocusName = "", stalledHardFamilies = emptyList(),
                                 consults = emptyList(),   // 相談も前のデータの対象を指している（T01）
                                 sameResult = null,   // [3.716.0] 「前回と同じ結果」も前のデータの実行の印
-                                message = "読込完了: ${lp.state.staffCount}名 / ${DayText.range(lp.state.startDate, 0, lp.state.dayCount - 1)}（${lp.state.dayCount}日） / ${lp.state.shiftCount}シフト$note",
+                                message = "読込完了: ${lp.state.staffCount}名 / ${DayText.range(lp.state.startDate, 0, lp.state.dayCount - 1)}（${lp.state.dayCount}日） / ${lp.state.shiftCount}シフト$note${periodOverflowNote(lp.state)}",
                             )
                         }
                         rollback = null

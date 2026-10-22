@@ -76,7 +76,7 @@ internal fun PreRunCheckSheet(
                 t.overCapRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult, onCancelConsult) }
             }
             t.wallLine?.let { w ->
-                Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                Text("■ 対象外のシフト（上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(w, style = MaterialTheme.typography.bodyMedium)
                 t.wallLanding?.let { l ->
                     TextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }

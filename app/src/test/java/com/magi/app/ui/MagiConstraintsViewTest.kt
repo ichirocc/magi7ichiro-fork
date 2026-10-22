@@ -119,8 +119,27 @@ class MagiConstraintsViewTest {
         assertNotNull(cons2InputError("0"))
         assertNull(cons2InputError("3"))
         assertNull(cons2InputError(""))
+        assertNotNull("合計>期間", cons2InputError("31", 30))
+        assertNull("合計=期間は通す", cons2InputError("30", 30))
+        assertNull("勤務表が無い(0日)ときは上限を見ない", cons2InputError("40", 0))
         assertTrue("レンジの両方空欄は評価されない", rangeBothBlank(" ", ""))
         assertFalse(rangeBothBlank("", "2"))
+    }
+
+    /** [backlog #42(h)⑥] 取込は断らず、期間を超える行だけエディタと同じ文言で警告する。 */
+    @Test
+    fun periodOverflowWarningsUseEditorWording() {
+        val base = load("/golden_state.json")
+        val t = base.dayCount
+        val k = base.shifts.first().kigou
+        val st = base.copy(cons1 = listOf(C1Row("${t + 5}", k, "1"), C1Row("$t", k, "1")),
+            cons2 = listOf(com.magi.app.model.C2Row(k, "${t + 1}"), com.magi.app.model.C2Row(k, "$t")))
+        val w = periodOverflowWarnings(st)
+        assertEquals(2, w.size)
+        assertEquals("期間の制約「${t + 5}日間に$k 1回以上」：" + cons1InputError("${t + 5}", "", t), w[0])
+        assertTrue(w[1], w[1].startsWith("個人の合計「$k ${t + 1}回」：") && w[1].endsWith(cons2InputError("${t + 1}", t)!!))
+        assertTrue(periodOverflowNote(st).contains("2件"))
+        assertEquals("", periodOverflowNote(base.copy(cons1 = emptyList(), cons2 = emptyList())))
     }
 
     /** 同じ値の行は違反が2倍に数えられる＝入口で止める。数値の 05 と 5 は同じ、自分自身（変更時）は除く。 */

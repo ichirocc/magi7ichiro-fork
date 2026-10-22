@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 個人の上限0を「対象外（上限0）」と中立表示・期間を超える c1/c2 行の取込警告（2026-10-22、3.723.1、ユーザー決定「推奨で」、backlog #11・#42(h)⑥）: 画面のみ・出力不変。  → `docs/history/3.4xx.md`
+- 文書の照合（2026-10-22、出力不変）（版上げなし・文書/コメント/未使用関数のみ）: stall_escape の wishC3wProven・wishReached・§10 表に floorCountsUpperZero／floorShortStall、business-logic・backlog #42(b)/#43②/#44④・screen_spec・README の目次と重み21種・最終更新の順、未使用の SetupGuideCard を削除  → `docs/history/3.4xx.md`
 - Q-05/Q-06 を推奨案 A で決定（2026-10-22、ユーザー「推奨で」、出力不変・版なし）: 群レンジの上限 0 は SOFT 目標のまま（入れない指定は「グループ単位の回数」の上限 0）＝business-logic、M-07 は Staff.id で解決済みとして閉じ CSV の名前照合の扱いを明記＝data-models。設計書の P8・P9 は文書だけで完了。
 - 段階的全面改修の設計書（完全版）を追加（2026-10-22、ユーザー決定「全面改修する」、出力不変・版なし）: `docs/overhaul_design.md`＝ゲート（チェッカーが真実源・Δ=フル・native-parity/golden・keep-best・最終番兵・保存世代・HF77・盤面ハッシュ一致）、段階 P0〜P7（P0〜P5 は出力不変のリファクタ、P6 グループ上限0・P7 識別子は仕様決定後）、付録 A に Q-05/Q-06 の仕様調査。
 - versionCode/versionName の採番検査を CI に（2026-10-22、U-04、出力不変・版なし）: `tools/check_version.py` を Design Lint ジョブに追加（main 以外）。この変更が版を変えたときだけ main の先端と比べ、versionName が変わったのに versionCode が増えていない・versionCode が減った・名前が同じで code だけ変わった を落とす（並行セッションが同じ番号で先にマージした場合も検出）。版を変えない docs/tools の変更は検査しない。

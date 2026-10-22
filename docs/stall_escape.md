@@ -145,7 +145,7 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 ```
 
 - `hardFloor` は §4 の構造的 covU 床（1 回だけ算出）。「非 covU HARD = 0」を併せるのは、群外の過配置が covU を床より見かけ上へこませても、解ける groupViol が残る間は長い閾値で粘るため。
-- `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
+- `wishC3wProven` は `wishConflictFloorMode ≠ OFF` または `PolishGate.floorCountsUpperZero`（3.709.0 から既定 ON）のとき数える（`wishOn`、`V6FinalPort`）。両方 OFF のときだけ 0。数えるときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
 - `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行する。3.642.0 から `C3nWallProof` が次の規則で証拠を選ぶ（既定）。
   - 生存盤面（`V6NativeOptimizer.liveBestSnapshot`）の報告が最良の報告 `wd.bestReport` と**同じ参照**のときだけ、その盤面を診断する（`C3nWallProof.bound`）。値が同じだけの別の報告は使わない。
     生存盤面は `publishLiveBest` が出すが、呼出は `ownsStatics(runSlot())`（スロット無しの直接呼出か、そのスロットが最新の run。`handleOptimize` 経由では常にスロットがある）のときだけ＝古い run が残す盤面は証拠にならない。
@@ -156,7 +156,7 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
   - 測定の基準腕 `PolishGate.c3nWallLegacy=true` は HEAD（版ごとに一度、生存盤面を一致の検査なしに診断）。
   - 3.643.0（`PolishGate.c3nWallDeepCheck`、既定 false）: 壁を証明相当（全 run の全セルが希望固定、`ForbiddenRunDiagnosis.allBlockedCertified`）と経験的（探索手の全滅）に分け、経験的な壁は `c3nWallRefutedByOneMove` が手を見つけないときだけ `c3nWallProven` とする。OFF では従来どおり `allBlocked` だけで判定する。反証は壁でない方向にしか働かない。C# の `FixSuggester.Suggest` には `ejectionChain` が無いので ON のときの反証は C# の方が弱い（既定 OFF では同値。`windows/README.md` 2026-10-08 の記録）。
 - `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る。3.641.0 で測った（§11、sample_v6×5 seed）: 120 s では損失なし、60 s では短縮なしが 1.6% 良い（時間 1.75 倍）、300 s では 0.7% 良い（時間 2.35 倍、非有意）。測定スイッチは `PolishGate.c3nWallShortStall`。
-- `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
+- `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。`wishOn`＝`wishConflictFloorMode ≠ OFF ∨ floorCountsUpperZero` のとき短縮判定へ配線する（`floorCountsUpperZero` は 3.709.0 から既定 ON＝`wishConflictFloorMode` が OFF でも上限0込みの床への到達で短い閾値へ移る。E0A 相当）。両方 OFF なら配線しない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
 
 ### 5.4 発火式と境界
@@ -360,6 +360,8 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 |---|---|---|
 | `PolishGate.stallPolishInjection` | false（設定タブからは 3.628.0 で非表示） | 全体最良の最終改善と最終試行の遅い方（`max(lastGlobalImproveMs, lastTryMs)`）から `max(20 000, budgetSec×100)` ms 経ったとき、最良の写しへ後処理を 6 000 ms 上限で当て、良ければ全体最良へ。回数 3 未満・探索残り 8 000 ms 以上が条件（`StallPolishInjection.shouldInject`） |
 | `PolishGate.wishConflictFloorMode` | OFF | 希望床の短縮終了（E0A）／E0B は最小後処理へ |
+| `PolishGate.floorCountsUpperZero` | **true**（3.709.0〜） | 頭打ちの床に上限0を含める。床へ届くと短い閾値へ移る＝`wishConflictFloorMode` が OFF でも E0A 相当の短縮（§5.4 の `wishReached`） |
+| `PolishGate.floorShortStall` | true（UI なし） | 床に届いたときの短い閾値を使う。測定の切り分け用 |
 | `extraRefineRequirePostHardDrop` | false（引数） | 残存 HARD が §4 の床のときだけ追加精製を省く。実質 A/A で信号なし（backlog #35） |
 | `V6OptimizerOptions.rsiFocusRotationPersist` | false | 周期枠を `runRsi` 呼出しをまたいで継続（有意差なし、backlog #28） |
 | `PolishGate.postChainRollbackCountsZero` | false | 巻き戻したパスの採用数を 0 と数える |

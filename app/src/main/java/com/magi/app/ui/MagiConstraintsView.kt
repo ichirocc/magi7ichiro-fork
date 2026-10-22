@@ -61,8 +61,38 @@ internal fun cons1InputError(d1: String, d2: String, dayCount: Int): String? {
     }
 }
 
-internal fun cons2InputError(count: String): String? =
-    count.trim().toIntOrNull()?.let { if (it < 1) "合計は 1 以上で入れてください" else null }
+internal fun cons2InputError(count: String, dayCount: Int = 0): String? =
+    count.trim().toIntOrNull()?.let {
+        when {
+            it < 1 -> "合計は 1 以上で入れてください"
+            dayCount in 1 until it -> "合計は 1〜$dayCount で入れてください（勤務表は $dayCount 日です）"
+            else -> null
+        }
+    }
+
+/** [backlog #42(h)⑥] 取込（CSV・JSON）で受理した行のうち、期間を超える期間の制約（何日間）と個人の合計。
+ *  取込は断らず（データの互換）、エディタと同じ文言で警告だけ返す。 */
+internal fun periodOverflowWarnings(st: MagiState): List<String> {
+    val t = st.dayCount
+    if (t <= 0) return emptyList()
+    val out = ArrayList<String>()
+    for (r in st.cons1) {
+        val d = r.day1.trim().toIntOrNull() ?: continue
+        if (d > t) out += "期間の制約「${d}日間に${r.shiftKigou} ${r.day2.trim()}回以上」：" + cons1InputError(r.day1, "", t)
+    }
+    for (r in st.cons2) {
+        val err = cons2InputError(r.count, t) ?: continue
+        if ((r.count.trim().toIntOrNull() ?: 0) > t) out += "個人の合計「${r.shiftKigou} ${r.count.trim()}回」：$err"
+    }
+    return out
+}
+
+/** 取込の完了メッセージの末尾（警告なしは空）。3 件まで並べ、残りは件数。 */
+internal fun periodOverflowNote(st: MagiState): String {
+    val w = periodOverflowWarnings(st)
+    if (w.isEmpty()) return ""
+    return "｜⚠ 期間を超える行が${w.size}件あります（取り込みましたが満たせません）: " + w.take(3).joinToString(" ／ ") + (if (w.size > 3) " ほか" else "")
+}
 
 /** グループ/スキルグループのレンジ: 両方空欄の行は評価されない（`Problem` が未解決行へ落とす）。 */
 internal fun rangeBothBlank(l: String, u: String): Boolean = l.isBlank() && u.isBlank()
