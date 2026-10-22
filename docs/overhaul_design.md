@@ -1,12 +1,35 @@
-# MAGI ShiftOptimizer 段階的全面改修 設計書（完全版）
+# MAGI ShiftOptimizer 段階的全面改修 設計書（完全版 v2）
 
-- 版: 2026-10-22 完全版（同日の下書きを置き換え）。決定: ユーザー「全面改修する」（2026-10-22）。
+- 版: v2（2026-10-22、完全版 v1 を改訂）。決定: ユーザー「全面改修する」「完全版にアップグレードする」（2026-10-22）。
+- v2 の改訂点: 進捗の現況（§2.3）、不変条件 INV との対応（§3.1）、各段の PR 分割（§6.1）、CI の対応表（§6.2）、C# 同期の積み残し一覧（§8.1）、複数セッションの運用（§8.2）、本書の変更手順（§13）。PolishGate の数を実数（39）に訂正。
 - 対象: `ichirocc/magi7ichiro-fork`（Kotlin が正）。C++ `app/src/main/cpp/magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植で、各段を同日に同期する。
 - 根拠: `docs/architecture.md`・`docs/sudo_model.md`・`docs/business-logic.md`・`docs/data-models.md`・`docs/stall_escape.md`・
   `docs/safety_inventory.md`（Q-02/Q-07 の棚卸し）と 3.723.0 時点のコード。数字は 2026-10-22 の実測。推定には【仮定】と書く。
 - 本書の位置づけ: 何を変え、何を変えないか、どの順で、何をもって合格とするかの正。各段の作業記録は従来どおり `docs/history/` に残す。
 
 ---
+
+## 0. 本書でいう「全面改修」の定義
+全面改修とは、**アプリの外から見た振る舞い（最適化の結果・判定・画面の意味・保存形式）を変えずに、内部の構造を全層にわたって作り直すこと**をいう。
+- 範囲: エンジン（探索の設定・時間予算・後処理）、制約の位置と説明、ViewModel、テスト基盤、文書の全層。Kotlin・C++・C# の 3 実装すべて。
+- 方法: **一度にすべて置き換える**（2026-10-22 ユーザー指示）。統合ブランチで安全網（§4）を最初のコミットに作り、段（§6）ごとにコミットを分けて全部を作り切り、合格ゲート（§3、G1〜G16）と受け入れ基準（§0.1）をすべて満たしてから main へ 1 回で入れる。
+- 含まないもの: 重み・閾値の変更、探索の動きの変更、業務仕様・データ形式の変更（§1.2）。これらは本改修とは別の手続き（HF77、§7 の計測、ユーザーの決定）で扱う。
+- 終わり: §12 の完了の定義を満たしたとき。
+
+### 0.1 全面改修の意義と受け入れ基準（2026-10-22 ユーザー指示）
+全面改修は、次の 6 点をすべて満たして初めて main に入れる。「同等以上」は「改修前の main（基準版）より悪くならない」の意味で、測って示す。
+| # | 意義 | 何を比べるか | 合格の線 | ゲート |
+|---|---|---|---|---|
+| S1 | 既存機能の同等以上 | 全画面の操作・判定・診断・保存・取込の結果 | 既存の JUnit・C# テストが全件通る。チェッカー出力・診断文のスナップショットが一致。機能の削除は §1.2 と決定済みのフラグ整理だけ | G1・G6・G8・G12 |
+| S2 | 既存の高精度以上 | 違反の判定と点数（チェッカー・差分評価・C++） | 違反リスト・breakdown・weightedScore が全 fixture で完全一致。Δ＝フル、Kotlin＝C++ | G1・G2・G3・G7 |
+| S3 | 既存の最適化の同等以上 | 最終盤面の質 | 決定的モードの盤面ハッシュが一致。時間制は HandleOptimizeBench（6 データ×5 seed 以上）で基準版と対で比べ、必須の悪化 0・weighted の平均差の 95% 区間の上端が 0 以下（悪化と言えない） | G8・G15 |
+| S4 | 既存の最適化時間の同等以上（遅くならない） | 同じ予算での経過時間、床・壁に届くまでの時間 | 同じ対の比較で経過時間の中央値が基準版以下（許容 +2% かつ +1 秒以内）。予算・締切の値は基準版と同じ | G15 |
+| S5 | 既存のパフォーマンスの同等以上 | 評価の速さ（Δ評価・C++ の手の数/秒）、メモリ、起動・画面の応答 | `host_parity_bench` の手の数/秒が基準版以上（許容 −2%）。ホストテストの所要時間、端末での最大ヒープ（実機ログ）が基準版以下 | G16 |
+| S6 | 既存の責務の整理整頓 | 責務の置き場所 | §12 の完了の定義（フラグ・予算・後処理・制約の位置・ViewModel がそれぞれ 1 か所） | §12 |
+
+- 基準版: 統合ブランチを切った時点の main（固定 SHA）。比較のデータと seed は改修の間ずっと同じものを使う。
+- S3〜S5 は、統合ブランチの先端で最後に一括で測る（途中の段でも参考に測るが、合否は最後）。
+- 1 つでも満たさなければ main に入れない。原因を直して測り直す。合格の線を緩めない。
 
 ## 1. 目的と非目的
 
@@ -21,7 +44,7 @@
 - 重み・閾値・データ値の変更（HF77）。`MirrorKeys.weights` が唯一の正のまま。
 - 探索の動き（受理・近傍・停止・配分の式）の変更。変えるものは既定 OFF のフラグで別途測ってから決める（§7）。
 - 否決済みの案の再導入（§9.2）。
-- 業務仕様の変更。グループ上限0（Q-05）と CSV の職員 ID 列（Q-06）は、ユーザーの決定後に別の段で扱う（§6 P8・P9）。
+- 業務仕様の変更。グループ上限0（Q-05）と職員の照合（Q-06）は 2026-10-22 に案 A（今のまま＋文書化）で決定済み（§6 P8・P9）。
 - 一括の改名・ディレクトリの総入れ替え。C# との対応を追えなくなる。
 
 ---
@@ -52,7 +75,19 @@
 | 書き込み口 | `ScheduleWriteSitesTest` が盤面を書き換えてよい関数を固定 | 同テスト |
 | 版の採番 | `tools/check_version.py`（U-04、PR #393） | CI `design-lint` |
 
-### 2.3 弱点（コードの根拠つき）
+### 2.3 進捗の現況（2026-10-22 時点）
+| 項目 | 状態 | 根拠 |
+|---|---|---|
+| U-04 版の採番検査（G13） | 完了 | PR #393（main 24c308a3） |
+| 本書・安全機構の棚卸し | 完了（本書は v2） | `docs/overhaul_design.md`、`docs/safety_inventory.md` |
+| P1 の一部（B-03・M-02・M-01・U-03・L-03） | 完了 | 3.723.2（PR #395、main 2dcc15d1） |
+| P1 の残り（`NativeGateFallbackTest`・`SaveRetryWiringTest`） | 未着手 | §5 |
+| P0 安全網 | 未着手 | §4。C# の停止明けに C# 分 |
+| P2〜P7 | 未着手 | P0・P1 の完了が前提 |
+| P8・P9 | 完了（文書のみ） | `docs/business-logic.md`（群レンジ上限0）、`docs/data-models.md`（職員の照合） |
+| C# 同期 | 保留（2026-10-22 から 24 時間停止） | §8.1 の一覧 |
+
+### 2.4 弱点（コードの根拠つき）
 | ID | 弱点 | 根拠 | 影響 |
 |---|---|---|---|
 | W1 | 時間予算の定義が分散（M-03/M-04） | `V6FinalPort.kt:250-289`（`normalStallMs`）・`:574`（`budgetMs`）・`:868/:888`（締切）、`V6NativeOptimizer.kt:1344`（`SaParams`）、`V6HotfixPasses.kt:907`（60 s 固定）、`EjectionChainPipeline.kt:44`、`CombinatorialRepair.kt:44`。予算・期限の識別子は v6 全体で約 150 か所。時計 `EngineClock.kt`（23 行）に残予算の概念は無い | 配分の不整合（RSI+ が短い予算で全体を超える＝backlog #16）、読み解きの難しさ |
@@ -79,9 +114,23 @@
 | G8 | 作り直す段では結果が変わらない | **盤面ハッシュ一致**（§4）。対象は (a) 後処理の決定的モード（`PostOptimizationParams.deterministic`）で 6 fixture × 固定 seed の最終盤面、(b) 全 fixture のチェッカー出力（違反リストと breakdown）、(c) 診断文のスナップショット |
 | G9 | 探索の動きを変えるものは既定 OFF のフラグで入れ、ペア比較で採否 | `tools/loop` の HandleOptimizeBench（6 データ×5 seed 以上、hard 悪化 0・weighted の 95% 区間）。否決なら記録だけ残す |
 | G10 | C# 同日同期 | `MagiEngine.Tests`・`MagiApp.ViewModels.Tests` 全件（ログで確認、パイプで切らない）、WinUI ビルド（CI） |
-| G11 | 1 段＝1 版、小さな PR | 目安 ±600 行。機械的な移動はそれ以上でもよいが、移動と意味の変更を同じ PR に入れない |
+| G11 | 統合ブランチの中は段ごとにコミットを分ける | 1 段＝1 コミット以上。移動と意味の変更を同じコミットに入れない（どこで結果が変わったかを二分探索できるように）。main へは G14 のとおり 1 回 |
 | G12 | 画面に触れた段 | CI `android-sdk`（workflow_dispatch）で実コンパイル、`design-review`、`design_lint` hard 0 |
 | G13 | 版の採番 | `tools/check_version.py`（重複・減少を落とす） |
+| G14 | 一括で入れる | 統合ブランチの先端で G1〜G16 をすべて満たしてから、main へ 1 回で入れる（2026-10-22 ユーザー指示「一度にすべて置き換える」） |
+| G15 | 最適化の質と時間（S3・S4） | HandleOptimizeBench で基準版と対で比較（必須の悪化 0、weighted の区間の上端 ≤ 0、経過時間の中央値 ≤ 基準版＋2% かつ＋1 秒） |
+| G16 | 性能（S5） | `host_parity_bench` の手の数/秒 ≥ 基準版−2%、ホストテストの所要時間・実機の最大ヒープ ≤ 基準版 |
+
+### 3.1 不変条件（`docs/invariants.md`）との対応
+ゲートは改修の進め方の条件、INV はアプリの振る舞いの条件。改修の各 PR は、触れる INV を `docs/invariants.md` の表で確かめ、その検証 T を走らせる。
+| ゲート | 主に守る INV | 検証 |
+|---|---|---|
+| G1・G2・G3 | INV-11（言語間の一致） | T12 |
+| G4 | INV-05（採否の比較は 1 つ）、INV-09（悪い結果を採らない） | T7 |
+| G5 | INV-04（希望固定を動かさない）、INV-09 | T1・T7 |
+| G6 | INV-07（試算は保存へ副作用なし） | T11・保存系 |
+| G7 | INV-12（HF77） | T13 |
+| G8 | INV-01〜INV-04（自動で取り消さない・上限0・手動固定・希望固定） | T1・T2・T8 と盤面ハッシュ |
 
 注意（G8 の限界）: `handleOptimize` 全体は時間依存で決定的ではない（`tools/loop/README.md`：後処理の時刻由来の種が残る）。
 したがって探索部（SA・ポートフォリオ）の作り直しは G2・G3（評価の一致）と、時間配分のログ比較（§6 P3）で示す。
@@ -113,20 +162,20 @@
 | M-01 原子置換を諦めたときの記録 | `NonAtomicFallbackLogTest` | `prevBackupFile` の書き込みにも記録の受け口を渡す |
 | U-03 重みの検査が `10_000L`・`1e4` を拾わない | `tools/test_weight_lint.py` | 正規表現を広げ、自己テストを CI で走らせる |
 
-（B-03・M-02・M-01・U-03・L-03 の文言は作業中の分にすでに含めている。）
+（B-03・M-02・M-01・U-03・L-03 は 3.723.2 に入れた。残りは `NativeGateFallbackTest` と `SaveRetryWiringTest`。）
 
 ---
 
 ## 6. 段階計画
 
-出力を変えない作り直し（P2〜P6）を先に済ませる。意味やデータ形式を変える段（P8・P9）はユーザーの決定の後に回す。
+統合ブランチの中で P0 から順に作る（出力を変えない作り直し）。P8・P9 は決定済み（文書のみ）。main へは全段が揃ってから 1 回で入れる（G14）。
 各段の C# は同日に同じ分け方で入れる。
 
 | 段 | 範囲 | 主なファイル | 合格 | 戻し方 | C# | 規模 |
 |---|---|---|---|---|---|---|
 | **P0 安全網** | §4 の 3 テスト | `app/src/test/`、`tools/host/` | 決定性（2 回一致）、増分 60 s 以内 | テスト追加のみ＝revert | 同名テスト | S |
 | **P1 穴埋め** | §5 | 各判定を純関数へ切り出す箇所 | G1〜G8 | revert | 同等の判定を C# にも | S〜M |
-| **P2 EngineConfig** | `PolishGate` の 36 フィールドを不変の `EngineConfig`（data class）に集め、実行開始時に 1 回スナップショット。各パスは引数で読む。移行中は `PolishGate` を `EngineConfig.current()` を作るためのファサードとして残す | `V6HotfixPasses.kt:117〜`、`V6FinalPort`、`V6NativeOptimizer`、`RsiHypothesisOperators`、`V6PortAnalyzer`、設定を渡す `MagiViewModel` | G8、既定値の表テスト（36 個すべて） | PR ごとに revert。ファサードで呼び出し側は無傷 | `EngineConfig.cs` | M（3 PR） |
+| **P2 EngineConfig** | `PolishGate` の 39 フィールドを不変の `EngineConfig`（data class）に集め、実行開始時に 1 回スナップショット。各パスは引数で読む。移行中は `PolishGate` を `EngineConfig.current()` を作るためのファサードとして残す | `V6HotfixPasses.kt:117〜`、`V6FinalPort`、`V6NativeOptimizer`、`RsiHypothesisOperators`、`V6PortAnalyzer`、設定を渡す `MagiViewModel` | G8、既定値の表テスト（39 個すべて） | PR ごとに revert。ファサードで呼び出し側は無傷 | `EngineConfig.cs` | M（3 PR） |
 | **P3 TimeBudget** | 予算を 1 個の `TimeBudget`（`EngineClock` の上に `deadline`・`remaining()`・`split(fraction, floorMs)`）へ。今の式は数値ごと写す（`normalStallMs` の下限 20,000 ms、`postReserve` 20 s 等） | W1 の各ファイル | 決定的モードで G8。時間制では各段の割当 ms をログで前後比較（差 0 であること） | revert | `TimeBudget.cs` | M（2 PR） |
 | **P4 PostPipeline** | 後処理チェーンを `Stage { key; run(board, budget, cfg) }` の並びにする（順序も中身も不変）。走行 keep-best と `PostStageRecord` はパイプライン側で一律にかける | `V6HotfixPasses`（partial に合わせる）、`V6FinalPort`、`V6LateOperators` | G4、G8、`PostStageRecord` の並びの一致 | revert | `V6HotfixPasses.*.cs` を同じ分割に | L（4〜5 PR） |
 | **P5 ConstraintCatalog** | 制約族ごとに `ConstraintSpec { key; hard; locate(); explain(); repairHints() }` を 1 つ。**採点（重み・式）は持たない**。チェッカーの位置づけ、診断の文、UI の修正提案が共有する | `MirrorCore`（`UnifiedViolationChecker`）、`V6SanityPort`、`V6PortAnalyzer`、`ui/FixTiers`・`FixExplain`・`CellSheetLogic` | G1、G3、§4 の Checker/Diagnosis スナップショット一致 | 族ごとの PR＝1 本ずつ revert | Catalog を同じ族の順で | L（族ごと約 8 PR） |
@@ -134,6 +183,27 @@
 | **P7 文書の正規化** | `architecture.md` を新構成に書き換え（21 族など取り残しも直す）、`sudo_model.md` の図を更新 | `docs/` | 文書照合（作業記録に方法を残す） | revert | `windows/README.md` | S |
 | **P8 グループ上限0**（2026-10-22 決定＝案 A、文書のみで完了） | 付録 A の Q-05。推奨 A（今のまま＋文書化）なら文書だけ。B なら `mayPlace` に c41/c41s の u=0 を含め、既定 OFF で入れて測る | A: `docs/business-logic.md`。B: `Problem`、C++、C#、文書、テスト | A: 文書照合。B: G9 | A: revert。B: フラグ | B のとき同日 | A: S／B: M |
 | **P9 職員の同一性**（2026-10-22 決定＝案 A、文書のみで完了） | 付録 A の Q-06。推奨 A（解決済みとして閉じる）なら文書だけ。B なら CSV に任意の「職員ID」列 | A: `docs/data-models.md`。B: `ScheduleCsvBridge`、C# `StaffCsvIO.cs`、VBA 互換 | 往復テスト | revert | B のとき同日 | A: S／B: M |
+
+### 6.1 各段の PR 分割
+| 段 | PR | 中身 |
+|---|---|---|
+| P2 | P2a | `EngineConfig`（39 フィールド・既定値の表テスト）と `snapshot()`。`normalStallFraction`・`floorCountsUpperZero` を引数で読む |
+| | P2b | 停滞・床・壁の系統（`floorShortStall`・`c3nWall*`・`adaptiveStall`・`wishConflictFloorMode`）と後処理の系統（`lnsAdaptive`・`prePostDescent`・`postChainRollbackCountsZero` ほか） |
+| | P2c | 玉突きの系統（`ejection*`・`*EjectionChain*`・`softCascade`）と残り。最後に `PolishGate` への書き込み口を設定画面だけに絞る |
+| P3 | P3a | `TimeBudget` 型と `V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）を移す |
+| | P3b | `V6NativeOptimizer`（`SaParams`）・`C1JointLnsPolish`（60 s 固定）・`EjectionChainPipeline`・`CombinatorialRepair` を子予算へ |
+| P4 | P4a〜P4e | `Stage` 型とパイプライン → 前段（入口・hf66/67）→ 中段（各 Polish・共同 LNS）→ 修復（`ViolationComponentRepair`・退避）→ 終段（玉突き・最終番兵の前）。各 PR で `PostStageRecord` の並びが同じこと |
+| P5 | 族ごと | HARD 6 族（groupViol・covU・c3n・c3w・pref・extWish）→ 個人回数（low・high）→ c1・c2 → c3 系（c3・c3m・c3mn）→ グループ（c41・c42・c41s・c42s）→ covO → 分布（fair・apt・weekly）。HARD を先にして診断と修正提案の食い違いを早く潰す |
+| P6 | 境界ごと | C# の partial と同じ名前: Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize・Persistence・RelaxTrial・Restore・SmartInitial・WishTrial・Ws1 |
+
+### 6.2 段ごとに走らせる CI
+| 段 | design-lint | v6-engine-check | native-parity | android-sdk | C#（停止明け） |
+|---|---|---|---|---|---|
+| P0・P1 | ○ | ○ | ○ | ― | MagiEngine.Tests |
+| P2・P3・P4 | ○ | ○ | ○ | 設定を渡す画面に触れたら ○ | MagiEngine.Tests |
+| P5 | ○ | ○ | ○ | ○（修正提案の画面） | 両テスト＋WinUI |
+| P6 | ○ | ○ | ― | ○ | MagiApp.ViewModels.Tests＋WinUI |
+| P7 | ○ | ― | ― | ― | ― |
 
 依存関係: P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7。P8・P9 は決定が出れば P2 以降のどこにでも挟める。
 P2 と P3 は互いに独立に近いが、P4 が両方を使うので P4 の前に両方を終える。
@@ -155,6 +225,25 @@ P2 と P3 は互いに独立に近いが、P4 が両方を使うので P4 の前
 - C# の更新を止める期間（ユーザー指示）は、Kotlin 側の段を進めてよいが、C# に入れるべき差分を一覧に積む。
   停止が明けたら一覧を上から順に入れ、Kotlin と同じ版の境界で PR を分ける。
 - C# だけの改善は「出力が同じ」もの（安全な巻き戻し・性能・型の契約）に限る。
+
+### 8.1 C# 同期の積み残し（2026-10-22 時点）
+停止明けに上から入れる。Kotlin 側の版の境界で PR を分ける。
+| # | 中身 | Kotlin の版 |
+|---|---|---|
+| 1 | 職員 1 人の証明に手動固定、複数シフト連の矛盾の検出 | 3.723.0 |
+| 2 | 個人の上限0の中立表示（`SettingIssue.ZeroCap`・`FixItems`・文言） | 3.723.1 |
+| 3 | 期間を超える c1/c2 行の警告、`cons2InputError` の期間上限 | 3.723.1 |
+| 4 | S6 承認の復旧（`RelaxRollback`）、試算中/失敗の理由、全経路で結果行 | 3.723.2 |
+| 5 | つくる前の確認の呼び名（`PinSourceWord`） | 3.723.2 |
+| 6 | 違反一覧の不変化（`ViolationChecker.cs` の `BuildFamilyMaps`） | 3.723.2 |
+| 7 | M-01 相当の穴が C# の原子保存にあるかの確認 | 3.723.2 |
+| 8 | C# 見直しの 3 件（タブ離脱でパネルを閉じる・人員不足の文言・S6 で古い試算の「閉じる」） | C# 単独 |
+| 9 | P0 の C# 版安全網 | P0 |
+
+### 8.2 複数セッションでの運用
+- 作業は版数を付けずに仮のコミットで作り、取り込む直前に一人が最新の main へ載せ直して版を振り、1 版 1 コミットにまとめる（squash）。
+- 別セッションの PR は、直前にマージされた main を土台にする。古い土台の PR は `check_version.py` が落とす。
+- 残件表は本書 §2.3・§8.1 と `docs/safety_inventory.md` を正とする。セッションごとの一覧は、取り込むときにここへ畳む。
 
 ---
 
@@ -178,11 +267,11 @@ P2 と P3 は互いに独立に近いが、P4 が両方を使うので P4 の前
 
 ---
 
-## 10. 最初の 3 PR
-1. **PR-1（P0）安全網**: `BoardHashFixtureTest`・`CheckerSnapshotTest`・`DiagnosisSnapshotTest`。Kotlin のみで先に入れ、
+## 10. 統合ブランチの最初の 3 コミット
+1. **コミット 1（P0）安全網**: `BoardHashFixtureTest`・`CheckerSnapshotTest`・`DiagnosisSnapshotTest`。Kotlin のみで先に入れ、
    C# の同名テストは停止明けに入れる。合格: 2 回連続一致、増分 60 s 以内。
-2. **PR-2（P1）穴埋め**: `NativeGateFallbackTest` と `SaveRetryWiringTest`（B-03・M-02・M-01・U-03 は作業中の分で入る）。
-3. **PR-3（P2a）`EngineConfig` 導入**: 36 フィールドと同じ既定値の data class と `snapshot()`。まず `normalStallFraction`
+2. **コミット 2（P1）穴埋め**: `NativeGateFallbackTest` と `SaveRetryWiringTest`（B-03・M-02・M-01・U-03 は作業中の分で入る）。
+3. **コミット 3（P2a）`EngineConfig` 導入**: 39 フィールドと同じ既定値の data class と `snapshot()`。まず `normalStallFraction`
    と `floorCountsUpperZero` の 2 つを引数で読む形へ移す。合格: PR-1 のハッシュ一致、既定値の表テスト。
 
 ---
@@ -209,7 +298,13 @@ P2 と P3 は互いに独立に近いが、P4 が両方を使うので P4 の前
   UI と診断の違反の位置が `ConstraintCatalog` 経由。
 - `MagiViewModel.kt` が C# と同じ境界で分割され、最大ファイルが 1,500 行以下【目安】。
 - 棚卸しの「記録あり・テスト無し」が 0。
-- C# が全段で同期済み。
+- C# が全段で同期済み（§8.1 の一覧が空）。
+- `docs/invariants.md` の INV が全段で守られ、該当する T が CI で走っている。
+
+## 13. 本書の変更手順
+- 段の範囲・順序・ゲートを変えるときは、本書を同じ PR で更新し、`docs/history/` に理由を残す。
+- 進捗（§2.3）と積み残し（§8.1）は、各版の取り込みと同じコミットで更新する。
+- 業務仕様・重み・探索の動きに関わる変更は本書の対象外（それぞれ business-logic・HF77・§7 の手順）。
 
 ---
 

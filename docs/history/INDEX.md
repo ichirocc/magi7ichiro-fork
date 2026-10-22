@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 段階的全面改修の設計書を v2 に（2026-10-22、ユーザー「完全版にアップグレードする」「一度にすべて置き換える」「全面改修の意義」、版なし）: §0 定義・§0.1 意義と受け入れ基準 S1〜S6（基準版より悪くならないことを測って示す）・G14 一括で入れる・G15 質と時間・G16 性能、進捗、INV との対応、各段のコミット分割、CI の対応表、C# の積み残し、複数セッションの運用、本書の変更手順。PolishGate を 39 に訂正。
 - backlog 小物 4 件（3.723.2、出力不変）: #46 T02 `CsvSavedMark` 切り出し＋host テスト／#42(h)⑤ `ViolationReport` の 1 件クラス列を `listOf` で読み取り専用に／#32 Kotlin 側にも意図的の注記／#26 業務重みと腕選択・予算配分を分ける指針を `docs/stall_escape.md` §6 へ  → `docs/history/3.4xx.md`
 - つくる前の確認の呼び名を固定の出どころで分ける（2026-10-22、3.723.2、画面のみ・出力不変）: 日の証明・本人の証明の行は核の `WishPin` を見て、希望だけ→「本人の希望」、手動固定だけ→「手で固定したマス」、両方→「希望と手で固定したマス」（純関数 `pinSourceWord`）。3.717.0 から証明が手動固定も数えるのに一律「本人の希望」と言っていた。テスト `PreRunCheckTextTest.pinSourceWord_distinguishesWishAndManualPin`。C# 同期要。
 - 安全性の棚卸しの穴埋め 5 件（2026-10-22、3.723.2、テストと記録のみ＝出力不変）: B-03 停止経路の実行中解除を `cancelPathReleases`/`shouldReleaseRunning`（`work/BgHandoff.kt`）へ切り出し `OptimizationWorkerReleaseTest`。M-02 非同期 enqueue 失敗の片付け判定を `asyncEnqueueFailureCleansUp` へ切り出し `BgEnqueueFailureTest`。M-01 前のデータの退避（`prevBackupFile`）で原子置換を諦めたら操作ログへ W（`onNonAtomic` の既定 `{}` はテストの呼び出しが多いため据え置き）。U-03 `weight_lint.py` が `10_000L`・`1e4`・`9.0E3` を拾う＋自己テスト `tools/test_weight_lint.py`（v6-engine-check で実行）、`fmtIter` の万の桁を抑止に追加。L-03 `MirrorEngineTest` の weekly 下限の KDoc を 3.526.0 の式へ。  → `docs/history/3.4xx.md`
