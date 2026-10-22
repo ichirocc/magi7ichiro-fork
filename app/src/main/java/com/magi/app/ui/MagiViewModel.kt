@@ -890,8 +890,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val ok = writeAutosave(gen, json) ?: true
         _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
         reportNonAtomicSave()
-        reportAutoSave(ok)
-        if (!ok) autoSave()   // 取り消したデバウンス保存を戻す（次の編集まで未保存にしない）
+        if (reportAutoSave(ok).retryLater) autoSave()   // 取り消したデバウンス保存を戻す
         return ok
     }
 
@@ -926,13 +925,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             "（書き込み中にアプリが強制終了すると自動保存が使えなくなる可能性があります）")
     }
 
-    private fun reportAutoSave(ok: Boolean) {
-        val wasOk = saveFail.lastOk
-        val dialog = saveFail.onResult(ok, saveRetrying)
-        if (dialog != null || ok) _ui.update { it.copy(saveFailDialog = dialog) }
-        if (ok == wasOk) return
-        if (ok) logOp("I", "自動保存が復旧しました")
-        else notify(SAVE_FAILED_NOTICE, "W")
+    private fun reportAutoSave(ok: Boolean): SaveOutcome {
+        val r = saveFail.report(ok, saveRetrying)
+        if (r.setDialog) _ui.update { it.copy(saveFailDialog = r.dialog) }
+        when (r.notice) {
+            SaveNotice.RECOVERED -> logOp("I", "自動保存が復旧しました")
+            SaveNotice.FAILED -> notify(SAVE_FAILED_NOTICE, "W")
+            null -> {}
+        }
+        return r
     }
 
     /** 「もう一度保存する」（ホーム・設定・上部の語・ダイアログ）。失敗したらダイアログを「まだ保存できていません」で出し直す。 */

@@ -332,11 +332,13 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 ### 6.1 P0 安全網（最初のコミット）
 基準版で次の 3 つの期待値を作り、以後のすべてのコミットで一致を確かめます。
 1. `BoardHashFixtureTest`: 6 fixture（`app/src/test/resources/` の `golden_state`・`sample_state_v6`・`blocked_covu_state`・`sept2026_state`・
-   `oct2026_grid_state`・`full_coverage_state`）× seed 3 本で、決定的モードの最終盤面を `StateFingerprint`（`StateFingerprint.kt:26`）でハッシュし、
-   `board_hash.json` と照合する。期待値の作り直しは明示の環境変数でだけ行う。
+   `oct2026_grid_state`・`full_coverage_state`）で、決定的モードの最終盤面を `StateFingerprint`（`StateFingerprint.kt:26`）でハッシュし、
+   `snapshots/board_hash.txt` と照合する。期待値の作り直しは `MAGI_UPDATE_SNAPSHOTS=1` のときだけ。seed は 1 本（決定的モードでは seed が盤面に
+   効かず、seed 1〜3 が全 fixture で同じハッシュだった。3 本では 3 クラスで 66 秒＝増分の上限を超えた）。
 2. `CheckerSnapshotTest`: 全 fixture の入力盤面について、違反リスト（族・職員・日）と breakdown を照合する。
 3. `DiagnosisSnapshotTest`: `V6SanityPort` の診断文の一覧を照合する。
 合格: 2 回続けて同じ値になる（決定性）。ホストテストの増分は 60 秒以内。C# にも同名のテストを置く。
+済み（2026-10-22）: 期待値は main `4e8fe3a` から生成、2 回走行で一致・3 クラスで約 26 秒。C# 側は停止中のため §9.1 の積み残し。
 
 ### 6.2 P1 テストの穴埋め
 | 穴 | 足すテスト | やり方 |
@@ -344,6 +346,10 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 | NativeGate の退化経路 | `NativeGateFallbackTest` | 照合の判定を純関数に切り出し、「不一致なら閉じて Kotlin の結果を使う」を JVM で確かめる |
 | 保存の再試行の配線 | `SaveRetryWiringTest` | 再試行の判定を純関数へ |
 （B-03・M-02・M-01・U-03・L-03 は 3.723.2 で済み。）
+済み（2026-10-22）: 2 層番兵の判定を `NativeGate.chunkConsistent`（1 層目）と `NativeGate.parityMismatch`（2 層目、照合 OFF は素通し）へ
+切り出し、SA・LAHC・ALNS・研磨の 8 か所を置き換えた（閉じる理由の文言は不変）。ホストは `.so` を読めないので、テストは判定・ゲートの閉鎖・
+閉じた後の Kotlin SA の結果がフル評価と一致し入力より悪くないことまで。保存は `SaveFailNotifier.report` が「ダイアログ・通知/ログ・書き直し
+（`retryLater`）」を返し、VM の `reportAutoSave`・`persistNow` はそれを反映するだけ。
 
 ### 6.3 P2 EngineConfig とフラグ整理
 | コミット | 中身 |
@@ -420,6 +426,7 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 | 7 | M-01 相当の穴が C# の原子保存にあるかの確認 | 3.723.2 |
 | 8 | C# 見直しの 3 件（タブ離脱でパネルを閉じる・人員不足の文言・S6 で古い試算の「閉じる」） | C# 単独 |
 | 9 | P0 の C# 版安全網 | P0 |
+| 10 | P1 の C# 版（`SaveFailNotifier.Report`＋`SaveRetryWiringTest`、NativeGate は C# に無ければ対象外） | P1 |
 
 ### 9.2 複数セッションでの運用
 - 作業は版数を付けずに仮のコミットで作る。取り込む直前に 1 人が最新の main へ載せ直し、版を振り、1 版 1 コミットにまとめる（squash）。

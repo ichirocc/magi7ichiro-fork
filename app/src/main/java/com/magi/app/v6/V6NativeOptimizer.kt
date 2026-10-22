@@ -1539,7 +1539,7 @@ object V6NativeOptimizer {
                     coroutineContext.ensureActive()
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, perSec * 1000.0)).coerceIn(0.0, 1.0)
                     val ret = NativeBridge.nativeAlnsChunk(alns, 200, frac)
-                    if (ret.size < 6 || ret[0] != 0L) { syncReport(); NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
+                    if (!NativeGate.chunkConsistent(ret, 6)) { syncReport(); NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
                     itersTotal += ret[4]
                     if (ret[3] == 1L && ret[2] < globalScore) {
                         // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
@@ -1548,10 +1548,8 @@ object V6NativeOptimizer {
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
                         // 拡張希望の禁止へ置いた盤面は採らない（この restart は Kotlin ループで続ける）
                         if (!p.keepsExtBan(globalBest, bestSol)) { syncReport(); return false }
-                        if (NativeGate.parityCheckEnabled) {
-                            TuningTelemetry.parityChecks.incrementAndGet()
-                            val kScore = fullEvaluator.fullEval(bestSol)
-                            if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        NativeGate.parityMismatch(ret[2]) { fullEvaluator.fullEval(bestSol) }?.let { kScore ->
+                            syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false
                         }
                         globalBest = bestSol; globalScore = ret[2]
                         lastImproveIter = itersTotal
@@ -2308,7 +2306,7 @@ object V6NativeOptimizer {
                     //   （hint は best 改善駆動で更新されるためチャンク粒度に依存しない。締切/停滞/キャンセルの
                     //   確認粒度は ms 級のまま）。
                     val ret = NativeBridge.nativePolishChunk(h, 400)
-                    if (ret.size < 5 || ret[0] != 0L) {
+                    if (!NativeGate.chunkConsistent(ret, 5)) {
                         NativeGate.disable("Polishチャンク整合性NG(status=${ret.getOrNull(0)})")
                         return NativePolishRun(false, best, iters, false)
                     }
@@ -2320,13 +2318,9 @@ object V6NativeOptimizer {
                         val sol = NativeEval.unflatten(buf, p.S, p.T)
                         // 拡張希望の禁止へ置いた盤面は採らない（照合済み best から Kotlin ループで続ける）
                         if (!p.keepsExtBan(best ?: initial, sol)) return NativePolishRun(false, best, iters, false)
-                        if (NativeGate.parityCheckEnabled) {
-                            TuningTelemetry.parityChecks.incrementAndGet()
-                            val k = fullEvaluator.fullEval(sol)
-                            if (k != ret[2]) {
-                                NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
-                                return NativePolishRun(false, best, iters, false)
-                            }
+                        NativeGate.parityMismatch(ret[2]) { fullEvaluator.fullEval(sol) }?.let { k ->
+                            NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
+                            return NativePolishRun(false, best, iters, false)
                         }
                         best = sol
                         verifiedBest = ret[2]

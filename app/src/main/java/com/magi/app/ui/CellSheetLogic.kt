@@ -679,7 +679,20 @@ internal class SaveFailNotifier {
         lastOk = ok
         return when { ok -> null; prev -> SaveFailDialog.FIRST; retried -> SaveFailDialog.AGAIN; else -> null }
     }
+
+    /** 保存結果の反映内容を決める唯一の場所（VM の reportAutoSave はそのまま適用するだけ）。 */
+    fun report(ok: Boolean, retried: Boolean): SaveOutcome {
+        val wasOk = lastOk
+        val dialog = onResult(ok, retried)
+        val notice = when { ok == wasOk -> null; ok -> SaveNotice.RECOVERED; else -> SaveNotice.FAILED }
+        return SaveOutcome(dialog, setDialog = dialog != null || ok, notice = notice, retryLater = !ok)
+    }
 }
+
+internal enum class SaveNotice { RECOVERED, FAILED }
+
+/** [retryLater]＝失敗したので次のデバウンス保存を仕掛け直す（次の編集まで未保存にしない）。 */
+internal data class SaveOutcome(val dialog: SaveFailDialog?, val setDialog: Boolean, val notice: SaveNotice?, val retryLater: Boolean)
 
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
 
