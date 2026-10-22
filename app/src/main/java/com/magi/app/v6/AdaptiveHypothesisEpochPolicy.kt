@@ -13,7 +13,7 @@ internal enum class HypothesisEpochRole {
 
     /**
      * [3.517.0] 同群2名の1ヶ月分割当を丸ごと交換するILS摂動＝fairは交換不変だが他族の局所解構造を
-     * 変える（経緯: `docs/history/3.4xx.md` 3.517.0）。`PolishGate.personSwapKick` が false の間は出現しない。
+     * 変える（経緯: `docs/history/3.4xx.md` 3.517.0）。
      */
     PERSON_SWAP_ILS,
 }

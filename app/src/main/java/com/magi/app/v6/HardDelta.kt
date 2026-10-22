@@ -4,7 +4,7 @@ package com.magi.app.v6
  * 候補盤面の HARD 正味差分（groupViol/pref/c3w/extWish/c3n/covU）を変わったセル・行・日だけから厳密に数える。
  * `check(cand).hard == check(base).hard + delta(...)` が [UnifiedViolationChecker.check] と同じ意味論で成り立つ
  * （各族の式は checker の当該ループの局所化）。呼出側は「このΔなら必ず却下する」候補だけ checker を省く
- * ＝採用集合・盤面は不変の速度専用（[PolishGate.hardDeltaPrefilter]）。
+ * ＝採用集合・盤面は不変の速度専用。
  */
 internal object HardDelta {
     private fun v(p: Problem, x: Int): Int = if (x in 0 until p.K) x else -1

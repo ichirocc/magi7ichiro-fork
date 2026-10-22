@@ -10,7 +10,7 @@ import org.junit.Test
  * `docs/stall_escape.md` の規則と数値をそのまま固定する（仕様 → テスト）。表の値が変わったら仕様も同じコミットで直す。
  * 既存の `V6FinalPortTest`（発火式・実効閾値）・`HypothesisEpochPolicyTest`（層 B）・`Hf63InfeasibilityTest`（HF63）・
  * `V6NativeOptimizerChoiceTest`（focus 選択）・`StallPolishInjectionTest` が持たない表の値・境界と、§5.2〜5.4 の判定の補助
- * （`WatchdogBest` の発火、`C3nWallProof` の証拠の選択、`BoardKeyedFlag`）を扱う。
+ * （`WatchdogBest` の発火、`BoardKeyedFlag`）を扱う。
  */
 class StallEscapeSpecTest {
 
@@ -222,75 +222,6 @@ class StallEscapeSpecTest {
         assertTrue("内容が同じ盤面は再診断しない", flag.get(listOf(listOf(1, 2), listOf(3, 4)), eval)); assertEquals(1, evals)
         assertFalse("別の盤面の結果は返さない", flag.get(y, eval)); assertEquals(2, evals)
         assertTrue("戻っても、その盤面自身の結果で判定する", flag.get(x, eval)); assertEquals(3, evals)
-    }
-
-    // §5.3 壁の証拠は、生存盤面の報告が最良の報告と同じ参照のときだけ使う（値が等しいだけでは使わない）
-    @Test fun c3nWallBindsOnlyToTheSameReportObject() {
-        val a = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val same = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        assertFalse(V6FinalPort.c3nWallSameReport(null, a))
-        assertFalse(V6FinalPort.c3nWallSameReport(a, null))
-        assertTrue(V6FinalPort.c3nWallSameReport(a, a))
-        assertFalse("値が同じでも別の報告は同じ盤面とみなさない", V6FinalPort.c3nWallSameReport(same, a))
-    }
-
-    // §5.3 既定の判定は、生存盤面の報告が最良と同じ参照のときだけ診断を使う（値が同じ別の報告では使わない）
-    @Test fun c3nWallProofUsesOnlyTheLiveBoardThatIsTheBestReport() {
-        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val sameValues = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val board = listOf(listOf(1, 2), listOf(3, 4))
-        var diagCalls = 0
-        var live = V6NativeOptimizer.LiveBestSnapshot(best, board)
-        val proof = V6FinalPort.C3nWallProof(
-            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live }, diagnose = { diagCalls++; true },
-        )
-        assertTrue("同じ参照の生存盤面は診断の結果を使う", proof.bound())
-        assertEquals(1, diagCalls)
-        live = V6NativeOptimizer.LiveBestSnapshot(sameValues, board)
-        assertFalse("値が同じでも別の参照の生存盤面は使わない", V6FinalPort.C3nWallProof(
-            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live }, diagnose = { true },
-        ).bound())
-    }
-
-    // §5.3 段の境界で生存盤面が空になっても、同じ最良版で成立した判定は持ち越す。版が変われば持ち越さない
-    @Test fun c3nWallProofCarriesItsVerdictAcrossAStageBoundaryOnly() {
-        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val board = listOf(listOf(1, 2), listOf(3, 4))
-        var version = 1
-        var live: V6NativeOptimizer.LiveBestSnapshot? = V6NativeOptimizer.LiveBestSnapshot(best, board)
-        val proof = V6FinalPort.C3nWallProof(
-            bestVersion = { version }, bestReport = { best }, liveSnapshot = { live }, diagnose = { true },
-        )
-        assertTrue(proof.bound())
-        live = null
-        assertTrue("同じ最良版なら持ち越す", proof.bound())
-        version = 2
-        assertFalse("版が変われば持ち越さない", proof.bound())
-    }
-
-    // §5.3 診断の間に生存盤面が入れ替わったら、その判定は使わない
-    @Test fun c3nWallProofRefusesAVerdictWhenTheLiveBoardChangesDuringDiagnosis() {
-        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val board = listOf(listOf(1, 2), listOf(3, 4))
-        var live = V6NativeOptimizer.LiveBestSnapshot(best, board)
-        val proof = V6FinalPort.C3nWallProof(
-            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live },
-            diagnose = { live = V6NativeOptimizer.LiveBestSnapshot(best, listOf(listOf(9))); true },
-        )
-        assertFalse("診断の間に入れ替わったら判定を使わない", proof.bound())
-    }
-
-    // ログの件数は呼び出し回数ではなく、生存盤面の更新ごとに数える
-    @Test fun c3nWallProofCountsEachLiveBoardUpdateOnceNotEachPoll() {
-        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
-        val other = rep(2, 18000.0, 4, "c3n" to 1, "pref" to 1)
-        val snap = V6NativeOptimizer.LiveBestSnapshot(other, listOf(listOf(1)))
-        val proof = V6FinalPort.C3nWallProof(
-            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { snap }, diagnose = { true },
-        )
-        repeat(50) { proof.bound() }
-        assertEquals("同じ生存盤面は一度だけ数える", 1, proof.checks.get())
-        assertEquals("対応しなかった更新も一度だけ数える", 1, proof.mismatch.get())
     }
 
     @org.junit.Test fun floorShortStallCanBeTurnedOff() {

@@ -11,7 +11,7 @@ import com.magi.app.model.MagiState
  *
  * Bridge schedules are never returned directly. Every adopted schedule is re-evaluated by the
  * official checker, must improve HARD -> weightedScore -> total, must not regress exact pins, and
- * must not break a wish the root keeps ([PolishGate.wishPinStrict]).
+ * must not break a wish the root keeps (rule A, `Problem.keepsWishPins`).
  */
 internal object EliteIntegrationPolish {
     data class Config(

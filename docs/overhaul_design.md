@@ -402,8 +402,12 @@ UI の非表示イベント・セッター・状態 2 つ（`c1MoveARepair`・`s
 P2d-④ 済み（2026-10-22、決定 6）: `quantitativeRangeEval`（c2・c41・c41s の量的評価、3.512.0 否決・本番は常に false）を撤去。チェッカー・評価器・Δ評価器・
 C++（`magi_native.cpp` の三項 8 か所・`c2Amount`/`rangeDistance`、TOC 再生成）の分岐を false 側へ畳み、`Problem`・`cachedProblem`・`ProblemCache` の鍵・
 45 ファイルの引数と `PostOptimizationParams`/`V6OptimizerOptions`/`handleOptimize` の引数を外した。JNI の meta[7] は ABI を保つため 0 固定で渡し、C++ は読まない。
-`QuantitativeRangeEvalTest` を削除。`CheckerReportDigestTest` の期待値は基準版 `4e8fe3a` を qre=false だけで走らせても同じ（作り直し不要）。
+`QuantitativeRangeEvalTest`・`EliteIntegrationQuantitativeTest` を削除。`CheckerReportDigestTest` の期待値は基準版 `4e8fe3a` を qre=false だけで走らせても同じ（作り直し不要）。
 P0 スナップショット・チェッカー等価・Δ評価・ネイティブ期待値（ホストの g++ で native-parity と同じ手順、0 不一致）を確認。C# は §9.1 #11。
+P2 の後片付け（2026-10-22）: ②d で本番から外れた `C3nWallProof.bound()`・生存盤面との対応づけ・`c3nWallSameReport` とそのテスト 5 本を削除
+（`C3nWallProof` は残存分析の `diagnoseBoard` だけ）。消したフラグを指していた古いコメント 4 か所を直した。
+P2 の残り: エンジン内で `PolishGate` を直接読むのは `wideC3nBreakDays`（探索の内側 `V6SearchOperators` と「設定の効き」）だけ。探索の奥まで引数を通すので
+P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す。背景 Worker の `PolishGate.restore` はそれまで残す。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
