@@ -220,7 +220,7 @@ class GridDisplayMarksTest {
         val why = noFixReasons(u, FixFocus(0, 1), limits, need)
         assertTrue(why.wishRelated)
         assertTrue(why.lines.any { "どれも本人の希望で固定" in it })
-        assertTrue(why.lines.any { "個人の上限が 0 回" in it })
+        assertTrue(why.lines.any { "対象外（上限0）" in it })
         assertTrue(why.lines.any { "必要人数ぎりぎり" in it })
         assertTrue(why.lines.any { "下限＝上限で固定" in it && "休 1回" in it })
         assertEquals(NoFixKind.FIXED, why.kind)   // 固定条件が理由に挙がった＝「固定条件による制限」（仕様 §7）

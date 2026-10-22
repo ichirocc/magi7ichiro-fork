@@ -327,7 +327,7 @@ private fun ConstraintDialog(
         "cons2" -> {
             var sk by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
             var c by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
-            val err = cons2InputError(c)
+            val err = cons2InputError(c, cv.dayCount)
             val isDup = dup(listOf(sk, c))
             Shell("個人の合計$mode", okLabel, onClose, { commit(listOf(sk, c)) { onEvent(MagiEvent.Constraint.AddCons2(sk, c)) } },
                 sk.isNotBlank() && c.isNotBlank() && err == null && !isDup, dirty = listOf(sk, c) != remember { listOf(sk, c) }) {

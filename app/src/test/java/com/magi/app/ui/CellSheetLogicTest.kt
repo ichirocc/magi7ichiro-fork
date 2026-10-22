@@ -325,7 +325,7 @@ class CellSheetLogicTest {
         assertTrue(line, fitsTwoLines(line, COUNT_LINE_EM))
         val caps = zeroCapShifts(p, i).map { st.shifts[it].kigou }
         assertTrue(caps.toString(), "Cｱ" in caps && "有" in caps && "休" !in caps)
-        assertEquals("Cｱは個人の上限0（入れない指定）のシフトです。希望どおり入れると要調整に数えます", wishZeroCapLine("Cｱ"))
+        assertEquals("Cｱは対象外（上限0）のシフトです。希望どおり入れると要調整に数えます", wishZeroCapLine("Cｱ"))
         for (x in 0 until st.staffCount) {
             val l = "回数 " + staffCountShort(st, p, s, x, rep.countFamilies)
             assertTrue("職員${x + 1}: $l", fitsTwoLines(l, COUNT_LINE_EM))

@@ -150,8 +150,8 @@ internal fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list
     return null
 }
 
-internal const val ZERO_CAP_TEXT = "個人の上限0（入れない指定）のシフトです。残るのは要調整です"
-internal const val ZERO_CAP_WISH_TEXT = "本人の希望が個人の上限0（入れない指定）のシフトに載っています。残るのは要調整です"
+internal const val ZERO_CAP_TEXT = "対象外（上限0）のシフトです。残るのは要調整です"
+internal const val ZERO_CAP_WISH_TEXT = "本人の希望が対象外（上限0）のシフトに載っています。残るのは要調整です"
 
 /** 同じ違反のもう一方のセルの日（板挟みで他の人の手が無いときの行き先）。禁止の並びは一致した並びの他の日、
  *  希望の前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */
@@ -298,7 +298,7 @@ internal fun staffCountShort(state: MagiState, p: Problem, s: Array<IntArray>, i
     return if (fitsTwoLines("回数 $long", COUNT_LINE_EM)) long else build(false)
 }
 
-internal const val ZERO_CAP_NOTE = "上限0＝入れない指定"
+internal const val ZERO_CAP_NOTE = com.magi.app.v6.ZERO_CAP_LABEL
 
 /** セルシートの回数の行の 1 行の字数（360dp−左右 16dp＝328dp を bodySmall 12sp で割った数）。 */
 internal const val COUNT_LINE_EM = 27.0
@@ -309,7 +309,7 @@ internal fun zeroCapShifts(p: Problem, i: Int): Set<Int> =
 
 /** 希望タブ: 希望が個人の上限0のシフトのときの 1 行（希望は優先して入る。残るのは要調整）。 */
 internal fun wishZeroCapLine(wishSymbol: String): String =
-    "${wishSymbol}は個人の上限0（入れない指定）のシフトです。希望どおり入れると要調整に数えます"
+    "${wishSymbol}は対象外（上限0）のシフトです。希望どおり入れると要調整に数えます"
 
 /** 回数の行が 2 行に収まるか（全角 1・半角 0.5 の字幅で、[emPerLine] 字ぶん × 2 行）。 */
 internal fun fitsTwoLines(text: String, emPerLine: Double): Boolean {

@@ -67,7 +67,15 @@ data class SettingIssue(
     val groupRangeRow: com.magi.app.model.C41Row? = null,
     /** 意図した設定に由来する案内（上限 0 × 希望）。ログで「設定ミス」と呼ばない。 */
     val neutral: Boolean = false,
+    /** [backlog #11] 個人の上限0（パート等の意図した指定）の案内。直す項目として数えない（[fixItems]）。 */
+    val zeroCap: Boolean = false,
 )
+
+/** 個人の上限0（休を除く）の表示名。設定ミスでなく意図した対象外として見せる（backlog #11、2026-10-22 ユーザー決定）。 */
+const val ZERO_CAP_LABEL = "対象外（上限0）"
+
+/** 直す項目として数える診断（個人の上限0の案内を除く）。 */
+fun fixItems(issues: List<SettingIssue>): List<SettingIssue> = issues.filterNot { it.zeroCap }
 
 /** [3.687.0/R02] 希望の取消を診断した入力の指紋（職員 ID・グループと担当可否・日・その日と前後の希望・シフトの並び・希望の前日に禁止・期間）。
  *  当てる直前に照合し、違えば診断が古いので取り消さない。 */
@@ -186,9 +194,9 @@ object V6SanityPort {
             cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${safeDayLabel(state.startDate, j)}「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
         }
         if (cells.isEmpty()) return null
-        return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
+        return SettingIssue(IssueKind.RANGE, "$ZERO_CAP_LABEL の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
             "今の勤務表に個人の上限0のシフトが ${cells.size}件入っています。再作成すると外されます",
-            "残すなら、${Place.EDIT}${Place.COUNT}でその人のそのシフトの個人上限を 1 以上に上げてください")
+            "パート等で入れない指定なら、このままで構いません", neutral = true, zeroCap = true)
     }
 
     /** 直す場所＝編集タブの区分と節の見出し（`MagiApp.kt` の区分・`CollapsibleSection`・各カードの題と同じ名前。見出しを変えたらここも）。
@@ -382,7 +390,7 @@ object V6SanityPort {
      *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
      *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
      *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
-    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が関係しています。見直すときは編集タブの『年間マスター』の『③ 回数（1人あたり）』で変えてください"
+    const val ZERO_CAP_SHORTFALL_NOTE = "$ZERO_CAP_LABEL の人を数えていません（パート等で入れない指定なら、このままで構いません）"
 
     data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
 
@@ -1351,9 +1359,9 @@ object V6SanityPort {
                     val wished = days.size
                     if (wished > hi && hi == 0) {
                         // 上限 0 は意図した「入れない指定」（3.507.0）＝設定ミスと呼ばない。
-                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「${symOf(k)}」",
-                            "個人の上限0（入れない指定）に希望が${wished}件（${daysText(days)}）載っています。残るのは要調整です",
-                            "${Place.EDIT}${Place.WISH}で${name}さんと相談して希望を調整するか、${Place.COUNT}で上限を見直してください", neutral = true))
+                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「${symOf(k)}」$ZERO_CAP_LABEL",
+                            "$ZERO_CAP_LABEL のシフトに希望が${wished}件（${daysText(days)}）載っています。希望どおり入るので要調整に数えます",
+                            "${Place.EDIT}${Place.WISH}で${name}さんと希望を確かめてください", neutral = true, zeroCap = true))
                     } else if (wished > hi) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",

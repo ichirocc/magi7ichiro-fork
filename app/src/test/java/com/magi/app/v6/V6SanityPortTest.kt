@@ -513,11 +513,15 @@ class V6SanityPortTest {
         // 上限 0 は意図した入れない指定＝「衝突」と呼ばず、要調整が残ると案内する。
         val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
             wishes = mapOf("0,0" to 1), staffRange = mapOf("0,1" to Range("", "0")))
-        val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」" }
-        assertTrue(issue.neutral)
-        assertEquals("個人の上限0（入れない指定）に希望が1件（8/1(土)）載っています。残るのは要調整です", issue.problem)
-        assertEquals("編集タブの『月次条件』の『希望シフト登録』でs0さんと相談して希望を調整するか、『年間マスター』の『③ 回数（1人あたり）』で上限を見直してください", issue.fix)
-        assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("衝突") })
+        val issues = V6SanityPort.buildGuidance(st)
+        val issue = issues.single { it.where == "s0さんの「X」対象外（上限0）" }
+        assertTrue(issue.neutral && issue.zeroCap)
+        assertEquals("対象外（上限0） のシフトに希望が1件（8/1(土)）載っています。希望どおり入るので要調整に数えます", issue.problem)
+        assertEquals("編集タブの『月次条件』の『希望シフト登録』でs0さんと希望を確かめてください", issue.fix)
+        assertTrue("上限" !in issue.fix)
+        assertTrue(issues.none { it.where.contains("衝突") })
+        // [backlog #11] 直す項目には数えない
+        assertTrue(issue !in fixItems(issues))
     }
 
     @Test fun demandAboveStaffCapsStatesTheGapInBothPlaces() {

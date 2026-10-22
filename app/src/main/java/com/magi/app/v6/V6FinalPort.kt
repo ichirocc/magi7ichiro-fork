@@ -647,7 +647,7 @@ object V6FinalPort {
         //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
         //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
-        // [E0] 希望衝突の床。ログには常に出し、探索への配線は wishFloorMode≠OFF のときだけ（OFF なら挙動不変）。
+        // [E0] 希望衝突の床。ログには常に出し、探索への配線は wishFloorMode≠OFF または floorCountsUpperZero のとき（wishOn）。
         val wishP = cachedProblem(state)
         val wishPartsMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true) } catch (_: Exception) { 0 to 0 }
         val wishFloorMp = wishPartsMp.first + wishPartsMp.second

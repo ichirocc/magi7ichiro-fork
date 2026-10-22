@@ -622,7 +622,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         month = runCatching { java.time.LocalDate.parse(ui.startDate).let { "${it.year}年${it.monthValue}月" } }.getOrDefault(""),
         staff = ui.staffNames.size, shifts = ui.shiftSymbols.size, wish = editWish,
         needStdOk = ws1View?.shifts?.any { it.need1.isNotBlank() } == true, needExceptions = conditionsView.needDayOverrides.size,
-        issues = ui.settingIssues.size, wishConflicts = editHasConflicts,
+        issues = com.magi.app.v6.fixItems(ui.settingIssues).size, wishConflicts = editHasConflicts,
         rules = conditionsView.setupCounts.constraints, ranges = conditionsView.setupCounts.ranges,
         shortShifts = remember(ui, conditionsView) { shortShiftCount(ui, conditionsView) }),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
@@ -864,7 +864,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.720.0 3c-1] SetupGuideCard はどの区分でも出さない（区分ごとの見出しカードが同じ点を持つ）。
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
-                    // [3.714.0] タブの見出し＋1 行（区分ごとの説明は見出しカードの副題・SetupGuideCard）。
+                    // [3.714.0] タブの見出し＋1 行（区分ごとの説明は見出しカードの副題）。
                     Text(EDIT_TAB_HEADING, style = MaterialTheme.typography.titleMedium)
                     Text(EDIT_TAB_LINE, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })

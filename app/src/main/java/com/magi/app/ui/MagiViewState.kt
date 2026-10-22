@@ -4,6 +4,7 @@ import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.Problem
 import com.magi.app.v6.RelaxTrial
+import com.magi.app.v6.ZERO_CAP_LABEL
 import com.magi.app.v6.WishTrial
 import com.magi.app.v6.formatDay
 
@@ -776,7 +777,7 @@ internal fun noFixReasons(
         if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
         else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
-        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は個人の上限が 0 回（入れない指定）です。"
+        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は$ZERO_CAP_LABEL です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
         if (tight.isNotEmpty()) out += tight.joinToString("・") { DayText.short(ui.startDate, it) } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
         val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->
@@ -803,7 +804,7 @@ internal fun noFixReasons(
     val section = if (i == null && k != null) "yr_headcount" else "yr_count"
     // 区分の優先: 矛盾を確かめた＞時間で打ち切った＞固定条件が理由に挙がった＞調べた範囲で無い。
     val contradiction = i != null && d != null && ui.wishSelfConflicts.any { it.staff == i && d in it.days }
-    val fixed = wish || out.any { "上限が 0 回" in it || "下限＝上限で固定" in it }
+    val fixed = wish || out.any { ZERO_CAP_LABEL in it || "下限＝上限で固定" in it }
     val kind = when { contradiction -> NoFixKind.CONTRADICTION; ui.fixTimedOut -> NoFixKind.TIME; fixed -> NoFixKind.FIXED; else -> NoFixKind.SCOPE }
     out[0] = kind.head
     return NoFixExplain(out, wish, section, kind)
@@ -909,10 +910,10 @@ internal data class PreRunSheetText(
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。行を押すと、そのセルか直す場所を開けます。"
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
-internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限なので、残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。"
+internal const val PRE_RUN_OVERCAP_ZERO = "対象外（上限0）のシフトに希望が載っています。パート等の意図した指定なので、残るのは要調整です。必要なら本人と希望を確かめてください。"
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、設定で上限を見直してください。"
 internal const val PRE_RUN_ZERO_CAP_TAG = "（入れないシフトの指定が関係）"
-internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。見直すときは、設定で入れない指定を変えてください。"
+internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、対象外（上限0）の人を数えないために残ります。希望のせいではありません。パート等の意図した指定なら、このままで構いません。"
 internal const val PRE_RUN_RERUN_NOTE = "今の勤務表に個人の上限（0回）のシフトが入っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
@@ -952,7 +953,7 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         }
     }
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
-    val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。" }
+    val wall = s.wallHint?.let { "$ZERO_CAP_LABEL：${it.pairs}組（${it.staffCount}人）。パート等の意図した指定です。" }
     return PreRunSheetText(
         floorHeader = if (floor.isEmpty()) null else "何度つくっても残る（${floor.size}件）",
         floorRows = floor,

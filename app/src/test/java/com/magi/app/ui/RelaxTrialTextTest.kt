@@ -61,5 +61,8 @@ class RelaxTrialTextTest {
         val lines = V6SanityPort.build(st, board).guidance.filter { it.problem.contains("上限0のシフトが") }
         assertEquals(1, lines.size)
         assertEquals("今の勤務表に個人の上限0のシフトが 4件入っています。再作成すると外されます", lines[0].problem)
+        // [backlog #11] パート等の意図した指定＝直す項目に数えず、上限を上げる誘導もしない
+        assertTrue(lines[0].zeroCap && lines[0].neutral && "上げて" !in lines[0].fix)
+        assertTrue(com.magi.app.v6.fixItems(lines).isEmpty())
     }
 }

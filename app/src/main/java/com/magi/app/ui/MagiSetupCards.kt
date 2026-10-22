@@ -140,53 +140,6 @@ internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
 
 
 @Composable
-internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1, onOpenWish: (() -> Unit)? = null) {
-    if (!ui.loaded) return
-    val c = cv.setupCounts
-    val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("初期設定の手順", style = MaterialTheme.typography.titleMedium)
-            // [E1] 番号順(①〜⑤)とeditScopeの不一致を解消：毎月触る項目と年次マスター項目を分けて表示。
-            //   ①基本情報・④制約・⑤回数範囲は「年次マスター」scopeにあり、月次では編集しない。
-            // [監査A1] 旧①〜⑤番号と旧スコープ名（年次マスター等）が新3ドア/新節番号と食い違っていた→ドア名で案内。
-            // [冗長性見直し] editScope==0(月次条件)では MonthlyChecklistCard がこの直下により詳しい形
-            //   （件数比・標準/例外の区別・作成ボタン）で同じ2行を表示するため、そこでは重複を隠す。
-            //   他スコープ(職員管理/年間マスター)では引き続き表示し、希望シフトへのショートカットを維持する。
-            if (editScope != 0) {
-                Text("月次条件（毎月）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
-                // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
-                //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
-                // 登録件数は「集め終わった」ことを示さないので ✓ を付けない（今月の作成条件の「希望・休暇」と同じ）。
-                GuideRow("希望シフト", "${c.wishes}件", done = null, onClick = onOpenWish)
-                GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
-            }
-            // [3.483.0 E-1] 月次条件(editScope==0)では年間マスターの行も隠し「次の一手」だけにする
-            //   （直下の MonthlyChecklistCard と同じ職員/シフト件数を二重に見せていた）。
-            if (editScope != 0) {
-                Text("年間マスター（制度が変わったときだけ）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
-                GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
-                GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
-                // [3.483.0 E-2] 旧「⑤ 個人の回数範囲」＝①〜④が無いのに⑤だけ残っていた番号の取り残し。
-                GuideRow("個人の回数範囲", "${c.ranges}件", true)
-            }
-            val next = when {
-                c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
-                c.wishes == 0 -> "希望・休暇があれば『希望シフト』で登録しましょう。"
-                // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
-                //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
-                else -> "準備OK。画面下の『${if (ui.hasResult) "再作成" else "勤務表をつくる"}』で作成できます。"
-            }
-            Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                Text("次の一手: $next", color = cs.onSecondaryContainer,
-                    modifier = Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
-
-
-@Composable
 internal fun GuideRow(label: String, value: String, done: Boolean?, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Row(
@@ -544,7 +497,8 @@ internal fun EditHeaderCard(
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
     var issuesOpen by rememberSaveable { mutableStateOf(false) }
     var issuesAll by rememberSaveable { mutableStateOf(false) }
-    val issues = ui.settingIssues.size
+    val fixList = com.magi.app.v6.fixItems(ui.settingIssues)
+    val issues = fixList.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
@@ -558,7 +512,7 @@ internal fun EditHeaderCard(
             ChecklistRow(issueLabel.first, issueLabel.second + (if (issues == 0) "" else if (issuesOpen) " ▾" else " ▸"), ok = issues == 0,
                 onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
             if (issuesOpen && issues > 0) {
-                val shown = if (issuesAll) ui.settingIssues else ui.settingIssues.take(SETTING_ISSUE_PREVIEW)
+                val shown = if (issuesAll) fixList else fixList.take(SETTING_ISSUE_PREVIEW)
                 shown.forEach { iss ->
                     Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(start = 12.dp))
