@@ -7,20 +7,20 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 全面改修 P0 の安全網（`docs/overhaul_design.md` §6.1 の 1）。6 fixture × seed 1〜3 で、決定的モードの後処理を通した
+ * 全面改修 P0 の安全網（`docs/overhaul_design.md` §6.1 の 1）。6 fixture で、決定的モードの後処理を通した
  * 最終盤面を `StateFingerprint` でハッシュし、基準版の写しと照合する。作り直しは `MAGI_UPDATE_SNAPSHOTS=1` のときだけ。
- * 探索本体は決定的でないため対象外（時間制の対比較が受け持つ、§3.3）。
+ * 探索本体は決定的でないため対象外（時間制の対比較が受け持つ、§3.3）。seed は決定的モードでは盤面に効かない（1〜3 で同一ハッシュ）ため 1 つだけ。
  */
 class BoardHashFixtureTest {
     @Test
     fun deterministicPostChainBoardMatchesTheBaselineHashForEveryFixtureAndSeed() {
         val actual = buildString {
             for (name in CheckerSnapshotTest.FIXTURES) {
-                val json = javaClass.getResourceAsStream("/$name.json")?.bufferedReader()?.readText()
+                val json = BoardHashFixtureTest::class.java.getResourceAsStream("/$name.json")?.bufferedReader()?.readText()
                 assertNotNull("/$name.json がテストリソースにありません", json)
                 val st = StateParser.parse(json!!)!!
                 val input = st.schedule.toIntArray2D()
-                for (seed in 1L..3L) {
+                for (seed in listOf(1L)) {
                     val out = V6HotfixPasses.runPostOptimization(st, input.copy2D(), "p0", seed = seed,
                         deadlineMs = EngineClock.nowMs() + 3_600_000L,
                         params = V6HotfixPasses.PostOptimizationParams(deterministic = true,
