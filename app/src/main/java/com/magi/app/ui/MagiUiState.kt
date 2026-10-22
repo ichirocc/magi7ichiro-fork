@@ -110,12 +110,10 @@ data class UiState(
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val aptFairToleranceUnguarded: Boolean = false,  // !AptFairPolish.heavySoftGuard（測定用・既定OFF）。じっくりの容認 6% でだけ効く。保存しない
-    val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
-    val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

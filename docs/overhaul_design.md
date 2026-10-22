@@ -393,6 +393,12 @@ P2d-②d 済み（2026-10-22、決定 1・A）: 画面のスイッチ 4 つを�
 （`c3nWallDeepCheck` は残存診断 `diagnoseBoard` から届くので残す。純関数 `effectiveStallMs` の壁の引数は仕様テストのため据え置き、本番は false を渡す。
 `C3nWallProof.bound()` はテストからだけ呼ばれる＝③で片付ける）。非表示の `blockSwapC3nFilter`（`filterC3nIncrease`）は常時にしてイベント・セッター・状態ごと削除、
 「設定の開始時」の事前フィルタは常に ON と出す。UI の状態・イベント・ハンドラ・説明文の定数も削除。P0 スナップショット一致・影響クラス 81 件合格。
+P2d-③ 済み（2026-10-22、決定 2〜5）: 否決・測定用の腕をコードごと削除＝研磨 7 ファイル（`SoftCascadePolish`・`PrePostDescent`・`C2Polish`・`C42FlowPolish`・
+`C3nMarginLnsPolish`・`RestZeroWindowLns`・`StallPolishInjection`）とそのテスト、`c1MoveARepair`（手A の禁止連続修復）、`adaptiveStall`（適応閾値と改善間隔の記録）、
+`postChainRollbackCountsZero`、`rsiFocusRotationPersist`（Hf63 の持続カウンタ）、`c1ComponentRepair`（`exactWindow(useComponents)` の成分経路。`components()`・
+`solveComponent` は単独窓修復と分析テストが使うので残す）、`fairAchievementDirection`、`dayAssignIdentityFallback`、各 `Reactivate` と `targetFamiliesRemain`、
+UI の非表示イベント・セッター・状態 2 つ（`c1MoveARepair`・`stallPolishInjection`）、`PortfolioBudgetBench`。`countChainEnabled`（じっくり）は残す。
+戻すときはこの直前のコミットから取り出す。P0 スナップショット一致・影響クラス 62 件合格。残り: `C3nWallProof.bound()` 系（②d で本番から外れた）は ④ の後に片付ける。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

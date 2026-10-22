@@ -10,7 +10,6 @@ class EngineConfigTest {
         assertEquals(0.9, d.normalStallFraction, 0.0)
         assertEquals(true, d.floorShortStall)
         assertEquals(false, d.c3nWallDeepCheck)
-        assertEquals(false, d.adaptiveStall)
         assertEquals(false, d.combineExhaustPairs)
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
@@ -29,14 +28,14 @@ class EngineConfigTest {
     }
 
     @Test fun snapshotIsFixedAtTheStartOfTheRun() {
-        val saved = PolishGate.adaptiveStall
+        val saved = PolishGate.c3nWallDeepCheck
         try {
-            PolishGate.adaptiveStall = true
+            PolishGate.c3nWallDeepCheck = true
             val c = EngineConfig.snapshot()
-            PolishGate.adaptiveStall = false
-            assertEquals(true, c.adaptiveStall)
+            PolishGate.c3nWallDeepCheck = false
+            assertEquals(true, c.c3nWallDeepCheck)
         } finally {
-            PolishGate.adaptiveStall = saved
+            PolishGate.c3nWallDeepCheck = saved
         }
     }
 }

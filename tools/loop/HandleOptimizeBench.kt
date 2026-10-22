@@ -55,8 +55,6 @@ fun main(args: Array<String>) {
                 PolishGate.floorShortStall = !(feature == "floorstall" && armOn)
                 // "deep"＝on 腕で経験的な c3n 壁を 1 手探索で反証する（PolishGate.c3nWallDeepCheck、根拠の段階化）。off 腕＝現行。
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
-                // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
-                PolishGate.adaptiveStall = feature == "adaptive" && armOn
                 // "ejpipe*"＝on 腕で玉突き連鎖パイプライン（BOTH／C1）。"ejpipefull"＝off 腕が従来の全族の常時フル、on 腕がパイプライン BOTH。
                 PolishGate.allFamilyEjectionChain = feature == "ejpipefull" && !armOn
                 PolishGate.ejectionPipelineFocus = when {

@@ -36,7 +36,6 @@ internal object DayAssignmentPolish {
     fun applyDayAssignmentPolish(
         state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
-        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -60,10 +59,7 @@ internal object DayAssignmentPolish {
                 val i = free[r]
                 LongArray(n) { c ->
                     val k = slots[c]
-                    // [3.597.0/backlog#30] 対角(c==r)は「自分の現シフトを保つ」＝盤面を変えないので常に選べる。
-                    //   有限にすると恒等割当が必ず実行可能になり、置けないスロットがある日も残りを研磨できる。
-                    val ownSlot = identityFallback && c == r
-                    if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                    if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                     else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                     else if (k !in 0 until p.K) 0L
                     else {
@@ -119,7 +115,6 @@ internal object DayAssignmentPolish {
     fun applyAlternatingSoftPolish(
         state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
-        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -155,8 +150,7 @@ internal object DayAssignmentPolish {
                     val i = free[r]
                     LongArray(n) { c ->
                         val k = slots[c]
-                        val ownSlot = identityFallback && c == r   // [3.597.0] 上と同じ＝現状維持は常に選べる
-                        if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                        if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                         else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                         else if (k !in 0 until p.K) 0L
                         else {

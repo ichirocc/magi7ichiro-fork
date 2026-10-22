@@ -110,29 +110,26 @@ class ExtWishOptimizeTest {
     /** 既定 OFF の研磨・玉突きも含めて後処理を全部 ON にした決定的モード。 */
     @Test fun postProcessingWithEveryFlagOnNeverPlacesABannedShift() {
         val saved = PolishGate.snapshot()
-        val savedCascade = PolishGate.softCascade
         try {
             PolishGate.restore(saved.mapValues { (_, v) -> if (v is Boolean) true else v })
-            PolishGate.softCascade = true
             for (file in listOf("sample_state_v6.json", "sept2026_state.json")) {
                 val st0 = load(file)
                 val input = st0.schedule.toIntArray2D()
                 val out0 = V6HotfixPasses.runPostOptimization(st0, input.copy2D(), "t", seed = 1L, deadlineMs = EngineClock.nowMs() + 3_600_000L,
-                    params = V6HotfixPasses.PostOptimizationParams(deterministic = true, softCascadeEnabled = true, c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
+                    params = V6HotfixPasses.PostOptimizationParams(deterministic = true, c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
                 val st = adversarial(st0, input, out0)
                 val p = Problem(st)
                 val base = p.withManualPins(normalizeSchedule(input, p))
                 var out: Array<IntArray>? = null
                 val offenders = withProbe({ base }, p) {
                     out = V6HotfixPasses.runPostOptimization(st, input.copy2D(), "t", seed = 1L, deadlineMs = EngineClock.nowMs() + 3_600_000L,
-                        params = V6HotfixPasses.PostOptimizationParams(deterministic = true, softCascadeEnabled = true, c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
+                        params = V6HotfixPasses.PostOptimizationParams(deterministic = true, c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
                 }
                 assertTrue("$file: 後処理の段が禁止を新しく置いた $offenders", offenders.isEmpty())
                 assertTrue("$file: 後処理の最終盤面", p.extBanNewCells(base, out!!).isEmpty())
             }
         } finally {
             PolishGate.restore(saved)
-            PolishGate.softCascade = savedCascade
         }
     }
 }

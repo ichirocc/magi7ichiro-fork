@@ -167,23 +167,11 @@ class C1RepairAnalysisComponentsTest {
         }
     }
 
-    // ---- 5) useComponents=false（既定）は旧経路のまま：既存の全テストの通過に加え、ここでも直接確認 ----
-
-    @Test
-    fun applyC1ExactWindowRepairDefaultsToLegacyPathAndIgnoresComponents() {
-        val s = st(4, 2, listOf(listOf(1, 1, 2, 2), listOf(2, 2, 1, 1)), listOf(C1Row("2", "X", "1")))
-        val sched = s.schedule.toIntArray2D()
-        val viaDefault = C1WindowPolish.applyC1ExactWindowRepair(s, sched)
-        val viaExplicitFalse = C1WindowPolish.applyC1ExactWindowRepair(s, sched, useComponents = false)
-        assertTrue(viaDefault.newSchedule.contentDeepEquals(viaExplicitFalse.newSchedule))
-        assertEquals(viaDefault.applied, viaExplicitFalse.applied)
-    }
-
-    // ---- 6) useComponents=true が単独窓修復では届かない解に届く（乱数探索で発見・UnifiedViolationChecker
-    //         で確定した合成例。手計算での決め打ちはしない）------------------------------------------
+    // ---- 5) 単独窓修復の視野の限界（乱数探索で発見・UnifiedViolationChecker で確定した合成例。連結成分化の
+    //         経路は全面改修 P2d で削除＝下の手詰まりは既知の限界として固定する）-----------------------
     //
     // 職員0(休/夜/日すべて担当可)が「休>=1」「夜>=1」の2ルールを同時に不足（休職員1/4は休のみ担当可、
-    // 夜職員2/3は夜のみ担当可）。旧経路(useComponents=false)は休ルールの窓を単独で厳密探索し、
+    // 夜職員2/3は夜のみ担当可）。単独窓修復は休ルールの窓を単独で厳密探索し、
     // 職員0のjoint c1を2→1にする解（休を必要数(1)よりずっと多く職員0に割り当てる配置）を先に確定する
     // ——その窓だけを見るDFSには「後で夜ルールも解かねばならない」という視野が無いため、職員0の
     // 可動日（休でない日）を使い切ってしまい、続く夜ルールの窓探索(M={職員0,2,3}、休を担当できない
@@ -222,26 +210,10 @@ class C1RepairAnalysisComponentsTest {
         val before = UnifiedViolationChecker.check(s, sched)
         assertEquals("職員0が休・夜の両方で不足", 2, before.breakdown["c1"])
         val cfg = C1RepairAnalysis.Config(maxInvolvedStaff = 8, maxWindowDays = 6)
-        val res = C1WindowPolish.applyC1ExactWindowRepair(s, sched, cfg, useComponents = false)
+        val res = C1WindowPolish.applyC1ExactWindowRepair(s, sched, cfg)
         val after = UnifiedViolationChecker.check(s, res.newSchedule)
-        assertEquals("旧経路は1件しか解消できない（視野の狭さで手詰まり）", 1, after.breakdown["c1"])
+        assertEquals("1件しか解消できない（視野の狭さで手詰まり）", 1, after.breakdown["c1"])
         assertEquals(0, after.hard)
-    }
-
-    @Test
-    fun componentBasedRepairResolvesBothOverlappingRulesTogether() {
-        val s = sequentialBlindSpotFixture()
-        val sched = s.schedule.toIntArray2D()
-        val cfg = C1RepairAnalysis.Config(maxInvolvedStaff = 8, maxWindowDays = 6)
-        val res = C1WindowPolish.applyC1ExactWindowRepair(s, sched, cfg, useComponents = true)
-        val after = UnifiedViolationChecker.check(s, res.newSchedule)
-        assertEquals("成分化により2件とも解消できる", 0, after.breakdown["c1"])
-        assertEquals(0, after.hard)
-        // coverage(被覆)は permutation で保存されるはず。cons41/covU/covO は本フィクスチャに無いが、
-        // 念のため各日・各シフトの人数が変わっていないことを確認する（探索の安全性の根幹）。
-        for (d in 0 until s.dayCount) for (k in shiftsCount(s)) {
-            assertEquals("d=$d k=$k の人数は不変", countAt(sched, d, k), countAt(res.newSchedule, d, k))
-        }
     }
 
     private fun shiftsCount(s: MagiState) = 0 until s.shiftCount

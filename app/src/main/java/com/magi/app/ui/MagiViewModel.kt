@@ -1351,12 +1351,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 容認 6% で重い違反の増加も許す → ${if (on) "ON" else "OFF"}")
     }
 
-    fun setC1MoveARepair(on: Boolean) {
-        com.magi.app.v6.PolishGate.c1MoveARepair = on
-        _ui.update { it.copy(c1MoveARepair = on) }
-        logOp("I", "設定変更: 期間の制約の入れ替えで禁止の並びも直す → ${if (on) "ON" else "OFF"}")
-    }
-
     fun setEjectionChain(mode: EjectionChainMode) {
         mode.apply()
         _ui.update { it.copy(ejectionChain = mode) }
@@ -1379,12 +1373,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         com.magi.app.v6.PolishGate.ejectionPipelineHardLeg = on
         _ui.update { it.copy(ejectionPipelineHardLeg = on) }
         logOp("I", "設定変更: 玉突きを必須の違反からも始める → ${if (on) "ON" else "OFF"}")
-    }
-
-    fun setStallPolishInjection(on: Boolean) {
-        com.magi.app.v6.PolishGate.stallPolishInjection = on
-        _ui.update { it.copy(stallPolishInjection = on) }
-        logOp("I", "設定変更: 行き詰まったら途中で仕上げを試す → ${if (on) "ON" else "OFF"}")
     }
 
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。

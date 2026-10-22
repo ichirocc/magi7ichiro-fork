@@ -64,9 +64,6 @@ data class V6OptimizerOptions(
     val tabu: Boolean = false,
     /** [backlog #12(a)・実験段階] c2/c41/c41sを二値でなく不足量/距離量で評価する（既定false=挙動不変）。 */
     val quantitativeRangeEval: Boolean = false,
-    /** [測定中/backlog#28] `RsiFocusSelection`のapt/covO周期枠(`round%3`)を`runRsi`呼出し単位でなく
-     *  `sharedHf63`が持続するカウンタで計る。既定OFF＝短いRSI呼出しの繰返しで枠が回らない条件の対策（経緯はdocs/history）。 */
-    val rsiFocusRotationPersist: Boolean = false,
     /** 既定は作った時点の [PolishGate] の写し。`handleOptimize` は入口の写しを渡す。 */
     val config: EngineConfig = EngineConfig.snapshot(),
 )
@@ -888,58 +885,7 @@ object V6NativeOptimizer {
             }
         }
 
-        val workersDone = java.util.concurrent.atomic.AtomicBoolean(false)
-        val injector = if (!PolishGate.stallPolishInjection) null else async(Dispatchers.Default) {
-            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L; var firstFailure: String? = null
-            // 再試行の待ちは最終試行時刻から数える（全体最良の最終改善時刻 lastGlobalImproveMs とは別）。
-            var lastTryMs = 0L
-            val postParams = options.config.postParams(options.quantitativeRangeEval)
-            while (!workersDone.get() && nowMs() < deadline) {
-                kotlinx.coroutines.delay(500L)
-                val now = nowMs()
-                if (shouldStop() || !StallPolishInjection.shouldInject(now, maxOf(lastGlobalImproveMs.get(), lastTryMs), deadline, budgetSec, tried)) continue
-                tried++
-                val base = synchronized(lock) { globalBest.copy2D() }
-                val capDeadline = minOf(deadline, now + StallPolishInjection.CAP_MS)
-                val tTry = nowMs()
-                val post = try {
-                    V6HotfixPasses.runPostOptimization(
-                        state, base, "PolishInjection", seed = baseSeed xor tried.toLong(),
-                        shouldStop = { workersDone.get() || shouldStop() || nowMs() >= capDeadline },
-                        deadlineMs = capDeadline, params = postParams,
-                    )
-                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) {
-                    failed++
-                    // 原因の調査用に最初の例外の種類と発生箇所（先頭フレーム）を残す（OBS-01）。
-                    if (firstFailure == null) firstFailure = "${e.javaClass.simpleName}: ${e.message ?: ""} @${e.stackTrace.firstOrNull()?.let { "${it.fileName}:${it.lineNumber}" } ?: "?"}"
-                    null
-                }
-                spentMs += nowMs() - tTry
-                var won = false
-                if (post != null) synchronized(lock) {
-                    if (better(post.report, globalReport) && p.keepsExtBan(globalBest, post.schedule)) {
-                        gainW += globalReport.weightedScore - post.report.weightedScore
-                        gainT += globalReport.total - post.report.total
-                        // 差し込み内の後処理ログは診断に混ぜない（最終の後処理と同じ行が二重に出て、6s 打ち切りの警告も紛れる）。
-                        globalBest = post.schedule.copy2D(); globalReport = post.report
-                        won = true
-                    }
-                }
-                lastTryMs = nowMs()
-                if (won) {
-                    lastGlobalImproveMs.set(lastTryMs)
-                    adopted++
-                    globalImproves.incrementAndGet()
-                    archive.register(post!!.schedule, post.report, HypothesisEpochRole.BASELINE_REFINE, worker = workers, epoch = tried, bridge = false)
-                    if (ownsStatics(runSlot())) publishLiveBest(post.report, post.schedule)
-                    onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
-                }
-            }
-            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}${firstFailure?.let { " 最初の例外=$it" } ?: ""}"
-        }
         val outcomes = jobs.map { d -> d.await() }
-        workersDone.set(true)
-        val injection = injector?.await()
         ensureActive()
         for ((index, o) in outcomes.withIndex()) {
             archive.register(
@@ -1025,8 +971,7 @@ object V6NativeOptimizer {
         // [3.409.17] エポック超過（役割名つき）は専用の [W] 行で出す。ViewModel が予算超過の実行で
         //   この行を操作ログへ写す＝診断ログが次の実行で消えても証拠が生き残る。
         val overrunLog = listOfNotNull(HypothesisPlanning.epochOverrunLog(outcomes.flatMap { it.epochOverruns }))
-        val injectionLog = listOfNotNull(injection?.let { MirrorLog(tag = "AdaptivePortfolio", message = it) })
-        val logs = globalLogs + overrunLog + summary + injectionLog
+        val logs = globalLogs + overrunLog + summary
         V6OptimizerResult(
             globalBest,
             globalReport.copy(logs = logs + globalReport.logs),
@@ -1902,8 +1847,7 @@ object V6NativeOptimizer {
             // [測定中/backlog#28] 既定OFF時はround（従来どおりrunRsi呼出し単位でリセット）。ONならhf63が
             //   持続するカウンタを使い、apt/covOの周期枠(%3)をエポック跨ぎで維持する。1ラウンドにつき1回だけ
             //   進め、下段の早期終了判定(pivot)にも同じ値を使う（そちらで再度進めない）。
-            val rotationRound = if (options.rsiFocusRotationPersist) hf63.nextFocusRotationRound() else round
-            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds, rotationRound)
+            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds)
             if (avoid.isNotEmpty() && avoid != lastLoggedAvoid) {
                 // [3.288.0/スパム対応] 集合が変化したラウンドのみログ（旧: 毎ラウンド同文）。
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
@@ -1969,7 +1913,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds, rotationRound)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break

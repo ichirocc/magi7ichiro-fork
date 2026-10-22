@@ -106,34 +106,14 @@ fun main(args: Array<String>) {
     // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ（必須）。
     val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
     val (oldP, newP) = when (feature) {
-        "c3nmargin" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsEnabled = true)
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
-        "restzero" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, restZeroWindowLnsEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
-        "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
-        "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
         "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
         "combineexhaust" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, combineExhaustPairs = true)
         "aptfairtol" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         // [2026-10-08] 許容 ON 同士で、無害化②（重い SOFT の 1 件増を拒む）の有無。大域フラグなので腕ごとに切り替える（下のループ）。
         "aptfairtolunguarded" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         "countchain" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainEnabled = true)
-        // [3.580.0/backlog#26] 既定OFFの専用修復腕を「対象違反が残る局面でだけ」再活性化する新フラグの
-        //   A/B。旧=フラグ全OFF（現行既定）、新=xxxReactivateだけON（xxxEnabled自体は既定のfalseのまま）。
-        "c2polishreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishReactivate = true)
-        "c42flowreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishReactivate = true)
-        "c1componentreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepairReactivate = true)
-        "c3nmarginreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsReactivate = true)
-        "countchainreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainReactivate = true)
-        // [3.590.0/backlog#27] FairPolishの候補分類をfairTarget(生回数平均)からfairDevOfBucket黒箱観測へ揃える。
-        "fairachievementdirection" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, fairAchievementDirection = true)
-        // [3.597.0/backlog#30] 日ごと厳密割当の対角(自分の現シフト)を常に有限にし、置けない職員/スロットが
-        //   ある日も残りを研磨できるようにする。
-        "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
-        //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
-        "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
         // [2026-10-10] 玉突き連鎖パイプライン（利用者提示の仕様）。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         //   pipeoff*＝OFF（3.655.0 までの既定）対パイプライン、pipevsfull*＝従来の常時フル対パイプライン（A1）、pipevsshallow＝浅い予察だけ対全段（A2/A3）。
         //   *end＝パイプラインを最終の違反起点修復の後に置く（pipevsfullallend の旧腕は従来の「修復後の玉突き」）。
@@ -146,8 +126,6 @@ fun main(args: Array<String>) {
         "piperoundsendk", "pipehardendk", "pipecomboendk", "pipecombovsfullendk", "pipehardvsroundsendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        // [2026-10-07] 後処理チェーン先頭の局所降下（PolishGate.prePostDescent）。大域フラグなので腕ごとに切り替える（下のループ）。
-        "prepostdescent" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         else -> error("MAGI_BENCH_FEATURE を指定する（既定の比較だった成分修復の有無は P2d で常に ON）: $feature")
     }
     System.err.println("feature=$feature deterministic=$det")
@@ -194,7 +172,6 @@ fun main(args: Array<String>) {
                 val monthScope = feature.startsWith("ejection") || (feature.startsWith("pipe") && !byKind)
                 C1EjectionChainPolish.defaultHoleFocus = !monthScope || ((feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new")
                 C1EjectionChainPolish.defaultHoleSoftOnly = !monthScope || feature == "ejectionafterrepairholesoft"
-                PolishGate.prePostDescent = feature == "prepostdescent" && arm == "new"
                 AptFairPolish.heavySoftGuard = !(feature == "aptfairtolunguarded" && arm == "new")
                 fun once(): List<Any> {
                     resetPeak(); System.gc()

@@ -191,12 +191,10 @@ internal sealed interface MagiEvent {
         data class SetNativeParity(val on: Boolean) : Settings
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetAptFairToleranceUnguarded(val on: Boolean) : Settings
-        data class SetC1MoveARepair(val on: Boolean) : Settings
         data class SetEjectionChain(val mode: EjectionChainMode) : Settings
         data class SetEjectionChainSeconds(val seconds: Int) : Settings
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
-        data class SetStallPolishInjection(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */

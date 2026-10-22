@@ -10,7 +10,6 @@ data class EngineConfig(
     // 停滞・床・壁（`docs/stall_escape.md`。意味は PolishGate の同名の KDoc）
     val floorShortStall: Boolean = true,
     val c3nWallDeepCheck: Boolean = false,
-    val adaptiveStall: Boolean = false,
     // 後処理（PostOptimizationParams へ渡す。じっくりで ON になる 3 つを含む）
     val combineExhaustPairs: Boolean = false,
     val aptFairSoftTolerance: Boolean = false,
@@ -31,7 +30,6 @@ data class EngineConfig(
             normalStallFraction = PolishGate.normalStallFraction,
             floorShortStall = PolishGate.floorShortStall,
             c3nWallDeepCheck = PolishGate.c3nWallDeepCheck,
-            adaptiveStall = PolishGate.adaptiveStall,
             combineExhaustPairs = PolishGate.combineExhaustPairs,
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainPolish = PolishGate.countChainPolish,

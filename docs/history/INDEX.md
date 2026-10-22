@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P2d-③（2026-10-22、版なし・本番の出力不変）: 否決・測定用の腕を削除（SoftCascadePolish・PrePostDescent・C2Polish・C42FlowPolish・C3nMarginLnsPolish・RestZeroWindowLns・StallPolishInjection の 7 ファイル、c1MoveARepair、adaptiveStall、postChainRollbackCountsZero、rsiFocusRotationPersist、c1ComponentRepair、fairAchievementDirection、dayAssignIdentityFallback、各 Reactivate、PortfolioBudgetBench）。戻すときはこの直前のコミットから  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2d-②d（2026-10-22、版なし・本番の出力不変）: 画面のスイッチ 4 つ（入れ替えも1手として使う・採れたら探し直す＝常時、余った時間も玉突きに使う・禁止の並びだけ残ったら早めに切り上げる＝削除）と c3nWallLegacy・C3nWallProof.legacy、非表示の blockSwapC3nFilter（filterC3nIncrease 常時）を削除  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2d-②c（2026-10-22、版なし・出力不変）: wishPinStrict（規則 A）を常時にして PolishGate のフラグ・wishMoveAllowed/keepsWishPins の strict 引数・7 ファイルの wishPinStrict 引数を削除。旧挙動の比較テストを削除  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2d-②b（2026-10-22、版なし・本番の出力不変）: 後処理の定着引数 5 本（componentRepairEnabled/Final・covOReliefEnabled・postChainRunningKeepBest・lnsAdaptive）を外す。lnsAdaptive は UI の残骸・「設定の効き」の語も削除。素の PostOptimizationParams() も本番と同じ自動調整に（P0 盤面ハッシュは基準版で同一を確認）  → `docs/overhaul_design.md` §6.3

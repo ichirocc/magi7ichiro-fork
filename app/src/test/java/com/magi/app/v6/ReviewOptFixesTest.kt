@@ -55,13 +55,6 @@ class ReviewOptFixesTest {
         }
     }
 
-    @Test fun prePostDescentTakesTheFamilySwapImprovement() {
-        val st = swapFamilyState()
-        val r = PrePostDescent.apply(st, arrayOf(intArrayOf(2, 0)), maxMillis = 60_000L, maxDraws = 500, seed = 1L)
-        assertEquals(1, r.newSchedule[0][1])
-        assertTrue(r.improved >= 1)
-    }
-
     @Test fun ejectionChainKeepsAndAdoptsTheFamilySwapImprovement() {
         val st = swapFamilyState()
         val r = C1EjectionChainPolish.apply(st, arrayOf(intArrayOf(2, 0)),
