@@ -54,12 +54,7 @@ internal object C1JointLnsPolish {
         val patienceMs: Long = 4_000L,
         /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める＝同じ入力・seed なら同じ盤面。 */
         val maxEvaluations: Int = 0,
-        /** 子の評価を [DeltaEvaluator] の差分で行う（親へ1回 reset、1〜3セルを当てて戻す）。最終の正式 check は不変。 */
-        val deltaChildEval: Boolean = deltaChildEvalDefault,
     )
-
-    /** [Config.deltaChildEval] の既定。順番均衡 A/B（78 盤面）が事前基準を満たしたため既定 ON。 */
-    @Volatile internal var deltaChildEvalDefault: Boolean = true
 
     private class Pending(val move: Move, val next: Array<IntArray>?, val cells: IntArray?)
 
@@ -154,7 +149,7 @@ internal object C1JointLnsPolish {
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootC1, emptyList(), 0)
         // センチネル(-1)を含む盤面は DeltaEvaluator が受け付けない＝従来の check へ戻す。
-        val deltaPool = if (config.deltaChildEval && rootSchedule.all { row -> row.all { it in 0 until p.K } })
+        val deltaPool = if (rootSchedule.all { row -> row.all { it in 0 until p.K } })
             DeltaPool(p) else null
         var best = root
         var expanded = 0

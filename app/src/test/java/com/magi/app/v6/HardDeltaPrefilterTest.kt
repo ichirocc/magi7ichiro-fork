@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
-/** [HardDelta] が checker の HARD 差と厳密に一致し、[PolishGate.hardDeltaPrefilter] の ON/OFF で盤面が変わらないこと。 */
+/** [HardDelta] が checker の HARD 差と厳密に一致し、前判定つきの研磨が checker と矛盾しない盤面を返すこと。 */
 class HardDeltaPrefilterTest {
     private val fixtures = listOf("/golden_state.json", "/sample_state_v6.json", "/blocked_covu_state.json", "/sept2026_state.json")
 
@@ -52,23 +52,15 @@ class HardDeltaPrefilterTest {
         }
     }
 
-    private fun <T> withPrefilter(on: Boolean, block: () -> T): T {
-        val saved = PolishGate.hardDeltaPrefilter
-        PolishGate.hardDeltaPrefilter = on
-        try { return block() } finally { PolishGate.hardDeltaPrefilter = saved }
-    }
-
     @Test
-    fun cyclicSwapAndC1BeamBoardsAreIdenticalWithPrefilterOnAndOff() {
+    fun cyclicSwapAndC1BeamWithPrefilterNeverIncreaseHard() {
         for (res in fixtures) {
             val st = load(res); val p = Problem(st)
-            fun cyc() = CyclicSwapWeeklyPolish.applyCyclicSwapPolish(st, board(st, p))
-            fun beam() = C1WindowPolish.applyC1BeamPolish(st, board(st, p), beamWidth = 6, maxSteps = 6)
-            val cOn = withPrefilter(true) { cyc() }; val cOff = withPrefilter(false) { cyc() }
-            assertTrue("$res cyclic", cOn.newSchedule.contentDeepEquals(cOff.newSchedule))
-            assertEquals(res, cOff.applied, cOn.applied)
-            val bOn = withPrefilter(true) { beam() }; val bOff = withPrefilter(false) { beam() }
-            assertTrue("$res beam", bOn.newSchedule.contentDeepEquals(bOff.newSchedule))
+            val h0 = hard(st, board(st, p))
+            val c = CyclicSwapWeeklyPolish.applyCyclicSwapPolish(st, board(st, p))
+            assertTrue("$res cyclic", hard(st, c.newSchedule) <= h0)
+            val b = C1WindowPolish.applyC1BeamPolish(st, board(st, p), beamWidth = 6, maxSteps = 6)
+            assertTrue("$res beam", hard(st, b.newSchedule) <= h0)
         }
     }
 }

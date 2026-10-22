@@ -39,9 +39,6 @@ object FixSuggester {
     /** 直近の探索が締切で打ち切られたか（改善案が見つからない理由の「時間不足」を言い分ける。仕様 §7）。 */
     @Volatile var lastTimedOut: Boolean = false
 
-    /** 単一変更に限り、希望固定セルが固定値から外れていれば「固定値へ戻す」1 手を候補にする（既定 ON）。 */
-    @Volatile var restoreWishLocked: Boolean = true
-
     /** 探索の上限（3.507.4 で集約。値は 2.4x 系からの据え置き）。 */
     internal object Limits {
         const val CHAIN_ROUNDS = 3          // 連鎖で積み上げる最大コマ数
@@ -182,7 +179,7 @@ object FixSuggester {
                     val a = s[i][j]
                     if (p.wishLocked(i, j)) {
                         val k = p.lockTo(i, j)
-                        if (restoreWishLocked && k >= 0 && k != a && !timeUp())
+                        if (k >= 0 && k != a && !timeUp())
                             tryOps(FixKind.CHANGE, listOf(FixCell(i, j, k)), "${nm(i)} ${dlab(j)} 「${sym(a)}」→「${sym(k)}」")
                         continue
                     }

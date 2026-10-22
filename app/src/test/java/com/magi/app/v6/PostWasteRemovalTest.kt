@@ -6,15 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** [3.680.0] 出力不変の無駄取り 2 件（[PolishGate.rotationDeltaPrescreen]・[PolishGate.roundPassMemo]）。ON/OFF で盤面が同じこと。 */
+/** [3.680.0] 出力不変の無駄取り 2 件（3 者回転の差分前判定・巡回の再生）。採否が正式評価と食い違わず、決定的に同じ盤面になること。 */
 class PostWasteRemovalTest {
     private fun load(name: String) = StateParser.parse(javaClass.getResource("/$name")!!.readText())!!
-
-    private fun <T> withGates(prescreen: Boolean, memo: Boolean, block: () -> T): T {
-        val a = PolishGate.rotationDeltaPrescreen; val b = PolishGate.roundPassMemo
-        PolishGate.rotationDeltaPrescreen = prescreen; PolishGate.roundPassMemo = memo
-        try { return block() } finally { PolishGate.rotationDeltaPrescreen = a; PolishGate.roundPassMemo = b }
-    }
 
     /** 3 者回転を盤面に当てたあとの差分キーが、正式評価の (hard, weightedScore, total) と毎手一致する（群をまたぐ組も含む）。 */
     @Test fun deltaKeyAgreesWithCheckerOnRotations() {
@@ -44,35 +38,30 @@ class PostWasteRemovalTest {
         }
     }
 
-    @Test fun rotationPrescreenKeepsTheSameBoard() {
+    @Test fun rotationPrescreenReportsTheCheckerScore() {
         for (f in listOf("golden_state.json", "sample_state_v6.json")) {
             val st = load(f)
             val s0 = st.schedule.toIntArray2D()
             val anchors = setOf("vio-c3", "vio-c3m", "vio-c3mn", "vio-c1")
-            val off = withGates(false, true) { C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1) }
-            val on = withGates(true, true) { C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1) }
-            assertTrue(f, off.newSchedule.contentDeepEquals(on.newSchedule))
-            assertEquals(f, off.applied, on.applied)
-            assertEquals(f, off.report?.weightedScore, on.report?.weightedScore)
+            val on = C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1)
+            on.report?.let { assertEquals(f, UnifiedViolationChecker.check(st, on.newSchedule).weightedScore, it.weightedScore, 0.0) }
+            assertTrue(f, on.logs.none { "食い違い" in it.message })
         }
     }
 
-    @Test fun roundPassMemoKeepsTheSameBoard() {
+    @Test fun postChainWithRoundMemoIsDeterministic() {
         for (f in listOf("golden_state.json", "sample_state_v6.json")) {
             val st = load(f)
             val params = V6HotfixPasses.PostOptimizationParams(deterministic = true, c1LnsMaxEvaluations = 2_000, personalLnsMaxEvaluations = 2_000)
-            fun run(memo: Boolean) = withGates(true, memo) {
-                V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "t", seed = 3L, params = params)
-            }
-            val off = run(false); val on = run(true)
-            assertTrue(f, off.schedule.contentDeepEquals(on.schedule))
-            assertEquals(f, off.report.weightedScore, on.report.weightedScore, 0.0)
-            assertEquals(f, off.stageRecords.map { it.key to it.applied }, on.stageRecords.map { it.key to it.applied })
+            fun run() = V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "t", seed = 3L, params = params)
+            val a = run(); val b = run()
+            assertTrue(f, a.schedule.contentDeepEquals(b.schedule))
+            assertEquals(f, a.stageRecords.map { it.key to it.applied }, b.stageRecords.map { it.key to it.applied })
         }
     }
 
     /** [3.686.0] 基準で 0 の回数の族（下限割れ）が回転で現れる盤面でも、差分評価の前判定は正式評価と同じ盤面を返す。 */
-    @Test fun rotationPrescreenKeepsTheSameBoardWhenARangeFamilyAppears() {
+    @Test fun rotationPrescreenReportsTheCheckerScoreWhenARangeFamilyAppears() {
         val st0 = load("sept2026_state.json")
         val s0 = st0.schedule.toIntArray2D()
         // 全員の各シフトの回数をそのまま下限にする＝基準では low 0、回転で 1 つでも減れば現れる。
@@ -85,10 +74,8 @@ class PostWasteRemovalTest {
         for (q in listOf(false, true)) {
             assertEquals(0, UnifiedViolationChecker.check(st, normalizeSchedule(s0, Problem(st, q)), quantitativeRangeEval = q).breakdown["low"] ?: 0)
             val anchors = setOf("vio-c3", "vio-c3m", "vio-c3mn", "vio-c1")
-            val off = withGates(false, true) { C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1, quantitativeRangeEval = q) }
-            val on = withGates(true, true) { C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1, quantitativeRangeEval = q) }
-            assertTrue("q=$q", off.newSchedule.contentDeepEquals(on.newSchedule))
-            assertEquals("q=$q", off.applied, on.applied)
+            val on = C3RotationPolish.applyBlockRotationPolish(st, s0.copy2D(), anchors, "t", maxPasses = 1, quantitativeRangeEval = q)
+            on.report?.let { assertEquals("q=$q", UnifiedViolationChecker.check(st, on.newSchedule, quantitativeRangeEval = q).weightedScore, it.weightedScore, 0.0) }
             assertTrue("q=$q 食い違いで止めていない", on.logs.none { "食い違い" in it.message })
         }
     }

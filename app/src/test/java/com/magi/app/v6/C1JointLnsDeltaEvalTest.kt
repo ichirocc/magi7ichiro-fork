@@ -18,8 +18,8 @@ import org.junit.Test
 import java.util.Random
 
 /**
- * [Config.deltaChildEval] の検証。G1＝子の差分 report が正式 check と全族一致、
- * G2＝決定的モード（評価回数上限）で flag OFF/ON の最終盤面と report が一致。
+ * 子の差分評価の検証。G1＝子の差分 report が正式 check と全族一致、
+ * G2＝決定的モード（評価回数上限）で同じ盤面を再現し、報告が正式 check と一致。
  */
 class C1JointLnsDeltaEvalTest {
     private val fixtures = listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
@@ -107,40 +107,38 @@ class C1JointLnsDeltaEvalTest {
         }
     }
 
-    private fun runBoth(st: MagiState, board: Array<IntArray>, q: Boolean, evals: Int): Pair<V6HotfixPasses.CyclicSwapResult, V6HotfixPasses.CyclicSwapResult> {
-        fun run(delta: Boolean) = C1JointLnsPolish.apply(
+    private fun runTwice(st: MagiState, board: Array<IntArray>, q: Boolean, evals: Int): Pair<V6HotfixPasses.CyclicSwapResult, V6HotfixPasses.CyclicSwapResult> {
+        fun run() = C1JointLnsPolish.apply(
             st, board.copy2D(),
-            C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = evals, deltaChildEval = delta),
+            C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = evals),
             quantitativeRangeEval = q,
         )
-        return run(false) to run(true)
+        return run() to run()
     }
 
-    private fun assertSameResult(label: String, off: V6HotfixPasses.CyclicSwapResult, on: V6HotfixPasses.CyclicSwapResult) {
-        assertTrue("$label board", off.newSchedule.contentDeepEquals(on.newSchedule))
-        assertEquals("$label applied", off.applied, on.applied)
-        assertEquals("$label breakdown", off.report!!.breakdown, on.report!!.breakdown)
-        assertEquals("$label weighted", off.report!!.weightedScore, on.report!!.weightedScore, 0.0)
-        val strip = { m: String -> m.substringBefore(" 停止=") }
-        assertEquals("$label log", strip(off.logs.first().message), strip(on.logs.first().message))
+    private fun assertReproducedAndChecked(label: String, st: MagiState, q: Boolean, a: V6HotfixPasses.CyclicSwapResult, b: V6HotfixPasses.CyclicSwapResult) {
+        assertTrue("$label board", a.newSchedule.contentDeepEquals(b.newSchedule))
+        assertEquals("$label applied", a.applied, b.applied)
+        val rep = UnifiedViolationChecker.check(st, b.newSchedule, quantitativeRangeEval = q)
+        assertEquals("$label breakdown", rep.breakdown, b.report!!.breakdown)
+        assertEquals("$label weighted", rep.weightedScore, b.report!!.weightedScore, 0.0)
     }
 
     @Test
-    fun deterministicModeGivesTheSameBoardWithAndWithoutDelta() {
+    fun deterministicModeReproducesTheBoardAndReportsTheCheckerScore() {
         var applied = 0
         for (name in fixtures) {
             val st = load(name)
-            val board = st.schedule.toIntArray2D()
-            val (off, on) = runBoth(st, board, false, 4000)
-            assertSameResult(name, off, on)
-            applied += on.applied
+            val (a, b) = runTwice(st, st.schedule.toIntArray2D(), false, 4000)
+            assertReproducedAndChecked(name, st, false, a, b)
+            applied += b.applied
         }
         for (seed in 1L..4L) {
             val st = synthetic(seed)
             for (q in listOf(false, true)) {
-                val (off, on) = runBoth(st, st.schedule.toIntArray2D(), q, 1500)
-                assertSameResult("synthetic$seed q=$q", off, on)
-                applied += on.applied
+                val (a, b) = runTwice(st, st.schedule.toIntArray2D(), q, 1500)
+                assertReproducedAndChecked("synthetic$seed q=$q", st, q, a, b)
+                applied += b.applied
             }
         }
         assertTrue("採用のある経路を通っている", applied >= 4)

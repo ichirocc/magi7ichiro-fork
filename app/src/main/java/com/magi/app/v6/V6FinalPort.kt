@@ -648,16 +648,14 @@ object V6FinalPort {
         //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
         //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
-        // [E0] 希望衝突の床。ログには常に出し、探索への配線は wishFloorMode≠OFF または floorCountsUpperZero のとき（wishOn）。
+        // [E0] 希望衝突の床（上限 0 込み＝3.709.0 で既定、P2d で常時）。到達で短い閾値へ移る。
         val wishP = cachedProblem(state)
         val wishPartsMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true) } catch (_: Exception) { 0 to 0 }
         val wishFloorMp = wishPartsMp.first + wishPartsMp.second
-        // [3.692.0] floorCountsUpperZero＝頭打ちの床を上限0込みにする（最適化器は上限0へ置かない＝mayPlace を守る盤面では健全）。
-        val floorUp0 = config.floorCountsUpperZero
-        val wishParts = if (floorUp0) wishPartsMp else try { V6SanityPort.wishConflictFloorParts(wishP) } catch (_: Exception) { 0 to 0 }
+        // 頭打ちの床は上限0込み（最適化器は上限0へ置かない＝mayPlace を守る盤面では健全）。
+        val wishParts = wishPartsMp
         val wishFloorLogged = wishParts.first + wishParts.second
-        val wishOn = wishFloorMode != WishFloorMode.OFF || floorUp0
-        val wishC3wProven = if (wishOn) V6SanityPort.wishConflictC3wCount(wishP) else 0
+        val wishC3wProven = V6SanityPort.wishConflictC3wCount(wishP)
         val e0Fired = java.util.concurrent.atomic.AtomicBoolean(false)
         fun wishReachedOn(board: Array<IntArray>?, hard: Int): Boolean = board != null && wishFloorReached(hard, wishFloorLogged) {
             try {
@@ -786,7 +784,7 @@ object V6FinalPort {
                 now - wd.lastBestImproveMs.get() > stallHardMs && c3nWallProven()
             val effStall = effectiveStallMs(
                 wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
-                wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached(),
+                wd.bestHard.get() == wishFloorLogged && bestWishReached(),
                 adaptiveMs = if (config.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
                 floorShort = config.floorShortStall,
             )
@@ -797,7 +795,7 @@ object V6FinalPort {
                     val fired = synchronized(progressLock) {
                         wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = wall)
                     }
-                    if (fired) e0Fired.set(wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached())
+                    if (fired) e0Fired.set(wd.bestHard.get() == wishFloorLogged && bestWishReached())
                     fired
                 }
                 else -> false
@@ -904,7 +902,7 @@ object V6FinalPort {
             //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
             val structuralHardResidual = extraRefineRequirePostHardDrop &&
                 isStructuralHardResidual(post.report, hardFloor,
-                    wishOn && wishReachedOn(post.schedule, post.report.hard), wishC3wProven) {
+                    wishReachedOn(post.schedule, post.report.hard), wishC3wProven) {
                     try {
                         val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
                         diag.hasRuns && diag.allBlocked
@@ -991,7 +989,7 @@ object V6FinalPort {
                 " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ現フェーズ${phaseGraceMs / 1000}s経過かつ無改善が" +
                 "${stallMs / 1000}s(通常)〜${stallHardMs / 1000}s(頭打ち=HARD下限到達 or c3n構造壁)続いたとき" +
                 " / 構造的HARD下限=${hardFloor} / 希望衝突の床=${wishFloorLogged}(衝突${wishParts.first}+日の証明${wishParts.second}・" +
-                (if (wishOn) "到達で頭打ち=${if (floorUp0) "上限0込み" else wishFloorMode.name}" else "記録のみ") + "・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
+                "到達で頭打ち=上限0込み・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
         )
         val watchdogLog = run {
             val lastImp = lastImpAtSearchEnd
@@ -1001,9 +999,9 @@ object V6FinalPort {
             val gapsEnd = wd.recentGaps()
             val adaptiveEnd = if (config.adaptiveStall) adaptiveStallMs(gapsEnd, stallHardMs, stallMs) else null
             val kind = when {
-                wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
+                wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
-                wishOn && wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
+                wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s" + (adaptiveEnd?.takeIf { it < stallMs }?.let { "→適応${it / 1000}s" } ?: "")
             }
@@ -1068,7 +1066,7 @@ object V6FinalPort {
                 (if (wd.stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・発火種別=${if (wd.stagnationByOverride.get()) "猶予上書き" else "通常"}・解は最良を維持）" +
-                (if (e0Fired.get()) "（希望衝突の床に到達＝${if (floorUp0 && wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
+                (if (e0Fired.get()) "（希望衝突の床に到達＝${if (wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが限定した手（1マス・玉突き・隣接日）では崩せないと判定。希望固定=証明相当/それ以外=探索で改善が見つかっていないだけ）" else ""),
         )) else emptyList()
@@ -1372,7 +1370,7 @@ object V6FinalPort {
                 kind = when {
                     !fired -> StopKind.DEADLINE
                     wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
-                    wishOn && wishReachedEnd -> StopKind.WISH_FLOOR
+                    wishReachedEnd -> StopKind.WISH_FLOOR
                     wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
                         if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL
                     else -> StopKind.NORMAL_STALL

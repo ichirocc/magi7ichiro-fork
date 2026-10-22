@@ -7,8 +7,6 @@ package com.magi.app.v6
 data class EngineConfig(
     /** 停滞の閾値＝予算×この割合（[V6FinalPort.normalStallMs]）。0.9 は 3.447.0 で据え置き確定（HF77）。 */
     val normalStallFraction: Double = 0.9,
-    /** 早期終了の希望衝突の床を上限 0 込みにする（3.709.0 で既定 ON）。 */
-    val floorCountsUpperZero: Boolean = true,
     // 停滞・床・壁（`docs/stall_escape.md`。意味は PolishGate の同名の KDoc）
     val c3nWallShortStall: Boolean = false,
     val floorShortStall: Boolean = true,
@@ -35,7 +33,6 @@ data class EngineConfig(
         /** 設定画面・背景 Worker の復元が書いた [PolishGate] を写す。エンジンの入口でだけ呼ぶ。 */
         fun snapshot(): EngineConfig = EngineConfig(
             normalStallFraction = PolishGate.normalStallFraction,
-            floorCountsUpperZero = PolishGate.floorCountsUpperZero,
             c3nWallShortStall = PolishGate.c3nWallShortStall,
             floorShortStall = PolishGate.floorShortStall,
             c3nWallLegacy = PolishGate.c3nWallLegacy,
@@ -49,7 +46,6 @@ data class EngineConfig(
                 c1Chain = PolishGate.c1EjectionChain,
                 allFamilyChain = PolishGate.allFamilyEjectionChain,
                 pipelineFocus = PolishGate.ejectionPipelineFocus,
-                pipelineAfterRepair = PolishGate.ejectionPipelineAfterRepair,
                 pipelineRounds = PolishGate.ejectionPipelineRounds,
                 pipelineHardLeg = PolishGate.ejectionPipelineHardLeg,
                 swapMoves = PolishGate.ejectionChainSwapMoves,
@@ -67,7 +63,6 @@ data class EjectionFlags(
     val c1Chain: Boolean = false,
     val allFamilyChain: Boolean = false,
     val pipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH,
-    val pipelineAfterRepair: Boolean = true,
     val pipelineRounds: Boolean = true,
     val pipelineHardLeg: Boolean = false,
     val swapMoves: Boolean = true,

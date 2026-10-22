@@ -8,7 +8,6 @@ class EngineConfigTest {
     @Test fun defaultsMatchTheProductionDefaults() {
         val d = EngineConfig()
         assertEquals(0.9, d.normalStallFraction, 0.0)
-        assertEquals(true, d.floorCountsUpperZero)
         assertEquals(false, d.c3nWallShortStall)
         assertEquals(true, d.floorShortStall)
         assertEquals(false, d.c3nWallLegacy)
@@ -19,7 +18,7 @@ class EngineConfigTest {
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
         assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
-            pipelineAfterRepair = true, pipelineRounds = true, pipelineHardLeg = false, swapMoves = true, maxMillis = 10_000L,
+            pipelineRounds = true, pipelineHardLeg = false, swapMoves = true, maxMillis = 10_000L,
             useLeftover = false, holeFocus = true, holeSoftOnly = true), d.ejection)
         assertEquals(d, EngineConfig.snapshot())
     }
@@ -35,14 +34,14 @@ class EngineConfigTest {
     }
 
     @Test fun snapshotIsFixedAtTheStartOfTheRun() {
-        val saved = PolishGate.floorCountsUpperZero
+        val saved = PolishGate.adaptiveStall
         try {
-            PolishGate.floorCountsUpperZero = false
+            PolishGate.adaptiveStall = true
             val c = EngineConfig.snapshot()
-            PolishGate.floorCountsUpperZero = true
-            assertEquals(false, c.floorCountsUpperZero)
+            PolishGate.adaptiveStall = false
+            assertEquals(true, c.adaptiveStall)
         } finally {
-            PolishGate.floorCountsUpperZero = saved
+            PolishGate.adaptiveStall = saved
         }
     }
 }

@@ -200,7 +200,6 @@ fun main(args: Array<String>) {
                     // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
-                PolishGate.ejectionPipelineAfterRepair = !pf.startsWith("pipe") || pf.endsWith("end")
                 EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
                 // [3.657.0] パイプラインの腕は 1 巡だけ・必須の焦点なしを基準に新腕だけ足す（3.656.0 までの腕の再現）。それ以外の機能は既定（探し直し ON）のまま測る。
                 //   pipehardvsroundsendk だけは両腕とも探し直し ON（既定）で、新腕に必須の焦点を足す。

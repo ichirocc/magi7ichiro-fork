@@ -63,9 +63,8 @@ object V6LateOperators {
         quantitativeRangeEval: Boolean = false,
         shouldStop: () -> Boolean = { false },
     ): LateImproveResult {
-        // 停止要求は試行ごとに見る（[PolishGate.lateOpStopPropagation]）。false は試行ごとの確認だけを切る（入口の確認は残る）。
-        val stop: () -> Boolean = if (PolishGate.lateOpStopPropagation) shouldStop else ({ false })
-        val session = LateSession(state, cachedProblem(state, quantitativeRangeEval), schedule.copy2D(), report, rng, deadlineMs, stop)
+        // 停止要求は試行ごとに見る。
+        val session = LateSession(state, cachedProblem(state, quantitativeRangeEval), schedule.copy2D(), report, rng, deadlineMs, shouldStop)
         if (shouldStop()) return session.result()   // 停止要求済みなら 1 手も試さない（入力をそのまま返す）
         session.chainSwap3(chainTry3)
         session.chainSwap4(chainTry4)

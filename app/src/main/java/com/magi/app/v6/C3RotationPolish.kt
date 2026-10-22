@@ -130,7 +130,7 @@ internal object C3RotationPolish {
         fun bannedNew(i: Int, j: Int, k: Int) = k != work[i][j] && p.extBanned(i, j, k)  // 拡張希望の禁止へは置かない
         val windows = intArrayOf(2, 3)
         // 差分評価の前判定。基準盤面で正式評価とキーが一致したときだけ使い、一致しなければフル評価へ戻す。
-        var de: DeltaEvaluator? = if (PolishGate.rotationDeltaPrescreen) DeltaEvaluator(p).also { it.reset(work) } else null
+        var de: DeltaEvaluator? = DeltaEvaluator(p).also { it.reset(work) }
         if (de != null && !deltaKeyMatches(de, before)) de = null
         var prescreened = 0
         var prescreenMismatches = 0

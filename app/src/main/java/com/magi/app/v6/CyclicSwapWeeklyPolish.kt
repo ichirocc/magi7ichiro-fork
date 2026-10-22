@@ -48,7 +48,6 @@ internal object CyclicSwapWeeklyPolish {
         //   wishLocked が正しい判定。安全側（isBetter/checkerが最終ゲート）で候補が広がるのみ。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         val rng = if (maxK >= 4) Random(seed) else null
-        val prefilter = PolishGate.hardDeltaPrefilter
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -71,7 +70,7 @@ internal object CyclicSwapWeeklyPolish {
                         val workBeforeSwap2 = work.copy2D()
                         work[a][j] = sb; work[b][j] = sa
                         // bestRep は work の現在値の報告＝HARD が増える候補は betterReport が副作用なく却下する。
-                        if (prefilter && HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b), intArrayOf(sa, sb)) > 0) {
+                        if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b), intArrayOf(sa, sb)) > 0) {
                             work[a][j] = sa; work[b][j] = sb; continue
                         }
                         val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -96,7 +95,7 @@ internal object CyclicSwapWeeklyPolish {
                             if (p.mayPlace(a, sb) && p.mayPlace(b, sc) && p.mayPlace(c, sa) && !banned3) {
                                 val workBeforeRotate3 = work.copy2D()
                                 work[a][j] = sb; work[b][j] = sc; work[c][j] = sa
-                                if (prefilter && HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b, c), intArrayOf(sa, sb, sc)) > 0) {
+                                if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b, c), intArrayOf(sa, sb, sc)) > 0) {
                                     work[a][j] = sa; work[b][j] = sb; work[c][j] = sc; continue
                                 }
                                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)

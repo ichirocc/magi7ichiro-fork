@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P2d-②a（2026-10-22、版なし・出力不変）: 定着フラグ 10 本を常に ON にしてフラグと OFF 経路を削除（rotationDeltaPrescreen・roundPassMemo・hardDeltaPrefilter・lateOpStopPropagation・ejectionPipelineAfterRepair・personSwapKick・floorCountsUpperZero・deltaChildEvalDefault・defaultCrossFamily（v1 候補生成）・restoreWishLocked）。OFF 比較テストは ON 経路の検証へ、PersonSwapBench・WasteRemovalProbe を削除  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2d-①（2026-10-22、版なし・出力不変）: どこからも ON にならない玉突き 5 本（hardEjectionChainEarly・allEjectionChainEarly・allEjectionChainFinal・hardEjectionChainRetry・allEjectionChainAfterRepair）と C1EjectionChainPolish.defaultMaxDepth/defaultNarrow、EjectionChainScope.NEARBY を削除。戻すときはこの直前のコミットから取り出す  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2c（2026-10-22、版なし・出力不変）: 玉突きの 11 項目を `EjectionFlags` へ（`EngineConfig.ejection`→`PostOptimizationParams.ejection`→パイプライン・従来の玉突き・手直し提案）。Config の既定は定数、`EjectionChainPipeline` を public に。エンジン内の PolishGate 書き込み 0  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2b（2026-10-22、版なし・出力不変）: 停滞・床・壁の 5 項目と後処理の 4 項目を `EngineConfig` へ、`EngineConfig.postParams()`、`V6OptimizerOptions.config`  → `docs/overhaul_design.md` §6.3

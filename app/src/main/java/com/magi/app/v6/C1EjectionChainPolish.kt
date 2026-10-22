@@ -30,8 +30,6 @@ internal object C1EjectionChainPolish {
         /** 0 以下＝無制限。決定的モードではこちらで止める。 */
         val maxEvaluations: Long = 0L,
         val maxRounds: Int = 4,
-        /** true＝v2（族越え）: 起点から増えている族（残存負債）を加重値の大きい順に修復対象とし、一か月全日×全職員から次の手を探す。false＝v1（直前の行と列）。 */
-        val crossFamily: Boolean = defaultCrossFamily,
         /** v2: Δ評価の上位から族別差分まで調べる候補数。 */
         val familyProbe: Int = 48,
         /** 起点。C1＝c1 不足窓、ALL＝正式評価器が場所を返す全族の違反（`PolishGate.allFamilyEjectionChain`）。 */
@@ -74,9 +72,6 @@ internal object C1EjectionChainPolish {
 
     /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
     @Volatile internal var entryProbe: ((Array<IntArray>) -> Unit)? = null
-
-    /** 測定用の切替（v1/v2 を同条件で比べる）。 */
-    @Volatile internal var defaultCrossFamily: Boolean = true
 
     private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish")
 
@@ -131,7 +126,6 @@ internal object C1EjectionChainPolish {
         val all = config.origin != Origin.C1
         val hardOnly = config.origin == Origin.HARD
         val softOnly = config.origin == Origin.SOFT
-        val crossFamily = all || config.crossFamily
         val hasUnassigned = work.any { row -> row.any { it !in 0 until p.K } }
         if (hasUnassigned || (if (hardOnly) rep.hard == 0 else if (softOnly) rep.total == rep.hard else if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
             indexOnly?.invoke(emptyList())
@@ -300,7 +294,7 @@ internal object C1EjectionChainPolish {
                 val touched = HashSet<Int>()
 
                 val useHole = config.holeFocus && !(config.holeSoftOnly && seed.family in HARD_FAMILIES)
-                val famStart = if (crossFamily) familyWeighted(de) else LongArray(0)
+                val famStart = familyWeighted(de)
                 fun dfs(depth: Int, li: Int, lj: Int) {
                     val s = de.score()
                     if (s / SCORE_HARD_UNIT <= baseHard + config.hardSlack) {
@@ -374,60 +368,54 @@ internal object C1EjectionChainPolish {
                             x -= 3; n--
                         }
                     }
-                    if (crossFamily) {
-                        if (useHole) {
-                            // 穴＝動かしたセルの同じ日（被覆の受け皿）と同じ職員の前後の日（並び・期間の制約）。
-                            val hole = java.util.BitSet(p.S * p.T)
-                            for (m in path) {
-                                val mi = m[0]; val mj = m[1]
-                                for (s2 in 0 until p.S) hole.set(s2 * p.T + mj)
-                                for (d in maxOf(0, mj - config.holeRadius)..minOf(p.T - 1, mj + config.holeRadius)) hole.set(mi * p.T + d)
-                            }
-                            var c = hole.nextSetBit(0)
-                            while (c >= 0) { consider(c / p.T, c % p.T); c = hole.nextSetBit(c + 1) }
-                            if (out() || seedSpent()) return
-                            if (config.swapMoves) {
-                                c = hole.nextSetBit(0)
-                                while (c >= 0) {
-                                    val ci = c / p.T; val cj = c % p.T
-                                    // 相手も穴なら番号の小さい側からだけ数える（同じ組を二度評価しない）。
-                                    for (b in 0 until p.S) if (b != ci && (!hole.get(b * p.T + cj) || b > ci)) considerSwap(ci, cj, b, cj)
-                                    for (d in 0 until p.T) if (d != cj && (!hole.get(ci * p.T + d) || d > cj)) considerSwap(ci, cj, ci, d)
-                                    c = hole.nextSetBit(c + 1)
-                                }
-                            }
-                        } else {
-                            for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
-                            if (config.swapMoves) {
-                                for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
-                                for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
-                            }
+                    if (useHole) {
+                        // 穴＝動かしたセルの同じ日（被覆の受け皿）と同じ職員の前後の日（並び・期間の制約）。
+                        val hole = java.util.BitSet(p.S * p.T)
+                        for (m in path) {
+                            val mi = m[0]; val mj = m[1]
+                            for (s2 in 0 until p.S) hole.set(s2 * p.T + mj)
+                            for (d in maxOf(0, mj - config.holeRadius)..minOf(p.T - 1, mj + config.holeRadius)) hole.set(mi * p.T + d)
                         }
-                        cand.sortWith(CAND_ORDER)
-                        val famNow = familyWeighted(de)
-                        val worse = LongArray(famNow.size) { maxOf(0L, famNow[it] - famStart[it]) }
-                        if (worse.any { it > 0 }) {
-                            // 残存負債が最大の族（同点は族の並び順）を第一に、負債全体の回収量を第二に並べる。
-                            var focus = 0
-                            for (x in worse.indices) if (worse[x] > worse[focus]) focus = x
-                            val top = cand.take(config.familyProbe)
-                            val gain = HashMap<LongArray, Long>()
-                            val gainFocus = HashMap<LongArray, Long>()
-                            for (c in top) {
-                                val olds = applyCand(c)
-                                val f2 = familyWeighted(de)
-                                undoCand(c, olds)
-                                var g = 0L
-                                for (x in worse.indices) if (worse[x] > 0) g += minOf(worse[x], maxOf(0L, famNow[x] - f2[x]))
-                                gain[c] = g
-                                gainFocus[c] = minOf(worse[focus], maxOf(0L, famNow[focus] - f2[focus]))
+                        var c = hole.nextSetBit(0)
+                        while (c >= 0) { consider(c / p.T, c % p.T); c = hole.nextSetBit(c + 1) }
+                        if (out() || seedSpent()) return
+                        if (config.swapMoves) {
+                            c = hole.nextSetBit(0)
+                            while (c >= 0) {
+                                val ci = c / p.T; val cj = c % p.T
+                                // 相手も穴なら番号の小さい側からだけ数える（同じ組を二度評価しない）。
+                                for (b in 0 until p.S) if (b != ci && (!hole.get(b * p.T + cj) || b > ci)) considerSwap(ci, cj, b, cj)
+                                for (d in 0 until p.T) if (d != cj && (!hole.get(ci * p.T + d) || d > cj)) considerSwap(ci, cj, ci, d)
+                                c = hole.nextSetBit(c + 1)
                             }
-                            cand.clear(); cand.addAll(top.sortedWith(compareBy<LongArray>({ -(gainFocus[it] ?: 0L) }, { -(gain[it] ?: 0L) }).then(CAND_ORDER)))
                         }
                     } else {
-                        for (j2 in 0 until p.T) if (j2 != lj) consider(li, j2)
-                        for (i2 in 0 until p.S) if (i2 != li) consider(i2, lj)
-                        cand.sortWith(CAND_ORDER)
+                        for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
+                        if (config.swapMoves) {
+                            for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
+                            for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
+                        }
+                    }
+                    cand.sortWith(CAND_ORDER)
+                    val famNow = familyWeighted(de)
+                    val worse = LongArray(famNow.size) { maxOf(0L, famNow[it] - famStart[it]) }
+                    if (worse.any { it > 0 }) {
+                        // 残存負債が最大の族（同点は族の並び順）を第一に、負債全体の回収量を第二に並べる。
+                        var focus = 0
+                        for (x in worse.indices) if (worse[x] > worse[focus]) focus = x
+                        val top = cand.take(config.familyProbe)
+                        val gain = HashMap<LongArray, Long>()
+                        val gainFocus = HashMap<LongArray, Long>()
+                        for (c in top) {
+                            val olds = applyCand(c)
+                            val f2 = familyWeighted(de)
+                            undoCand(c, olds)
+                            var g = 0L
+                            for (x in worse.indices) if (worse[x] > 0) g += minOf(worse[x], maxOf(0L, famNow[x] - f2[x]))
+                            gain[c] = g
+                            gainFocus[c] = minOf(worse[focus], maxOf(0L, famNow[focus] - f2[focus]))
+                        }
+                        cand.clear(); cand.addAll(top.sortedWith(compareBy<LongArray>({ -(gainFocus[it] ?: 0L) }, { -(gain[it] ?: 0L) }).then(CAND_ORDER)))
                     }
                     // depth は起点を含む手数（起点＝1）。branching[0] は起点の次の 1 手ぶん（旧: depth で引いて先頭を飛ばしていた）。
                     val b = config.branching[minOf(depth - 1, config.branching.size - 1)]
@@ -495,7 +483,7 @@ internal object C1EjectionChainPolish {
             else -> "改善なし"
         }
         if (stats.endReason == "時間切れ") stats.timeouts++
-        val label = if (softOnly) "ソフト起点" else if (all) "全族起点" else "期間要件(c1)起点${if (crossFamily) "v2" else "v1"}"
+        val label = if (softOnly) "ソフト起点" else if (all) "全族起点" else "期間要件(c1)起点v2"
         val logs = listOf(MirrorLog(tag = "C1EjectionChain",
             message = "${label}玉突き連鎖[起点${stats.seeds}/生成${stats.generated}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/起点上限${stats.seedCapped}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/深さ${config.maxDepth}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
                 "c1 ${before.breakdown["c1"] ?: 0}->${rep.breakdown["c1"] ?: 0} score ${before.weightedScore.toLong()}->${rep.weightedScore.toLong()} HARD ${before.hard}->${rep.hard} total ${before.total}->${rep.total} 族差 " +

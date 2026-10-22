@@ -375,6 +375,11 @@ P2d は 4 コミットに分ける: ① 到達不能の玉突き 5 本と測定�
 P2d-① 済み（2026-10-22）: `hardEjectionChainEarly`・`allEjectionChainEarly`・`allEjectionChainFinal`・`hardEjectionChainRetry`・
 `allEjectionChainAfterRepair` の 4 分岐と宣言・snapshot/restore の鍵、`C1EjectionChainPolish.defaultMaxDepth`/`defaultNarrow`（既定値を定数へ）、
 `EjectionChainScope.NEARBY`（画面に出ていない・保存しない）。LoopBench の 5 腕、ExtWishOptimizeTest の鍵。P0 スナップショット一致。
+P2d-② は ②a エンジン内のフラグ ②b 後処理の引数 ②c `wishPinStrict` ②d 画面のスイッチ に分ける。
+P2d-②a 済み（2026-10-22）: 常に ON にしてフラグを外した＝`rotationDeltaPrescreen`・`roundPassMemo`・`hardDeltaPrefilter`・`lateOpStopPropagation`・
+`ejectionPipelineAfterRepair`（前の置き場所の分岐ごと）・`personSwapKick`（7 役割のローテーション固定）・`floorCountsUpperZero`（床は常に上限0込み）・
+`C1JointLnsPolish.deltaChildEvalDefault`（Config の引数ごと）・`C1EjectionChainPolish.defaultCrossFamily`（v1 の候補生成ごと）・`FixSuggester.restoreWishLocked`。
+OFF 比較のテストは ON の経路の検証（再現性・正式評価との一致・HARD を増やさない）へ書き換え、`PersonSwapBench`・`WasteRemovalProbe` と OFF 腕を削除。P0 スナップショット一致。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
@@ -444,6 +449,7 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 | 8 | C# 見直しの 3 件（タブ離脱でパネルを閉じる・人員不足の文言・S6 で古い試算の「閉じる」） | C# 単独 |
 | 9 | P0 の C# 版安全網 | P0 |
 | 10 | P1 の C# 版（`SaveFailNotifier.Report`＋`SaveRetryWiringTest`、NativeGate は C# に無ければ対象外） | P1 |
+| 11 | P2 の C# 版（`EngineConfig`、P2d で外した・消したフラグ: `RotationDeltaPrescreen`・`RoundPassMemo`・`HardDeltaPrefilter`・`LateOpStopPropagation`・`EjectionPipelineAfterRepair`・`PersonSwapKick`・`FloorCountsUpperZero`・`DeltaChildEvalDefault`・`DefaultCrossFamily`・`RestoreWishLocked` ほか後続） | P2 |
 
 ### 9.2 複数セッションでの運用
 - 作業は版数を付けずに仮のコミットで作る。取り込む直前に 1 人が最新の main へ載せ直し、版を振り、1 版 1 コミットにまとめる（squash）。

@@ -173,3 +173,4 @@
 ## 進捗（この表は 2026-10-22 の棚卸しのまま。片付けた項目をここに足す）
 - P2a〜P2c: 1 章 #10〜#16・#23・#24・#25・#28・#29・#33〜#35・#37〜#39 と玉突きの範囲 2 つを `EngineConfig` へ移した（エンジンは入口の写しだけを読む）。
 - P2d-①: #17〜#21、`defaultNarrow`・`defaultMaxDepth`、`EjectionChainScope.NEARBY` を削除。
+- P2d-②a: #4・#5・#6・#11・#26・#36・#39、`deltaChildEvalDefault`・`defaultCrossFamily`・`restoreWishLocked` を常に ON にしてフラグを外した。

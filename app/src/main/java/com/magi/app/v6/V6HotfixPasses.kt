@@ -154,24 +154,6 @@ object PolishGate {
      */
     @Volatile var filterC3nIncrease: Boolean = true
 
-    /**
-     * [3.680.0] 3者回転研磨（`C3RotationPolish.applyBlockRotationPolish`）で、フル checker の前に `DeltaEvaluator.reportKey`
-     * で正式採否のキーを出し、現最良に勝てない候補を捨てる。採否は不変（キーは checker と一致、基準盤面で不一致ならフル評価へ戻る）。
-     */
-    @Volatile var rotationDeltaPrescreen: Boolean = true
-
-    /**
-     * [3.680.0] 巡回研磨クラスタで、乱数種を取らない決定的なパスが前回と同じ盤面で採用 0 だったとき、同じ結果を再生して実行を省く。
-     * 締切で打ち切られた呼び出しは記録しない。出力は不変。
-     */
-    @Volatile var roundPassMemo: Boolean = true
-
-    /**
-     * 循環交換研磨（k=2,3）と C1広域ビームで、必ず却下される候補（HARD 正味増）を [HardDelta] の厳密差分で
-     * checker の前に捨てるか。既定 **true**。速度専用＝ON/OFF で盤面は同一（`HardDeltaPrefilterTest`）。UI トグルは無し。
-     */
-    @Volatile var hardDeltaPrefilter: Boolean = true
-
     /** [E0/測定中] 前面の「つくる」で HARD が希望衝突の床に到達したら頭打ち（E0A＝後処理は通常／E0B＝研磨を省いて時間を返す）。
      *  既定 OFF＝実データ A/B を見て利用者が決める（docs/history 3.613.0）。背景 Worker には渡さない。 */
     @Volatile var wishConflictFloorMode: WishFloorMode = WishFloorMode.OFF
@@ -185,10 +167,6 @@ object PolishGate {
     /** 玉突きを予察つきのパイプライン（[EjectionChainPipeline]）で行う。OFF 以外のとき従来の玉突き（どの置き場所も）は走らせない。
      *  既定 **BOTH**（3.656.0 で昇格＝docs/history）。 */
     @Volatile internal var ejectionPipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH
-
-    /** パイプラインの置き場所を最終の違反起点修復の後へ（false＝C1 共同 LNS の直後。そこでは後段の経路が変わり OFF 比で
-     *  必須が増える盤面があった）。既定 **true**（3.656.0）。 */
-    @Volatile var ejectionPipelineAfterRepair: Boolean = true
 
     /** パイプラインで採用があった巡のあと、索引を作り直してもう一巡する（最大 4 巡）。設定タブ「採れたら探し直す」。
      *  既定 **true**（3.657.0、決定的 LoopBench で現行比 勝45/負0・必須増 0＝docs/history）。 */
@@ -257,13 +235,6 @@ object PolishGate {
     @Volatile var lnsAdaptive: Boolean = true
 
     /**
-     * [3.517.0] AdaptivePortfolio の新ロール `PERSON_SWAP_ILS`（全月入替→再最適化のILS摂動）を
-     * 役割ローテーションに含めるか。既定 **true**（3.519.0で確定。実データ4件×5seedで必須退行0件・
-     * 全4件で品質が同等以上。根拠は `docs/algorithm_portfolio.md`「既定ONへ昇格」参照）。
-     */
-    @Volatile var personSwapKick: Boolean = true
-
-    /**
      * [希望固定の徹底] 規則 A（利用者決定 2026-09-25）: 最適化器は希望固定セル（`wishLocked`）を「希望へ」か「今のまま」にしか
      * しない＝希望どおりのセルは動かさない・未反映のセルは希望へ戻してよい（あとから足した希望も従来どおり載る）・
      * 未反映のセルを希望でも今の値でもない値へは動かさない。判定は `Problem.wishMoveAllowed`（セル）と
@@ -309,54 +280,46 @@ object PolishGate {
     /** 測定用の基準腕（`docs/stall_escape.md` §5.3）: true＝HEAD の壁判定（版ごとに固定・生存盤面の診断・一致の検査なし）。既定 **false**。 */
     @Volatile var c3nWallLegacy: Boolean = false
 
-    /** 測定用の切り分け（`docs/stall_escape.md` §5.5）: false＝後期演算（EarlyChain）は試行ごとの停止確認をしない（入口の停止確認は残るので HEAD とは完全に一致しない）。既定 **true**。 */
-    @Volatile var lateOpStopPropagation: Boolean = true
-
     /** 根拠の精度（`docs/stall_escape.md` §5.3、3.643.0）: 経験的な c3n 壁（探索手の全滅）は、1 手探索（`FixSuggester`、上限 2 s）でも必須を減らす手が
      *  無いときだけ短縮に使う。希望固定だけの壁（証明相当）は従来どおり。既定 **false**（計測は経験的な壁のフィクスチャ待ち＝ベンチの腕 `deep`、`docs/stall_escape.md` §11）。 */
     @Volatile var c3nWallDeepCheck: Boolean = false
     /** [PROPOSAL C/3.643.0、`docs/stall_escape.md` §5.8] 適応閾値: 直近の改善間隔の最大×3 を [短, 通常] に挟み、通常分岐の停滞閾値を縮める。既定 false（2026-10-09 の計測で既定が良く否決＝§11。腕 `adaptive` は再計測用）。 */
     @Volatile var adaptiveStall: Boolean = false
-    /** [3.692.0] 早期終了の希望衝突の床を上限0込み（`wishConflictFloorParts(zeroCapBinding = true)`、ログの「上限0を拘束とみなすと N」）にし、
-     *  到達で短い閾値へ移る（[wishConflictFloorMode] が OFF でも E0A 相当）。既定 true（3.709.0、実機データの腕 `floorup0` で結果同一・時間 −74%）。 */
-    @Volatile var floorCountsUpperZero: Boolean = true
-
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
         "wideC3nBreakDays" to wideC3nBreakDays, "c1MoveARepair" to c1MoveARepair,
-        "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
+        "filterC3nIncrease" to filterC3nIncrease,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
-        "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name, "ejectionPipelineAfterRepair" to ejectionPipelineAfterRepair,
+        "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name,
         "ejectionPipelineRounds" to ejectionPipelineRounds, "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
         "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "normalStallFraction" to normalStallFraction, "ejectionUseLeftover" to ejectionUseLeftover,
-        "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
+        "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall, "floorCountsUpperZero" to floorCountsUpperZero,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
     fun restore(m: Map<String, Any?>) {
         fun b(k: String, set: (Boolean) -> Unit) { (m[k] as? Boolean)?.let(set) }
         b("wideC3nBreakDays") { wideC3nBreakDays = it }; b("c1MoveARepair") { c1MoveARepair = it }
-        b("filterC3nIncrease") { filterC3nIncrease = it }; b("hardDeltaPrefilter") { hardDeltaPrefilter = it }
+        b("filterC3nIncrease") { filterC3nIncrease = it }
         (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
         (m["ejectionPipelineFocus"] as? String)?.let { n -> EjectionChainPipeline.Focus.entries.firstOrNull { it.name == n }?.let { ejectionPipelineFocus = it } }
-        b("ejectionPipelineAfterRepair") { ejectionPipelineAfterRepair = it }
         b("ejectionPipelineRounds") { ejectionPipelineRounds = it }; b("ejectionPipelineHardLeg") { ejectionPipelineHardLeg = it }
         b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
         b("ejectionUseLeftover") { ejectionUseLeftover = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
-        b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
+        b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }; b("floorCountsUpperZero") { floorCountsUpperZero = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }
     }
 }
 
@@ -701,7 +664,7 @@ object V6HotfixPasses {
         private var lastFoldRolledBack = false
 
         /** フェーズ名を UI へ通知し、所要 ms を [key] に累算しながら [block] を実行する。 */
-        /** [PolishGate.roundPassMemo] 実行を省いた段を、[timed] と同じキー・0ms で記録する。 */
+        /** 巡回で前回と同じ盤面・採用 0 だった段（[memoTimed]）を、[timed] と同じキー・0ms で記録する。 */
         fun memoHit(phase: String, key: String) {
             onPhase(phase)
             lastKey = key
@@ -812,7 +775,6 @@ object V6HotfixPasses {
         val ej = params.ejection
         val pipelineFocus = ej.pipelineFocus
         val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
-        val pipelineAtEnd = ej.pipelineAfterRepair
         fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
             EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
                 deepMaxMillis = if (ej.useLeftover) maxOf(ej.maxMillis, EngineClock.remainingMs(deadlineMs)) else ej.maxMillis,
@@ -895,9 +857,7 @@ object V6HotfixPasses {
                 }
             }
         })
-        if (pipelineOn && !pipelineAtEnd) {
-            chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき)", "玉突きパイプライン") { work -> runPipeline(work) })
-        } else if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
+        if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
             val tEj = EngineClock.nowMs()
             val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
@@ -946,7 +906,7 @@ object V6HotfixPasses {
             chain.rejectedPool.clear()
         }
 
-        if (pipelineOn && pipelineAtEnd && !shouldStop()) {
+        if (pipelineOn && !shouldStop()) {
             chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき・修復の後)", "玉突きパイプライン") { work -> runPipeline(work) })
         }
 
@@ -1046,7 +1006,6 @@ object V6HotfixPasses {
         var c1Plateau: C1PlateauDiagnosis? = null
         val memo = HashMap<String, Pair<Array<IntArray>, CyclicSwapResult>>()
         fun memoTimed(phase: String, key: String, memoKey: String = key, block: (Array<IntArray>, () -> Boolean) -> CyclicSwapResult): CyclicSwapResult {
-            if (!PolishGate.roundPassMemo) return chain.timed(phase, key) { block(it, clusterStop) }
             val hit = memo[memoKey]
             if (hit != null && hit.first.contentDeepEquals(chain.work) && !clusterStop()) {
                 chain.memoHit(phase, key)

@@ -807,9 +807,4 @@ class CoverageDayProof3692Test {
         assertEquals("試した入れ替えでは埋まらなかった", V6FinalPort.covUWallWhy(3, 3))
         assertEquals("実証済み1件・試した入れ替えでは埋まらなかった2件", V6FinalPort.covUWallWhy(3, 2))
     }
-
-    @Test fun floorCountsUpperZeroIsOnAndSnapshotted() {
-        assertTrue(PolishGate.floorCountsUpperZero)
-        assertEquals(true, PolishGate.snapshot()["floorCountsUpperZero"])
-    }
 }
