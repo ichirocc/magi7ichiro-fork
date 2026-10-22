@@ -132,8 +132,8 @@
 | **P5 ConstraintCatalog** | 制約族ごとに `ConstraintSpec { key; hard; locate(); explain(); repairHints() }` を 1 つ。**採点（重み・式）は持たない**。チェッカーの位置づけ、診断の文、UI の修正提案が共有する | `MirrorCore`（`UnifiedViolationChecker`）、`V6SanityPort`、`V6PortAnalyzer`、`ui/FixTiers`・`FixExplain`・`CellSheetLogic` | G1、G3、§4 の Checker/Diagnosis スナップショット一致 | 族ごとの PR＝1 本ずつ revert | Catalog を同じ族の順で | L（族ごと約 8 PR） |
 | **P6 ViewModel 分割** | `MagiViewModel.kt` を、既存の `MagiHandlers` の鎖の区切りに沿って partial 相当（Kotlin は委譲クラス）に分ける。C# の 14 partial と同じ名前・同じ境界にそろえる。`MagiMediator`/`MagiArbiter` はそのまま | `ui/MagiViewModel*.kt`、`MagiHandlers.kt` | G6、G12、ViewModel 系 JUnit | revert | C# はすでに分割済み＝名前の対応表だけ作る | L（画面ごと） |
 | **P7 文書の正規化** | `architecture.md` を新構成に書き換え（21 族など取り残しも直す）、`sudo_model.md` の図を更新 | `docs/` | 文書照合（作業記録に方法を残す） | revert | `windows/README.md` | S |
-| **P8 グループ上限0**（決定後） | 付録 A の Q-05。推奨 A（今のまま＋文書化）なら文書だけ。B なら `mayPlace` に c41/c41s の u=0 を含め、既定 OFF で入れて測る | A: `docs/business-logic.md`。B: `Problem`、C++、C#、文書、テスト | A: 文書照合。B: G9 | A: revert。B: フラグ | B のとき同日 | A: S／B: M |
-| **P9 職員の同一性**（決定後） | 付録 A の Q-06。推奨 A（解決済みとして閉じる）なら文書だけ。B なら CSV に任意の「職員ID」列 | A: `docs/data-models.md`。B: `ScheduleCsvBridge`、C# `StaffCsvIO.cs`、VBA 互換 | 往復テスト | revert | B のとき同日 | A: S／B: M |
+| **P8 グループ上限0**（2026-10-22 決定＝案 A、文書のみで完了） | 付録 A の Q-05。推奨 A（今のまま＋文書化）なら文書だけ。B なら `mayPlace` に c41/c41s の u=0 を含め、既定 OFF で入れて測る | A: `docs/business-logic.md`。B: `Problem`、C++、C#、文書、テスト | A: 文書照合。B: G9 | A: revert。B: フラグ | B のとき同日 | A: S／B: M |
+| **P9 職員の同一性**（2026-10-22 決定＝案 A、文書のみで完了） | 付録 A の Q-06。推奨 A（解決済みとして閉じる）なら文書だけ。B なら CSV に任意の「職員ID」列 | A: `docs/data-models.md`。B: `ScheduleCsvBridge`、C# `StaffCsvIO.cs`、VBA 互換 | 往復テスト | revert | B のとき同日 | A: S／B: M |
 
 依存関係: P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7。P8・P9 は決定が出れば P2 以降のどこにでも挟める。
 P2 と P3 は互いに独立に近いが、P4 が両方を使うので P4 の前に両方を終える。

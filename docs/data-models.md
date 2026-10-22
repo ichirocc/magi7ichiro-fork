@@ -64,6 +64,8 @@
 | `Shift` | `name: String`, `kigou: String`, `need1: String`, `need2: String`, `role: ShiftRole = None` | need1/need2 = P1/P2 の既定必要数（`""`/null＝要件なし）。`role`＝`ShiftRole{None,Rest}`（3.603.0、休の識別。詳細は下記） |
 | `Group` | `name: String`, `kigou: String` | kigou＝制約で使う記号 |
 | `Staff` | `name: String`, `groupIdx: Int`, `skillIdx: Int = -1`, `id: Int = 0` | **`id` は不変の職員 ID**（1 以上、2026-10-13 利用者決定）。並び替え・改名・同名でも同じ人を指す（相談の対象をこれで結ぶ）。JSON は `"staff": [{"id":1,"name":…}]`。読込（`StateParser.parse`）で、無い・重複（後に出た方）・0 以下の ID に、読み込み順に今の最大値＋1 から振る（古いデータは自動で付く）。保存はどの経路（全体保存・勤務表だけ・制約編集）でも `id` を書く。職員の追加は今の最大値＋1、並び替え・改名・削除・グループの付け替えでは保つ。名簿 CSV の取込で増えた職員も最大値＋1。CSV の列は変えない（ID は CSV に出さない）。`0`＝未採番（コード内で組み立てた値だけ。読込後は常に 1 以上）。groupIdx→ユニット群（担当可否/covU）、skillIdx→スキル群（C41s/C42s 専用）。**`skillIdx = -1` は「未所属」の正規の値で既定**（UI の「(なし)」・3.70.0。既定は backlog#38 で 0 → -1＝職員追加・名簿取込・`skillIdx` の無い JSON は -1、保存済みの明示の値はそのまま）。`ssk[i] == groupIdx(>=0)` が常に偽になるので cons41s/cons42s から安全に外れる。群削除時の再割当も `-1` へ寄せる（3.328.0）。スキル群が 0 件の状態で最初の 1 群を作るときは全員を `-1` にしてから足す（`Ws1Ops.addSkillGroup`、backlog#38） |
+
+> **職員の照合（2026-10-22 ユーザー決定「推奨で」＝Q-06 案 A、M-07 は解決済みとして閉じる）**：JSON・相談・変更案・修正の焦点は `Staff.id` で照合する。CSV（勤務表の重ね合わせ・名簿）は ID 列を持たず氏名で照合し、同姓同名はスキップして報告する（誤って結ばない）。名簿 CSV で改名すると別の職員として追加されるので、改名は編集画面で行う。
 | `Range` | `lo: String`, `hi: String` | 個人×シフトの下限/上限（LimMin/LimMax） |
 | `C1Row` | `day1: String`, `shiftKigou: String`, `day2: String` | 「day1 日窓で shiftKigou を day2 回」 |
 | `C2Row` | `shiftKigou: String`, `count: String` | 個人の shiftKigou 合計の目標 |
