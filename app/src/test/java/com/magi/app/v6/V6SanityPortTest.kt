@@ -112,6 +112,27 @@ class V6SanityPortTest {
             issues.none { it.kind == IssueKind.CONSTRAINT && it.problem.contains("両立できません") })
     }
 
+    @Test fun mustSeqContainingForbiddenSeqIsReported() {
+        // 複数シフトの並び「A→休→A」の中に禁止の並び「休→A」が入っている＝「A」を置くたびにどちらかの違反になる。
+        //   単一シフト連どうしの比較（上の 2 件）では見えない組合せ。
+        val st = seqState(
+            cons3 = listOf(com.magi.app.model.C3Row(listOf("A", "休", "A"))),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("休", "A"))),
+        )
+        val issues = V6SanityPort.buildGuidance(st).filter { it.kind == IssueKind.CONSTRAINT && it.problem.contains("両立できません") }
+        assertEquals("1 行だけ案内する: $issues", 1, issues.size)
+        assertTrue(issues[0].problem.contains("「休→A」"))
+    }
+
+    @Test fun mustSeqNotContainingForbiddenSeqIsNotReported() {
+        // 「A→休→A」は「A→A」を含まない（間に休がある）＝両立できる。
+        val st = seqState(
+            cons3 = listOf(com.magi.app.model.C3Row(listOf("A", "休", "A"))),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("A", "A"))),
+        )
+        assertTrue(V6SanityPort.buildGuidance(st).none { it.kind == IssueKind.CONSTRAINT && it.problem.contains("両立できません") })
+    }
+
     /** ベース: 2職員×6日、A は 1日1スロット。cons1 A(窓3日で2回以上) を切替えて壁/ダイヤルを検証。 */
     private fun windowState(need1A: String, cons1: List<com.magi.app.model.C1Row>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",

@@ -43,7 +43,7 @@
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
   - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6＝3.556.0）— **非forbidden**。
   - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
-  - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格, 3.542.0）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishLocked`)で固定した X の
+  - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格, 3.542.0）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
