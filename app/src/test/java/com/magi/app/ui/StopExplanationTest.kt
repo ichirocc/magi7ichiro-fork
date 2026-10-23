@@ -26,7 +26,7 @@ class StopExplanationTest {
 
     @Test fun remainingHardUsesUnits() {
         val e = stopExplanationOf(s(StopKind.DEADLINE, 3, early = false), mapOf("c3n" to 1, "covU" to 2))!!
-        assertTrue(e.line, e.line.contains("最終結果の必須違反は 1件・2人です"))
+        assertTrue(e.line, e.line.contains("残る必須違反は 1件・2人です"))
         assertFalse(e.line.contains("主探索") || e.line.contains("制限時間"))
     }
 
