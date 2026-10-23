@@ -391,6 +391,21 @@ class V6PortAnalyzerTest {
         assertTrue("希望固定の明示と対処の案内", run.hint.contains("本人の希望") && run.hint.contains("残ります"))
     }
 
+    // 手で固定したセルは「本人希望」と言わない（直す場所は勤務表の固定）。旧: 手動固定も「本人と相談して希望を調整」と案内した。
+    @Test
+    fun manuallyPinnedForbiddenRunIsNotCalledAWish() {
+        val st = forbiddenState(
+            schedule = listOf(listOf(1, 1, 0)),
+            cons3n = listOf(C3Row(listOf("X", "X"))),
+            wishes = mapOf("0,0" to 1),
+        ).copy(manualPins = listOf(com.magi.app.model.ManualPin(0, 1, 1)))
+        val run = V6PortAnalyzer.diagnoseForbiddenRuns(st).runs.single()
+        assertTrue(run.cells.all { it.escape == ForbiddenCellEscape.PINNED })
+        assertTrue(run.cells[1].detail, run.cells[1].detail.startsWith("手で固定=X"))
+        assertTrue(run.cells[0].detail, run.cells[0].detail.startsWith("本人希望=X"))
+        assertTrue(run.hint, run.hint.contains("手で固定したマス: ") && run.hint.contains("本人の希望: ") && run.hint.contains("固定を外す"))
+    }
+
     // c3n −1 / pref +1 は HARD 件数が同じでも重みでは点数が良くなる＝分類は PINNED のまま、文言にだけ一文を添える。
     @Test
     fun wishPinnedCellShowsScoreHintWhenWeightedScoreImproves() {
