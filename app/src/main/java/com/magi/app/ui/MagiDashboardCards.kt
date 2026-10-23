@@ -1356,7 +1356,7 @@ internal fun PinFixedImpactCard(
                     }
                 }
                 if (shown.size < ui.pinTargets.size) SettingIssuesShowAll(ui.pinTargets.size - shown.size) { showAll = true }
-                Text("押すと設定が変わります。「元に戻す」で戻せます。効果は再作成すると分かります。",
+                Text("押すと設定が変わります（元に戻せます）。効果は再作成で分かります。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             MagiTextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
@@ -1424,7 +1424,7 @@ internal fun SettingIssuesCard(
                             Text(s.problem, color = warnFg, style = MaterialTheme.typography.bodySmall)
                             Text("→ ${s.fix}", color = warnFg, style = MaterialTheme.typography.bodyMedium)
                             if (s.actionLabel.isNotEmpty()) {
-                                Button(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
+                                OutlinedButton(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                     Text(s.actionLabel)
                                 }
                             }
@@ -2049,7 +2049,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                 Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
             }
             if (open) {
-                Text("案を押すと、反映する前に確かめます（反映後も「元に戻す」で取り消せます）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text("案を押すと、反映する前に確かめます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 MagiSegmentedControl(
                     options = ui.alternatives.indices.map { "案${it + 1}" },
                     selected = selected,

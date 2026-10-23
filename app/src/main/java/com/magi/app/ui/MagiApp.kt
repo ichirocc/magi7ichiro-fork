@@ -889,7 +889,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             val period = editPeriodNow
                             val wishNow = resolvePick(wishPick, ui.staffNames, period)
                             val needNow = resolvePick(needPick, ui.shiftSymbols, period)
-                            WishCard(ui, conditionsView, onEditEvent, scrollKey = wishScrollKey, onShowConflicts = { wishConflicts = true },
+                            WishCard(ui, conditionsView, onEditEvent, scrollKey = wishScrollKey,
+                                onShowConflicts = { wishConflicts = true }.takeIf { editPlan.secondary != EditHeaderSecondary.WISH_CONFLICTS },   // 見出しカードが同じ行き先を出す段では置かない
                                 staffSel = wishNow.index, onStaffSel = { wishPick = pickAt(wishPick, ui.staffNames, period, it) },
                                 daysSel = wishNow.days, onDaysSel = { wishPick = pickDays(wishPick, ui.staffNames, period, it) },
                                 initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, initialDay = deepLinkDay.takeIf { it >= 0 && deepLinkWishStaff >= 0 },

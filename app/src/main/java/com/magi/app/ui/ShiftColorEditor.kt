@@ -150,7 +150,7 @@ internal fun ShiftColorCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("シフトの表示色", style = MaterialTheme.typography.titleMedium)
             Text(
-                "勤務表に表示される各シフトの色です（既定はシフト種別ごとの色）。シフトを押すと色を変えられます。",
+                "シフトを押すと色を変えられます。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

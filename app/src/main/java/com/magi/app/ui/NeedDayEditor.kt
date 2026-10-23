@@ -351,7 +351,7 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
             Text(
-                "登録・変更は上の必要人数カレンダーから。ここは全シフト横断の一覧確認・削除用です。",
+                "一覧と削除用です（登録は上のカレンダーから）。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

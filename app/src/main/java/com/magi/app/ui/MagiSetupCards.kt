@@ -172,7 +172,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
-                Text("仕上げと玉突き（勤務の入れ替え調整）は共通の枠です。改善が止まると早く終わることがあります。",
+                Text("仕上げと玉突きは共通の枠です。改善が止まると早く終わります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(8.dp))
@@ -602,7 +602,7 @@ internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("勤務表の修正中に印を付けたルール見直しのメモです（アプリ終了で消えます）。",
+            Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             ui.reviewMemos.forEachIndexed { idx, memo ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
