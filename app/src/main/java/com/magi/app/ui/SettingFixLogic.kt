@@ -79,14 +79,15 @@ object SettingFixLogic {
                 //   タップまでに並びが変わっても別の行を壊さない）。同じ内容が複数あるときは先頭1件だけ直す。
                 val row = issue.groupRangeRow ?: return null
                 val lo = issue.newLo ?: return null
-                fun clampOne(rows: List<C41Row>): List<C41Row> {
+                // 行が見つからない（診断の後に変わった）なら null＝変えない（空の Undo 段を積まない）。
+                fun clampOne(rows: List<C41Row>): List<C41Row>? {
                     val i = rows.indexOf(row)
-                    if (i < 0) return rows
+                    if (i < 0) return null
                     return rows.toMutableList().also { it[i] = row.copy(l = lo) }
                 }
                 when (issue.groupRangeFamily) {
-                    "c41" -> s.copy(cons41 = clampOne(s.cons41))
-                    "c41s" -> s.copy(cons41s = clampOne(s.cons41s))
+                    "c41" -> s.copy(cons41 = clampOne(s.cons41) ?: return null)
+                    "c41s" -> s.copy(cons41s = clampOne(s.cons41s) ?: return null)
                     else -> return null
                 }
             }

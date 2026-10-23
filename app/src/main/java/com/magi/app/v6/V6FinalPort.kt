@@ -993,9 +993,10 @@ object V6FinalPort {
         //   実行ごと1行のみ＝スパムなし。読取専用・表示のみ。
         val budgetPlanLog = MirrorLog(
             level = "I", tag = "TimeBudget",
-            message = "予算配分: 総${seconds}s = 探索${(searchDeadlineMs - startMs) / 1000}s + 後処理予約${postReserveMs / 1000}s" +
-                " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ現フェーズ${phaseGraceMs / 1000}s経過かつ無改善が" +
+            message = "予算配分: 総${(hardDeadlineMs - startMs) / 1000}s = 探索${(searchDeadlineMs - startMs) / 1000}s + 後処理予約${postReserveMs / 1000}s" +
+                " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ無改善が" +
                 "${stallMs / 1000}s(通常)〜${stallHardMs / 1000}s(頭打ち=HARD下限到達 or c3n構造壁)続いたとき" +
+                "（現フェーズの開始から${phaseGraceMs / 1000}sは待つ。無改善が閾値の${STALL_OVERRIDE_FACTOR}倍を超えたら待たない）" +
                 " / 構造的HARD下限=${hardFloor} / 希望衝突の床=${wishFloorLogged}(衝突${wishParts.first}+日の証明${wishParts.second}・" +
                 (if (wishOn) "到達で頭打ち=${if (floorUp0) "上限0込み" else wishFloorMode.name}" else "記録のみ") + "・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
         )

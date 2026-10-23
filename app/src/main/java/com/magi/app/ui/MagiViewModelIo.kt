@@ -343,6 +343,11 @@ fun MagiViewModel.importStaffCsv(rawText: String) {
         logOp("W", "職員一覧CSV取込 失敗: 0件")
         return
     }
+    if (res.updated == 0 && res.added == 0) {
+        _ui.update { it.copy(messageIsError = true, message = "職員一覧を取り込めませんでした。同姓同名で対象を決められない氏名 ${res.ambiguousNames.take(3).joinToString("・")}（その行は変更しません）") }
+        logOp("W", "職員一覧CSV取込 失敗: 同姓同名${res.ambiguousNames.size}件のみ")
+        return
+    }
     val parts = buildList {
         if (res.added > 0) add("${res.added}名を新規追加")
         if (res.updated > 0) add("${res.updated}名を更新")
