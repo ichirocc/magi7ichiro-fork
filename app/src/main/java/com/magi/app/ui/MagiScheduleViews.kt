@@ -2418,7 +2418,7 @@ private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate
                         Text("解消するために確認すること：${c.check}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MagiTextButton(onClick = { onCell(c.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当する勤務を見る") }
-                            if (c.go != AddCandidate.Go.NONE) MagiTextButton(onClick = { onSettings(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("対象の設定を見る") }
+                            if (c.go != AddCandidate.Go.NONE) MagiTextButton(onClick = { onSettings(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("対象の設定を開く") }
                         }
                     }
                 }

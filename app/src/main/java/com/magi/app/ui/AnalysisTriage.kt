@@ -320,7 +320,7 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     }
     val label = when (primary) {
         AnalysisPrimary.TOUR -> guidedTourButton(tourCount)
-        AnalysisPrimary.GUIDED -> "なおし方を見る（${shortDays}日）"
+        AnalysisPrimary.GUIDED -> "直し方を見る（${shortDays}日）"
         AnalysisPrimary.NONE -> null
     }
     return AnalysisSummary(sentence, points, primary, label)
@@ -377,7 +377,7 @@ internal fun noFixLine(repeated: Boolean, timedOut: Boolean = false): String = w
     else -> NO_FIX_LINE
 }
 
-internal enum class RepeatedEmptyAction(val label: String) { WISHES("希望を見る"), SETTINGS("設定の確認を見る") }
+internal enum class RepeatedEmptyAction(val label: String) { WISHES("希望を見る"), SETTINGS("設定を開く") }
 
 /** 続けて 0 件の対象の行き先。希望がぶつかるセルなら希望、設定ミスの診断が出ていれば設定、どちらも無ければボタンなし。 */
 internal fun repeatedEmptyAction(wishOnTarget: Boolean, settingIssueKnown: Boolean): RepeatedEmptyAction? = when {

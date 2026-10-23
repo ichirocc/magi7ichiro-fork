@@ -33,7 +33,7 @@ class Review3705Test {
             shortfall(day = 4), shortfall(day = 4, shift = 1), shortfall(day = 9)))
         val guided = analysisSummary(made.copy(breakdown = mapOf("covU" to 3), coverageDiag = short), 0, null)
         assertEquals(AnalysisPrimary.GUIDED, guided.primary)
-        assertEquals("なおし方を見る（2日）", guided.primaryLabel)
+        assertEquals("直し方を見る（2日）", guided.primaryLabel)
         assertEquals(AnalysisPrimary.NONE, analysisSummary(made.copy(bestHard = 0L), 3, null).primary)
         assertEquals(AnalysisPrimary.NONE, analysisSummary(made.copy(running = true), 3, null).primary)
         assertEquals(AnalysisPrimary.NONE, analysisSummary(UiState(loaded = true), 0, null).primary)

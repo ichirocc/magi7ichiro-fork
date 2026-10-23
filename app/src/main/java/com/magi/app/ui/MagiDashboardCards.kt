@@ -760,7 +760,7 @@ internal fun OperatorNextActionCard(
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す（段の順は homePlan）。
         HomePlanKind.GUIDED_FIX ->
             OpNextPlan(amber, onAmber, shortage?.headline ?: "",
-                homeTargetLabel("なおし方を見る", nextTarget, null, fontScale), onFix, true, null, onSetup)
+                homeTargetLabel("直し方を見る", nextTarget, null, fontScale), onFix, true, null, onSetup)
         HomePlanKind.APPLY_MOVE -> {
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
@@ -1744,7 +1744,7 @@ private fun ConfirmRow(
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             // [3.483.0 A-3] 行の押下で起きることをそのまま言う。
-            if (clickable) Text(if (dayOnly) "勤務表→" else if (item.day != null) "勤務を開く" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
+            if (clickable) Text(if (dayOnly) "勤務表→" else if (item.day != null) "勤務を見る" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
                 color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
     }

@@ -1624,7 +1624,7 @@ internal const val SHORTAGE_LABEL_INFEASIBLE = "担当できる人が足りな�
 internal const val SHORTAGE_LABEL_BLOCKED = "今の希望では埋まらない"
 internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
 internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋まらなかった"
-internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「なおし方を見る」で 1 人ずつ入れられます"
+internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「直し方を見る」で 1 人ずつ入れられます"
 
 /** [3.712.0] 診断カードの行は 1 行の事実と札だけ。理由・内訳はカードの末尾の「詳しく」に 1 回だけ（利用者仕様: 説明は画面に 1 回）。 */
 internal const val DIAG_DETAILS_LABEL = "詳しく ▸"
