@@ -222,7 +222,7 @@ private fun hardDetail(
     }
     "covU" -> when {
         coverage == null || !coverage.hasShortage -> ""
-        coverage.allBlockedNow -> "いまの希望のままでは、試した入れ替えの範囲で埋まりませんでした（${coverage.totalShortfall}人・自動作成で見つかる場合があります）。"
+        coverage.allBlockedNow -> "試した入れ替えでは埋まりませんでした（${coverage.totalShortfall}人）。自動作成なら埋まる場合があります。"
         coverage.provenBlockedSlots > 0 -> "${coverage.provenBlockedSlots}枠はいまの希望のままでは埋まりません。"
         coverage.searchMissSlots > 0 -> "${coverage.searchMissSlots}枠は試した入れ替えでは埋まりませんでした。"
         else -> "担当を動かせば埋まる見込みです。"
@@ -263,7 +263,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     } else if (ui.relaxedBoard) {
         "設定を緩めて手順を当てた盤面の概算です（再作成する前）。"
     } else {
-        "実行前の概算です。期間の制約・禁止の並びなど、設定の組み合わせによっては、つくったあとも残る場合があります。"
+        "実行前の概算です。設定の組み合わせによっては、つくったあとも残ります。"
     }
     return AnalysisTriage(
         computed = computed,

@@ -53,12 +53,12 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
             //   スキルは勤務グループとは別の独立した分類（ユーザー確認済み）＝分類を置いておくこと
             //   自体は正しい。ただし「いま効いているか」は画面が言わないと分からない（実機で
             //   「グループ分けは正しいか?」と聞き返された＝ルール0本で何にも効いていない状態が不可視だった）。
-            Text("担当シフトには影響しない、勤務グループとは別の分類です（1人1スキル）。スキルグループのルール（レンジ／ペア禁止）だけがこの分類を使います。",
+            Text("担当シフトとは別の分類です（1人1スキル）。スキルグループのルールだけが使います。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             if (skills.isNotEmpty()) {
                 val skillRules = skillRuleCount
                 if (skillRules == 0) {
-                    Text("いまはスキルグループのルールが1件も無いため、この分類は勤務表に影響しません（分類を置いておくこと自体は問題ありません）。ルールはこの下の専用ルール欄で作れます。",
+                    Text("ルールが無いので、この分類は勤務表に影響しません。ルールはこの下の欄で作れます。",
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
                     Text("スキルグループのルール ${skillRules}件がこの分類を使っています。",

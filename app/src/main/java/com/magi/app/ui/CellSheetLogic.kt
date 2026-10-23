@@ -350,7 +350,7 @@ internal fun isWishDilemma(wish: Int?, current: Int, severity: CellSeverity): Bo
 internal fun wishKeptLine(wishSymbol: String): String = "本人の希望（$wishSymbol）を守っています"
 
 /** 希望タブの注記の手動固定版（手動固定は希望より強い＝再作成でも希望へ戻さない。`docs/business-logic.md` の手動固定）。 */
-internal const val WISH_TAB_PINNED_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。このセルは手動固定のため、再作成しても希望には合わせません（固定を外すと合わせます）。"
+internal const val WISH_TAB_PINNED_NOTE = "希望を変えてもセルはそのままです（未反映）。手動固定のセルなので、再作成しても希望に合わせません。"
 
 /** 職員 [i] の [j] 日（0 始まり）が拡張希望の指定日なら、その日に禁止のシフト記号（シフト一覧の順）。指定日でなければ null。
  *  日だけで決める＝希望を保存しない日（`ExtWishRules.wishBlockedBy`）と同じ。 */
@@ -647,7 +647,7 @@ internal fun resolveFixFocus(f: FixFocus, staffId: Int?, exceptId: Int?, staffId
 internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除されたため、変更案を探せません。画面を閉じて開き直してください。"
 
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
-internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした。端末に書き込めません（空き容量が足りない可能性があります）。「$SAVE_RETRY_BUTTON」を押してください"
+internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした（空き容量不足の可能性）。「$SAVE_RETRY_BUTTON」を押してください"
 internal const val HOME_SAVE_FAILED_LINE = "自動保存できていません。端末の空き容量を確かめてください"
 internal const val TOP_BAR_SAVE_FAILED = "保存できていません"
 /** 上部の札の幅の境界（3.657.0 の名前列と同じ）。これより狭いと自動作成の状態を札の下の行へ畳む。 */
@@ -1373,10 +1373,10 @@ internal fun cellCountLines(ui: UiState, i: Int, current: Int, limits: ((Int, In
 
 /** 手動固定の説明（通常の修正操作と分ける）。 */
 internal const val PIN_TITLE = "この勤務を自動変更しない"
-internal const val PIN_NOTE = "固定すると、自動作成・調整ではこの勤務を変更しません。現在の違反が解消されるわけではありません。"
+internal const val PIN_NOTE = "自動作成・調整でこの勤務を変えなくなります。違反は消えません。"
 
 /** 担当外の勤務の理由（自分で勤務を選ぶ画面）。 */
-internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です（担当可否の設定）。選ぶと担当外シフトの必須違反になります。"
+internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です。選ぶと必須違反になります。"
 
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
 internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap(), ranBeforeEdit: Boolean = false): Pair<String, String> =
@@ -2028,3 +2028,12 @@ internal fun editReturnProblem(shortfalls: List<com.magi.app.v6.CoverageShortfal
 /** [3.720.0 3c-6] 回数のシートで違反を 1 タップで解く外枠ボタン（「回」を付ける）。 */
 internal fun raiseCapButton(n: Int): String = "上限を${n}回に上げて適用"
 internal fun lowerFloorButton(n: Int): String = "下限を${n}回に下げて適用"
+
+/** ホームの「原因の診断」に畳むカードのうち、いま中身があるものの数（各カードの表示条件と同じ）。 */
+internal fun homeDiagnosisCount(ui: UiState): Int = listOf(
+    ui.copilotHint != null || (ui.polishExhausted && !ui.running),
+    ui.coverageDiag?.let { it.hasShortage || it.hasSurplus } == true,
+    ui.forbiddenDiag?.hasRuns == true,
+    ui.c1Plateau?.let { it.causeUnknown || it.hasEntries } == true,
+    ui.observedPinBlockedAttempts > 0,
+).count { it }

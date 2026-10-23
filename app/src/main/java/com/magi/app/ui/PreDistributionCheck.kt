@@ -44,4 +44,4 @@ internal fun monthEdgeTouched(days: List<Int>, totalDays: Int, maxLen: Int): Boo
     maxLen >= 2 && days.any { it < maxLen - 1 || it > totalDays - maxLen }
 
 /** 配布前確認の注意書き。必須違反 0 件だけでは、相談の完了や法令への適合までは示さない（仕様 §10）。 */
-internal const val PRE_DIST_NOTE = "必須違反 0 件は、登録した必須条件を満たしたことだけを示します。相談の完了や法令への適合は含みません。相談事項や職場の確認手続きを確かめたうえで、配布をご判断ください。"
+internal const val PRE_DIST_NOTE = "必須違反 0 件は、登録した必須条件を満たしたという意味です。相談の完了や法令への適合は含みません。確認してから配布してください。"

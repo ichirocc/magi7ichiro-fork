@@ -41,7 +41,7 @@ data class ChangeRow(val staff: String, val date: String, val before: String, va
 /** 変更を当てるボタン（違反セルの半自動修正仕様 §5: 押すと検証してから全変更を反映する）。 */
 internal const val APPLY_CHANGE_BUTTON = "この変更を適用する"
 /** [3.687.0/R09] 確認の画面の門の説明（[FixApplyGate] と同じ規則: 必須を増やさない・別の場所に必須を生まない・希望の固定を崩さない。要調整だけの改善は通る）。 */
-internal const val PREVIEW_GATE_NOTE = "適用の直前に最新の勤務表でもう一度検査し、必須違反を増やす・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。"
+internal const val PREVIEW_GATE_NOTE = "適用の直前に検査し直し、必須違反を増やす・生む変更や希望の固定を崩す変更は当てません。「元に戻す」で取り消せます。"
 /** 当てずに閉じるボタン（今の勤務表のまま）。 */
 internal const val KEEP_CURRENT_BUTTON = "今は変更しない"
 /** 変更を当てる前の確認の見出し（1 手でも入替でも同じ）。 */

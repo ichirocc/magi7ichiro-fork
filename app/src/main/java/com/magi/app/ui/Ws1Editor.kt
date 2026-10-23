@@ -199,7 +199,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val restNote = if (d.k == v.restIdx) "休だった日は自動的に他のシフトへ変わります。" else ""
                 dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + wishNote + restNote)
             }) else null,
-            deleteBlocked = "最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。先に別のシフトを追加すると削除できます。".takeIf { v.shifts.size <= 1 },
+            deleteBlocked = "最後の1シフトは削除できません。先に別のシフトを追加してください。".takeIf { v.shifts.size <= 1 },
             existingKigou = v.shifts.map { it.kigou }, selfIndex = d.k)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "", false,
             { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null },
@@ -214,7 +214,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
             }) else null,
-            deleteBlocked = "最後の1グループは削除できません（担当可否の分類が無くなるため）。先に別のグループを追加すると削除できます。".takeIf { v.groups.size <= 1 },
+            deleteBlocked = "最後の1グループは削除できません。先に別のグループを追加してください。".takeIf { v.groups.size <= 1 },
             existingKigou = v.groups.map { it.kigou }, selfIndex = d.g)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null },

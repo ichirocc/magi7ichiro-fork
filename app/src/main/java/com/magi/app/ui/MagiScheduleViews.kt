@@ -1432,7 +1432,7 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
         // 希望で固定した人数が適正人数を超えるときだけ「希望を調整しない限り残る」と言う（以下なら固定していない人を動かせば減る）。
         val overByWish = limits != null && pinned.size > limits.second
         lines += "本人の希望: " + pinned.joinToString("・") { "${ui.staffNames.getOrNull(it) ?: "#$it"}さん" } +
-            if (overByWish) "（必須の希望どうしが同じ日に重なっています。本人と相談してどちらかの希望を調整しない限り、過剰は残ります。調整すると希望は外れます。元に戻すで戻せます）" else ""
+            if (overByWish) "（必須の希望どうしが同じ日に重なっています。どちらかの希望を本人と調整しない限り、過剰は残ります）" else ""
     }
     return TallyDetailUi("${DayText.full(ui.startDate, j)}・$sym", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }

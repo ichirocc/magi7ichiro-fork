@@ -452,4 +452,9 @@ class CellSheetLogicTest {
         assertEquals(false, homeCardShowsMake(running = true, fixSearching = false, hasResult = false, draft = false, infeasible = false))
         assertEquals(false, homeCardShowsMake(false, fixSearching = true, hasResult = false, draft = false, infeasible = false))
     }
+
+    @Test fun homeDiagnosisCountsOnlyCardsWithContent() {
+        assertEquals(0, homeDiagnosisCount(UiState()))
+        assertEquals(1, homeDiagnosisCount(UiState(observedPinBlockedAttempts = 3)))
+    }
 }

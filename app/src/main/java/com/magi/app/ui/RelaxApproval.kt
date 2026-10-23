@@ -11,7 +11,7 @@ object RelaxApproval {
 
     /** R4 の理由。NoWall・Stopped を「解消できない」「0 件の証拠」と言わない（J7）。 */
     enum class EndReason(val text: String) {
-        NO_WALL("上限0を外しても、この違反を解く手順は見つかりませんでした。解消できないという意味ではありません。"),
+        NO_WALL("上限0を外しても、この違反を解く手順は見つかりませんでした（解けないとは限りません）。"),
         STOPPED("試算を途中で止めたので、結果はありません。"),
         UNAVAILABLE("この勤務表では試算できません。"),
         NO_GAIN("試算しても必須違反は減りませんでした。"),

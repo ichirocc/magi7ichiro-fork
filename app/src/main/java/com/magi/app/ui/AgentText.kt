@@ -16,7 +16,7 @@ internal const val AGENT_WIDEN_MAX_SEC = 10
 
 internal const val AGENT_RUNNING_LINE = "代行で仕上げています…（必須違反を減らす変更を順に当てています）"
 internal const val AGENT_TOGGLE_LABEL = "作成のあと代行で仕上げる"
-internal const val AGENT_TOGGLE_NOTE = "必須違反が残ったとき、安全な勤務の変更だけを自動で当てます。希望を外す・設定を緩めるは判断を待ちます。"
+internal const val AGENT_TOGGLE_NOTE = "必須違反が残ったら、安全な勤務の変更だけを自動で当てます。希望と設定の変更は承認を待ちます。"
 
 /** カードの見出し。何もしなかった輪は出さない（null）。 */
 internal fun agentHeadline(r: AgentRecord): String? =

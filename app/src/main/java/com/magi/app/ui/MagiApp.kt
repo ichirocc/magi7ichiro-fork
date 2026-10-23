@@ -775,6 +775,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.696.0] 診断の束は実行中は出さない＝いま置き換えている前の盤面の説明で、途中経過の下に 5 画面分伸びていた
                     //   （端末報告「縦に長すぎる」）。終われば新しい盤面の診断として戻る。
                     if (!ui.running) {
+                    // 原因の診断 5 枚は 1 つに畳む（縦に長すぎた）。操作の要る設定ミスは外に残す。
+                    val diagCount = homeDiagnosisCount(ui)
+                    var diagOpen by rememberSaveable { mutableStateOf(false) }
+                    if (diagCount > 0) MagiTextButton(onClick = { diagOpen = !diagOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(if (diagOpen) "原因の診断 ▾" else "原因の診断（${diagCount}件） ▸")
+                    }
+                    if (diagOpen) {
                     CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },
                         onEditWishes = { tab = 2; editScope = 0 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
@@ -786,6 +793,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.325.0] 回数固定の横断集計は c1 固有でないので独立カードへ分離（c1=0 でも出る）。
                     PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
+                    }
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) },
                         onGoEdit = goEditForIssue,
                         onClearWishes = { vm.clearOutOfScopeWishes() }, wishClearCount = vm.wishOutOfScopeCount())
@@ -1223,7 +1231,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             AlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
                 title = { Text("担当外の希望を含めますか？") },
-                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。\n含めて反映すると、その ${wishConfirm} 件は担当外の勤務として入り、必須違反として数えます。「担当内だけ反映する」ならその ${wishConfirm} 件は入れません。どちらも「元に戻す」で戻せます。") },
+                text = { Text("担当外の希望が ${wishConfirm} 件あります。\n含めると担当外の勤務として入り、必須違反になります。「担当内だけ反映する」なら入れません。どちらも元に戻せます。") },
                 // [3.398.0] 旧版は「含めて反映」「担当内のみ反映」の2つで、**どちらを押しても勤務表が変わる**のに
                 //   取消のボタンが1つも無かった（外側タップ/戻るでしか抜けられない）。しかも取消の位置
                 //   (dismissButton) に反映が置かれ、押し間違いがそのまま変更になる。すぐ上のCSVダイアログは
@@ -1478,7 +1486,7 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("取込が完了しました（職員 ${staff}名・${days}日）", style = MaterialTheme.typography.titleMedium)
-            Text("担当できるシフトはどのグループもすべて可、必要人数と制約は未設定のまま取り込みました。編集タブの「年間マスター」で人数と制約を決めましょう。",
+            Text("担当はすべて可、必要人数と制約は未設定で取り込みました。年間マスターで決めてください。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("年間マスターを開く") }

@@ -288,12 +288,12 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             //   （3.371.0）。旧表示は hyp をそのまま「仮説（案）の数」と言い切っており実挙動と食い違った。
             val spawn = com.magi.app.v6.HypothesisPlanning.hypothesisSpawnPlan(ui.workers, hyp).first
             val overNote = if (ui.workers > cores)
-                "この端末のコア数(${cores})を超えるためコアを奪い合います。極端に大きい値は電池・発熱に注意してください。" +
+                "端末のコア数(${cores})を超えるとコアを奪い合い、電池と発熱が増えます。" +
                     (if (spawn < hyp) "なお「組み替え」「違反集中」「違反集中＋」では、コア数を超える分は" +
                         "案を増やさず各案の内部並列へ回します（同時に走る案は${spawn}）。" else "")
             else ""
             Text(
-                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値がそのまま同時に走る組み立ての本数になります。" +
+                "※「高速」（30秒以下のおまかせを含む）では、この値が同時に走る本数です。" +
                     "それ以外の方式では設定値がそのまま並べて試す仮説（案）の数（${hyp}）になります。$overNote",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -303,7 +303,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeAccel, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）", style = MaterialTheme.typography.bodyMedium)
-                Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
+                Text("内側の計算を高速版で行います。結果は常に照合し、食い違えば従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.nativeAccel, onCheckedChange = null, enabled = !ui.running)
@@ -315,7 +315,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     if (ui.nativeParity)
                         "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
                     else
-                        "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
+                        "⚠ 照合せず高速版の結果を使います（検証用）。誤った勤務表になることがあります。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )
@@ -418,10 +418,10 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」のときに働きます"
-internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
+internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"
+internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
-internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりのときだけ働きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
+internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"

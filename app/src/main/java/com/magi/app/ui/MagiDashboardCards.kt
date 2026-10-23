@@ -451,7 +451,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val heldN = ui.consults.count { it.held }
             Text("相談中（${ui.consults.size - heldN}件）" + (if (heldN > 0) "・保留（${heldN}件）" else ""), style = MaterialTheme.typography.titleMedium)
-            Text("関係者に確認してから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます。書き出しは止めません）。",
+            Text("関係者に確かめてから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます）。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.consults.forEach { c ->
                 // 対象は職員 ID（無ければ氏名）と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
@@ -619,7 +619,7 @@ internal fun GuidedFixDialog(
                             Text("・${shortageRowLine(it.dayLabel, it.shiftSymbol, it.miss)}　${shortageRowTag(it.verdict == CoverageVerdict.INFEASIBLE, it.blockedNow)}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("再作成しても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
+                        Text("再作成しても同じ結果です。希望を1件調整するか（月次条件）、担当を増やしてください（年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         val blockedLanding = blocked.firstNotNullOfOrNull { landingFor(it) }
                         Button(onClick = { onDismiss(); onGoEdit(blockedLanding) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -1008,15 +1008,15 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     diag.allBlockedNow && diag.searchMissSlots == 0 -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整する（編集タブ＞月次条件）か、担当を追加してください（編集タブ＞年間マスター①）。"
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、試した入れ替えでは埋まりませんでした（埋められないと決まったわけではありません）。" +
-                        "再作成するか、希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると埋まりやすくなります（編集タブ＞年間マスター①）。"
+                        "再作成するか、希望を1件調整するか（月次条件）、担当を増やすと埋まりやすくなります（年間マスター①）。"
                     diag.provenBlockedSlots > 0 -> "不足 ${diag.totalShortfall} 人。うち ${diag.provenBlockedSlots} 枠は" +
-                        "いまの希望のままでは埋められません。その枠は希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると直せます（編集タブ＞年間マスター①）。" +
+                        "いまの希望のままでは埋まりません。希望を1件調整するか（月次条件）、担当を増やしてください（年間マスター①）。" +
                         "残りは再作成すると解消する場合があります。"
                     diag.searchMissSlots > 0 -> "不足 ${diag.totalShortfall} 人。うち ${diag.searchMissSlots} 枠は試した入れ替えでは埋まりませんでした。" +
                         "再作成すると解消する場合があります。"
                     diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人。$SHORTAGE_ENOUGH_TEXT"
                     else -> "不足 ${diag.totalShortfall} 人。${SHORTAGE_LABEL_INFEASIBLE} ${diag.infeasibleSlots} 枠、${SHORTAGE_LABEL_FIXABLE} ${diag.fixableSlots} 枠。" +
-                        "動かせば埋まる枠は再作成すると解消する場合があります。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
+                        "動かせば埋まる枠は再作成で解消する場合があります。担当できる人が足りない枠は、担当を見直してください（年間マスター①）。"
                 }
                 // [3.712.0] 見出しの長い説明は「詳しく」の中へ。
                 if (details) Text(headline, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -1052,7 +1052,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                             for (r in diag.relaxations.take(4)) {
                                 Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("※ 担当追加の提案です。設定は変えません。採用するときは編集タブ＞年間マスター①で担当を追加してください。",
+                            Text("※ 担当追加の提案です（設定は変えません）。採用するなら年間マスター①で追加してください。",
                                 color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -1160,7 +1160,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
             if (walls.isNotEmpty()) {
                 HorizontalDivider()
                 Text("崩せない原因の並び", style = MaterialTheme.typography.titleSmall)
-                Text("この並びを禁止しているかぎり、必須違反は残ります。ルールを外すとその場で再チェックします（元に戻せます）。",
+                Text("この並びを禁止するかぎり、必須違反は残ります。ルールを外すとすぐ再チェックします（元に戻せます）。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 for ((seqLabel, rows) in walls) {
                     val who = rows.map { it.staffName }.distinct()
@@ -1188,7 +1188,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
         AlertDialog(
             onDismissRequest = { confirmRule = null },
             title = { Text("禁止の並びを解除しますか？") },
-            text = { Text("「$seq」の禁止を、全員について外します（いま崩せない並び ${n}件）。外すとその場で再チェックします。元に戻すで取り消せます。") },
+            text = { Text("「$seq」の禁止を全員について外します（いま崩せない並び ${n}件）。元に戻せます。") },
             confirmButton = { DialogDangerButton("解除する", onClick = { confirmRule = null; onRelaxRule(seq) }) },
             dismissButton = { DialogDismissButton(onClick = { confirmRule = null }, text = "解除しない") },
         )
