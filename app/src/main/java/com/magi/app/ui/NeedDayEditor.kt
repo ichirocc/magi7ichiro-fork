@@ -28,7 +28,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -224,7 +223,7 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text(needApplyButton(days.size)) }
         }
-        TextButton(onClick = { onEvent(MagiEvent.Condition.ClearNeedDaysForDays(k, sorted.map { it - 1 })); onDone() }, enabled = !ui.running,
+        MagiTextButton(onClick = { onEvent(MagiEvent.Condition.ClearNeedDaysForDays(k, sorted.map { it - 1 })); onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を標準に戻す") }
     }
 }

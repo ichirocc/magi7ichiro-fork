@@ -30,7 +30,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -169,7 +168,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             Spacer(Modifier.height(8.dp))
             Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
             var budgetMore by rememberSaveable { mutableStateOf(false) }
-            TextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) "閉じる" else "詳しく") }
+            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) "閉じる" else "詳しく") }
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
@@ -490,7 +489,7 @@ internal fun EditHeaderCard(
                 OutlinedButton(onClick = onOpenNeed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(EDIT_NEED_BUTTON) }
             }
             if (plan.secondary == EditHeaderSecondary.WISH_CONFLICTS) {
-                TextButton(onClick = onWishConflicts, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(WISH_CONFLICTS_BUTTON) }
+                MagiTextButton(onClick = onWishConflicts, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(WISH_CONFLICTS_BUTTON) }
             }
         }
     }
@@ -725,7 +724,7 @@ internal fun DataActionsCard(
             }
             // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
             if (ui.prevBackupAvailable) {
-                TextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
+                MagiTextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                     Text("開く前のデータに戻す")
                 }
                 Text("もう一度押すと、今のデータと入れ替わります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

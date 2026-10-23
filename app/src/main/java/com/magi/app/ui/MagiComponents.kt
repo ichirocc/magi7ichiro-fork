@@ -4,11 +4,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -142,4 +146,19 @@ fun MagiTagChip(
             Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
+}
+
+/** 補助の操作（塗り＞外枠＞これ の 3 段の最下段）。文字だけではボタンに見えなかったので薄い背景を敷く（2026-10-23 ユーザー決定）。 */
+@Composable
+internal fun MagiTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = ButtonDefaults.TextButtonContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val tint = MaterialTheme.colorScheme.onSurface
+    TextButton(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(containerColor = tint.copy(alpha = 0.08f), disabledContainerColor = tint.copy(alpha = 0.04f)),
+        content = content)
 }

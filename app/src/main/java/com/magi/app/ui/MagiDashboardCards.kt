@@ -35,7 +35,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -159,7 +158,7 @@ internal fun WishConflictDialog(
                             val rows = if (slot in expanded) g.rows else g.rows.take(WISH_TRIAL_GROUP_LIMIT)
                             rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                             if (rows.size < g.rows.size) {
-                                TextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                MagiTextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("ほか ${g.rows.size - rows.size}人")
                                 }
                             }
@@ -189,7 +188,7 @@ private fun WishTrialRowView(
     val small = MaterialTheme.typography.bodySmall
     val c3w = row.c3wLine != null
     // 既定の丸い端の形は複数行の高さで左上の字を切るので、カードと同じ角丸にする。
-    TextButton(onClick = { onOpenCell(row.staff, row.day) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+    MagiTextButton(onClick = { onOpenCell(row.staff, row.day) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         // [3.696.0] 札を右に並べると名前の先頭が欠けた（端末報告「福澤が欠けている」）＝文は全幅、札はその下。
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // [3.712.0] 1 行目は名前と日、2 行目に短い理由（利用者仕様）。
@@ -215,10 +214,10 @@ private fun WishTrialRowView(
             is WishTrialView.Ready -> {
                 wishTrialText(view.outcome)?.let { Text(it, style = small, modifier = Modifier.padding(start = 12.dp)) }
                 if (relaxFound && wishTrialNoGain(view.outcome)) {
-                    TextButton(onClick = onShowRelax, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) { Text(WISH_TO_RELAX_LABEL) }
+                    MagiTextButton(onClick = onShowRelax, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) { Text(WISH_TO_RELAX_LABEL) }
                 }
                 if (view.token.result != null) {
-                    TextButton(
+                    MagiTextButton(
                         onClick = { onConfirm(view.token) },
                         enabled = !ui.running,
                         colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
@@ -237,7 +236,7 @@ private fun WishTrialRowView(
 
 @Composable
 private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) {
+    MagiTextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) {
         Text("希望を外したら？")
     }
 }
@@ -267,7 +266,7 @@ internal fun RelaxTrialDialog(
         t.moveLines.forEach { Text(it, style = small) }
         if (t.otherMoves > 0) {
             if (all || showAll) t.otherMoveLines.forEach { Text(it, style = small) }
-            else TextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほか ${t.otherMoves}セル（タップですべて表示）") }
+            else MagiTextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほか ${t.otherMoves}セル（タップですべて表示）") }
         }
     }
     @Composable fun valueRows() {
@@ -293,7 +292,7 @@ internal fun RelaxTrialDialog(
                         Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         valueRows()
                         Text("試算 ${flow.trialId}・データ ${flow.fingerprint}", style = small, color = cs.onSurfaceVariant)
-                        TextButton(onClick = { showCond = !showCond }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showCond) }) { Text("試算の条件") }
+                        MagiTextButton(onClick = { showCond = !showCond }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showCond) }) { Text("試算の条件") }
                         if (showCond) {
                             Text(RELAX_WISH_LINE, style = small)
                             Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
@@ -302,7 +301,7 @@ internal fun RelaxTrialDialog(
                             Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
                             t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant) }
                         }
-                        TextButton(onClick = { showSteps = !showSteps }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showSteps) }) { Text("手順（勤務表への当て方）") }
+                        MagiTextButton(onClick = { showSteps = !showSteps }, modifier = Modifier.heightIn(min = 48.dp).semantics { stateDescription = foldState(showSteps) }) { Text("手順（勤務表への当て方）") }
                         if (showSteps) moves(false)
                         Text(RelaxApproval.NOT_APPROVAL_NOTE, style = small, color = cs.onSurfaceVariant)
                     }
@@ -385,7 +384,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
                 var more by remember { mutableStateOf(false) }
-                TextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) "閉じる" else "詳しく") }
+                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) "閉じる" else "詳しく") }
                 if (more) {
                 p.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
@@ -434,11 +433,11 @@ internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, he
     // [3.696.0] 札の隣に「取り消す」＝積んだ直後の押し間違いを戻せる（端末報告「相談中を元に戻せない」）。
     if (consulted) Row(modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         MagiTagChip(text = if (held) CONSULT_HELD else CONSULT_DONE, color = MagiAccent.orange)
-        if (onUndo != null) TextButton(onClick = onUndo, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_UNDO_BUTTON) }
+        if (onUndo != null) MagiTextButton(onClick = onUndo, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_UNDO_BUTTON) }
     }
     else Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-        if (onHold != null) TextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(holdLabel) }
+        MagiTextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+        if (onHold != null) MagiTextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(holdLabel) }
     }
 }
 
@@ -465,16 +464,16 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                     Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
                     // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
-                    TextButton(onClick = { onCycleAnswer(c) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
+                    MagiTextButton(onClick = { onCycleAnswer(c) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                         if (cell != null) {
-                            TextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }
+                            MagiTextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }
                         } else if (chainOk) {
-                            TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
+                            MagiTextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
                         }
-                        TextButton(onClick = { onToggleHold(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
+                        MagiTextButton(onClick = { onToggleHold(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
                         DeleteRowButton(onClick = { onRemove(c) }, text = "済")
                     }
                 }
@@ -531,8 +530,8 @@ internal fun GuidedFixDialog(
                         guidedStatusPoints(target.need, target.got, cands.size).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
                         // [3.714.0] 副操作は文字ボタン（その日の希望・担当の設定へ）。
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = { onDismiss(); onGoEdit(shortageWishLanding(target)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_WISH_BUTTON) }
-                            TextButton(onClick = { onDismiss(); onGoEdit(shortageSkillLanding()) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_SKILL_BUTTON) }
+                            MagiTextButton(onClick = { onDismiss(); onGoEdit(shortageWishLanding(target)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_WISH_BUTTON) }
+                            MagiTextButton(onClick = { onDismiss(); onGoEdit(shortageSkillLanding()) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_SKILL_BUTTON) }
                         }
                         LaunchedEffect(target.dayIndex, target.shiftIndex) { vm.logUi(OpLogText.UiOp.GuidedOpen(target.dayLabel, target.shiftSymbol, cands.size)) }
                         val gcv = remember(ui) { vm.conditionsView() }
@@ -562,7 +561,7 @@ internal fun GuidedFixDialog(
                                         ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                                 }
                                 if (cands.size > GUIDED_FIX_PREVIEW) {
-                                    TextButton(onClick = { showAll.value = !showAll.value }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                    MagiTextButton(onClick = { showAll.value = !showAll.value }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                                         Text(if (showAll.value) "一部だけ表示" else "すべて表示（ほか${cands.size - GUIDED_FIX_PREVIEW}人）")
                                     }
                                 }
@@ -836,7 +835,7 @@ internal fun OperatorNextActionCard(
                     // [3.714.0] 作成中も相談の 1 行から一覧を開ける（文字ボタン、塗りは増やさない）。
                     if (consultLine != null) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(consultLine, color = plan.fg, style = body, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onOpenConsults, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN, color = plan.fg) }
+                        MagiTextButton(onClick = onOpenConsults, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN, color = plan.fg) }
                     }
                 }
                 HomeSection.PRIMARY -> {
@@ -848,11 +847,11 @@ internal fun OperatorNextActionCard(
                     }
                 }
                 // [3.713.0] 補助操作は文字ボタン（塗りは主ボタン 1 つ）。段に補助が無ければ「表で全体を見る」。
-                HomeSection.HELPER -> TextButton(
+                HomeSection.HELPER -> MagiTextButton(
                     onClick = if (plan.helperLabel != null) plan.helperAction else onSchedule,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, color = plan.fg, maxLines = a11yMaxLines(fontScale), overflow = TextOverflow.Ellipsis) }
-                HomeSection.OTHERS -> if (creation != null) TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
+                HomeSection.OTHERS -> if (creation != null) MagiTextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
                 HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     plan.body?.let { Text(it, style = body, color = plan.fg) }
                     plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
@@ -863,12 +862,12 @@ internal fun OperatorNextActionCard(
                     if (ui.relaxSearching) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
-                            TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                            MagiTextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                         }
                     } else if ((relaxStopped || relaxFailed) && ui.bestHard > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(if (relaxFailed) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
-                            TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
+                            MagiTextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
                         }
                     }
                 }
@@ -908,7 +907,7 @@ internal fun OperatorNextActionCard(
                 // [3.261.0] 初期解生成へ常に戻れる小さな常設リンク（元に戻すで取消可能・破壊的でない）。
                 // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る操作なので、その結果と戻し方を文言に含める。
                 HomeSection.DRAFT_LINK -> Column(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) { Text("下書きから作り直す") }
+                    MagiTextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) { Text("下書きから作り直す") }
                     Text("今の結果は「元に戻す」で戻せます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp))
                 }
@@ -972,7 +971,7 @@ internal fun CopilotCard(
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onSoftPolish, modifier = Modifier.heightIn(min = 48.dp)) { Text(SOFT_POLISH_LINK, color = cs.onTertiaryContainer) }
+                        MagiTextButton(onClick = onSoftPolish, modifier = Modifier.heightIn(min = 48.dp)) { Text(SOFT_POLISH_LINK, color = cs.onTertiaryContainer) }
                         Text(SOFT_POLISH_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
                     }
                 }
@@ -1175,7 +1174,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                             Text(seqLabel, style = MaterialTheme.typography.titleSmall)
                             Text("${rows.size}件（$whoTxt）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        TextButton(
+                        MagiTextButton(
                             onClick = { confirmRule = seqLabel to rows.size },
                             enabled = !ui.running,
                             colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
@@ -1278,7 +1277,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
             DiagDetailToggle(detailOpen, onToggle = { detailOpen = !detailOpen })
             // 回数固定の影響カードが出ているときは、同じ行き先のボタンをそちらに任せる。
             if (diag.pinConstrained > 0 && ui.observedPinBlockedAttempts <= 0) {
-                TextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
+                MagiTextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
             }
         }
     }
@@ -1345,11 +1344,11 @@ internal fun PinFixedImpactCard(
                                 //   0 でクランプされて無操作になる（押しても何も起きないボタンだった）。
                                 //   下げられるときだけ出す。
                                 if (t.pinnedCount > 0) {
-                                    TextButton(onClick = { onRelax(t.staff, t.shift, -1, 0) }, enabled = !ui.running) {
+                                    MagiTextButton(onClick = { onRelax(t.staff, t.shift, -1, 0) }, enabled = !ui.running) {
                                         Text("下限を1下げる（${t.pinnedCount - 1}〜${t.pinnedCount}）")
                                     }
                                 }
-                                TextButton(onClick = { onRelax(t.staff, t.shift, 0, 1) }, enabled = !ui.running) {
+                                MagiTextButton(onClick = { onRelax(t.staff, t.shift, 0, 1) }, enabled = !ui.running) {
                                     Text("上限を1上げる（${t.pinnedCount}〜${t.pinnedCount + 1}）")
                                 }
                             }
@@ -1360,7 +1359,7 @@ internal fun PinFixedImpactCard(
                 Text("押すと設定が変わります。「元に戻す」で戻せます。効果は再作成すると分かります。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            TextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
+            MagiTextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
         }
     }
 }
@@ -1455,7 +1454,7 @@ internal const val GUIDED_FIX_PREVIEW = 8
 
 @Composable
 internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("すべて表示（ほか ${hidden}件）") }
+    MagiTextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("すべて表示（ほか ${hidden}件）") }
 }
 
 @Composable
@@ -1751,10 +1750,10 @@ private fun ConfirmRow(
     }
     // [下流→上流ディープリンク] 設定の節の名を本文の下に全幅で（行本体の押下とは別の操作）。
     //   なおし方の画面は日を指定して開けないので、人員不足の行は「勤務表でこの日を見る」と言う。
-    if (ns != null && dayOnly) TextButton(onClick = { onShowDay(item.day!!) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("勤務表でこの日を見る") }
+    if (ns != null && dayOnly) MagiTextButton(onClick = { onShowDay(item.day!!) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("勤務表でこの日を見る") }
     when {
-        ws != null -> TextButton(onClick = { onFixWish(ws, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.WISH)) }
-        ns != null -> TextButton(onClick = { onFixNeed(ns, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.DEMAND)) }
+        ws != null -> MagiTextButton(onClick = { onFixWish(ws, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.WISH)) }
+        ns != null -> MagiTextButton(onClick = { onFixNeed(ns, item.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(com.magi.app.v6.IssueKind.DEMAND)) }
     }
     }
 }
@@ -1835,7 +1834,7 @@ internal fun AnalysisTriageCard(
                         Column(Modifier.padding(10.dp)) {
                             Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                             if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            TextButton(onClick = { onGoEdit(row.kind) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(row.kind)) }
+                            MagiTextButton(onClick = { onGoEdit(row.kind) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(row.kind)) }
                         }
                     }
                 }
@@ -1986,7 +1985,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                 if (ui.fixSearching) {
                     Text("探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
-                    TextButton(onClick = onSearch) { Text(if (ui.fixSuggestions.isEmpty()) "探す" else "全体でもう一度探す") }
+                    MagiTextButton(onClick = onSearch) { Text(if (ui.fixSuggestions.isEmpty()) "探す" else "全体でもう一度探す") }
                 }
             }
             if (!proMode) {
@@ -2119,7 +2118,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 preDistributionTop(rows).forEach { PreDistRowView(it) }
                 Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) "詳しくを閉じる" else "詳しく") }
+                MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) "詳しくを閉じる" else "詳しく") }
                 if (details) {
                     preDistributionDetails(rows).forEach { PreDistRowView(it) }
                     Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

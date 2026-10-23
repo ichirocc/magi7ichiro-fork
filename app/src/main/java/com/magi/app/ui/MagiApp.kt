@@ -33,7 +33,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -670,7 +669,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    TextButton(onClick = {
+                    MagiTextButton(onClick = {
                         editReturn = null
                         when (ret.origin) {
                             EditReturn.PRE_RUN -> { tab = 0; vm.reopenPreRun() }
@@ -1254,7 +1253,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
         val statusLine = if (ui.loaded && !ui.running) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
         val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
         val saveWordView: @Composable () -> Unit = {
-            if (saveWord != null) TextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+            if (saveWord != null) MagiTextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
                 Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }

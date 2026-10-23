@@ -41,7 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -206,7 +205,7 @@ internal fun CellEditSheet(
             searchLabel = peekSearchAction(mode, status.severity),
             onSearch = { searchOnOpen = true; onToggleExpand() },
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
-            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
+            MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
                 Text("小さく表示 ▾")
             }
             val partners = remember(rev, cell) {
@@ -219,7 +218,7 @@ internal fun CellEditSheet(
                     Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
                     if (tourNext != null && tourNext != cell && step == 0) {
-                        TextButton(onClick = { onMove(tourNext) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
+                        MagiTextButton(onClick = { onMove(tourNext) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                     }
                     SheetListButton(onList)
                     SheetUndoButton(canUndo, onUndo)
@@ -265,7 +264,7 @@ internal fun CellEditSheet(
                     } else StatusRow(status, null)
                     var details by remember(cell) { mutableStateOf(false) }
                     // [3.714.0] 問題が 1 つでも説明の文は「詳しく見る」の中（主は「変更案を探す」＝これは文字ボタン）。
-                    if (mode == 0 && fams.isNotEmpty() || details) TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    if (mode == 0 && fams.isNotEmpty() || details) MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(when {
                             fams.size >= 2 -> if (details) "関連する問題を閉じる" else "関連する問題をすべて見る：ほか${fams.size - 1}件"
                             else -> if (details) "閉じる" else CELL_DETAIL_BUTTON
@@ -374,7 +373,7 @@ internal fun CellEditSheet(
                         RelaxHandoff.UNAVAILABLE -> Text(relaxUnavailableText(relaxUnavailable.orEmpty()), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         RelaxHandoff.STOPPED, RelaxHandoff.FAILED -> Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(if (handoff == RelaxHandoff.FAILED) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-                            TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL) }
+                            MagiTextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL) }
                         }
                         RelaxHandoff.NONE -> {}
                     }
@@ -388,7 +387,7 @@ internal fun CellEditSheet(
                     }
                     // 希望・手動固定・ルールの見直しは「ほかの操作」に畳む（主の 2 つの操作を先に見せる）。
                     var moreOps by remember(cell) { mutableStateOf(false) }
-                    if (mode == 0 && !(dilemma && dilemmaChoice == 0)) TextButton(onClick = { moreOps = !moreOps }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    if (mode == 0 && !(dilemma && dilemmaChoice == 0)) MagiTextButton(onClick = { moreOps = !moreOps }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(if (moreOps) "ほかの操作を閉じる" else MORE_OPS_LABEL)
                     }
                     if (mode == 0 && moreOps) {
@@ -405,7 +404,7 @@ internal fun CellEditSheet(
                         }
                     }
                     if (mode == 0 && moreOps && status.severity != CellSeverity.NONE) {
-                        TextButton(onClick = {
+                        MagiTextButton(onClick = {
                             val famsJp = cellVioClasses(ui, "$i,$j").joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
                             onEvent(MagiEvent.Session.AddReviewMemo("$name ${DayText.full(ui.startDate, j)} ${sym(current)}：${famsJp.ifEmpty { status.cause }}"))
                         }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -427,7 +426,7 @@ internal fun CellEditSheet(
             }
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
-                if (!dilemma || dilemmaChoice == 2) TextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
+                if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
                 // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。前後の日は外枠（文字だけではボタンに見えなかった）。
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                     val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
@@ -438,7 +437,7 @@ internal fun CellEditSheet(
                     OutlinedButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text("${next ?: "翌日"} ▶", maxLines = 1)
                     }
-                    TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+                    MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
                 }
                 // 板挟みの選択肢はこの固定部に置く（上の読むところは縦に送るので、長いと画面の外に隠れた）。
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -487,7 +486,7 @@ internal fun CellEditSheet(
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(onClick = { step = 1 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("別の勤務を選ぶ") }
                 }
-                TextButton(onClick = { step = 0; pickTo = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(KEEP_UNCHANGED_BUTTON) }
+                MagiTextButton(onClick = { step = 0; pickTo = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(KEEP_UNCHANGED_BUTTON) }
             }
             if (mode == 1 && wish != null) Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
@@ -496,7 +495,7 @@ internal fun CellEditSheet(
                 }
             }
             if (mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
-                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+                MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
             // 画面下端のジェスチャー帯の上に、押せるものを置かない 32dp。
             Spacer(Modifier.height(32.dp))
@@ -515,7 +514,7 @@ private fun ReviewSection(title: String, lines: List<String>) {
 /** [3.718.0] 見出し行の「一覧へ」（文字ボタン＝主は 1 つのまま、INV-09）。同じパネルを問題一覧に戻す。 */
 @Composable
 private fun SheetListButton(onList: (() -> Unit)?) {
-    if (onList != null) TextButton(onClick = onList, modifier = Modifier.heightIn(min = 48.dp)) { Text(PANEL_LIST_BUTTON) }
+    if (onList != null) MagiTextButton(onClick = onList, modifier = Modifier.heightIn(min = 48.dp)) { Text(PANEL_LIST_BUTTON) }
 }
 
 /** 見出し行の「元に戻す」（IconButton 既定の 48dp）。有効条件は下部バーの元に戻すと同じ（呼び出し側が `canUndo && !running` を渡す）。 */
@@ -564,8 +563,8 @@ private fun PeekBody(
                 color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (tourPrev != null || tourNext != null) {
-                TextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
-                TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
+                MagiTextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
+                MagiTextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
         }
         // 押せる行どうしは 8dp 空ける（赤の［希望を外す］とシフトの押し違いを防ぐ）。
@@ -573,7 +572,7 @@ private fun PeekBody(
             // 希望モードはセルを移っても続く＝ちら見でもシフトを押すと希望になると示し、1 タップで割当へ戻せるようにする。
             if (mode == 1) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTagChip("希望を登録中", MagiAccent.pink)
-                TextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
+                MagiTextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
             }
             // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
             val showRemove = wish != null && mode == 1
@@ -602,7 +601,7 @@ private fun PeekBody(
                                 else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                             }
                         }
-                        TextButton(onClick = onToggleExpand, modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
+                        MagiTextButton(onClick = onToggleExpand, modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
                             contentPadding = PaddingValues(0.dp)) { Text("詳しく ▸", maxLines = 1) }
                     }
                     if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
