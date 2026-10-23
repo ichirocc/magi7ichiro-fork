@@ -84,6 +84,9 @@ class ReviewExtWishFollowTest {
         val groups2 = st.copy(groups = listOf(Group("G0", "G0"), Group("H", "H")), groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")))
         assertNull(StaffCsvIO.parse("氏名,グループ,スキル\n同名,H,\n", groups2))
         val up = StaffCsvIO.parseUpsert("氏名,グループ,スキル\n同名,H,\n", groups2, grid(groups2))
-        assertTrue(up == null || (up.updated == 0 && up.added == 0 && up.ambiguousNames == listOf("同名")))
+        assertEquals(listOf("同名"), up!!.ambiguousNames); assertEquals(0, up.updated + up.added)
+        // 他の行が通っても、同姓同名で飛ばした氏名は結果に載る（旧: 結果へ渡さず、画面の警告が出なかった）。
+        val mixed = StaffCsvIO.parseUpsert("氏名,グループ,スキル\n同名,H,\nC,H,\n", groups2, grid(groups2))!!
+        assertEquals(1, mixed.updated); assertEquals(listOf("同名"), mixed.ambiguousNames)
     }
 }

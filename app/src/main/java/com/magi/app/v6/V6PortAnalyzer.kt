@@ -692,7 +692,11 @@ object V6PortAnalyzer {
                         val cur = norm[i][j]
                         cells.add(diagnoseForbiddenCell(state, p, norm, cov, i, j, cur))
                     }
-                    val pinnedDays = cells.filter { it.escape == ForbiddenCellEscape.PINNED }.joinToString("・") { it.dayLabel }
+                    // 手で固定したマスは希望と別に言う（直すのは本人との相談でなく、勤務表で固定を外すこと）。
+                    val pinnedCells = cells.filter { it.escape == ForbiddenCellEscape.PINNED }
+                    val byHand = pinnedCells.filter { p.pinned(i, it.dayIndex) }
+                    val pinnedDays = (pinnedCells - byHand.toSet()).joinToString("・") { it.dayLabel }
+                    val handDays = byHand.joinToString("・") { it.dayLabel }
                     val hint = when {
                         cells.any { it.escape == ForbiddenCellEscape.FREE } ->
                             "安全に崩せる手があります。勤務表のこの並びのセルから『直し方を探す』で直せます（当てると必須違反が減ります）"
@@ -702,6 +706,11 @@ object V6PortAnalyzer {
                         //   禁止パターンを構成」＝辞書式意味論(pref9000>c3n7000)の下で証明相当。それ以外の塞がり
                         //   (受け皿なし等)は「現在の探索手(単独変更・玉突き連鎖・隣接日調整)を検証して全て不成立」
                         //   という強い証拠であり、全勤務表空間の数学的な非充足証明ではない＝断定を避けた表現にする。
+                        cells.all { it.escape == ForbiddenCellEscape.PINNED } && byHand.isNotEmpty() ->
+                            "固定どおりに入れると禁止の並びになります（" +
+                                listOfNotNull(pinnedDays.ifEmpty { null }?.let { "本人の希望: $it" }, "手で固定したマス: $handDays").joinToString(" / ") + "）。" +
+                                "固定を変えない限り、どう組んでもこの禁止の並びは残ります。勤務表で手の固定を外す" +
+                                (if (pinnedDays.isNotEmpty()) "か、本人と相談して希望を1件調整" else "") + "してください" + scoreHintOf(cells)
                         cells.all { it.escape == ForbiddenCellEscape.PINNED } ->
                             "本人の希望どおりに入れると禁止の並びになります（本人の希望: $pinnedDays）。" +
                                 "希望を変えない限り、どう組んでもこの禁止の並びは残ります。本人と相談して、どちらか1件の希望を調整してください" +
@@ -709,6 +718,7 @@ object V6PortAnalyzer {
                         else ->
                             "全セルが塞がっています" +
                                 (if (pinnedDays.isNotEmpty()) "（本人の希望: $pinnedDays）" else "") +
+                                (if (handDays.isNotEmpty()) "（手で固定したマス: $handDays）" else "") +
                                 "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
                                 "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
                                 "周辺の希望を1件調整するか、担当を追加してください" + scoreHintOf(cells)
@@ -768,7 +778,8 @@ object V6PortAnalyzer {
         val wishHeld = p.wishLocked(i, j) && p.lockTo(i, j) == cur
         return if (wishHeld && cell.escape in setOf(ForbiddenCellEscape.FREE, ForbiddenCellEscape.CHAIN, ForbiddenCellEscape.ADJACENT))
             cell.copy(escape = ForbiddenCellEscape.PINNED,
-                detail = "本人希望=${cell.shiftSymbol}（勤務表づくりは希望を動かしません。この希望を1件変えれば崩せます）")
+                detail = if (p.pinned(i, j)) "手で固定=${cell.shiftSymbol}（勤務表づくりは固定を動かしません。勤務表で固定を外せば崩せます）"
+                    else "本人希望=${cell.shiftSymbol}（勤務表づくりは希望を動かしません。この希望を1件変えれば崩せます）")
         else cell
     }
 

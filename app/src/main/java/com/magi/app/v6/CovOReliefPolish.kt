@@ -4,7 +4,7 @@ import com.magi.app.model.MagiState
 
 /**
  * 人員過剰(covO)の退避研磨。過剰セルの在勤者を受け皿のある担当可シフト（需要 0 のシフト＝B4 等を含む）へ 1 セルずつ動かし、
- * 正式チェッカーの keep-best で採る。`V6PortAnalyzer.diagnoseSurpluses` と同じ手を診断でなく修復として総当たりする。
+ * 正式チェッカーの keep-best で採る（回数固定 lo==hi は他の研磨パスと同じ `adoptionGate` で崩さない）。`V6PortAnalyzer.diagnoseSurpluses` と同じ手を診断でなく修復として総当たりする。
  */
 internal object CovOReliefPolish {
     data class Result(
@@ -43,7 +43,7 @@ internal object CovOReliefPolish {
                 if (shouldStop() || applied >= maxMoves) break
                 if (p.covOCell(k, j, cov[j][k]) <= 0) continue
                 var bestI = -1; var bestM = -1; var bestAfter: ViolationReport? = null
-                var pinned = 0; var noRoom = 0; var worse = 0
+                var pinned = 0; var noRoom = 0; var worse = 0; var pinBlocked = 0
                 for (i in 0 until p.S) {
                     if (work[i][j] != k) continue
                     if (p.wishLocked(i, j) && p.lockTo(i, j) == k) { pinned++; continue }
@@ -54,10 +54,13 @@ internal object CovOReliefPolish {
                         if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 受け皿なし
                         if (evaluations >= maxEvaluations) break
                         tried = true; evaluations++
+                        val base = work.copy2D()
                         work[i][j] = m
                         val after = UnifiedViolationChecker.check(state, work)
+                        val gate = adoptionGate(p, base, work, after, bestAfter ?: bestRep)
                         work[i][j] = k
-                        if (betterReport(after, bestAfter ?: bestRep)) { bestI = i; bestM = m; bestAfter = after }
+                        if (gate.accepted) { bestI = i; bestM = m; bestAfter = after }
+                        else if (gate.pinBad) pinBlocked++
                         else worstWorsenedFamily(after, bestRep)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }
                     }
                     if (!tried) noRoom++ else if (bestI != i) worse++
@@ -70,6 +73,7 @@ internal object CovOReliefPolish {
                     rejected += worse
                     residual["${sym(k)}@${j + 1}"] = when {
                         pinned > 0 && worse == 0 && noRoom == 0 -> "希望固定"
+                        pinBlocked > 0 && worse <= pinBlocked -> "回数固定"
                         worse > 0 -> "重み悪化"
                         else -> "受け皿なし"
                     }

@@ -39,6 +39,16 @@ class FixTiersTest {
         val limits: (Int, Int) -> Pair<Int, Int>? = { k, _ -> if (k == D) 1 to 1 else null }
     }
 
+    /** D を担当できない職員が先に並んでいても、後ろの職員の 1 セルの案は出る（旧: 置けるシフトの無いセルで走査ごと止まった）。 */
+    @Test fun aStaffWhoCannotTakeTheShiftDoesNotStopTheScan() {
+        val st = board12x16().copy(groupShift = listOf(listOf(1, 0), listOf(1, 1), listOf(1, 1)),
+            schedule = listOf(listOf(REST, REST, REST, REST), listOf(REST, D, REST, D), listOf(REST, REST, D, REST)))
+        val under = FixTarget(null, D, 0, 1, true, "必要人数")
+        val moves = entryMoves(st, sched(st), under, REST)
+        assertTrue(moves.toString(), moves.any { it.sug.ops == listOf(FixCell(1, 0, D)) })
+        assertTrue(moves.none { it.sug.ops.single().staff == 0 })
+    }
+
     @Test fun entryMoveOfAnotherStaffIsTier1AndPinnedStaffIsBlockedWithReason() {
         val st = board12x16(); val s = sched(st)
         val moves = entryMoves(st, s, over, REST)

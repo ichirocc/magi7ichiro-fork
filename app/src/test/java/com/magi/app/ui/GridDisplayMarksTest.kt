@@ -242,6 +242,17 @@ class GridDisplayMarksTest {
         assertEquals("本人の希望（10/2 の「A4」）は守ったままです。", w1.lines[1])
     }
 
+    /** 手で固定したマスも理由に挙げ、「固定条件による制限」に分ける（希望とは言わない）。旧: 手動固定だけが原因でも「調べた範囲で無い」。 */
+    @Test fun noFixReasonsNameManualPinsApartFromWishes() {
+        val u = UiState(startDate = "2026-10-01", staff = 2, days = 2, shifts = 2, shiftSymbols = listOf("休", "A"),
+            schedule = listOf(listOf(1, 0), listOf(1, 1)), manualPins = setOf("0,0", "1,0"))
+        val cell = noFixReasons(u, FixFocus(0, null, 0))
+        assertEquals("このセル（10/1 の「A」）は手で固定したマスです。", cell.lines[1])
+        assertEquals(NoFixKind.FIXED, cell.kind); assertTrue(!cell.wishRelated)
+        assertTrue(noFixReasons(u, FixFocus(0, 1)).lines.any { "1 回のうち 1 回は手で固定したマス" in it })
+        assertTrue(noFixReasons(u, FixFocus(null, 1, 0)).lines.any { it.endsWith("のうち #0さん・#1さん は手で固定したマスです。") })
+    }
+
     /** 見つからない理由の区分（仕様 §7）: 矛盾＞時間不足＞固定条件＞調べた範囲。どれも「解決できない」とは言わない。 */
     @Test fun noFixKindSeparatesTimeContradictionAndScope() {
         val u = UiState(staff = 1, days = 2, shifts = 2, shiftSymbols = listOf("休", "A"), schedule = listOf(listOf(1, 0)))

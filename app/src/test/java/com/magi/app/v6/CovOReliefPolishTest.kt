@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C1Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
@@ -18,14 +19,14 @@ class CovOReliefPolishTest {
     private val b = Shift("B", "B", "", "")
 
     private fun st(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap(), cons3n: List<C3Row> = emptyList(),
-                   staffRange: Map<String, Range> = mapOf("0,0" to Range("0", "0"), "1,0" to Range("0", "0"))): MagiState {
+                   staffRange: Map<String, Range> = mapOf("0,0" to Range("0", "0"), "1,0" to Range("0", "0")), cons1: List<C1Row> = emptyList()): MagiState {
         val t = schedule[0].size
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-%02d".format(t),
             shifts = listOf(rest, a, b), groups = listOf(Group("G", "G"), Group("H", "H")), staff = listOf(Staff("X", 0), Staff("Y", 1)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
             schedule = schedule, wishes = wishes, staffRange = staffRange, needDay1 = emptyMap(), needDay2 = emptyMap(),
-            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(), cons3mn = emptyList(),
+            cons1 = cons1, cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(), cons3mn = emptyList(),
             cons41 = emptyList(), cons42 = emptyList(), skillGroups = emptyList(), cons41s = emptyList(),
         )
     }
@@ -45,6 +46,17 @@ class CovOReliefPolishTest {
         val r = CovOReliefPolish.apply(s, sched(s))
         assertEquals(0, r.applied); assertEquals(1, r.afterCovO)
         assertTrue(r.logs.single().message.contains("希望固定"))
+    }
+
+    /** 回数固定（lo==hi）は他の研磨パスと同じく崩さない。X の休は 1 回に固定＝A→休 は c1 を 2 窓直して重み上は得でも採らず、受け皿 B へ退避する。 */
+    @Test fun exactPinIsNotDriftedEvenWhenTheWeightsPreferIt() {
+        val s = st(listOf(listOf(0, 1, 1, 1, 1), listOf(1, 1, 0, 1, 1)), staffRange = mapOf("0,0" to Range("1", "1")),
+            cons1 = listOf(C1Row("3", "休", "1")))
+        val before = sched(s)
+        val r = CovOReliefPolish.apply(s, sched(s))
+        assertTrue("退避は起きる", r.applied > 0)
+        assertEquals("X の休は固定の 1 回のまま", 1, r.newSchedule[0].count { it == 0 })
+        assertTrue(!exactPinRegression(Problem(s), before, r.newSchedule))
     }
 
     @Test fun forbiddenRunBlocksTheMoveAndTheOtherWorkerMoves() {

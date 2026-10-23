@@ -16,7 +16,7 @@
 //
 // 移植規約:
 // - 添字・番兵は Kotlin と同一（rangeLo/Hi の未設定 = INT32_MIN/INT32_MAX、apt/wish 未設定 = -1）。
-// - Java の Math.round(double) は floor(x+0.5)（half-up）。jround() で同一化。
+// - Java の Math.round(double) は最も近い整数（端数がちょうど 0.5 なら +∞ 側）。floor(x+0.5) は x+0.5 の丸めで 0.49999999999999994 を 1 にするので、jround() は端数で比べる。
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
 // ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
@@ -92,13 +92,13 @@
 //  L 2486  JNI    nativeLahcRead
 //  L 2500  JNI    nativeSaChunk
 //  L 2530  JNI    nativeCreateProblem
-//  L 2699  JNI    nativeDestroyProblem
-//  L 2705  JNI    nativeFullEval
+//  L 2705  JNI    nativeDestroyProblem
+//  L 2711  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
 
-inline long long jround(double x) { return (long long)std::floor(x + 0.5); }
+inline long long jround(double x) { double f = std::floor(x); return (long long)(x - f >= 0.5 ? f + 1 : f); }
 
 struct C1r { int d1, si, d2; };
 struct C2r { int si, c; };
@@ -2541,7 +2541,8 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     // [backlog #12(a)・実験段階] 旧レイアウト(7要素)との互換のため、8要素目が無ければ既定false。
     // meta[7] は旧 quantitativeRangeEval（P2d で撤去）。ABI を保つため受け取って読まない。
     const int S = p->S, T = p->T, K = p->K, G = p->G;
-    if (S <= 0 || T <= 0 || K <= 0 || G < 0) { delete p; return 0; }
+    // dow0 は曜日の添字（wd[...+(dow0+j)%7] へ書く）。Kotlin は常に 0..6 を渡す＝外れたら拒否して Kotlin へ退化。
+    if (S <= 0 || T <= 0 || K <= 0 || G < 0 || p->dow0 < 0 || p->dow0 > 6) { delete p; return 0; }
 
     auto staff = readIntArray(env, staffArr);          // sgrp(S) + ssk(S)
     auto canDo = readIntArray(env, canDoArr);          // S*K (0/1)
@@ -2678,7 +2679,12 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
         int len = bucket[bi++];
         if (len < 0 || (size_t)len > bucket.size() - bi) { bOk = false; break; }
         p->bucket[g].reserve((size_t)len);
-        for (int l = 0; l < len; l++) p->bucket[g].push_back(bnext());
+        for (int l = 0; l < len; l++) {
+            const int k = bnext();
+            if (k < 0 || k >= K) { bOk = false; break; }   // 評価器が k で S*K・K*T の表を引く
+            p->bucket[g].push_back(k);
+        }
+        if (!bOk) break;
     }
     if (!bOk) { delete p; return 0; }
     p->members.resize((size_t)G);

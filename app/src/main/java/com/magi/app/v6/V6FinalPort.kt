@@ -909,8 +909,9 @@ object V6FinalPort {
         val budgetPlanLog = MirrorLog(
             level = "I", tag = "TimeBudget",
             message = "予算配分: 総${(hardDeadlineMs - startMs) / 1000}s = 探索${(searchDeadlineMs - startMs) / 1000}s + 後処理予約${postReserveMs / 1000}s（予算${seconds}s＋後処理${POST_RESERVE_SEC}s＋玉突き${CHAIN_RESERVE_SEC}s）" +
-                " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ現フェーズ${phaseGraceMs / 1000}s経過かつ無改善が" +
+                " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ無改善が" +
                 "${stallMs / 1000}s(通常)〜${stallHardMs / 1000}s(頭打ち=HARD下限到達 or c3n構造壁)続いたとき" +
+                "（現フェーズの開始から${phaseGraceMs / 1000}sは待つ。無改善が閾値の${STALL_OVERRIDE_FACTOR}倍を超えたら待たない）" +
                 " / 構造的HARD下限=${hardFloor} / 希望衝突の床=${wishFloorLogged}(衝突${wishParts.first}+日の証明${wishParts.second}・" +
                 "到達で頭打ち=上限0込み・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
         )

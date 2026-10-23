@@ -145,7 +145,10 @@ class OptimizationWorker(
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
         //   だけ案内する＝**なぜ途中で消えたか**が読めなかった。失敗しても本体は続ける（従来どおり）。
         runCatching { setForeground(getForegroundInfo()) }
-            .onFailure { note("前景サービスにできませんでした（${it.javaClass.simpleName}）＝端末の都合で最適化が途中終了する可能性があります", "W") }
+            .onFailure {
+                if (it is kotlinx.coroutines.CancellationException) throw it   // 停止は前景化の失敗として飲まない（ForegroundRunKeepAlive と同じ）
+                note("前景サービスにできませんでした（${it.javaClass.simpleName}）＝端末の都合で最適化が途中終了する可能性があります", "W")
+            }
         // [Android 17 バブル] 会話バブルの前提（会話チャンネル＋長寿命ショートカット）を用意し、開始バブルを提示。
         runCatching {
             BubbleSupport.ensureChannel(ctx)

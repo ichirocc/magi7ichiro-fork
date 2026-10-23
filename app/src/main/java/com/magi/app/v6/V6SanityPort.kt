@@ -588,7 +588,7 @@ object V6SanityPort {
     /** [3.507.5/レビュー第6段] 設定ミス検査を話題ごとのメソッドに分けた入れ物。各メソッドは `out` に追加するだけで、文言と順序は分割前と同じ。 */
     /** 設定ミス検査の表示上限（3.507.5 で集約。値は据え置き）。 */
     private object Guidance {
-        const val SOFT_OVERFLOW = 900_000L   // SOFT 合計がこれ以上ならスコア上限 1,000,000 との桁干渉を警告
+        const val SOFT_OVERFLOW = SCORE_HARD_UNIT / 10 * 9   // SOFT 合計がこれ以上なら HARD 1 件の桁（SCORE_HARD_UNIT）との干渉を警告
         const val PREVIEW = 3                // 件数つき警告に並べる例の数
         const val NAME_PREVIEW = 4           // 職員名を並べる数
         const val MUS_TOP = 3                // 最小説明（MUS）を出す上限
@@ -1475,13 +1475,13 @@ object V6SanityPort {
         }
 
         fun softOverflowIssue() {
-            // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
-            //   HARD 1件(=1,000,000) と soft が桁で干渉し「必須違反ゼロ最優先」が崩れる。初期解の soft で概算警告。
+            // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計が HARD 1 件の桁（SCORE_HARD_UNIT）に接近/超過すると、
+            //   HARD と soft が桁で干渉し「必須違反ゼロ最優先」が崩れる。初期解の soft で概算警告。
             run {
                 val soft = Evaluator(p).fullEvalParts(normalizeSchedule(state.schedule.toIntArray2D(), p))[1]
                 if (soft >= Guidance.SOFT_OVERFLOW) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "要調整の合計点が大きすぎます（${soft}）",
-                        "要調整の合計点が上限の 1,000,000 に近く、必須違反を0件にすることを最優先する計算が崩れるおそれがあります",
+                        "要調整の合計点が上限の ${"%,d".format(SCORE_HARD_UNIT)} に近く、必須違反を0件にすることを最優先する計算が崩れるおそれがあります",
                         "${Place.EDIT}${Place.RULE}の解けない決まり（日数より回数が多い期間の制約など）や、${Place.HEAD}の多数のグループペア禁止・広すぎる範囲の決まりを見直して、要調整を減らしてください"))
                 }
             }

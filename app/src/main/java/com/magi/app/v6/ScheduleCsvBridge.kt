@@ -695,7 +695,7 @@ object StaffCsvIO {
      * 群/スキルは記号(kigou)照合、未知なら新規は先頭群/未所属(-1)・既存は現状維持。
      * [3.413.0/I-07] 未知の記号は [StaffUpsertResult.unknownGroups]/[StaffUpsertResult.unknownSkills] に
      * 記録する（空欄＝指定なしと、誤記＝解決できなかった、を呼出側が区別できるようにするため）。
-     * @return StaffUpsertResult、または null（解析不能/更新0かつ追加0）。
+     * @return StaffUpsertResult、または null（解析不能/更新0かつ追加0かつ同姓同名なし）。
      */
     fun parseUpsert(text: String, state: MagiState, sched: Array<IntArray>): StaffUpsertResult? {
         val rows = parseCsvGuarded(text) ?: return null
@@ -763,12 +763,12 @@ object StaffCsvIO {
                 }
             }
         }
-        if (updated == 0 && added == 0) return null
+        if (updated == 0 && added == 0 && ambiguousNames.isEmpty()) return null
         val newSched = Array(sched.size + extraRows.size) { i ->
             if (i < sched.size) sched[i].copyOf() else extraRows[i - sched.size]
         }
         val ns = state.copy(staff = withStaffIds(newStaff), schedule = newSched.map { it.toList() })
-        return StaffUpsertResult(ns, newSched, updated, added, unknownG, unknownS)
+        return StaffUpsertResult(ns, newSched, updated, added, unknownG, unknownS, ambiguousNames.toList())
     }
 }
 
