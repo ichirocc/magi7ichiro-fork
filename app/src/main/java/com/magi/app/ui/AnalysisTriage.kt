@@ -263,7 +263,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     } else if (ui.relaxedBoard) {
         "設定を緩めて手順を当てた盤面の概算です（再作成する前）。"
     } else {
-        "実行前の概算です。設定の組み合わせによっては、つくったあとも残ります。"
+        "実行前の概算です。設定の組み合わせによっては、つくったあとも残る場合があります。"
     }
     return AnalysisTriage(
         computed = computed,
