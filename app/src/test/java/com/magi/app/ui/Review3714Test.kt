@@ -63,7 +63,7 @@ class Review3714Test {
         assertEquals("希望・人数・基本", EDIT_TAB_LINE)
         assertEquals("まだ作っていません", homeHeadline(HomePlanKind.MAKE))
         assertEquals("データを開く", EMPTY_STATE_TITLE)
-        assertEquals("開く", CONSULT_OPEN)
+        assertEquals("勤務を見る", CONSULT_OPEN)
     }
 
     @Test fun lengthLimits() {

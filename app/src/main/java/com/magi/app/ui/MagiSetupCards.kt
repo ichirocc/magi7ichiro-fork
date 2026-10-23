@@ -752,7 +752,7 @@ internal fun DataActionsCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("保存する") }
+                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存する") }
                 OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

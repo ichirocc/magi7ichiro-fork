@@ -837,7 +837,7 @@ internal fun OperatorNextActionCard(
                     // [3.714.0] 作成中も相談の 1 行から一覧を開ける（文字ボタン、塗りは増やさない）。
                     if (consultLine != null) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(consultLine, color = plan.fg, style = body, modifier = Modifier.weight(1f))
-                        MagiTextButton(onClick = onOpenConsults, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN, color = plan.fg) }
+                        MagiTextButton(onClick = onOpenConsults, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_LIST_OPEN, color = plan.fg) }
                     }
                 }
                 HomeSection.PRIMARY -> {
