@@ -113,14 +113,14 @@ import androidx.compose.ui.platform.LocalContext
  */
 
 @Composable
-internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
+internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit, bare: Boolean = false) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val label = remember(ui.startDate) {
         runCatching { val d = LocalDate.parse(ui.startDate); "${d.year}年 ${d.monthValue}月" }.getOrNull()
     }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
@@ -461,8 +461,7 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 @Composable
 internal fun EditHeaderCard(
     ui: UiState, plan: EditHeaderPlan, wishNoInput: Int,
-    onOpenWish: () -> Unit, onOpenNeed: () -> Unit, onWishConflicts: () -> Unit,
-) {
+    onOpenWish: () -> Unit, onOpenNeed: () -> Unit, onWishConflicts: () -> Unit, inner: (@Composable () -> Unit)? = null) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
@@ -472,6 +471,7 @@ internal fun EditHeaderCard(
     val issues = fixList.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            inner?.invoke()
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
             Text(plan.subtitle, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             val (wishLabel, needLabel, issueLabel) = plan.points.map { it.substringBefore(' ') to it.substringAfter(' ') }.let { Triple(it[0], it[1], it[2]) }
@@ -550,7 +550,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
  * データは Problem 由来（`ConditionsView` の担当可否 / 必要人数レンジ＝日別例外込み）＝チェッカーと同じ実効値。
  */
 @Composable
-internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
+internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean = false) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val days = ui.days
@@ -564,8 +564,8 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
         if (d == 0) null else RowV(ui.shiftSymbols[k], canDoCount[k], d, mx)
     }
     if (rows.isEmpty()) return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
             Text("足りないシフトは①で担当を増やすか、必要人数を見直します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -789,8 +789,7 @@ internal fun AppearanceCard(
     oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
-    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {},
-) {
+    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {}, inner: (@Composable () -> Unit)? = null) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -817,6 +816,7 @@ internal fun AppearanceCard(
             // [3.483.0 C-3] 何が変わるかを1行で（旧: 無説明のトグル）。
             Text("プロにすると、分析タブの詳しい数値のカードと、勤務表の「まとめて割当」を表示します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            inner?.invoke()
         }
     }
 }

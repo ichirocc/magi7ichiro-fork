@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
  * [onPrimary] があるときだけ主ボタンを出す（職員管理の主「職員を追加する」は一覧カードの中）。塗りは主が OPEN_MASTER のときだけ（INV-09）。
  */
 @Composable
-internal fun ScopeHeaderCard(plan: EditHeaderPlan, onPrimary: (() -> Unit)? = null) {
+internal fun ScopeHeaderCard(plan: EditHeaderPlan, onPrimary: (() -> Unit)? = null, inner: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -34,6 +34,7 @@ internal fun ScopeHeaderCard(plan: EditHeaderPlan, onPrimary: (() -> Unit)? = nu
                     OutlinedButton(onClick = onPrimary, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(OPEN_MASTER_BUTTON) }
                 }
             }
+            inner?.invoke()
         }
     }
 }

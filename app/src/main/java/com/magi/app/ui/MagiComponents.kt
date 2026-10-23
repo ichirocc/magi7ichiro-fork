@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -164,4 +165,11 @@ internal fun MagiTextButton(
     TextButton(onClick = onClick, modifier = modifier, enabled = enabled, shape = shape, contentPadding = contentPadding,
         colors = ButtonDefaults.textButtonColors(containerColor = tint.copy(alpha = 0.08f), contentColor = contentColor, disabledContainerColor = tint.copy(alpha = 0.04f)),
         content = content)
+}
+
+/** 1 枚のカード、または親のカードの中に入れるときは枠なし（[bare]）。中身の余白は [content] に渡す（枠なしは 0）。 */
+@Composable
+internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues) -> Unit) {
+    if (bare) content(PaddingValues(0.dp))
+    else Card(Modifier.fillMaxWidth()) { content(PaddingValues(16.dp)) }
 }

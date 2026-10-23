@@ -726,8 +726,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
-                    AgentCard(ui, relaxFound = vm.relaxTrialFor() != null, onUndo = { vm.undoAgent() })
+                    // 代行の記録は主カードの先頭（別のカードにしない＝ホームのカードを 1 枚減らす）。
                     OperatorNextActionCard(
+                        inner = { AgentCard(ui, relaxFound = vm.relaxTrialFor() != null, onUndo = { vm.undoAgent() }, bare = true) },
                         stateOf = { vm.state },
                         onRetrySave = { vm.retrySave() },
                         ui = ui,
@@ -884,8 +885,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
                             EditHeaderCard(ui, editPlan, editWish.noInput, onOpenWish = { wishScrollKey++ }, onOpenNeed = { needScrollKey++ },
-                                onWishConflicts = { wishConflicts = true })
-                            MonthPickerCard(ui, onEvent)
+                                onWishConflicts = { wishConflicts = true },
+                                inner = { MonthPickerCard(ui, onEvent, bare = true) })
                             val period = editPeriodNow
                             val wishNow = resolvePick(wishPick, ui.staffNames, period)
                             val needNow = resolvePick(needPick, ui.shiftSymbols, period)
@@ -899,8 +900,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 shiftSel = needNow.index, onShiftSel = { s -> needPick = pickAt(needPick, ui.shiftSymbols, period, s) },
                                 daysSel = needNow.days, onDaysSel = { d -> needPick = pickDays(needPick, ui.shiftSymbols, period, d) },
                                 initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, initialDay = deepLinkDay.takeIf { d -> d >= 0 && deepLinkNeedShift >= 0 },
-                                onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 }) }
-                            NeedDayCard(ui, conditionsView, onEditEvent)
+                                onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 },
+                                inner = { NeedDayCard(ui, conditionsView, onEditEvent, bare = true) }) }
                         }
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
@@ -915,8 +916,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
                             ReviewMemoCard(ui, onEvent)
                             // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
-                            ScopeHeaderCard(editPlan, onPrimary = { deepLinkEditSection = "yr_ws1" })
-                            StaffingRealityCard(ui, conditionsView)
+                            ScopeHeaderCard(editPlan, onPrimary = { deepLinkEditSection = "yr_ws1" }, inner = { StaffingRealityCard(ui, conditionsView, bare = true) })
                             // [E6案A] 長大スクロールを畳んで削減。[3.720.0 3c-3] ①も既定で畳む（見出しカードの「基本設定を開く」で開く）。
                             // 編集画面はデータを引数で受け取るようになったので `key(ui.editRev)` の包みは全廃した
                             //   （3.190.0〜3.515.2 の再構成保証は「生の vm 読取」への対処だった）。editRev 自体は
@@ -996,8 +996,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },
-                        leftHand = leftHand, onLeftHand = { leftHand = it })
-                    ShiftColorCard(ui, vm.shiftColorList(), onEvent)
+                        leftHand = leftHand, onLeftHand = { leftHand = it },
+                        inner = { ShiftColorCard(ui, vm.shiftColorList(), onEvent, bare = true) })
                     // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
                     //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
                     //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。

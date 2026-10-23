@@ -693,6 +693,7 @@ internal fun OperatorNextActionCard(
     tourNext: String? = null,        // 必須違反の巡回の先頭（残りの一覧・探索中の段の対象）
     onRetrySave: () -> Unit = {},    // 保存の失敗の行の「もう一度保存する」
     onOpenConsults: () -> Unit = {}, // 作成中の相談の行の「開く」（相談の一覧を出す）
+    inner: (@Composable () -> Unit)? = null,   // カードの先頭に差し込む中身（代行の記録）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -799,6 +800,7 @@ internal fun OperatorNextActionCard(
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            inner?.invoke()
             for (sec in sections) when (sec) {
                 // [3.719.0 読み上げ] 作成の終わり（CREATION_DONE_TITLE）・探索中の状態の行・進捗は liveRegion＝画面を触らなくても読み上げる。
                 HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
@@ -2137,7 +2139,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
 
 /** 代行役（AX）のカード: 実行中の 1 行、終われば当てた手の数と前後・残りの扱い・手の一覧（畳む）・元に戻す。 */
 @Composable
-internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit) {
+internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bare: Boolean = false) {
     val rec = ui.agentRecord
     val head = rec?.let { agentHeadline(it) }
     val wishCount = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui).let { c -> c.direct.size + c.shortfall.sumOf { it.rows.size } } }
@@ -2145,8 +2147,8 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit) {
     if (!ui.agentRunning && head == null) return   // 1 手も当てなかった輪は出さない（次の判断は主カードが言う）
     val cs = MaterialTheme.colorScheme
     var open by remember(rec) { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (ui.agentRunning) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(22.dp))

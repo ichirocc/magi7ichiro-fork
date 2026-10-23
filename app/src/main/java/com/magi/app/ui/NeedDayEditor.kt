@@ -119,6 +119,7 @@ internal fun NeedCalendarCard(
     shiftSel: Int, onShiftSel: (Int) -> Unit, daysSel: Set<Int>, onDaysSel: (Set<Int>) -> Unit,
     initialShift: Int? = null, initialDay: Int? = null, onInitialConsumed: () -> Unit = {},
     scrollKey: Int = 0,
+    inner: (@Composable () -> Unit)? = null,   // カードの末尾に差し込む中身（日別の例外一覧）
 ) {
     if (v.shifts.isEmpty()) return
     val k = shiftSel.takeIf { it in v.shifts.indices } ?: 0
@@ -180,6 +181,7 @@ internal fun NeedCalendarCard(
                     onCancel = { onDaysSel(emptySet()) }, onDone = { onDaysSel(emptySet()) })
             } else {
             }
+            inner?.invoke()
         }
     }
     if (baseSheet) {
@@ -343,12 +345,12 @@ private fun NeedMonthGrid(
  * （カレンダーは1シフトずつしか見えない弱点を補う）。登録/変更は上の`NeedCalendarCard`へ一本化。
  */
 @Composable
-internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit) {
+internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, bare: Boolean = false) {
     val overrides = cv.needDayOverrides
     // [3.707.0 3a-8] 例外が無ければ出さない（件数は見出しと必要人数カードにある）。
     if (overrides.isEmpty()) return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
             Text(
                 "一覧と削除用です（登録は上のカレンダーから）。",
