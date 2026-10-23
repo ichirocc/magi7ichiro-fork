@@ -159,6 +159,7 @@ internal object AptFairPolish {
                 val a = work[i][j]; val b = work[i2][j]
                 if (a != sharedK || b == sharedK) continue
                 if (!movable(i, j) || !movable(i2, j)) continue
+                if (!p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
                 if (p.extBanned(i, j, b) || p.extBanned(i2, j, a)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()

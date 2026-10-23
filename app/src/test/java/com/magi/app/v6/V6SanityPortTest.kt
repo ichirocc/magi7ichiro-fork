@@ -978,6 +978,9 @@ class V6SanityPortTest {
         assertEquals("c41", fix.groupRangeFamily)
         assertEquals("1", fix.newLo)
         assertNotNull(fix.groupRangeRow)
+        assertEquals("1", com.magi.app.ui.SettingFixLogic.apply(bad, fix)!!.cons41.single().l)
+        // 診断の後に行が変わっていたら直さない（旧: 変更なしの state を返し、空の Undo 段と「修正を適用」の記録が残った）。
+        assertNull(com.magi.app.ui.SettingFixLogic.apply(groupRangeState("4", "1"), fix))
     }
 
     @Test fun groupRangeLoBelowHiIsNotReported() {

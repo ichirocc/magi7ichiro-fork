@@ -98,6 +98,16 @@ class AptPolishTest {
         assertEquals("Xの総日数(=被覆総量)は保存される", xCountBefore, xCountAfter)
     }
 
+    /** 相互交換も個人上限0（入れない指定）のシフトを置かない（FairPolish の相互交換と同じ `mayPlace`）。
+     *  B の X は上限0。c1「2日窓で X≥1」が B に立つので、交換は重み上 −50−4+25 と得でも採らない。 */
+    @Test
+    fun mutualSwapNeverPlacesAPersonallyCappedShift() {
+        val st = mutualSwapState().copy(staffRange = mapOf("1,1" to com.magi.app.model.Range("0", "0")),
+            cons1 = listOf(com.magi.app.model.C1Row("2", "X", "1")))
+        val result = AptFairPolish.applyAptPolish(st, st.schedule.toIntArray2D())
+        assertTrue("B に上限0の X が入らない", result.newSchedule[1].none { it == 1 })
+    }
+
     // 手③: 自己振替/相互交換の相手が構造的に存在しない単一方向のaptHighを、玉突きチェーンで解消する。
     // Aが唯一のX担当可能者でXを独占(need1=1)。Bは需要のない別シフトZに在勤中(いつでも動かせる)。
     private fun chainState(): MagiState {

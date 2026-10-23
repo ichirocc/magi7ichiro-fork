@@ -78,6 +78,7 @@ internal fun StaffShiftMatrixCard(
     sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    // 職員・シフトは最新の設定、回数は再検査の済んだ画面の状態から読む＝追加の直後は回数の表が小さい（無い所は 0）。
     val K = v.shifts.size
     val S = v.staff.size
     if (K == 0 || S == 0) return
@@ -166,7 +167,7 @@ internal fun StaffShiftMatrixCard(
                             val allowed = cv.allowedShiftsFor(i)
                             for (k in 0 until K) {
                                 val cell = matrixCell(
-                                    allowed = k in allowed, count = counts.perStaff[i][k],
+                                    allowed = k in allowed, count = counts.perStaff.getOrNull(i)?.getOrNull(k) ?: 0,
                                     limits = cv.staffCellLimits(i, k), vio = ui.countViolations["$i,$k"],
                                     isRest = k == restIdx, shortC = shortC, overC = overC, cs = cs,
                                 )
@@ -179,7 +180,7 @@ internal fun StaffShiftMatrixCard(
                         for (k in 0 until K) {
                             var targetSum = 0; var actualSum = 0; var hasTarget = false
                             for (i in 0 until S) {
-                                actualSum += counts.perStaff[i][k]
+                                actualSum += counts.perStaff.getOrNull(i)?.getOrNull(k) ?: 0
                                 val apt = cv.staffCellLimits(i, k).third
                                 if (apt != null) { targetSum += apt; hasTarget = true }
                             }

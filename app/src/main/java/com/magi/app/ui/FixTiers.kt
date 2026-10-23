@@ -54,7 +54,8 @@ internal fun entryMoves(state: MagiState, s: Array<IntArray>, target: FixTarget,
             // 休で通れば十分（過剰を外す 1 セルは休がいちばん他を崩しにくい）。
             if (r is FixApplyGate.Outcome.Applied && to == rest) break
         }
-        val (r, op) = best ?: break
+        // 置けるシフトが無いセル（担当外・上限0）は飛ばすだけ。評価の上限に達したときだけ打ち切る。
+        val (r, op) = best ?: if (evals >= maxEvals) break else continue
         if (!target.effect(board, listOf(op)).fixes) continue
         val after: ViolationReport? = when (r) { is FixApplyGate.Outcome.Applied -> r.after; is FixApplyGate.Outcome.Rejected -> r.after }
         val name = state.staff.getOrNull(i)?.name ?: UNKNOWN_LABEL
