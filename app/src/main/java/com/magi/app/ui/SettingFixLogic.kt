@@ -15,7 +15,7 @@ object SettingFixLogic {
 
     const val WISH_ALREADY_REMOVED_MESSAGE = "この希望はすでに外れています"
 
-    const val WISH_STALE_MESSAGE = "診断のあとで職員・担当できるシフト・希望などの設定が変わったため、取り消しませんでした。診断をやり直してください"
+    const val WISH_STALE_MESSAGE = "診断のあとで設定が変わったため、取り消しませんでした。診断をやり直してください"
 
     /** [3.687.0/R02] 診断した職員を ID で今の並びに引き直した希望のキー（ID を持たない古い診断は元のキー、職員がいなければ null）。 */
     fun currentWishKey(s: MagiState, issue: SettingIssue): String? {

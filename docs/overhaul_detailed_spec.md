@@ -201,7 +201,6 @@ data class EngineConfig(
     val workers: Int,
     val strength: SearchStrength,        // ふつう / じっくり
     val deterministic: Boolean,
-    val quantitativeRangeEval: Boolean,  // P2d で撤去予定（docs/flag_inventory.md 決定 6）
     val search: SearchFlags,             // PolishGate の探索フラグのうち残すもの
     val post: PostFlags,                 // PostOptimizationParams の真偽値と上限値
 ) {

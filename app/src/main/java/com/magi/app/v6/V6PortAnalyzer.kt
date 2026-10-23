@@ -366,7 +366,6 @@ object V6PortAnalyzer {
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
-        quantitativeRangeEval: Boolean = false,
         /** [3.515.0] surplus(covO)診断は他2呼出元（ViolationComponentRepair・V6FinalPortの残存分析）が
          *  shortfalls しか読まないのに毎回計算していた無駄。falseで丸ごと省く（既定trueで挙動不変）。 */
         includeSurplus: Boolean = true,
@@ -374,7 +373,7 @@ object V6PortAnalyzer {
          *  深追いする（数秒かかりうるためライブ診断では既定false、経緯: history 3.515.0）。 */
         deepSurplus: Boolean = false,
     ): CoverageDiagnosis {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
         val shortfalls = diagnoseShortfalls(state, p, norm, cov)
@@ -597,7 +596,7 @@ object V6PortAnalyzer {
                                 probeBudget--
                                 probedAny = true
                                 probe[i][j] = m
-                                val after = UnifiedViolationChecker.check(state, probe, quantitativeRangeEval = p.quantitativeRangeEval)
+                                val after = UnifiedViolationChecker.check(state, probe)
                                 probe[i][j] = k
                                 if (betterReport(after, report)) { freeImproving++; improvedHere = true; break }
                                 worstWorsenedFamily(after, report)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }
@@ -776,7 +775,7 @@ object V6PortAnalyzer {
         val cell = diagnoseForbiddenCellMoves(state, p, norm, cov, i, j, cur)
         // 希望固定の徹底（wishPinStrict）の間、探索・研磨は希望どおりのセルを動かさない。崩せる手が見つかっても
         //   それは希望を変える手＝利用者の操作なので、「探索未到達」に見せず希望固定として返す。
-        val wishHeld = PolishGate.wishPinStrict && p.wishLocked(i, j) && p.lockTo(i, j) == cur
+        val wishHeld = p.wishLocked(i, j) && p.lockTo(i, j) == cur
         return if (wishHeld && cell.escape in setOf(ForbiddenCellEscape.FREE, ForbiddenCellEscape.CHAIN, ForbiddenCellEscape.ADJACENT))
             cell.copy(escape = ForbiddenCellEscape.PINNED,
                 detail = if (p.pinned(i, j)) "手で固定=${cell.shiftSymbol}（勤務表づくりは固定を動かしません。勤務表で固定を外せば崩せます）"

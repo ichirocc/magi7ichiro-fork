@@ -13,7 +13,7 @@ internal enum class HypothesisEpochRole {
 
     /**
      * [3.517.0] 同群2名の1ヶ月分割当を丸ごと交換するILS摂動＝fairは交換不変だが他族の局所解構造を
-     * 変える（経緯: `docs/history/3.4xx.md` 3.517.0）。`PolishGate.personSwapKick` が false の間は出現しない。
+     * 変える（経緯: `docs/history/3.4xx.md` 3.517.0）。
      */
     PERSON_SWAP_ILS,
 }
@@ -50,13 +50,10 @@ internal object AdaptiveHypothesisEpochPolicy {
         HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
     )
 
-    // [3.517.0] PolishGate.personSwapKick が true(3.519.0で既定化)のときだけ使う7要素版。false時は
-    // escapeRoles(6要素)がそのまま使われ続けるので、baseEscapeOffset/reassignmentsの剰余算術は
-    // フラグOFF時ビット単位で不変。
+    // [3.517.0] 全月入替の PERSON_SWAP_ILS を加えた 7 要素（3.519.0 で既定化、P2d で常時）。
     private val escapeRolesWithSwap = escapeRoles + HypothesisEpochRole.PERSON_SWAP_ILS
 
-    private fun currentEscapeRoles(): Array<HypothesisEpochRole> =
-        if (PolishGate.personSwapKick) escapeRolesWithSwap else escapeRoles
+    private fun currentEscapeRoles(): Array<HypothesisEpochRole> = escapeRolesWithSwap
 
     private fun baseEscapeOffset(index: Int): Int = when (Math.floorMod(index, 8)) {
         1 -> 0

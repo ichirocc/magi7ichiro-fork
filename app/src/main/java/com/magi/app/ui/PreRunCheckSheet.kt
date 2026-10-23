@@ -15,7 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -59,7 +58,7 @@ internal fun PreRunCheckSheet(
                 t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 t.floorRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult, onCancelConsult) }
                 if (t.hasWishRows && onShowWishes != null) {
-                    TextButton(onClick = onShowWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
+                    MagiTextButton(onClick = onShowWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
                 }
             }
             t.rerunHeader?.let { h ->
@@ -67,7 +66,7 @@ internal fun PreRunCheckSheet(
                 Text(PRE_RUN_RERUN_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.rerunRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding) }
                 t.rerunRows.firstOrNull()?.let { r ->
-                    TextButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当セルを見る") }
+                    MagiTextButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当セルを見る") }
                 }
             }
             t.overCapNote?.let { n ->
@@ -79,7 +78,7 @@ internal fun PreRunCheckSheet(
                 Text("■ 対象外のシフト（上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(w, style = MaterialTheme.typography.bodyMedium)
                 t.wallLanding?.let { l ->
-                    TextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
+                    MagiTextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
                 }
             }
         }
@@ -96,12 +95,12 @@ private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Bo
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) {
             if (i != null && j != null) {
-                TextButton(onClick = { onOpenCell(i, j, row.wish) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                MagiTextButton(onClick = { onOpenCell(i, j, row.wish) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text(row.text, modifier = Modifier.fillMaxWidth())
                 }
             } else if (l != null) {
                 // セルを持たない行は、その原因の入力箇所へ（押す前に行き先を 1 行で示す）。
-                TextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                MagiTextButton(onClick = { onOpenLanding(l) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Column(Modifier.fillMaxWidth()) {
                         Text(row.text)
                         Text("→ ${landingButtonLabel(l)}", style = MaterialTheme.typography.bodySmall)

@@ -30,7 +30,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -114,14 +113,14 @@ import androidx.compose.ui.platform.LocalContext
  */
 
 @Composable
-internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
+internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit, bare: Boolean = false) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val label = remember(ui.startDate) {
         runCatching { val d = LocalDate.parse(ui.startDate); "${d.year}年 ${d.monthValue}月" }.getOrNull()
     }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
@@ -169,11 +168,11 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             Spacer(Modifier.height(8.dp))
             Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
             var budgetMore by rememberSaveable { mutableStateOf(false) }
-            TextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) "閉じる" else "詳しく") }
+            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
-                Text("仕上げと玉突き（勤務の入れ替え調整）は共通の枠です。改善が止まると早く終わることがあります。",
+                Text("仕上げと玉突きは共通の枠です。改善が止まると早く終わります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(8.dp))
@@ -289,12 +288,12 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             //   （3.371.0）。旧表示は hyp をそのまま「仮説（案）の数」と言い切っており実挙動と食い違った。
             val spawn = com.magi.app.v6.HypothesisPlanning.hypothesisSpawnPlan(ui.workers, hyp).first
             val overNote = if (ui.workers > cores)
-                "この端末のコア数(${cores})を超えるためコアを奪い合います。極端に大きい値は電池・発熱に注意してください。" +
+                "端末のコア数(${cores})を超えるとコアを奪い合い、電池と発熱が増えます。" +
                     (if (spawn < hyp) "なお「組み替え」「違反集中」「違反集中＋」では、コア数を超える分は" +
                         "案を増やさず各案の内部並列へ回します（同時に走る案は${spawn}）。" else "")
             else ""
             Text(
-                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値がそのまま同時に走る組み立ての本数になります。" +
+                "※「高速」（30秒以下のおまかせを含む）では、この値が同時に走る本数です。" +
                     "それ以外の方式では設定値がそのまま並べて試す仮説（案）の数（${hyp}）になります。$overNote",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -304,7 +303,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeAccel, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）", style = MaterialTheme.typography.bodyMedium)
-                Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
+                Text("内側の計算を高速版で行います。結果は常に照合し、食い違えば従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.nativeAccel, onCheckedChange = null, enabled = !ui.running)
@@ -316,21 +315,27 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     if (ui.nativeParity)
                         "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
                     else
-                        "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
+                        "⚠ 照合せず高速版の結果を使います（検証用）。誤った勤務表になることがあります。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )
             }
             Switch(checked = ui.nativeParity, onCheckedChange = null, enabled = !ui.running && ui.nativeAccel)
         }
-        // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
-        //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {
             Switch(checked = ui.softPolish, onCheckedChange = null, enabled = !ui.running)
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.agentAuto, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAgentAuto(it)) }).semantics(mergeDescendants = true) {}) {
+            Switch(checked = ui.agentAuto, onCheckedChange = null, enabled = !ui.running)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(AGENT_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
+                Text(AGENT_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         Column(Modifier.fillMaxWidth()) {
             Text("探す強さ", style = MaterialTheme.typography.titleSmall)
@@ -368,43 +373,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionChainSwap, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("入れ替えも1手として使う", style = MaterialTheme.typography.bodyMedium)
-                    Text("同じ日の2人、同じ人の2日を入れ替える手も試します（既定はON）",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionChainSwap, onCheckedChange = null, enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
-            }
-            // 次の 2 つはパイプライン（「見込みのある所だけ」）にだけ効く。
+            // 次はパイプライン（「見込みのある所だけ」）にだけ効く。
             val pipelineOn = !ui.running && ui.ejectionChain == EjectionChainMode.PIPELINE
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineRounds, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineRounds(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("採れたら探し直す", style = MaterialTheme.typography.bodyMedium)
-                    Text(EJECTION_ROUNDS_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionPipelineRounds, onCheckedChange = null, enabled = pipelineOn)
-            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineHardLeg, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("必須の違反からも始める", style = MaterialTheme.typography.bodyMedium)
                     Text(EJECTION_HARD_LEG_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = null, enabled = pipelineOn)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionUseLeftover, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionUseLeftover(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("余った時間も玉突きに使う", style = MaterialTheme.typography.bodyMedium)
-                    Text(EJECTION_LEFTOVER_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.ejectionUseLeftover, onCheckedChange = null, enabled = pipelineOn)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.c3nWallShortStall, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetC3nWallShortStall(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text("禁止の並びだけ残ったら早めに切り上げる", style = MaterialTheme.typography.bodyMedium)
-                    Text(C3N_WALL_SHORT_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.c3nWallShortStall, onCheckedChange = null, enabled = !ui.running)
             }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -433,24 +409,19 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
     }
 }
 
-/** 画面に出す範囲。「前後7日」は必須を増やした組があり BY_KIND が上位互換なので出さない。 */
-internal val EJECTION_CHAIN_SCOPES_SHOWN = listOf(EjectionChainScope.MONTH, EjectionChainScope.BY_KIND)
+internal val EJECTION_CHAIN_SCOPES_SHOWN = EjectionChainScope.entries
 
 internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
     EjectionChainScope.MONTH -> "月全体"
     EjectionChainScope.BY_KIND -> "必須は月全体・他は前後7日"
-    EjectionChainScope.NEARBY -> "前後7日"
 }
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」のときに働きます"
-internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」のときに働きます"
-internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、組むのを早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
-internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」のときに働きます"
-internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
+internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"
+internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
-internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりのときだけ働きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
+internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"
@@ -490,8 +461,7 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 @Composable
 internal fun EditHeaderCard(
     ui: UiState, plan: EditHeaderPlan, wishNoInput: Int,
-    onOpenWish: () -> Unit, onOpenNeed: () -> Unit, onWishConflicts: () -> Unit,
-) {
+    onOpenWish: () -> Unit, onOpenNeed: () -> Unit, onWishConflicts: () -> Unit, inner: (@Composable () -> Unit)? = null) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
@@ -501,6 +471,7 @@ internal fun EditHeaderCard(
     val issues = fixList.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            inner?.invoke()
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
             Text(plan.subtitle, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             val (wishLabel, needLabel, issueLabel) = plan.points.map { it.substringBefore(' ') to it.substringAfter(' ') }.let { Triple(it[0], it[1], it[2]) }
@@ -526,7 +497,7 @@ internal fun EditHeaderCard(
                 OutlinedButton(onClick = onOpenNeed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(EDIT_NEED_BUTTON) }
             }
             if (plan.secondary == EditHeaderSecondary.WISH_CONFLICTS) {
-                TextButton(onClick = onWishConflicts, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(WISH_CONFLICTS_BUTTON) }
+                MagiTextButton(onClick = onWishConflicts, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(WISH_CONFLICTS_BUTTON) }
             }
         }
     }
@@ -579,7 +550,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
  * データは Problem 由来（`ConditionsView` の担当可否 / 必要人数レンジ＝日別例外込み）＝チェッカーと同じ実効値。
  */
 @Composable
-internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
+internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean = false) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val days = ui.days
@@ -593,8 +564,8 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
         if (d == 0) null else RowV(ui.shiftSymbols[k], canDoCount[k], d, mx)
     }
     if (rows.isEmpty()) return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
             Text("足りないシフトは①で担当を増やすか、必要人数を見直します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -631,7 +602,7 @@ internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("勤務表の修正中に印を付けたルール見直しのメモです（アプリ終了で消えます）。",
+            Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             ui.reviewMemos.forEachIndexed { idx, memo ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -761,7 +732,7 @@ internal fun DataActionsCard(
             }
             // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
             if (ui.prevBackupAvailable) {
-                TextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
+                MagiTextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                     Text("開く前のデータに戻す")
                 }
                 Text("もう一度押すと、今のデータと入れ替わります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -781,18 +752,19 @@ internal fun DataActionsCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("保存する") }
+                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存する") }
                 OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを取り込む") }
                 OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを書き出す") }
             }
-            Text("種類別のCSVを書き出す",
-                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [3.547.0] 3→4項目化でRow等分weightだと1項目あたりの幅が狭まり続けるため、
-            //   幅いっぱいに収まる分だけ並べ余りは折り返すFlowRowへ（ShiftColorCardのチップと同じ考え方）。
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 種類別の書き出し 4 つは畳む（データのカードの常時のボタンを減らす）。
+            var kindsOpen by remember { mutableStateOf(false) }
+            MagiTextButton(onClick = { kindsOpen = !kindsOpen }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (kindsOpen) "種類別のCSVを書き出す ▾" else "種類別のCSVを書き出す ▸")
+            }
+            if (kindsOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員一覧") }
                 OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフト") }
                 OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("各制約") }
@@ -818,8 +790,7 @@ internal fun AppearanceCard(
     oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
-    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {},
-) {
+    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {}, inner: (@Composable () -> Unit)? = null) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -846,6 +817,7 @@ internal fun AppearanceCard(
             // [3.483.0 C-3] 何が変わるかを1行で（旧: 無説明のトグル）。
             Text("プロにすると、分析タブの詳しい数値のカードと、勤務表の「まとめて割当」を表示します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            inner?.invoke()
         }
     }
 }
@@ -907,7 +879,7 @@ internal fun CollapsibleSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(if (expanded) "▼ 閉じる" else "▶ 開く", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (expanded) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (expanded) {

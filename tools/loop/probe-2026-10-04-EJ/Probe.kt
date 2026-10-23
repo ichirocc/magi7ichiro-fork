@@ -22,7 +22,6 @@ fun main(args: Array<String>) {
             val arms = if (seed % 2 == 1) armList else armList.reversed()
             for (arm in arms) {
                 val on = arm != "off"
-                C1EjectionChainPolish.defaultCrossFamily = arm == "v2"
                 val key = "$fx,$budget,$seed,$arm"; if (key in done) continue
                 PolishGate.c1EjectionChain = on
                 val t0 = System.currentTimeMillis()

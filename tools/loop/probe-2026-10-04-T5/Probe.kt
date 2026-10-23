@@ -19,7 +19,6 @@ fun main(args: Array<String>) {
             for (on in arms) {
                 val arm = if (on) "on" else "off"
                 val key = "$fx,$budget,$seed,$arm"; if (key in done) continue
-                C1JointLnsPolish.deltaChildEvalDefault = on
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking { V6FinalPort.handleOptimize(st, st.schedule.map { it.toIntArray() }.toTypedArray(),
                     secondsRaw = budget, allowImpossible = true, seed = seed.toLong()) }

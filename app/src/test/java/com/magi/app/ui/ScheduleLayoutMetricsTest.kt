@@ -105,4 +105,12 @@ class ScheduleLayoutMetricsTest {
         assertEquals(9, rows(915, true, 0, true))
         assertEquals(7, (915 - m.TOP_BAR_DP - m.bottomStackDp(true, false) - m.DAY_HEADER_DP - 264) / m.ROW_DP)
     }
+
+    @Test fun bottomNavCollapsesOnScrollDownAndExpandsOnScrollUpOrTop() {
+        assertEquals(true, navCollapseNext(false, 100, 200))
+        assertEquals(true, navCollapseNext(true, 200, 190))     // 小さな揺れでは変えない
+        assertEquals(false, navCollapseNext(true, 300, 200))
+        assertEquals(false, navCollapseNext(true, 50, 0))       // 先頭では広げる
+        assertEquals(false, navCollapseNext(false, 0, 10))
+    }
 }

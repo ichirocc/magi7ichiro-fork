@@ -3,6 +3,8 @@ package com.magi.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,7 +35,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -280,6 +281,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val onEvent: (MagiEvent) -> Unit = { mediator.dispatch(it) }
     val onEditEvent: (MagiEvent) -> Unit = { e -> if (e is MagiEvent.Condition || e is MagiEvent.Structure) condEdited = true; onEvent(e) }
     LaunchedEffect(ui.running) { if (ui.running) condEdited = false }
+    // 代行役（AX）: 作成の直後に必須違反が残っていれば、勤務の変更だけを自動で当てる（条件と未見の盤面かは VM が判定）。
+    LaunchedEffect(ui.running, ui.engineRan, ui.bestHard, ui.checkRev) { vm.maybeRunAgent() }
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
@@ -507,6 +510,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (!visible) scope.launch { sc.animateScrollTo(top) }
     }
     val editScrolls = List(3) { rememberScrollState() }
+    // 下部のタブは下へ送ると縮み、上へ戻すか先頭で広がる（iOS 26 のタブバーと同じ動き。ガラスは使わない＝UD の不透明）。
+    var navCollapsed by remember { mutableStateOf(false) }
+    val pageScroll = if (tab == 2) editScrolls[editScope.coerceIn(0, 2)] else tabScrolls[tab.coerceIn(0, 4)]
+    LaunchedEffect(pageScroll) {
+        var last = pageScroll.value
+        snapshotFlow { pageScroll.value }.collect { v ->
+            navCollapsed = navCollapseNext(navCollapsed, last, v)
+            last = v
+        }
+    }
     // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは月次条件の先頭。
     val openEditLanding: (EditLanding?) -> Unit = { l ->
         tab = 2
@@ -627,7 +640,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         shortShifts = remember(ui, conditionsView) { shortShiftCount(ui, conditionsView) }),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
         ranBeforeEdit = ui.hasResult && (ui.ranBeforeEdit || condEdited), running = ui.running)
-    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
+    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching || ui.agentRunning, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
@@ -637,12 +650,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList)
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList,
+                        hideMake = tab == 0 && homeCardShowsMake(ui.running, ui.fixSearching, ui.hasResult, ui.draftStage && ui.engineRan, ui.coverageDiag?.allInfeasible == true))
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
                 }
-                MagiBottomNav(tab) { tab = it }
+                MagiBottomNav(tab, collapsed = navCollapsed, onExpand = { navCollapsed = false }) { tab = it; navCollapsed = false }
             }
         },
         // [3.400.0] 成功と失敗を同じ見た目で出さない（失敗はエラー色）。色は既に SettingIssuesCard 等が
@@ -669,7 +683,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    TextButton(onClick = {
+                    MagiTextButton(onClick = {
                         editReturn = null
                         when (ret.origin) {
                             EditReturn.PRE_RUN -> { tab = 0; vm.reopenPreRun() }
@@ -724,7 +738,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
+                    // 代行の記録は主カードの先頭（別のカードにしない＝ホームのカードを 1 枚減らす）。
                     OperatorNextActionCard(
+                        inner = { AgentCard(ui, relaxFound = vm.relaxTrialFor() != null, onUndo = { vm.undoAgent() }, bare = true) },
                         stateOf = { vm.state },
                         onRetrySave = { vm.retrySave() },
                         ui = ui,
@@ -772,6 +788,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.696.0] 診断の束は実行中は出さない＝いま置き換えている前の盤面の説明で、途中経過の下に 5 画面分伸びていた
                     //   （端末報告「縦に長すぎる」）。終われば新しい盤面の診断として戻る。
                     if (!ui.running) {
+                    // 原因の診断 5 枚は 1 つに畳む（縦に長すぎた）。操作の要る設定ミスは外に残す。
+                    val diagCount = homeDiagnosisCount(ui)
+                    var diagOpen by rememberSaveable { mutableStateOf(false) }
+                    if (diagCount > 0) MagiTextButton(onClick = { diagOpen = !diagOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(if (diagOpen) "原因の診断 ▾" else "原因の診断（${diagCount}件） ▸")
+                    }
+                    if (diagOpen) {
                     CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },
                         onEditWishes = { tab = 2; editScope = 0 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
@@ -783,6 +806,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.325.0] 回数固定の横断集計は c1 固有でないので独立カードへ分離（c1=0 でも出る）。
                     PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
+                    }
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) },
                         onGoEdit = goEditForIssue,
                         onClearWishes = { vm.clearOutOfScopeWishes() }, wishClearCount = vm.wishOutOfScopeCount())
@@ -873,12 +897,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
                             EditHeaderCard(ui, editPlan, editWish.noInput, onOpenWish = { wishScrollKey++ }, onOpenNeed = { needScrollKey++ },
-                                onWishConflicts = { wishConflicts = true })
-                            MonthPickerCard(ui, onEvent)
+                                onWishConflicts = { wishConflicts = true },
+                                inner = { MonthPickerCard(ui, onEvent, bare = true) })
                             val period = editPeriodNow
                             val wishNow = resolvePick(wishPick, ui.staffNames, period)
                             val needNow = resolvePick(needPick, ui.shiftSymbols, period)
-                            WishCard(ui, conditionsView, onEditEvent, scrollKey = wishScrollKey, onShowConflicts = { wishConflicts = true },
+                            WishCard(ui, conditionsView, onEditEvent, scrollKey = wishScrollKey,
+                                onShowConflicts = { wishConflicts = true }.takeIf { editPlan.secondary != EditHeaderSecondary.WISH_CONFLICTS },   // 見出しカードが同じ行き先を出す段では置かない
                                 staffSel = wishNow.index, onStaffSel = { wishPick = pickAt(wishPick, ui.staffNames, period, it) },
                                 daysSel = wishNow.days, onDaysSel = { wishPick = pickDays(wishPick, ui.staffNames, period, it) },
                                 initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, initialDay = deepLinkDay.takeIf { it >= 0 && deepLinkWishStaff >= 0 },
@@ -887,8 +912,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 shiftSel = needNow.index, onShiftSel = { s -> needPick = pickAt(needPick, ui.shiftSymbols, period, s) },
                                 daysSel = needNow.days, onDaysSel = { d -> needPick = pickDays(needPick, ui.shiftSymbols, period, d) },
                                 initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, initialDay = deepLinkDay.takeIf { d -> d >= 0 && deepLinkNeedShift >= 0 },
-                                onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 }) }
-                            NeedDayCard(ui, conditionsView, onEditEvent)
+                                onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 },
+                                inner = { NeedDayCard(ui, conditionsView, onEditEvent, bare = true) }) }
                         }
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
@@ -903,8 +928,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
                             ReviewMemoCard(ui, onEvent)
                             // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
-                            ScopeHeaderCard(editPlan, onPrimary = { deepLinkEditSection = "yr_ws1" })
-                            StaffingRealityCard(ui, conditionsView)
+                            ScopeHeaderCard(editPlan, onPrimary = { deepLinkEditSection = "yr_ws1" }, inner = { StaffingRealityCard(ui, conditionsView, bare = true) })
                             // [E6案A] 長大スクロールを畳んで削減。[3.720.0 3c-3] ①も既定で畳む（見出しカードの「基本設定を開く」で開く）。
                             // 編集画面はデータを引数で受け取るようになったので `key(ui.editRev)` の包みは全廃した
                             //   （3.190.0〜3.515.2 の再構成保証は「生の vm 読取」への対処だった）。editRev 自体は
@@ -984,8 +1008,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },
-                        leftHand = leftHand, onLeftHand = { leftHand = it })
-                    ShiftColorCard(ui, vm.shiftColorList(), onEvent)
+                        leftHand = leftHand, onLeftHand = { leftHand = it },
+                        inner = { ShiftColorCard(ui, vm.shiftColorList(), onEvent, bare = true) })
                     // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
                     //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
                     //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。
@@ -1220,7 +1244,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             AlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
                 title = { Text("担当外の希望を含めますか？") },
-                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。\n含めて反映すると、その ${wishConfirm} 件は担当外の勤務として入り、必須違反として数えます。「担当内だけ反映する」ならその ${wishConfirm} 件は入れません。どちらも「元に戻す」で戻せます。") },
+                text = { Text("担当外の希望が ${wishConfirm} 件あります。\n含めると担当外の勤務として入り、必須違反になります。「担当内だけ反映する」なら入れません。どちらも元に戻せます。") },
                 // [3.398.0] 旧版は「含めて反映」「担当内のみ反映」の2つで、**どちらを押しても勤務表が変わる**のに
                 //   取消のボタンが1つも無かった（外側タップ/戻るでしか抜けられない）。しかも取消の位置
                 //   (dismissButton) に反映が置かれ、押し間違いがそのまま変更になる。すぐ上のCSVダイアログは
@@ -1253,7 +1277,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
         val statusLine = if (ui.loaded && !ui.running) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
         val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
         val saveWordView: @Composable () -> Unit = {
-            if (saveWord != null) TextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+            if (saveWord != null) MagiTextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
                 Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
@@ -1295,7 +1319,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
+                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
@@ -1303,12 +1327,12 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     // 必須 0 でも要調整が残る＝「配布可」と言い切らず、配布前の確認へ案内する（2026-10-14 利用者レビュー）。
                     Surface(onClick = onPreDist, color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
+                            Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
                 } else Surface(color = bg, shape = MaterialTheme.shapes.small) {
-                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale),
+                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
@@ -1338,13 +1362,13 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
         // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
         //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
         //   `ui.running` に限定**されており、探索中は止める手段が画面上に一つも無かった。
-        ui.running || ui.fixSearching -> {
+        ui.running || ui.fixSearching || ui.agentRunning -> {
             val stopContent: @Composable RowScope.() -> Unit = {
                 if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
                 Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             }
             val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
-            // 作成直後の自動探索（fixSearching）はホームの主カードの文字ボタンで止める＝下部バーは外枠のまま（INV-09）。
+            // 作成直後の自動探索（fixSearching）を止めるのはここだけ（ホームのカードに同じボタンを置かない）。塗りは主カードに譲る（INV-09）。
             if (secondary && !ui.running) OutlinedButton(onClick = { vm.stop() }, modifier = m, contentPadding = pad, content = stopContent)
             else Button(onClick = { vm.stop() }, modifier = m, contentPadding = pad,
                 colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer), content = stopContent)
@@ -1380,7 +1404,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
 }
 
 @Composable
-internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false, onShowList: () -> Unit = {}) {
+internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false, onShowList: () -> Unit = {}, hideMake: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
     // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
@@ -1410,7 +1434,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
+            if (hideMake) Spacer(Modifier.weight(1f)) else PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
         }
         }
     }
@@ -1418,7 +1442,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
 
 
 @Composable
-internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
+internal fun MagiBottomNav(selected: Int, collapsed: Boolean = false, onExpand: () -> Unit = {}, onSelect: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val items = listOf(
         Triple("ホーム", Icons.Filled.Home, "ホーム"),
@@ -1431,16 +1455,29 @@ internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
     val itemColors = NavigationBarItemDefaults.colors(
         indicatorColor = cs.primaryContainer, selectedIconColor = cs.onPrimaryContainer, selectedTextColor = cs.primary,
     )
-    NavigationBar {
-        items.forEachIndexed { i, item ->
-            NavigationBarItem(
-                selected = selected == i,
-                onClick = { onSelect(i) },
-                icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
-                label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
-                alwaysShowLabel = true,
-                colors = itemColors,
-            )
+    // 画面の端から浮かせた角丸の帯（不透明・境界線で分ける＝影を使わない）。縮むと今のタブだけの小さな帯になり、押すと広がる。
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Surface(color = cs.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge, border = BorderStroke(1.dp, cs.outlineVariant),
+            modifier = if (collapsed) Modifier else Modifier.fillMaxWidth()) {
+            if (collapsed) {
+                val item = items[selected.coerceIn(0, items.lastIndex)]
+                Row(Modifier.clickable(onClickLabel = "タブを広げる", onClick = onExpand).heightIn(min = 48.dp).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(item.second, contentDescription = null, tint = cs.primary)
+                    Text(item.first, style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                }
+            } else NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
+                items.forEachIndexed { i, item ->
+                    NavigationBarItem(
+                        selected = selected == i,
+                        onClick = { onSelect(i) },
+                        icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
+                        label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
+                        alwaysShowLabel = true,
+                        colors = itemColors,
+                    )
+                }
+            }
         }
     }
 }
@@ -1460,7 +1497,7 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onRerun, enabled = ui.loaded,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("再作成") }
-                OutlinedButton(onClick = onDismiss,
+                MagiTextButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
         }
@@ -1475,11 +1512,11 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("取込が完了しました（職員 ${staff}名・${days}日）", style = MaterialTheme.typography.titleMedium)
-            Text("担当できるシフトはどのグループもすべて可、必要人数と制約は未設定のまま取り込みました。編集タブの「年間マスター」で人数と制約を決めましょう。",
+            Text("担当はすべて可、必要人数と制約は未設定で取り込みました。年間マスターで決めてください。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("年間マスターを開く") }
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+                MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
         }
     }

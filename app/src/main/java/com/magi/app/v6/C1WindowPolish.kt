@@ -60,16 +60,12 @@ internal object C1WindowPolish {
         schedule: Array<IntArray>,
         cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
         shouldStop: () -> Boolean = { false },
-        // [C1 重複窓の連結成分化/測定中] 既定 false = 旧経路そのまま（1件の違反を起点にパディング）。
-        //   true にすると analyze() の代わりに components() で近接・重複窓を束ね、solveComponent へ渡す。
-        useComponents: Boolean = false,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         var solved = 0
@@ -112,7 +108,7 @@ internal object C1WindowPolish {
             if (res.patch.any { op -> op[2] != work[op[0]][op[1]] && p.extBanned(op[0], op[1], op[2]) }) return
             val workBefore = work.copy2D()
             for (op in res.patch) work[op[0]][op[1]] = op[2]
-            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+            val rep = UnifiedViolationChecker.check(state, work)
             // [3.321.0] このパスだけ却下理由をまったく残しておらず、ログは applied==0 のとき
             //   一律「頭打ち=改善手なし」としか言えなかった（patch が出て却下されても同じ文言）。
             //   他の研磨パスと同じ RejectCulpritStats で分類する。
@@ -125,32 +121,15 @@ internal object C1WindowPolish {
                 for (mi in work.indices) work[mi] = workBefore[mi]
             }
         }
-        if (useComponents) {
-            // [C1 重複窓の連結成分化/測定中] 重複除去キーは comp.staff/comp.start/comp.end（analyze 経路の
-            //   staff/shift/startD の代わり）。components() は同一 staff 内で重ならない区間しか作らないため
-            //   本来は不要な保険だが、他パスと同じ「起点ごとに1回」の形を揃えておく。
-            val seenComp = HashSet<String>()
-            for (comp in C1RepairAnalysis.components(p, work, cfg)) {
-                if (shouldStop()) break
-                if (!seenComp.add("${comp.staff}|${comp.start}|${comp.end}")) continue
-                val span = minOf(cfg.maxWindowDays, p.T)
-                val startD = comp.start.coerceAtMost(p.T - span).coerceAtLeast(0)
-                val days = (startD until startD + span).toList()
-                val key = compSpanKey(comp.staff, comp.start, comp.end, days)
-                if (key in deadSpans) continue
-                applyResult(C1RepairAnalysis.solveComponent(p, work, comp, cfg), key)
-            }
-        } else {
-            for (v in C1RepairAnalysis.analyze(p, work)) {
-                if (shouldStop()) break
-                val span = minOf(cfg.maxWindowDays, p.T)
-                val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
-                if (!seenFocus.add("${v.staff}|${v.shift}|$startD")) continue
-                val days = (startD until startD + span).toList()
-                val key = spanKey(v.staff, v.shift, days)
-                if (key in deadSpans) continue
-                applyResult(C1RepairAnalysis.solveWindow(p, work, v, cfg), key)
-            }
+        for (v in C1RepairAnalysis.analyze(p, work)) {
+            if (shouldStop()) break
+            val span = minOf(cfg.maxWindowDays, p.T)
+            val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
+            if (!seenFocus.add("${v.staff}|${v.shift}|$startD")) continue
+            val days = (startD until startD + span).toList()
+            val key = spanKey(v.staff, v.shift, days)
+            if (key in deadSpans) continue
+            applyResult(C1RepairAnalysis.solveWindow(p, work, v, cfg), key)
         }
         val c1b = before.breakdown["c1"] ?: 0
         val c1a = bestRep.breakdown["c1"] ?: 0
@@ -184,13 +163,12 @@ internal object C1WindowPolish {
     fun applyC1IndexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "C1IndexRepair", message = "c1対象なし=スキップ")), report = before)
@@ -237,7 +215,7 @@ internal object C1WindowPolish {
                     val trial = work.copy2D()
                     trial[staff][d] = shift
                     // (a) 直接移動のみで改善（旧シフトに余裕がある場合）。
-                    val repDirect = UnifiedViolationChecker.check(state, trial, quantitativeRangeEval)
+                    val repDirect = UnifiedViolationChecker.check(state, trial)
                     if (adoptionGate(p, work, trial, repDirect, bestRep, pinBlocks).accepted) {
                         work = trial; bestRep = repDirect; applied++; adopted = true; break@windowLoop
                     }
@@ -247,7 +225,7 @@ internal object C1WindowPolish {
                         val chain = findCovUChain(p, trial, old, d, rng, exclude = staff)
                         if (chain != null && chain.none { p.extBanned(it[0], it[1], it[2]) }) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
-                            val repChain = UnifiedViolationChecker.check(state, trial, quantitativeRangeEval)
+                            val repChain = UnifiedViolationChecker.check(state, trial)
                             if (adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
                                 work = trial; bestRep = repChain; applied++; chainUsed++; adopted = true; break@windowLoop
                             }
@@ -297,39 +275,15 @@ internal object C1WindowPolish {
      * 採否は既存と同じ betterReport(hard→weighted→total) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
      * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
-    /**
-     * 手A の交換直後の盤面で、i2 の a@j・i の x@j が禁止連続(c3n)を作っていれば隣接日の付け替えで崩す手を返す
-     * （盤面は変えない）。崩す必要がない・崩せないときは null＝呼び出し側は素の交換を判定する。
-     * c3w は当日セル自身の静的禁止なので隣接日では崩れず、ここでは扱わない（makesForbiddenRun が true のまま→null）。
-     */
-    internal fun moveARepairChain(p: Problem, work: Array<IntArray>, i: Int, i2: Int, j: Int, x: Int, a: Int, rng: Random): List<IntArray>? {
-        val out = ArrayList<IntArray>()
-        val saved = ArrayList<IntArray>()
-        try {
-            for ((s, sh) in listOf(i2 to a, i to x)) {
-                if (sh !in 0 until p.K || !p.makesForbiddenRun(work, s, j, sh)) continue
-                if (p.c3wBanned(s, j, sh)) return null
-                val f = tryFixForbiddenRunViaAdjacentDay(p, work, s, j, sh, rng) ?: return null
-                if (f.any { it[1] == j || p.extBanned(it[0], it[1], it[2]) }) return null
-                for (mv in f) { saved.add(intArrayOf(mv[0], mv[1], work[mv[0]][mv[1]])); work[mv[0]][mv[1]] = mv[2] }
-                out.addAll(f)
-            }
-            return out.ifEmpty { null }
-        } finally {
-            for (idx in saved.indices.reversed()) work[saved[idx][0]][saved[idx][1]] = saved[idx][2]
-        }
-    }
-
-    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         var aRect = 0; var aSelf = 0
-        var mvaTried = 0; var mvaAccepted = 0
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
                 listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")), report = bestRep)
@@ -388,7 +342,7 @@ internal object C1WindowPolish {
             //   1セル=重み降順の全クラスリスト、weight-priorityで discard しない）に切替えれば漏れなく検出
             //   できる。起点集合が広がるだけ(既存の起点は cellFamilies にも必ず含まれる=violationsの
             //   最重クラスはcellFamiliesの先頭要素と同一)なので後方互換・退化なし。
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
             val anchorStaff = HashSet<Int>()
             for ((key, fams) in rep0.cellFamilies) {
                 if ("vio-c1" in fams) anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
@@ -434,16 +388,11 @@ internal object C1WindowPolish {
                         for (i2 in 0 until p.S) {
                             if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a) || p.extBanned(i2, j, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
-                            val fix = if (PolishGate.c1MoveARepair) moveARepairChain(p, work, i, i2, j, x, a, rng) else null
-                            val fixOld = fix?.let { f -> IntArray(f.size) { work[f[it][0]][f[it][1]] } }
-                            fix?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                            if (fix != null) mvaTried++
-                            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                            val rep = UnifiedViolationChecker.check(state, work)
                             val pinBadA = exactPinRegression(p, workBeforeDay, work)
                             if (pinBadA && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeDay, work)
                             if (betterReport(rep, bestRep) && !pinBadA) {
                                 bestRep = rep; applied++; improved = true; done = true
-                                if (fix != null) mvaAccepted++
                                 break
                             }
                             // [3.324.0/外部レビュー] 旧実装は手Aのピン却下を黙って巻き戻すだけで数えておらず、
@@ -455,7 +404,6 @@ internal object C1WindowPolish {
                             //   どちらも i2 ごと＝同じ粒度なので、対称に数える。
                             if (betterReport(rep, bestRep) && pinBadA) recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_PIN)
                             else recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_SCORE, after = rep, before = bestRep)
-                            if (fix != null && fixOld != null) for (idx in fix.indices.reversed()) work[fix[idx][0]][fix[idx][1]] = fixOld[idx]
                             work[i][j] = a; work[i2][j] = x                 // 巻き戻し
                         }
                         if (done) { donorsCache = null; continue }
@@ -481,7 +429,7 @@ internal object C1WindowPolish {
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x) ||
                                     p.makesForbiddenRun(work, i2, j1, x) || p.makesForbiddenRun(work, i2, j, a)
                                 if (!bad3n) {
-                                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                                    val rep = UnifiedViolationChecker.check(state, work)
                                     if (betterReport(rep, bestRep)) {
                                         bestRep = rep; applied++; aRect++; improved = true; done = true
                                         donorsCache = null
@@ -514,7 +462,7 @@ internal object C1WindowPolish {
                                 work[i][j1] = a; work[i][j] = x
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x)
                                 if (!bad3n) {
-                                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                                    val rep = UnifiedViolationChecker.check(state, work)
                                     if (betterReport(rep, bestRep)) {
                                         bestRep = rep; applied++; aSelf++; improved = true; done = true; donorsCache = null
                                     }
@@ -536,7 +484,7 @@ internal object C1WindowPolish {
                             ?.takeIf { ch -> ch.none { p.extBanned(it[0], it[1], it[2]) } }   // 禁止を含む連鎖は無し扱い
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                        val rep = UnifiedViolationChecker.check(state, work)
                         if (adoptionGate(p, workBeforeDay, work, rep, bestRep, pinBlocks).accepted) {
                             bestRep = rep; applied++; improved = true
                             donorsCache = null
@@ -613,7 +561,7 @@ internal object C1WindowPolish {
                 if (bestGain > 0) {
                     val a = work[i][bestJo]
                     work[i][bestJx] = a; work[i][bestJo] = x
-                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                    val rep = UnifiedViolationChecker.check(state, work)
                     if (betterReport(rep, bestRep)) {
                         bestRep = rep; applied++; aRepack++
                     } else {
@@ -681,8 +629,7 @@ internal object C1WindowPolish {
             message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf 再配置:$aRepack)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
-                (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "") +
-                (if (PolishGate.c1MoveARepair) " 手A禁止連続修復:試行${mvaTried}/採用${mvaAccepted}" else "")))
+                (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "")))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
@@ -750,7 +697,6 @@ internal object C1WindowPolish {
     fun applyC1BeamPolish(
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, patience: Int = 20,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.375.0/ユーザー指示「停滞脱出のログにイテ回数と時間を出す」] 停滞打ち切りの所要時間。
         //   旧: 「steps=22/最良が20手更新されず打ち切り」と手数だけで、その空振りが一瞬なのか
@@ -758,9 +704,9 @@ internal object C1WindowPolish {
         val beamT0 = EngineClock.nowMs()
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work0 = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work0, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work0)
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work0, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")), report = before)
@@ -811,7 +757,6 @@ internal object C1WindowPolish {
             return w
         }
 
-        val prefilter = PolishGate.hardDeltaPrefilter
         var beam = listOf(Beam(work0, before, 0))
         // [3.340.0] 探索中に見つけた最良を保持する（最終ビームは観測列に含まれるので退化不能）。
         var bestEver: Beam? = null
@@ -829,8 +774,8 @@ internal object C1WindowPolish {
                     if (shouldStop()) break
                     val x = p.cons1[ci].shiftIdx
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
-                    if (prefilter && b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
-                    val rep2 = UnifiedViolationChecker.check(state, w2, quantitativeRangeEval)
+                    if (b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
+                    val rep2 = UnifiedViolationChecker.check(state, w2)
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))
                     anyExpanded = true

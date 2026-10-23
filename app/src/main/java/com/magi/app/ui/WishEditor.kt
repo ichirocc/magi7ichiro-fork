@@ -34,7 +34,6 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -137,7 +136,7 @@ internal fun WishCard(
             // [3.707.0 3b-2] この職員のぶつかっている希望（先頭の 1 件の日を添える、件数は出さない）。
             val conflict = remember(ui, i) { wishTrialCandidates(ui).let { c -> c.direct.firstOrNull { it.staff == i } ?: c.shortfall.flatMap { it.rows }.firstOrNull { it.staff == i } } }
             if (conflict != null && onShowConflicts != null) {
-                TextButton(onClick = onShowConflicts, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishConflictLinkText(DayText.short(ui.startDate, conflict.day))) }
+                MagiTextButton(onClick = onShowConflicts, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishConflictLinkText(DayText.short(ui.startDate, conflict.day))) }
             }
             MonthHeaderStatic(ui.startDate)
             WishMonthGrid(
@@ -250,7 +249,7 @@ private fun WishApplyPanel(
         ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
         if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
         if (others.isNotEmpty()) {
-            TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
+            MagiTextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
         }
         if (selK !in allowed) {
             Text(wishOutOfScopeNote(shifts.getOrNull(selK) ?: "", ui.staffNames.getOrElse(staffIdx) { "" }),
@@ -264,8 +263,8 @@ private fun WishApplyPanel(
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text(wishApplyButton(usable.size, shifts.getOrNull(selK) ?: "")) }
         }
-        TextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
-            colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+        MagiTextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
+            contentColor = cs.error,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の希望を消す（${clearable.size}件）") }
     }
     if (confirmClear) {

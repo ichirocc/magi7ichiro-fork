@@ -35,14 +35,12 @@ internal object DayAssignmentPolish {
      */
     fun applyDayAssignmentPolish(
         state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
-        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         // [3.509.2] 適切回数(apt)目標は Problem.apt（実効目標＝担当可ゲート・到達クランプ・D9 の個人設定除外込み）。
@@ -60,10 +58,7 @@ internal object DayAssignmentPolish {
                 val i = free[r]
                 LongArray(n) { c ->
                     val k = slots[c]
-                    // [3.597.0/backlog#30] 対角(c==r)は「自分の現シフトを保つ」＝盤面を変えないので常に選べる。
-                    //   有限にすると恒等割当が必ず実行可能になり、置けないスロットがある日も残りを研磨できる。
-                    val ownSlot = identityFallback && c == r
-                    if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                    if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                     else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                     else if (k !in 0 until p.K) 0L
                     else {
@@ -91,7 +86,7 @@ internal object DayAssignmentPolish {
                 if (cand[i][j] != k) { cand[i][j] = k; changed = true }
             }
             if (!changed) continue
-            val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
+            val rep = UnifiedViolationChecker.check(state, cand)
             // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
             //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
             if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) { work = cand; bestRep = rep; counts = cnt(); applied++ }
@@ -118,14 +113,12 @@ internal object DayAssignmentPolish {
      */
     fun applyAlternatingSoftPolish(
         state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
-        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
         fun aptTarget(i: Int, k: Int): Int? = p.apt[i][k].takeIf { it >= 0 }   // [3.509.2] 上と同じく実効目標
@@ -155,8 +148,7 @@ internal object DayAssignmentPolish {
                     val i = free[r]
                     LongArray(n) { c ->
                         val k = slots[c]
-                        val ownSlot = identityFallback && c == r   // [3.597.0] 上と同じ＝現状維持は常に選べる
-                        if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                        if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                         else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                         else if (k !in 0 until p.K) 0L
                         else {
@@ -195,7 +187,7 @@ internal object DayAssignmentPolish {
                     if (cand[i][j] != k) { cand[i][j] = k; changed = true }
                 }
                 if (!changed) continue
-                val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
+                val rep = UnifiedViolationChecker.check(state, cand)
                 // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
                 //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
                 if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) {

@@ -145,11 +145,10 @@ object ViolationComponentRepair {
         pool: List<CombinatorialRepair.Candidate>,
         params: Params = Params(),
         shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         val pinBlocks = PinBlockAttribution()
         var applied = 0
@@ -274,7 +273,7 @@ object ViolationComponentRepair {
                     val pinBad: Boolean
                     try {
                         for (op in ops) work[op[0]][op[1]] = op[2]
-                        rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                        rep = UnifiedViolationChecker.check(state, work)
                         val improves = betterReport(rep, bestRep)
                         pinBad = improves && exactPinRegression(p, base, work)
                         if (pinBad) pinBlocks.record(p, base, work)

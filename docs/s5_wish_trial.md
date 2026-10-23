@@ -114,7 +114,7 @@
 - 測った代替案（採らない）: VCR＋後処理は過小を 8→3 に減らすが、後処理は締切で止まる＝端末の負荷で数が変わり、止めどころが締切しかなく、
   1 行 3 秒かかる。0 の行も確定ボタンを残す（§5）ので、過小の害は案内の質にとどまる。実機で 0 の行が多いと分かったら「詳しく試算」として足す。
 - **呼び出しは定数で固定**: `ViolationComponentRepair.repair(st, clear(st,B), pool = emptyList(), params = Params())`、
-  quantitativeRangeEval＝false、`shouldStop = { !isActive }` だけ。PolishGate・残り時間・停滞から導かない（本実行の VCR は拒否候補プールと
+  `shouldStop = { !isActive }` だけ。PolishGate・残り時間・停滞から導かない（本実行の VCR は拒否候補プールと
   時間で広げた Params を使うが、試算はそれを真似ない）。C# も同じ定数（C# の VCR は既定の Params だけを持つ＝同値）。
 - VCR の注意: `depth==1 && est==baseEst` の単独候補は評価しない。未割当（-1）セルがあると何もしない（I10）。族の入れ替えを禁じない。
 

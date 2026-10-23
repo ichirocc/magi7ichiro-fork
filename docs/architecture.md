@@ -184,6 +184,7 @@ ViewModel ハブ
   Delta は差分評価。`SaOptimizer` が Delta×Full の整合チェック（安全網）を行うため**両者は常に一致させる**。
 - `C3Run.kt` — `isSingleShiftSeq(seq)`, `rowDeficit(a,i,k,L)`（単一シフト連の不足評価）。
 - `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
+- `EngineConfig.kt` — 1 回の実行で使うエンジン設定。`handleOptimize` の入口で `PolishGate` から 1 回だけ写す（全面改修 P2、項目は段階的に移す）。
   最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
 - `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
 - `RestZeroWindowLns.kt` — **休0日の窓LNS**（3.555.0、既定 OFF＝`PostOptimizationParams.restZeroWindowLnsEnabled`）。休の必要人数を明示した日に
@@ -202,6 +203,7 @@ ViewModel ハブ
   単セル covU 修正が LNS の余地を先に使い実データで HARD 退行）。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
   10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
+- `AgentLoop.kt` — 代行役（AX）の輪。`FixSuggester` の案を `FixApplyGate` に通し、合格した先頭を当てて探し直す（勤務の変更だけ・入力不変）。画面側は `MagiViewModel.maybeRunAgent`・`AgentCard`・`AgentText.kt`。
 - `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。
 
 UI は `app/src/main/java/com/magi/app/ui/`:

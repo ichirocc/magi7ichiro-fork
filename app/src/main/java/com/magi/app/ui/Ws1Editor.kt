@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -103,7 +103,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
             // use2 は画面に出さない（保存値はそのまま）
-            Divider()
+            HorizontalDivider()
 
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
@@ -132,7 +132,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             }
             AddRowButton("シフトを追加する", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
             AddRowButton("まとめて追加する", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
-            Divider()
+            HorizontalDivider()
 
             // --- groups ---
             Spacer(Modifier.height(8.dp))
@@ -150,7 +150,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 }
             }
             AddRowButton("グループを追加する", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
-            Divider()
+            HorizontalDivider()
 
             // [3.482.0 編集タブ簡素化] 旧「職員」節（氏名/所属の一覧・追加・一括追加・削除）は撤去し、
             //   職員管理ドア（StaffManageCard）へ一本化した。3.114.0 は「同一 vm API の別ビュー・併存」を選び
@@ -199,7 +199,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val restNote = if (d.k == v.restIdx) "休だった日は自動的に他のシフトへ変わります。" else ""
                 dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + wishNote + restNote)
             }) else null,
-            deleteBlocked = "最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。先に別のシフトを追加すると削除できます。".takeIf { v.shifts.size <= 1 },
+            deleteBlocked = "最後の1シフトは削除できません。先に別のシフトを追加してください。".takeIf { v.shifts.size <= 1 },
             existingKigou = v.shifts.map { it.kigou }, selfIndex = d.k)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "", false,
             { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null },
@@ -214,7 +214,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
             }) else null,
-            deleteBlocked = "最後の1グループは削除できません（担当可否の分類が無くなるため）。先に別のグループを追加すると削除できます。".takeIf { v.groups.size <= 1 },
+            deleteBlocked = "最後の1グループは削除できません。先に別のグループを追加してください。".takeIf { v.groups.size <= 1 },
             existingKigou = v.groups.map { it.kigou }, selfIndex = d.g)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null },

@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -94,7 +94,7 @@ internal fun ConstraintsCard(
                 }
                 // [3.483.0 E-10] 並び系は起点チップごとに「＋」があるため、末尾の「追加」は「新しい起点で追加」と区別。
                 AddRowButton(if (fam.key.startsWith("cons3") && fam.key != "cons3w") "新しい起点で追加する" else "追加する", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
-                Divider()
+                HorizontalDivider()
             }
         }
     }
@@ -182,7 +182,7 @@ private fun ConstraintHelpExpander(families: List<ConstraintFamilyView>) {
                 .clickable { open = !open },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (open) "ⓘ 詳しい説明を閉じる" else "ⓘ 詳しい説明（それぞれの条件の意味）",
+            Text(if (open) "ⓘ 詳しい説明 ▾" else "ⓘ 詳しい説明（それぞれの条件の意味） ▸",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         if (open) {
@@ -280,7 +280,7 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
                         }
                     }
                     AddRowButton("追加する", onClick = { addFamily = fam.key }, enabled = !ui.running)
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }

@@ -15,9 +15,9 @@ import kotlin.math.max
  * greedy/simple schedule creation, light local search, and CSV round-trip helpers.
  */
 object GreedyMirrorScheduler {
-    fun generate(state: MagiState, quantitativeRangeEval: Boolean = false): ScheduleRunResult {
+    fun generate(state: MagiState): ScheduleRunResult {
         val t0 = System.nanoTime()
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
         // [3.603.0] 休シフト未設定はここも入口＝ブロックする（V6SanityPortの起動前チェックと同じ判断）。
         val restK = restShiftIndex(state) ?: throw IllegalArgumentException("休みシフトが設定されていません")
@@ -134,7 +134,7 @@ object GreedyMirrorScheduler {
             }
         }
 
-        val report = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval)
+        val report = UnifiedViolationChecker.check(state, schedule)
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
         val log = MirrorLog(
             tag = "GenerateInitial",

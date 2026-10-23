@@ -186,23 +186,16 @@ internal sealed interface MagiEvent {
         data class SetWorkers(val n: Int) : Settings
         data class SetBudget(val sec: Int) : Settings
         data class SetSoftPolish(val on: Boolean) : Settings
+        data class SetAgentAuto(val on: Boolean) : Settings
         data class SetAlgorithm(val algorithm: V6Algorithm) : Settings
         data class SetNativeAccel(val on: Boolean) : Settings
         data class SetNativeParity(val on: Boolean) : Settings
-        data class SetBlockSwapC3nFilter(val on: Boolean) : Settings
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetAptFairToleranceUnguarded(val on: Boolean) : Settings
-        data class SetC1MoveARepair(val on: Boolean) : Settings
         data class SetEjectionChain(val mode: EjectionChainMode) : Settings
-        data class SetEjectionChainSwap(val on: Boolean) : Settings
         data class SetEjectionChainSeconds(val seconds: Int) : Settings
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
-        data class SetEjectionPipelineRounds(val on: Boolean) : Settings
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
-        data class SetEjectionUseLeftover(val on: Boolean) : Settings
-        data class SetC3nWallShortStall(val on: Boolean) : Settings
-        data class SetStallPolishInjection(val on: Boolean) : Settings
-        data class SetLnsAdaptive(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */

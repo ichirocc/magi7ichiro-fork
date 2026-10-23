@@ -45,16 +45,13 @@ internal object WishIslandPolish {
     fun applyWishIslandPolish(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, maxEvaluations: Int = 120,
         beamWidth: Int = 4, beamDepth: Int = 3, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult = applyWishIslandPolish(
         state, schedule, Params(maxPasses = maxPasses, maxEvaluations = maxEvaluations, beamWidth = beamWidth, beamDepth = beamDepth), shouldStop,
-        quantitativeRangeEval,
     )
 
     fun applyWishIslandPolish(
         state: MagiState, schedule: Array<IntArray>, params: Params, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
-    ): V6HotfixPasses.CyclicSwapResult = Session(state, schedule, params, shouldStop, quantitativeRangeEval).run()
+    ): V6HotfixPasses.CyclicSwapResult = Session(state, schedule, params, shouldStop).run()
 
     /** ビーム 1 段で走査する中立手の上限＝保持数の何倍か（[3.502.0]）。評価予算はこれとは別に `maxEvaluations` で頭打ち。 */
     private const val BEAM_SCAN_FACTOR = 2
@@ -79,7 +76,6 @@ internal object WishIslandPolish {
 
     private class Session(
         private val state: MagiState, private val input: Array<IntArray>, params: Params, private val shouldStop: () -> Boolean,
-        private val quantitativeRangeEval: Boolean = false,
     ) {
         /** 不正な設定でも研磨パスが落ちないように下限へ丸める（負の予算＝何もしない、幅 0 のビーム＝幅 1）。 */
         private val prm = params.copy(
@@ -88,9 +84,9 @@ internal object WishIslandPolish {
             minIslandBudget = params.minIslandBudget.coerceAtLeast(1), beamBranchFactor = params.beamBranchFactor.coerceAtLeast(1),
             stuckNamesShown = params.stuckNamesShown.coerceAtLeast(0),
         )
-        private val p = Problem(state, quantitativeRangeEval)
+        private val p = Problem(state)
         private val work = normalizeSchedule(input, p)
-        private val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        private val before = UnifiedViolationChecker.check(state, work)
         private var bestRep = before
         private val T = p.T; private val S = p.S; private val K = p.K
         private val reach = computeReach()
@@ -341,7 +337,7 @@ internal object WishIslandPolish {
                 val pinBad: Boolean
                 val accept: Boolean
                 try {
-                    rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                    rep = UnifiedViolationChecker.check(state, work)
                     val improves = betterReport(rep, bestRep)
                     pinBad = improves && exactPinRegression(p, base, work)
                     if (pinBad) pinBlocks.record(p, base, work)
@@ -418,7 +414,7 @@ internal object WishIslandPolish {
                 if (increasesForbidden(m)) { prunedC3n++; continue }
                 val old = apply(m)
                 try {
-                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                    val rep = UnifiedViolationChecker.check(state, work)
                     evaluated++; beamEvaluated++; scanned++
                     val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
                     if (neutral) { val key = BoardKey(work.copy2D()); if (seenBoards.add(key)) keepBest(next, Node(key.work, rep), depthLimit) }

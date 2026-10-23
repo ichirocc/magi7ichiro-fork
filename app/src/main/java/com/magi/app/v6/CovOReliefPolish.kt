@@ -19,12 +19,11 @@ internal object CovOReliefPolish {
     fun apply(
         state: MagiState, schedule: Array<IntArray>,
         maxMoves: Int = 64, maxEvaluations: Int = 3_000,
-        shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
-        wishPinStrict: Boolean = PolishGate.wishPinStrict,
+        shouldStop: () -> Boolean = { false },
     ): Result {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0; var evaluations = 0
         val adopted = ArrayList<String>()
@@ -51,13 +50,13 @@ internal object CovOReliefPolish {
                     var tried = false
                     for (m in p.allowedShiftsForStaff(i)) {
                         if (m == k || p.extBanned(i, j, m) || p.makesForbiddenRun(work, i, j, m)) continue
-                        if (!p.wishMoveAllowed(i, j, k, m, wishPinStrict)) continue   // 未反映の希望固定セルは希望へだけ
+                        if (!p.wishMoveAllowed(i, j, k, m)) continue   // 未反映の希望固定セルは希望へだけ
                         if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 受け皿なし
                         if (evaluations >= maxEvaluations) break
                         tried = true; evaluations++
                         val base = work.copy2D()
                         work[i][j] = m
-                        val after = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                        val after = UnifiedViolationChecker.check(state, work)
                         val gate = adoptionGate(p, base, work, after, bestAfter ?: bestRep)
                         work[i][j] = k
                         if (gate.accepted) { bestI = i; bestM = m; bestAfter = after }

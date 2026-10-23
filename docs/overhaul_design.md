@@ -332,11 +332,13 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 ### 6.1 P0 安全網（最初のコミット）
 基準版で次の 3 つの期待値を作り、以後のすべてのコミットで一致を確かめます。
 1. `BoardHashFixtureTest`: 6 fixture（`app/src/test/resources/` の `golden_state`・`sample_state_v6`・`blocked_covu_state`・`sept2026_state`・
-   `oct2026_grid_state`・`full_coverage_state`）× seed 3 本で、決定的モードの最終盤面を `StateFingerprint`（`StateFingerprint.kt:26`）でハッシュし、
-   `board_hash.json` と照合する。期待値の作り直しは明示の環境変数でだけ行う。
+   `oct2026_grid_state`・`full_coverage_state`）で、決定的モードの最終盤面を `StateFingerprint`（`StateFingerprint.kt:26`）でハッシュし、
+   `snapshots/board_hash.txt` と照合する。期待値の作り直しは `MAGI_UPDATE_SNAPSHOTS=1` のときだけ。seed は 1 本（決定的モードでは seed が盤面に
+   効かず、seed 1〜3 が全 fixture で同じハッシュだった。3 本では 3 クラスで 66 秒＝増分の上限を超えた）。
 2. `CheckerSnapshotTest`: 全 fixture の入力盤面について、違反リスト（族・職員・日）と breakdown を照合する。
 3. `DiagnosisSnapshotTest`: `V6SanityPort` の診断文の一覧を照合する。
 合格: 2 回続けて同じ値になる（決定性）。ホストテストの増分は 60 秒以内。C# にも同名のテストを置く。
+済み（2026-10-22）: 期待値は main `4e8fe3a` から生成、2 回走行で一致・3 クラスで約 26 秒。C# 側は停止中のため §9.1 の積み残し。
 
 ### 6.2 P1 テストの穴埋め
 | 穴 | 足すテスト | やり方 |
@@ -344,6 +346,10 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 | NativeGate の退化経路 | `NativeGateFallbackTest` | 照合の判定を純関数に切り出し、「不一致なら閉じて Kotlin の結果を使う」を JVM で確かめる |
 | 保存の再試行の配線 | `SaveRetryWiringTest` | 再試行の判定を純関数へ |
 （B-03・M-02・M-01・U-03・L-03 は 3.723.2 で済み。）
+済み（2026-10-22）: 2 層番兵の判定を `NativeGate.chunkConsistent`（1 層目）と `NativeGate.parityMismatch`（2 層目、照合 OFF は素通し）へ
+切り出し、SA・LAHC・ALNS・研磨の 8 か所を置き換えた（閉じる理由の文言は不変）。ホストは `.so` を読めないので、テストは判定・ゲートの閉鎖・
+閉じた後の Kotlin SA の結果がフル評価と一致し入力より悪くないことまで。保存は `SaveFailNotifier.report` が「ダイアログ・通知/ログ・書き直し
+（`retryLater`）」を返し、VM の `reportAutoSave`・`persistNow` はそれを反映するだけ。
 
 ### 6.3 P2 EngineConfig とフラグ整理
 | コミット | 中身 |
@@ -352,6 +358,56 @@ interface ConstraintSpec { val key: String; val hard: Boolean
 | P2b | 停滞・床・壁の系統と、後処理の系統を移す |
 | P2c | 玉突きの系統を移す。`PolishGate` への書き込み口を設定画面だけに絞る |
 | P2d | フラグ整理（§10）。1 件ずつ盤面ハッシュの一致を確かめる |
+
+P2a 済み（2026-10-22）: `EngineConfig`（`normalStallFraction`・`floorCountsUpperZero`）と `EngineConfig.snapshot()`。`handleOptimize(config = snapshot())`
+が入口で 1 回だけ写し、`watchdogBudget`・床の判定はそこから読む。`normalStallMs`/`watchdogBudget` の省略時は PolishGate でなく本番既定。T-6 は `EngineConfigTest`。
+P2b 済み（2026-10-22）: 停滞・床・壁（`c3nWallShortStall`・`floorShortStall`・`c3nWallLegacy`・`c3nWallDeepCheck`・`adaptiveStall`）と後処理
+（`combineExhaustPairs`・`lnsAdaptive`・`aptFairSoftTolerance`・`countChainPolish`）を `EngineConfig` へ。`postParams()` が `PostOptimizationParams` を作り、
+`V6OptimizerOptions.config` で探索側（研磨の注入）にも同じ写しを渡す。エンジン内でこの 9 項目を `PolishGate` から読む箇所は 0。
+P2c 済み（2026-10-22）: 玉突きの 11 項目（4 択の写像・入れ替え・探し直し・必須から・余った時間・秒数・範囲 2 つ）を `EjectionFlags` にまとめ、
+`EngineConfig.ejection` → `PostOptimizationParams.ejection` → パイプライン・従来の玉突き・手直し提案（`FixSuggester.suggest(ejection=)`）へ引数で渡す。
+`EjectionChainPipeline.Config`・`C1EjectionChainPolish.Config` の既定は大域でなく定数。`EjectionChainPipeline` は `EngineConfig` が型を持つため public に。
+書き込み口: エンジン内の書き込みは 0。残るのは設定画面（VM のセッターと `MagiUiState` の強さ・玉突きの適用）と背景 Worker の `PolishGate.restore` だけで、
+restore は P2d で残りのフラグ（`personSwapKick` など、まだ `PolishGate` から読む）を片付けた後に `EngineConfig` の復元へ置き換える。
+P2d で消す 5 本（`hardEjectionChainEarly` など）は移さず `PolishGate` のまま。
+P2d は 4 コミットに分ける: ① 到達不能の玉突き 5 本と測定用の変数（flag_inventory 4 章 B） ② 定着フラグを常に ON（A と決定 1・2・7）
+③ 否決の腕の削除（B′ と決定 3〜5） ④ `quantitativeRangeEval`（決定 6、C++ も同じコミット、C# は §9.1）。各コミットで P0 スナップショット一致。
+P2d-① 済み（2026-10-22）: `hardEjectionChainEarly`・`allEjectionChainEarly`・`allEjectionChainFinal`・`hardEjectionChainRetry`・
+`allEjectionChainAfterRepair` の 4 分岐と宣言・snapshot/restore の鍵、`C1EjectionChainPolish.defaultMaxDepth`/`defaultNarrow`（既定値を定数へ）、
+`EjectionChainScope.NEARBY`（画面に出ていない・保存しない）。LoopBench の 5 腕、ExtWishOptimizeTest の鍵。P0 スナップショット一致。
+P2d-② は ②a エンジン内のフラグ ②b 後処理の引数 ②c `wishPinStrict` ②d 画面のスイッチ に分ける。
+P2d-②a 済み（2026-10-22）: 常に ON にしてフラグを外した＝`rotationDeltaPrescreen`・`roundPassMemo`・`hardDeltaPrefilter`・`lateOpStopPropagation`・
+`ejectionPipelineAfterRepair`（前の置き場所の分岐ごと）・`personSwapKick`（7 役割のローテーション固定）・`floorCountsUpperZero`（床は常に上限0込み）・
+`C1JointLnsPolish.deltaChildEvalDefault`（Config の引数ごと）・`C1EjectionChainPolish.defaultCrossFamily`（v1 の候補生成ごと）・`FixSuggester.restoreWishLocked`。
+OFF 比較のテストは ON の経路の検証（再現性・正式評価との一致・HARD を増やさない）へ書き換え、`PersonSwapBench`・`WasteRemovalProbe` と OFF 腕を削除。P0 スナップショット一致。
+P2d-②b 済み（2026-10-22）: `PostOptimizationParams` の `componentRepairEnabled`・`componentRepairFinal`・`covOReliefEnabled`・`postChainRunningKeepBest`
+（`PostChain` の引数ごと）・`lnsAdaptive`（`PolishGate`・`EngineConfig`・UI の非表示イベントとセッター・「設定の効き」の語ごと）を外した。
+`PostOptimizationParams()` を素で作るベンチ・テストも本番と同じ共同 LNS の自動調整になる（§10 の注意）。P0 の盤面ハッシュはこれで変わらない
+（基準版 `4e8fe3a` で lnsAdaptive=true にして作り直した期待値が md5 で同一＝作り直し不要を確認）。LoopBench の既定比較は廃止（機能名の指定が必須）。
+P2d-②c 済み（2026-10-22）: `wishPinStrict`（規則 A、利用者決定 2026-09-25）を常時に。`Problem.wishMoveAllowed`・`keepsWishPins` の `strict` 引数と、
+7 ファイル（V6NativeOptimizer・HardRepairCore・RsiHypothesisOperators・EliteIntegrationPolish・EliteRelinking・CovOReliefPolish・V6PortAnalyzer）の
+`wishPinStrict` 引数を外した。`WishPinStrictTest`・`ManualPinTest`・`V6PortAnalyzerTest` の旧挙動（OFF）の比較は削除し、ON の検査だけ残す。P0 スナップショット一致。
+P2d-②d 済み（2026-10-22、決定 1・A）: 画面のスイッチ 4 つを外した＝定着の「入れ替えも1手として使う」（`ejectionChainSwapMoves`、`C1EjectionChainPolish.Config.swapMoves` ごと常時）・
+「採れたら探し直す」（`ejectionPipelineRounds`、`EjectionChainPipeline.Config.repeatRounds` ごと常時）、否決の「余った時間も玉突きに使う」（`ejectionUseLeftover`）・
+「禁止の並びだけ残ったら早めに切り上げる」（`c3nWallShortStall`）。後者で到達しなくなった `c3nWallLegacy`・`c3nWallProven()`・`C3nWallProof.legacy()` も削除
+（`c3nWallDeepCheck` は残存診断 `diagnoseBoard` から届くので残す。純関数 `effectiveStallMs` の壁の引数は仕様テストのため据え置き、本番は false を渡す。
+`C3nWallProof.bound()` はテストからだけ呼ばれる＝③で片付ける）。非表示の `blockSwapC3nFilter`（`filterC3nIncrease`）は常時にしてイベント・セッター・状態ごと削除、
+「設定の開始時」の事前フィルタは常に ON と出す。UI の状態・イベント・ハンドラ・説明文の定数も削除。P0 スナップショット一致・影響クラス 81 件合格。
+P2d-③ 済み（2026-10-22、決定 2〜5）: 否決・測定用の腕をコードごと削除＝研磨 7 ファイル（`SoftCascadePolish`・`PrePostDescent`・`C2Polish`・`C42FlowPolish`・
+`C3nMarginLnsPolish`・`RestZeroWindowLns`・`StallPolishInjection`）とそのテスト、`c1MoveARepair`（手A の禁止連続修復）、`adaptiveStall`（適応閾値と改善間隔の記録）、
+`postChainRollbackCountsZero`、`rsiFocusRotationPersist`（Hf63 の持続カウンタ）、`c1ComponentRepair`（`exactWindow(useComponents)` の成分経路。`components()`・
+`solveComponent` は単独窓修復と分析テストが使うので残す）、`fairAchievementDirection`、`dayAssignIdentityFallback`、各 `Reactivate` と `targetFamiliesRemain`、
+UI の非表示イベント・セッター・状態 2 つ（`c1MoveARepair`・`stallPolishInjection`）、`PortfolioBudgetBench`。`countChainEnabled`（じっくり）は残す。
+戻すときはこの直前のコミットから取り出す。P0 スナップショット一致・影響クラス 62 件合格。残り: `C3nWallProof.bound()` 系（②d で本番から外れた）は ④ の後に片付ける。
+P2d-④ 済み（2026-10-22、決定 6）: `quantitativeRangeEval`（c2・c41・c41s の量的評価、3.512.0 否決・本番は常に false）を撤去。チェッカー・評価器・Δ評価器・
+C++（`magi_native.cpp` の三項 8 か所・`c2Amount`/`rangeDistance`、TOC 再生成）の分岐を false 側へ畳み、`Problem`・`cachedProblem`・`ProblemCache` の鍵・
+45 ファイルの引数と `PostOptimizationParams`/`V6OptimizerOptions`/`handleOptimize` の引数を外した。JNI の meta[7] は ABI を保つため 0 固定で渡し、C++ は読まない。
+`QuantitativeRangeEvalTest`・`EliteIntegrationQuantitativeTest` を削除。`CheckerReportDigestTest` の期待値は基準版 `4e8fe3a` を qre=false だけで走らせても同じ（作り直し不要）。
+P0 スナップショット・チェッカー等価・Δ評価・ネイティブ期待値（ホストの g++ で native-parity と同じ手順、0 不一致）を確認。C# は §9.1 #11。
+P2 の後片付け（2026-10-22）: ②d で本番から外れた `C3nWallProof.bound()`・生存盤面との対応づけ・`c3nWallSameReport` とそのテスト 5 本を削除
+（`C3nWallProof` は残存分析の `diagnoseBoard` だけ）。消したフラグを指していた古いコメント 4 か所を直した。
+P2 の残り: エンジン内で `PolishGate` を直接読むのは `wideC3nBreakDays`（探索の内側 `V6SearchOperators` と「設定の効き」）だけ。探索の奥まで引数を通すので
+P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す。背景 Worker の `PolishGate.restore` はそれまで残す。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
@@ -420,6 +476,8 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 | 7 | M-01 相当の穴が C# の原子保存にあるかの確認 | 3.723.2 |
 | 8 | C# 見直しの 3 件（タブ離脱でパネルを閉じる・人員不足の文言・S6 で古い試算の「閉じる」） | C# 単独 |
 | 9 | P0 の C# 版安全網 | P0 |
+| 10 | P1 の C# 版（`SaveFailNotifier.Report`＋`SaveRetryWiringTest`、NativeGate は C# に無ければ対象外） | P1 |
+| 11 | P2 の C# 版（`EngineConfig`、P2d で外した・消したフラグ: `RotationDeltaPrescreen`・`RoundPassMemo`・`HardDeltaPrefilter`・`LateOpStopPropagation`・`EjectionPipelineAfterRepair`・`PersonSwapKick`・`FloorCountsUpperZero`・`DeltaChildEvalDefault`・`DefaultCrossFamily`・`RestoreWishLocked` ほか後続） | P2 |
 
 ### 9.2 複数セッションでの運用
 - 作業は版数を付けずに仮のコミットで作る。取り込む直前に 1 人が最新の main へ載せ直し、版を振り、1 版 1 コミットにまとめる（squash）。

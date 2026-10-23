@@ -4,11 +4,16 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
@@ -142,4 +148,28 @@ fun MagiTagChip(
             Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
+}
+
+/** 補助の操作（塗り＞外枠＞これ の 3 段の最下段）。文字だけではボタンに見えなかったので薄い背景を敷く（2026-10-23 ユーザー決定）。 */
+@Composable
+internal fun MagiTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = ButtonDefaults.textShape,
+    contentColor: Color = MaterialTheme.colorScheme.primary,
+    contentPadding: PaddingValues = ButtonDefaults.TextButtonContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val tint = MaterialTheme.colorScheme.onSurface
+    TextButton(onClick = onClick, modifier = modifier, enabled = enabled, shape = shape, contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(containerColor = tint.copy(alpha = 0.08f), contentColor = contentColor, disabledContainerColor = tint.copy(alpha = 0.04f)),
+        content = content)
+}
+
+/** 1 枚のカード、または親のカードの中に入れるときは枠なし（[bare]）。中身の余白は [content] に渡す（枠なしは 0）。 */
+@Composable
+internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues) -> Unit) {
+    if (bare) content(PaddingValues(0.dp))
+    else Card(Modifier.fillMaxWidth()) { content(PaddingValues(16.dp)) }
 }

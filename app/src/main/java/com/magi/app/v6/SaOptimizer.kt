@@ -176,24 +176,20 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 NativeBridge.nativeSaChunk(handle, cur, best, bestScore, rng.nextLong(),
                     params.t0, params.tf, params.alpha, params.chain)
             }.getOrNull()
-            if (ret == null || ret.size < 6 || ret[0] != 0L) {
+            if (!NativeGate.chunkConsistent(ret, 6)) {
                 NativeGate.disable("SAチャンク整合性NG (status=${ret?.getOrNull(0)})")
                 return false
             }
-            val newBest = ret[2]
+            val newBest = ret!![2]
             if (newBest < bestScore) {
                 // [2層目の番兵] 採用前に Kotlin フル再評価で照合（Long の == 比較・許容誤差なし）。
                 //   [照合トグル] OFF=純ネイティブ（照合せず C++結果を信頼）。C++自己整合(status)は上で常時検査済。
                 val bestSol = NativeEval.unflatten(best, s, t)
                 // 拡張希望の禁止へ置いた盤面は採らない（このワーカーは Kotlin で走らせ直す）
                 if (!problem.keepsExtBan(lastSol, bestSol)) return false
-                if (NativeGate.parityCheckEnabled) {
-                    TuningTelemetry.parityChecks.incrementAndGet()
-                    val kotlinScore = evaluator.fullEval(bestSol)
-                    if (kotlinScore != newBest) {
-                        NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
-                        return false
-                    }
+                NativeGate.parityMismatch(newBest) { evaluator.fullEval(bestSol) }?.let { kotlinScore ->
+                    NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
+                    return false
                 }
                 if (newBest / M < bestScore / M) lastHardImprove = (System.nanoTime() / 1_000_000L)
                 bestScore = newBest
@@ -259,24 +255,20 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             while (!timeUp()) {
                 coroutineContext.ensureActive()
                 val ret = runCatching { NativeBridge.nativeLahcChunk(h, 4000) }.getOrNull()
-                if (ret == null || ret.size < 5 || ret[0] != 0L) {
+                if (!NativeGate.chunkConsistent(ret, 5)) {
                     NativeGate.disable("LAHCチャンク整合性NG (status=${ret?.getOrNull(0)})")
                     return false
                 }
-                if (ret[2] < bestScore) {
+                if (ret!![2] < bestScore) {
                     // [2層目の番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
                     //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                     NativeBridge.nativeLahcRead(h, 0, bestFlat)
                     val sol = NativeEval.unflatten(bestFlat, s, t)
                     // 拡張希望の禁止へ置いた盤面は採らない（このワーカーは Kotlin で走らせ直す）
                     if (!problem.keepsExtBan(lastSol, sol)) return false
-                    if (NativeGate.parityCheckEnabled) {
-                        TuningTelemetry.parityChecks.incrementAndGet()
-                        val kotlinScore = evaluator.fullEval(sol)
-                        if (kotlinScore != ret[2]) {
-                            NativeGate.disable("LAHC Kotlin照合NG (native=${ret[2]} kotlin=$kotlinScore)")
-                            return false
-                        }
+                    NativeGate.parityMismatch(ret[2]) { evaluator.fullEval(sol) }?.let { kotlinScore ->
+                        NativeGate.disable("LAHC Kotlin照合NG (native=${ret[2]} kotlin=$kotlinScore)")
+                        return false
                     }
                     bestScore = ret[2]
                     lastSol = sol
@@ -349,7 +341,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         //   希望を破る手は多くの盤面で HARD 件数が増え Metropolis はほぼ必ず却下するが、**手の 35〜36% がその手に費やされていた**（実測）。
         //   例外: 希望どうしの衝突（`V6SanityPort.wishSelfConflicts`）のセルでは c3n→pref が HARD 件数不変＝soft の差だけで決まり、
         //   却下されるとは限らない。近傍はそれでも触らない（方針: 最適化器は希望を崩さない。どれを取り消すかは利用者が S5 で選ぶ＝
-        //   `PolishGate.wishPinStrict`）。
+        //   規則 A）。
         //   入口の hf67HardRepair が実現可能な希望を先に盤面へ入れるので、触らなければ正しいまま残る。
         fun locked(i: Int, j: Int) = problem.wishLocked(i, j)
         fun opSingle() {

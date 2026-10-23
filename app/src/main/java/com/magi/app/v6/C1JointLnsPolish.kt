@@ -54,12 +54,7 @@ internal object C1JointLnsPolish {
         val patienceMs: Long = 4_000L,
         /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める＝同じ入力・seed なら同じ盤面。 */
         val maxEvaluations: Int = 0,
-        /** 子の評価を [DeltaEvaluator] の差分で行う（親へ1回 reset、1〜3セルを当てて戻す）。最終の正式 check は不変。 */
-        val deltaChildEval: Boolean = deltaChildEvalDefault,
     )
-
-    /** [Config.deltaChildEval] の既定。順番均衡 A/B（78 盤面）が事前基準を満たしたため既定 ON。 */
-    @Volatile internal var deltaChildEvalDefault: Boolean = true
 
     private class Pending(val move: Move, val next: Array<IntArray>?, val cells: IntArray?)
 
@@ -102,11 +97,10 @@ internal object C1JointLnsPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC1A11L,
-        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val rootSchedule = normalizeSchedule(schedule, p)
-        val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
+        val rootReport = UnifiedViolationChecker.check(state, rootSchedule)
         val rootC1 = rootReport.breakdown["c1"] ?: 0
         if (p.cons1.isEmpty() || rootC1 <= 0 || p.T <= 0 || p.S <= 0) {
             return V6HotfixPasses.CyclicSwapResult(
@@ -154,7 +148,7 @@ internal object C1JointLnsPolish {
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootC1, emptyList(), 0)
         // センチネル(-1)を含む盤面は DeltaEvaluator が受け付けない＝従来の check へ戻す。
-        val deltaPool = if (config.deltaChildEval && rootSchedule.all { row -> row.all { it in 0 until p.K } })
+        val deltaPool = if (rootSchedule.all { row -> row.all { it in 0 until p.K } })
             DeltaPool(p) else null
         var best = root
         var expanded = 0
@@ -211,7 +205,7 @@ internal object C1JointLnsPolish {
                     while (from < pending.size && !haltNow()) {
                         val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
                         val reports = if (deltaPool != null) deltaPool.evaluate(parent.schedule, chunk.map { it.cells!! })
-                            else mapParallel(chunk) { UnifiedViolationChecker.check(state, it.next!!, quantitativeRangeEval = quantitativeRangeEval) }
+                            else mapParallel(chunk) { UnifiedViolationChecker.check(state, it.next!!) }
                         generated += chunk.size; evaluations += chunk.size
                         from += chunk.size
                         for ((idx, pair) in chunk.withIndex()) {
@@ -274,7 +268,7 @@ internal object C1JointLnsPolish {
         }
 
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
-        val finalReport = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
+        val finalReport = UnifiedViolationChecker.check(state, best.schedule)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
         val valid = best !== root && finalC1 < rootC1 && better(finalReport, rootReport) &&
             !pinBlocks.blocksImproving(p, rootSchedule, best.schedule)

@@ -92,8 +92,6 @@ WEIGHT_LINT_EXEMPT = {
         (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数のhigh(25)・apt(4)と同型）"),
     ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "* 10000L + p.covOCell"):
         (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/C42FlowPolish.kt", "p.covUCell("):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "* 10000L + p.covOCell"):
         (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]

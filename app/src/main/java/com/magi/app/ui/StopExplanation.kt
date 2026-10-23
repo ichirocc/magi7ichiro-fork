@@ -16,17 +16,17 @@ internal fun stopExplanationOf(s: V6FinalPort.StopSummary, breakdown: Map<String
     if (s.remainingHard == 0) return null
     return when (s.kind) {
         V6FinalPort.StopKind.DEADLINE ->
-            StopExplanation("組む時間（${s.budgetSec} 秒）いっぱいまで探しました。終了時点で、最後の改善から ${s.stalledSec} 秒が経過していました。最終結果の必須違反は ${hard}です。",
+            StopExplanation("組む時間（${s.budgetSec} 秒）いっぱい探しました（最後の改善から ${s.stalledSec} 秒）。残る必須違反は ${hard}です。",
                 // 組む時間がすでに上限なら「延ばす」は勧めない。
                 if (s.budgetSec < com.magi.app.v6.MAX_OPTIMIZE_SEC) StopNext.MORE_TIME else StopNext.FIND_FIX)
         V6FinalPort.StopKind.PLATEAU_FLOOR ->
-            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は、担当できる職員が足りないための人員不足です。解消するには、担当条件や配置できる職員の見直しが必要です。", StopNext.REVIEW_STAFFING)
+            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は担当できる職員が足りない人員不足です。担当条件か職員を見直してください。", StopNext.REVIEW_STAFFING)
         V6FinalPort.StopKind.WISH_FLOOR ->
-            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は、同時には満たせない希望によるものです。解消するには、対象の希望を調整する必要があります。", StopNext.REVIEW_WISHES)
+            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は同時に満たせない希望によるものです。希望の調整が必要です。", StopNext.REVIEW_WISHES)
         V6FinalPort.StopKind.C3N_WALL_CERTIFIED ->
-            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は禁止の並びで、希望によって勤務が固定されています。解消には希望の調整が必要です。", StopNext.REVIEW_WISHES)
+            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は希望で固定された禁止の並びです。希望の調整が必要です。", StopNext.REVIEW_WISHES)
         V6FinalPort.StopKind.C3N_WALL_EMPIRICAL ->
-            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は禁止の並びです。1 マスの変更、複数の勤務の入れ替え（玉突き）、隣接日の調整を試しましたが、解消する案は見つかりませんでした。", StopNext.FIND_FIX)
+            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は禁止の並びです。1 マスの変更・玉突き・隣接日の調整では解消できませんでした。", StopNext.FIND_FIX)
         V6FinalPort.StopKind.NORMAL_STALL ->
             StopExplanation("${s.stalledSec} 秒間、改善が見られなかったため、組むのを早めに終えました（$used）。必須違反 ${hard}が残っています。", StopNext.FIND_FIX)
     }

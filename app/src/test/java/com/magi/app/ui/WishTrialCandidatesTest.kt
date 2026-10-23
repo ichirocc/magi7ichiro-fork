@@ -116,7 +116,7 @@ class WishTrialCandidatesTest {
         assertEquals("希望を調整して外すと必須違反が確実に1件減り、再作成するとさらに2件減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
         assertEquals("希望を調整して外すと必須違反が確実に1件減ります。", wishTrialText(r(5, 4, 5, 4)))
         assertEquals("希望を調整して外し、再作成すると、必須違反が2件減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
-        assertEquals("この希望を調整して外しても、必須は減らない見込みです（必須 5件 → 5件）。すべての組み合わせを試したわけではありません。", wishTrialText(r(5, 5, 5, 5)))
+        assertEquals("この希望を外しても、必須は減らない見込みです（5件 → 5件、全通りは試していません）。", wishTrialText(r(5, 5, 5, 5)))
         assertEquals("再作成するだけの場合より、さらに1件減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
         assertEquals("希望を外さなくても、再作成するだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
         assertEquals("試算できませんでした（未割当のセルがあります）。", wishTrialText(WishTrial.Unavailable("未割当のセルがあります")))

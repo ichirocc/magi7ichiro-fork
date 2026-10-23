@@ -169,3 +169,13 @@
 6. quantitativeRangeEval は評価器・C++・C# にまたがるので、P2 の最後の別コミット（P2d）で消す。
 7. 定着フラグの OFF 比較腕（PersonSwapBench・floorup0 など）は消す。挙動を確かめるテストは ON の経路の検証に書き換えて残す。
 いずれも既定の出力は不変。lnsAdaptive を常に ON にすると `PostOptimizationParams()` を素で作るベンチ・テストの出力が変わるので、それらは本番と同じ既定へ揃える。
+
+## 進捗（この表は 2026-10-22 の棚卸しのまま。片付けた項目をここに足す）
+- P2a〜P2c: 1 章 #10〜#16・#23・#24・#25・#28・#29・#33〜#35・#37〜#39 と玉突きの範囲 2 つを `EngineConfig` へ移した（エンジンは入口の写しだけを読む）。
+- P2d-①: #17〜#21、`defaultNarrow`・`defaultMaxDepth`、`EjectionChainScope.NEARBY` を削除。
+- P2d-②a: #4・#5・#6・#11・#26・#36・#39、`deltaChildEvalDefault`・`defaultCrossFamily`・`restoreWishLocked` を常に ON にしてフラグを外した。
+- P2d-②b: 2 章の componentRepairEnabled/Final・covOReliefEnabled・postChainRunningKeepBest、1 章 #25 lnsAdaptive（UI の残骸ごと）を外した。
+- P2d-②c: #27 wishPinStrict を常時にしてフラグと引数を外した。
+- P2d-②d: #3 filterC3nIncrease（UI 残骸ごと）・#12 ejectionPipelineRounds・#14 ejectionChainSwapMoves を常時、#16 ejectionUseLeftover・#33 c3nWallShortStall・#35 c3nWallLegacy を削除（決定 1）。
+- P2d-③: #2 c1MoveARepair・#22 softCascade・#30 postChainRollbackCountsZero・#31 stallPolishInjection・#32 prePostDescent・#38 adaptiveStall、2 章の c2Polish*・c42FlowPolish*・c1ComponentRepair*・c3nMarginLns*・countChainReactivate・restZeroWindowLnsEnabled・fairAchievementDirection・dayAssignIdentityFallback、3 章 rsiFocusRotationPersist を削除。
+- P2d-④: 2 章 quantitativeRangeEval を Kotlin・C++ から撤去（JNI meta[7] は 0 固定）。

@@ -108,3 +108,13 @@ internal fun weekRangeCaption(startDate: String, firstDay: Int, lastDay: Int): P
     val b = LocalDate.parse(startDate).plusDays(lastDay.toLong())
     "${a.monthValue}/${a.dayOfMonth}" to (if (a.monthValue == b.monthValue) "〜${b.dayOfMonth}" else "〜${b.monthValue}/${b.dayOfMonth}")
 }.getOrNull()
+
+/** 下部のタブの縮み（純関数）: 先頭では広げ、24px より大きく下へ送れば縮め、24px より大きく上へ戻せば広げる。小さな揺れでは変えない。 */
+internal fun navCollapseNext(collapsed: Boolean, last: Int, now: Int): Boolean = when {
+    now <= 0 -> false
+    now - last > NAV_COLLAPSE_SLOP_PX -> true
+    last - now > NAV_COLLAPSE_SLOP_PX -> false
+    else -> collapsed
+}
+
+internal const val NAV_COLLAPSE_SLOP_PX = 24

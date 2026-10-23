@@ -25,7 +25,7 @@ class StopExplanationBoundaryTest {
 
     @Test fun finalBreakdownUnitsWinOverTheCount() {
         val e = stopExplanationOf(s(StopKind.DEADLINE, 3, early = false), mapOf("covU" to 1, "c3n" to 2))!!
-        assertTrue(e.line, e.line.contains("最終結果の必須違反は 2件・1人です"))
+        assertTrue(e.line, e.line.contains("残る必須違反は 2件・1人です"))
     }
 
     @Test fun floorThenPostProcessingStaysConsistentWithFinalCounts() {

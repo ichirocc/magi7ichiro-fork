@@ -48,7 +48,7 @@ object WishTrial {
     ): Outcome? {
         val key = "$staff,$day"
         if (!state.wishes.containsKey(key)) return null
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         if (staff !in 0 until p.S || day !in 0 until p.T || !p.wishFixed(staff, day) || p.pinned(staff, day)) return null
         unavailableReason(state, schedule)?.let { return Unavailable(it) }
         val ctl = control ?: when (val c = control(state, schedule, shouldStop)) {
@@ -68,7 +68,7 @@ object WishTrial {
 
     /** 試算できる希望のキー（"i,j"）。担当できない勤務の希望と手動固定のセル（[#41]）は入らない＝試算の対象外（§2.2）。 */
     fun lockedWishKeys(state: MagiState): Set<String> {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         return state.wishes.keys.filterTo(LinkedHashSet()) { key ->
             val (i, j) = key.split(",").map { it.trim().toIntOrNull() ?: -1 }.let { (it.getOrNull(0) ?: -1) to (it.getOrNull(1) ?: -1) }
             i in 0 until p.S && j in 0 until p.T && p.wishFixed(i, j) && !p.pinned(i, j)
@@ -77,7 +77,7 @@ object WishTrial {
 
     /** VCR は未割当セルがあると黙って何もしない（0 と区別できない）ので、先に弾く。 */
     private fun unavailableReason(state: MagiState, schedule: Array<IntArray>): String? {
-        val p = cachedProblem(state, false)
+        val p = cachedProblem(state)
         if (schedule.size != p.S || schedule.any { it.size != p.T }) return "勤務表の大きさが設定と合いません"
         if (schedule.any { row -> row.any { it !in 0 until p.K } }) return "未割当のセルがあります"
         return null
@@ -86,7 +86,7 @@ object WishTrial {
     /** 本実行の入口と同じ clear のあと VCR（§4 の定数）。clear が例外（休み無し）なら null。 */
     private fun vcrHard(state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean): Int? {
         val cleared = try { HardRepairCore.clearCappedCells(state, schedule.copy2D()).first } catch (e: Exception) { return null }
-        val r = ViolationComponentRepair.repair(state, cleared, emptyList(), ViolationComponentRepair.Params(), shouldStop, quantitativeRangeEval = false)
+        val r = ViolationComponentRepair.repair(state, cleared, emptyList(), ViolationComponentRepair.Params(), shouldStop)
         return r.report?.hard ?: UnifiedViolationChecker.check(state, r.newSchedule).hard
     }
 }

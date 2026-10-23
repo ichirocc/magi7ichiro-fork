@@ -65,9 +65,11 @@ internal const val CONSULT_HOLD_BUTTON = "保留する"
 internal const val CONSULT_HELD = "保留中"
 internal const val CONSULT_ADDED = "ホームの「相談中」に登録しました（記録だけで、本人への連絡や了承にはなりません）"
 internal const val CONSULT_DUPLICATE = "この内容は、すでにホームの「相談中」に登録されています"
-internal const val CONSULT_OPEN = "開く"
+internal const val CONSULT_OPEN = "勤務を見る"
+/** ホームの主カードの相談の 1 行から相談の一覧を出す（行の［勤務を見る］と行き先が違うので名前を分ける）。 */
+internal const val CONSULT_LIST_OPEN = "相談の一覧を見る"
 internal const val CONSULT_RESUME = "案を見る"
-internal const val CONSULT_STALE = "相談に登録した後で勤務表または設定が変わったため、この案はそのまま当てられません。「変更案を探す」から、もう一度確かめてください"
+internal const val CONSULT_STALE = "登録後に勤務表か設定が変わったため、この案は当てられません。「変更案を探す」で確かめ直してください"
 
 /** ホームの主カードの 1 行。0 件なら出さない。 */
 internal fun consultLine(n: Int): String? = if (n > 0) "相談中 ${n}件" else null

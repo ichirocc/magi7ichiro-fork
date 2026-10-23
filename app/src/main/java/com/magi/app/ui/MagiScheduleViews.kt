@@ -40,7 +40,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -170,7 +169,7 @@ internal fun LiveScheduleCard(ui: UiState) {
                 set
             }
             SideEffect { prevHolder[0] = cur }
-            TextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
+            MagiTextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(if (show) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null, modifier = Modifier.padding(end = 4.dp))
                 Text(if (show) "途中経過を隠す" else "途中経過を見る")
@@ -258,7 +257,7 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
         Text(if (locCount >= 0) "違反フィルタ（種別）・要確認 ${locCount}か所" else "違反フィルタ（種別）",
             style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (enabled != allVioBucketKeys) {
-            TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
+            MagiTextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
                 Text("すべて表示", style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -317,7 +316,7 @@ internal fun ScheduleToolsCard(
                         // 「要確認 N」は違反ロケーション数（セル/日/回数の実箇所）。上部バッジ「必須違反 N」と単位が違うので「か所」と明示。
                         Text("要確認 ${locCount}か所", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                         if (enabled != allVioBucketKeys) {
-                            TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
+                            MagiTextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
                                 Text("すべて表示", style = MaterialTheme.typography.labelLarge)
                             }
                         }
@@ -338,7 +337,7 @@ internal fun ScheduleToolsCard(
                 }
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { legendOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp),
+                MagiTextButton(onClick = { legendOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方とシフトの色）" }) {
                     Text("凡例 ▸", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
@@ -347,7 +346,7 @@ internal fun ScheduleToolsCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CompactMarkLegend(vioColor, vioSoftColor)
                 }
-                TextButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) onQuery("") }, contentPadding = PaddingValues(horizontal = 8.dp),
+                MagiTextButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) onQuery("") }, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(if (query.isNotBlank()) "検索中: $query" else "検索", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -357,7 +356,7 @@ internal fun ScheduleToolsCard(
                     value = query, onValueChange = onQuery,
                     label = { Text("職員名で検索（該当行を強調）") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { onQuery("") }) { Text("消す") } },
+                    trailingIcon = { if (query.isNotEmpty()) MagiTextButton(onClick = { onQuery("") }) { Text("消す") } },
                 )
             }
         }
@@ -1324,7 +1323,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == j) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                             if (days.size >= 2) {
                                 if (picked == j && !multi) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                else TextButton(onClick = { picked = j; multi = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
+                                else MagiTextButton(onClick = { picked = j; multi = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
                             }
                         }
                     }
@@ -1360,7 +1359,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { detail = null; onEvent(MagiEvent.Condition.RemoveWish(i, dj)) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を外す", color = cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を外す", color = cs.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                             // [実機バグ修正] 希望で固定していない在勤者にも1人にしぼった「直し方を探す」への導線を足す。
@@ -1375,7 +1374,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { person = i },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの変更案を探す", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの変更案を探す", maxLines = 2, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                         }
@@ -1433,7 +1432,7 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
         // 希望で固定した人数が適正人数を超えるときだけ「希望を調整しない限り残る」と言う（以下なら固定していない人を動かせば減る）。
         val overByWish = limits != null && pinned.size > limits.second
         lines += "本人の希望: " + pinned.joinToString("・") { "${ui.staffNames.getOrNull(it) ?: "#$it"}さん" } +
-            if (overByWish) "（必須の希望どうしが同じ日に重なっています。本人と相談してどちらかの希望を調整しない限り、過剰は残ります。調整すると希望は外れます。元に戻すで戻せます）" else ""
+            if (overByWish) "（必須の希望どうしが同じ日に重なっています。どちらかの希望を本人と調整しない限り、過剰は残ります）" else ""
     }
     return TallyDetailUi("${DayText.full(ui.startDate, j)}・$sym", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }
@@ -1813,7 +1812,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
             var general by remember(i) { mutableStateOf(false) }
-            TextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案を閉じる" else STAFF_OTHER_FIXES_LABEL) }
+            MagiTextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案 ▾" else STAFF_OTHER_FIXES_LABEL) }
             if (general) FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
     }
@@ -1830,7 +1829,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == m.shift) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                         if (picked == m.shift) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        else TextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
+                        else MagiTextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
                     }
                 }
             }
@@ -1909,7 +1908,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
                                 modifier = Modifier.weight(1f).padding(vertical = MagiSpacing.xs))
                             if (picked != null && c.shiftIdx >= 0) {
                                 if (pick == c.shiftIdx) Text("選択中", color = fg, style = MaterialTheme.typography.labelMedium)
-                                else TextButton(onClick = { pick = c.shiftIdx }, modifier = Modifier.heightIn(min = 48.dp)) { Text("見る") }
+                                else MagiTextButton(onClick = { pick = c.shiftIdx }, modifier = Modifier.heightIn(min = 48.dp)) { Text("見る") }
                             }
                         }
                     }
@@ -1919,7 +1918,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
                         verticalAlignment = Alignment.CenterVertically) {
                         Text((if (weeklyOpen) "▼ " else "▶ ") + "${breakdownLabels["weekly"]}（${sheet.weekly.size}件）",
                             style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        Text(if (weeklyOpen) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (weeklyOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (weeklyOpen) {
                         Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -2083,7 +2082,7 @@ internal fun FixSearchPanel(
                         ?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                     Text(fixSearchingText(compact), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                TextButton(onClick = { onEvent(MagiEvent.Session.CancelFixSearch) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CANCEL_FIX_SEARCH_BUTTON) }
+                MagiTextButton(onClick = { onEvent(MagiEvent.Session.CancelFixSearch) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CANCEL_FIX_SEARCH_BUTTON) }
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("勤務変更案を探す途中でうまくいきませんでした。もう一度試せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
@@ -2150,7 +2149,7 @@ internal fun FixSearchPanel(
                                 changes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 // [3.712.0] 日ごとの人数と回数の影響は確認の画面が言う＝案のカードでは「詳しく」の中だけ。
                                 var more by remember(s) { mutableStateOf(false) }
-                                TextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+                                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
                                 // 見ている日のほかの勤務と、別の日へ移る影響を分ける（必要・適正は設定の値で言う）。
                                 val (sameDay, otherDays) = remember(s, ui.schedule, cv) {
                                     headcountImpact(ui.schedule, s.ops, ui.shiftSymbols, ui.startDate, cv?.let { c -> c::needCellLimits }, target?.day?.let { target.shift to it })
@@ -2253,7 +2252,7 @@ internal fun FixSearchPanel(
                             Text(title, style = MaterialTheme.typography.titleSmall)
                             Text(note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) items.take(limit).forEachIndexed { n, x -> card(startN + n + 1, x.sug, x.explain, purposeOverride) }
                 }
@@ -2271,7 +2270,7 @@ internal fun FixSearchPanel(
                             Text(otherFixHeading(others.size), style = MaterialTheme.typography.titleSmall)
                             Text(target?.let { otherFixNote(label, it) } ?: "${addressLabel ?: "選んだ問題"}は解消しません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) others.take(limit).forEachIndexed { n, s -> card(fixing.size.coerceAtMost(limit) + n + 1, s) }
                 }
@@ -2309,9 +2308,9 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
             // 失敗している間だけ塗り（帯の中の主はこれ 1 つ）。
             if (ui.saveState == SaveState.Failed) Button(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (nextLabel != null) TextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
-                TextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }
-                if (ui.canUndo) TextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
+                if (nextLabel != null) MagiTextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
+                MagiTextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "今回の変更内容 ▾" else "今回の変更内容 ▸") }
+                if (ui.canUndo) MagiTextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
             }
         }
     }
@@ -2339,10 +2338,10 @@ private fun NoFixBlock(
     // [3.716.0] シートに塗りの主（足りない側の人探し）が別にあれば文字ボタン（塗りは 1 つ＝INV-09）。
     if (nav.onTour != null && nav.tourCount > 0) {
         val toTour = { onApplied(); nav.onTour.invoke() }
-        if (primaryElsewhere) TextButton(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+        if (primaryElsewhere) MagiTextButton(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
         else Button(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
     }
-    if (!compact) TextButton(onClick = onApplied, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_CLOSE_BUTTON) }
+    if (!compact) MagiTextButton(onClick = onApplied, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_CLOSE_BUTTON) }
     if (ui.fixEmptyRepeatKey == focus.key) {
         // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。
         if (compact) when (repeatedEmptyAction(why.wishRelated, ui.settingIssues.isNotEmpty())) {
@@ -2355,11 +2354,8 @@ private fun NoFixBlock(
         val st = focus.staff; val d = focus.day
         val prev = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d - 1) else null
         val next = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d + 1) else null
-        Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        if (st != null && d != null && (prev != null || next != null)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (prev != null) OutlinedButton(onClick = { nav.onCell(st, d - 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${prev}を開く", maxLines = 1) }
-            if (next != null) OutlinedButton(onClick = { nav.onCell(st, d + 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${next}を開く", maxLines = 1) }
-        }
+        // 前後の日へはシートの固定部の ◀ ▶ で行く（ここに同じボタンを重ねない）。
+        Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall)
         if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
         return
     }
@@ -2373,7 +2369,7 @@ private fun NoFixBlock(
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (scopeOpen) "閉じる" else "開く") { scopeOpen = !scopeOpen },
             verticalAlignment = Alignment.CenterVertically) {
             Text("探した範囲", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text(if (scopeOpen) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+            Text(if (scopeOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
         }
         if (scopeOpen) Text(SEARCHED_SCOPE_DETAIL, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
     }
@@ -2421,8 +2417,8 @@ private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate
                         Text("変更できない理由：" + (c.reason ?: "この画面では確かめられませんでした"), style = MaterialTheme.typography.bodySmall)
                         Text("解消するために確認すること：${c.check}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { onCell(c.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当する勤務を見る") }
-                            if (c.go != AddCandidate.Go.NONE) TextButton(onClick = { onSettings(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("対象の設定を見る") }
+                            MagiTextButton(onClick = { onCell(c.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当する勤務を見る") }
+                            if (c.go != AddCandidate.Go.NONE) MagiTextButton(onClick = { onSettings(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("対象の設定を開く") }
                         }
                     }
                 }

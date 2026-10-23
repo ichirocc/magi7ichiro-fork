@@ -443,4 +443,18 @@ class CellSheetLogicTest {
         assertNull(adoptedDespiteMoreText(10, 9, 900.0, 500.0))
         assertNull(adoptedDespiteMoreText(10, 13, 500.0, 500.0))
     }
+
+    @Test fun homeCardMakeHidesTheSameBottomButton() {
+        assertEquals(true, homeCardShowsMake(running = false, fixSearching = false, hasResult = false, draft = false, infeasible = false))
+        assertEquals(true, homeCardShowsMake(false, false, true, draft = true, infeasible = false))
+        assertEquals(false, homeCardShowsMake(false, false, true, draft = true, infeasible = true))
+        assertEquals(false, homeCardShowsMake(false, false, true, draft = false, infeasible = false))
+        assertEquals(false, homeCardShowsMake(running = true, fixSearching = false, hasResult = false, draft = false, infeasible = false))
+        assertEquals(false, homeCardShowsMake(false, fixSearching = true, hasResult = false, draft = false, infeasible = false))
+    }
+
+    @Test fun homeDiagnosisCountsOnlyCardsWithContent() {
+        assertEquals(0, homeDiagnosisCount(UiState()))
+        assertEquals(1, homeDiagnosisCount(UiState(observedPinBlockedAttempts = 3)))
+    }
 }

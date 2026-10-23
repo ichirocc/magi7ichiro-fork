@@ -101,7 +101,7 @@ class RelaxTrialTest {
         val st2 = RelaxTrial.apply(st, listOf(RelaxTrial.Relax(1, a, 1)))
         assertEquals(Range("0", "1"), st2.staffRange["1,1"])
         assertEquals(st.staffRange - "1,1", st2.staffRange - "1,1")
-        assertTrue(cachedProblem(st2, false).mayPlace(1, a))
+        assertTrue(cachedProblem(st2).mayPlace(1, a))
     }
 
     @Test fun r10_wishSelfConflictCellIsNotAnAnchor() {

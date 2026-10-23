@@ -25,7 +25,7 @@
   負荷で変わる（同じ設定の旧腕でも 100〜180/230 組しか一致しない）。比べたい 2 条件は同じベンチの 2 腕にする。
 - `V6FinalPort.handleOptimize(seed = …)` で最適化器の種を指定できる（既定 null・0 は時刻由来）。並列ワーカー・壁時計予算・
   後処理の時刻由来の種は残る＝種を固定しても盤面は再現しない。`LoopBench` は後処理だけの決定的モードなので使わない。
-- 壁時計予算のハーネス（`PortfolioBudgetBench`・`HandleOptimizeBench`）は同一設定でもばらつく。
+- 壁時計予算のハーネス（`HandleOptimizeBench`、`PortfolioBudgetBench` は P2d で削除）は同一設定でもばらつく。
   HandleOptimizeBench の実質 A/A（フラグが経路上効かない 3 件）で品質 ±1.6%・時間 ±37% を観測した＝
   これ未満の差は効果と読まない。
 

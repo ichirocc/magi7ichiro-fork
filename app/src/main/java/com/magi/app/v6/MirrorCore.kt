@@ -202,10 +202,9 @@ object UnifiedViolationChecker {
     fun check(
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
-        quantitativeRangeEval: Boolean = false,
     ): ViolationReport {
         val t0 = System.nanoTime()
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         val scratch = checkScratch.get().fit(p)
         val s = scratch.normalize(schedule, p)
         // [3.395.0/高速化] 集計は添字加算の IntArray で行い、最後に `MirrorKeys.all` の順で Map へ起こす
@@ -302,10 +301,7 @@ object UnifiedViolationChecker {
         for (c in p.cons2) {
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
-                if (p.quantitativeRangeEval) {
-                    val amt = c2Amount(counts[i][c.shiftIdx], c.count)
-                    if (amt > 0) { inc("c2", amt.toInt()); markCount(i, c.shiftIdx, "c2") }
-                } else if (counts[i][c.shiftIdx] < c.count) {
+                if (counts[i][c.shiftIdx] < c.count) {
                     inc("c2")
                     markCount(i, c.shiftIdx, "c2")
                 }
@@ -317,10 +313,7 @@ object UnifiedViolationChecker {
         for (c in p.cons41) {
             for (j in 0 until p.T) {
                 val z = scratch.groupDay(grpDay!!, p.G, c.groupIdx, c.shiftIdx, j, p)
-                if (p.quantitativeRangeEval) {
-                    val amt = rangeDistance(z, c.l, c.u)
-                    if (amt > 0) { inc("c41", amt.toInt()); markNeed(c.shiftIdx, j, "c41") }
-                } else if (z < c.l || z > c.u) {
+                if (z < c.l || z > c.u) {
                     inc("c41")
                     markNeed(c.shiftIdx, j, "c41")
                 }
@@ -364,10 +357,7 @@ object UnifiedViolationChecker {
         for (c in p.cons41s) {
             for (j in 0 until p.T) {
                 val z = scratch.groupDay(skDay!!, nSkill, c.groupIdx, c.shiftIdx, j, p)
-                if (p.quantitativeRangeEval) {
-                    val amt = rangeDistance(z, c.l, c.u)
-                    if (amt > 0) { inc("c41s", amt.toInt()); markNeed(c.shiftIdx, j, "c41s") }
-                } else if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
+                if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
             }
         }
         for (c in p.cons42s) {
@@ -700,19 +690,18 @@ fun Problem.pinned(i: Int, j: Int): Boolean = pin[i][j] >= 0
 
 /** [希望固定の徹底] 規則 A: 最適化器がセル (i,j) を `cur` から `new` へ変えてよいか。希望固定セルは「希望へ」か「今のまま」だけ
  *  ＝希望どおりのセルは動かさず、未反映のセル（希望と違う値）は希望へ戻すのだけ可で、希望でも今の値でもない値へは動かさない。
- *  `strict=false`（[PolishGate.wishPinStrict] OFF）は旧挙動＝希望は常に可。[#41] 手動固定はフラグによらず「固定の値へ」か「今のまま」だけ。 */
-fun Problem.wishMoveAllowed(i: Int, j: Int, cur: Int, new: Int, strict: Boolean = PolishGate.wishPinStrict): Boolean {
+ *  [#41] 手動固定は「固定の値へ」か「今のまま」だけ。 */
+fun Problem.wishMoveAllowed(i: Int, j: Int, cur: Int, new: Int): Boolean {
     val pv = pin[i][j]
     if (pv >= 0) return new == pv || new == cur
-    return !strict || !wishFixed(i, j) || new == wish[i][j] || new == cur
+    return !wishFixed(i, j) || new == wish[i][j] || new == cur
 }
 
-/** [希望固定の徹底] 盤面単位の規則 A: `cand` の希望固定セルはどれも「希望どおり」か「`base` と同じ値」。[#41] 手動固定は常に同じ判定
- *  （`strict=false` でも見る）。盤面ごと採る経路の採否に使う（[PolishGate.wishPinStrict] か手動固定があるときだけ呼ぶ）。 */
-fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>, strict: Boolean = true): Boolean {
-    if (!strict && !hasPins) return true
+/** [希望固定の徹底] 盤面単位の規則 A: `cand` の希望固定セルはどれも「希望どおり」か「`base` と同じ値」。[#41] 手動固定も同じ判定。
+ *  盤面ごと採る経路の採否に使う。 */
+fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>): Boolean {
     for (i in 0 until S) for (j in 0 until T) {
-        if (!wishMoveAllowed(i, j, base[i][j], cand[i][j], strict)) return false
+        if (!wishMoveAllowed(i, j, base[i][j], cand[i][j])) return false
     }
     return true
 }
@@ -901,15 +890,13 @@ fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
  * （fg の refreshCheck と bg 最適化が同一プロセスで重なると到達 → 誤スコア/AIOOBE）。
  */
 private object ProblemCache {
-    // [backlog #12(a)・実験段階] quantitativeRangeEval は Problem の内容を変えるので、
-    //   キーへ含めないと同一state・別フラグの2要求が誤って同じインスタンスを共有してしまう。
-    private class Entry(val key: MagiState, val flag: Boolean, val value: Problem)
+    private class Entry(val key: MagiState, val value: Problem)
     @Volatile private var entry: Entry? = null
-    fun get(state: MagiState, quantitativeRangeEval: Boolean): Problem {
+    fun get(state: MagiState): Problem {
         val e = entry
-        if (e != null && e.key === state && e.flag == quantitativeRangeEval) return e.value
-        val np = Problem(state, quantitativeRangeEval)
-        entry = Entry(state, quantitativeRangeEval, np)   // 単一参照の公開はアトミック。race時の重複生成は等価で無害。
+        if (e != null && e.key === state) return e.value
+        val np = Problem(state)
+        entry = Entry(state, np)   // 単一参照の公開はアトミック。race時の重複生成は等価で無害。
         return np
     }
 }
@@ -980,7 +967,7 @@ private val pairKeys: Array<String> = Array(PAIR_KEY_N * PAIR_KEY_N) { "${it / P
 internal fun pairKey(a: Int, b: Int): String =
     if (a in 0 until PAIR_KEY_N && b in 0 until PAIR_KEY_N) pairKeys[a * PAIR_KEY_N + b] else "$a,$b"
 
-fun cachedProblem(state: MagiState, quantitativeRangeEval: Boolean = false): Problem = ProblemCache.get(state, quantitativeRangeEval)
+fun cachedProblem(state: MagiState): Problem = ProblemCache.get(state)
 
 fun coverage(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
     val out = Array(p.T) { IntArray(p.K) }

@@ -350,7 +350,7 @@ internal fun isWishDilemma(wish: Int?, current: Int, severity: CellSeverity): Bo
 internal fun wishKeptLine(wishSymbol: String): String = "本人の希望（$wishSymbol）を守っています"
 
 /** 希望タブの注記の手動固定版（手動固定は希望より強い＝再作成でも希望へ戻さない。`docs/business-logic.md` の手動固定）。 */
-internal const val WISH_TAB_PINNED_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。このセルは手動固定のため、再作成しても希望には合わせません（固定を外すと合わせます）。"
+internal const val WISH_TAB_PINNED_NOTE = "希望を変えてもセルはそのままです（未反映）。手動固定のセルなので、再作成しても希望に合わせません。"
 
 /** 職員 [i] の [j] 日（0 始まり）が拡張希望の指定日なら、その日に禁止のシフト記号（シフト一覧の順）。指定日でなければ null。
  *  日だけで決める＝希望を保存しない日（`ExtWishRules.wishBlockedBy`）と同じ。 */
@@ -555,7 +555,7 @@ internal fun targetSearchingLines(t: FixTarget, label: String): List<String> = l
 internal fun changeSizeLine(ops: List<com.magi.app.v6.FixCell>): String = "変更箇所：${ops.map { it.staff }.distinct().size}人・${ops.size}セル"
 
 /** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
-internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
+internal const val CANCEL_FIX_SEARCH_BUTTON = "探すのをやめる"
 internal const val FIX_SEARCH_CANCELLED = "探すのを止めました。"
 internal const val FIX_SEARCH_RETRY_BUTTON = "もう一度探す"
 
@@ -647,7 +647,7 @@ internal fun resolveFixFocus(f: FixFocus, staffId: Int?, exceptId: Int?, staffId
 internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除されたため、変更案を探せません。画面を閉じて開き直してください。"
 
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
-internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした。端末に書き込めません（空き容量が足りない可能性があります）。「$SAVE_RETRY_BUTTON」を押してください"
+internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした（空き容量不足の可能性）。「$SAVE_RETRY_BUTTON」を押してください"
 internal const val HOME_SAVE_FAILED_LINE = "自動保存できていません。端末の空き容量を確かめてください"
 internal const val TOP_BAR_SAVE_FAILED = "保存できていません"
 /** 上部の札の幅の境界（3.657.0 の名前列と同じ）。これより狭いと自動作成の状態を札の下の行へ畳む。 */
@@ -679,7 +679,20 @@ internal class SaveFailNotifier {
         lastOk = ok
         return when { ok -> null; prev -> SaveFailDialog.FIRST; retried -> SaveFailDialog.AGAIN; else -> null }
     }
+
+    /** 保存結果の反映内容を決める唯一の場所（VM の reportAutoSave はそのまま適用するだけ）。 */
+    fun report(ok: Boolean, retried: Boolean): SaveOutcome {
+        val wasOk = lastOk
+        val dialog = onResult(ok, retried)
+        val notice = when { ok == wasOk -> null; ok -> SaveNotice.RECOVERED; else -> SaveNotice.FAILED }
+        return SaveOutcome(dialog, setDialog = dialog != null || ok, notice = notice, retryLater = !ok)
+    }
 }
+
+internal enum class SaveNotice { RECOVERED, FAILED }
+
+/** [retryLater]＝失敗したので次のデバウンス保存を仕掛け直す（次の編集まで未保存にしない）。 */
+internal data class SaveOutcome(val dialog: SaveFailDialog?, val setDialog: Boolean, val notice: SaveNotice?, val retryLater: Boolean)
 
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
 
@@ -1324,7 +1337,8 @@ internal fun cellRuleLine(fam: String): String = when (fam) {
     "covO" -> "この日の人数が多すぎます"
     else -> "${breakdownLabels[fam] ?: fam}に当たります"
 }
-internal const val CELL_DETAIL_BUTTON = "詳しく見る"
+internal const val CELL_DETAIL_BUTTON = "詳しく ▸"
+internal const val CELL_DETAIL_CLOSE = "詳しく ▾"
 
 internal fun cellProblemSentence(fam: String): String = when (fam) {
     "c3n" -> "前後の勤務との組み合わせが禁止条件に該当しています"
@@ -1359,16 +1373,16 @@ internal fun cellCountLines(ui: UiState, i: Int, current: Int, limits: ((Int, In
 
 /** 手動固定の説明（通常の修正操作と分ける）。 */
 internal const val PIN_TITLE = "この勤務を自動変更しない"
-internal const val PIN_NOTE = "固定すると、自動作成・調整ではこの勤務を変更しません。現在の違反が解消されるわけではありません。"
+internal const val PIN_NOTE = "自動作成・調整でこの勤務を変えなくなります。違反は消えません。"
 
 /** 担当外の勤務の理由（自分で勤務を選ぶ画面）。 */
-internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です（担当可否の設定）。選ぶと担当外シフトの必須違反になります。"
+internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です。選ぶと必須違反になります。"
 
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
 internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap(), ranBeforeEdit: Boolean = false): Pair<String, String> =
     (if (engineRan) "自動作成済み" else if (ranBeforeEdit && hasResult) "手で変更あり" else if (hasResult) "手で編集" else "自動作成前") to
-        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hardText(breakdown, hard)}"
-        else if (soft > 0) "評価：要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "評価：違反なし")
+        (if (!checked) "未評価" else if (hard > 0) "必須違反 ${hardText(breakdown, hard)}"
+        else if (soft > 0) "要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "違反なし")
 
 /**
  * 案がこのセルの問題を解消するか（2026-10-14 利用者レビュー: 族の全体の件数が減るだけでは、選んだセルが直るとは限らない）。
@@ -1542,13 +1556,13 @@ internal const val MORE_OPS_LABEL = "ほかの操作 ▸"
 internal fun showCountSection(countKeys: Collection<String>, i: Int, lines: List<String>): Boolean =
     lines.isNotEmpty() && countKeys.any { VioKey.first(it) == i }
 
-internal const val COMPACT_NO_FIX = "この場所を直す案は見つかりませんでした"
+internal const val COMPACT_NO_FIX = "この場所を直す案はありません"
 
 /** セルのシートで案が無いときの 1 行。[single]＝問題が 1 つならその名（前後の日へ案内する）、無ければ先頭の理由を添える。 */
 internal fun compactNoFixLine(reasons: List<String>, single: String?, prevDay: String?, nextDay: String?): String {
     if (single != null) {
         val days = listOfNotNull(prevDay, nextDay)
-        return "このセルの${single}を解消する案は見つかりませんでした" + (if (days.isEmpty()) "" else "。前後の日（${days.joinToString("・")}）を開いて確かめられます")
+        return "このセルの${single}を直す案はありません" + (if (days.isEmpty()) "" else "。前後の日（${days.joinToString("・")}）も確かめてください")
     }
     return reasons.firstOrNull()?.let { "$COMPACT_NO_FIX。$it" } ?: COMPACT_NO_FIX
 }
@@ -1610,11 +1624,11 @@ internal const val SHORTAGE_LABEL_INFEASIBLE = "担当できる人が足りな�
 internal const val SHORTAGE_LABEL_BLOCKED = "今の希望では埋まらない"
 internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
 internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋まらなかった"
-internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「なおし方を見る」で 1 人ずつ入れられます"
+internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「直し方を見る」で 1 人ずつ入れられます"
 
 /** [3.712.0] 診断カードの行は 1 行の事実と札だけ。理由・内訳はカードの末尾の「詳しく」に 1 回だけ（利用者仕様: 説明は画面に 1 回）。 */
-internal const val DIAG_DETAILS_LABEL = "詳しく"
-internal const val DIAG_DETAILS_CLOSE = "詳しくを閉じる"
+internal const val DIAG_DETAILS_LABEL = "詳しく ▸"
+internal const val DIAG_DETAILS_CLOSE = "詳しく ▾"
 internal const val SHORTAGE_TAG_INFEASIBLE = "担当が足りない"
 internal const val SHORTAGE_MOVABLE_LINE = "休みや余裕のある勤務から移せます"
 internal const val FORBIDDEN_RETRY_NOTE = "玉突きか隣の日の調整で崩せます。もう一度つくると直る場合があります"
@@ -1714,6 +1728,10 @@ internal data class HomePlan(val kind: HomePlanKind, val primary: HomeAction, va
  * ホームの「次にやること」の段を決める（純関数）。主ボタンは常に 1 つ＝組立中と探索中だけ押せない。
  * 保存の失敗（[saveFailed]）と相談中（[consults]）は段を変えない＝完成の見出しと書き出しを止めない（D10）。
  */
+/** ホームの主カードが［勤務表をつくる］を出す段（`homePlan` の MAKE・DRAFT と同じ条件）。このとき下部バーの同じボタンは隠す。 */
+internal fun homeCardShowsMake(running: Boolean, fixSearching: Boolean, hasResult: Boolean, draft: Boolean, infeasible: Boolean): Boolean =
+    !running && !fixSearching && (!hasResult || (draft && !infeasible))
+
 internal fun homePlan(
     running: Boolean, hasResult: Boolean, hard0: Boolean,
     infeasible: Boolean = false, hasPinned: Boolean = false, guided: Boolean = false,
@@ -2010,3 +2028,12 @@ internal fun editReturnProblem(shortfalls: List<com.magi.app.v6.CoverageShortfal
 /** [3.720.0 3c-6] 回数のシートで違反を 1 タップで解く外枠ボタン（「回」を付ける）。 */
 internal fun raiseCapButton(n: Int): String = "上限を${n}回に上げて適用"
 internal fun lowerFloorButton(n: Int): String = "下限を${n}回に下げて適用"
+
+/** ホームの「原因の診断」に畳むカードのうち、いま中身があるものの数（各カードの表示条件と同じ）。 */
+internal fun homeDiagnosisCount(ui: UiState): Int = listOf(
+    ui.copilotHint != null || (ui.polishExhausted && !ui.running),
+    ui.coverageDiag?.let { it.hasShortage || it.hasSurplus } == true,
+    ui.forbiddenDiag?.hasRuns == true,
+    ui.c1Plateau?.let { it.causeUnknown || it.hasEntries } == true,
+    ui.observedPinBlockedAttempts > 0,
+).count { it }

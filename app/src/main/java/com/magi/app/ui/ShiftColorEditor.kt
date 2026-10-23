@@ -143,14 +143,13 @@ internal val VIOLATION_COLOR_PALETTE = listOf(
 internal fun ShiftColorCard(
     ui: UiState,
     shifts: List<ShiftColorView>,
-    onEvent: (MagiEvent) -> Unit,
-) {
+    onEvent: (MagiEvent) -> Unit, bare: Boolean = false) {
     var target by remember { mutableStateOf<String?>(null) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    MagiCardOrPlain(bare) { pad ->
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("シフトの表示色", style = MaterialTheme.typography.titleMedium)
             Text(
-                "勤務表に表示される各シフトの色です（既定はシフト種別ごとの色）。シフトを押すと色を変えられます。",
+                "シフトを押すと色を変えられます。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

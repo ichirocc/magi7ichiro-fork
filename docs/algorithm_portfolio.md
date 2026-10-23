@@ -194,7 +194,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 |---|---|---|
 | `Params.c2PolishEnabled`／`c2PolishReactivate` | 職員別合計（c2）の専用研磨／巡末の再起動 | iter15 不合格・3.524.0、iter_c2reactivate（backlog #12(b)・#26） |
 | `Params.c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群ペア禁止 c42 の最小費用フロー研磨（Reactivate は backlog でコード保持と明記） | 3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
-| `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
+| `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） （P2d-④ で撤去） |
 | `Params.c1ComponentRepair`／`c1ComponentRepairReactivate` | C1 成分修復 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.c3nMarginLnsEnabled`／`c3nMarginLnsReactivate` | c3n 余裕日の LNS 研磨 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.countChainReactivate` | 回数連鎖研磨の巡末再起動（本体は上表 `countChainPolish`） | iter_countchainreactivate（#26） |

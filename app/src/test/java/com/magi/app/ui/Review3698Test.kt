@@ -81,7 +81,7 @@ class Review3698Test {
         assertEquals("福澤さん 禁止の並び", t(HomePlanKind.LIST))
         assertEquals("福澤さん 禁止の並び", t(HomePlanKind.SEARCHING))
         for (k in listOf(HomePlanKind.MAKE, HomePlanKind.PRE_DIST, HomePlanKind.RUNNING, HomePlanKind.DATA_INFEASIBLE)) assertNull(t(k))
-        assertEquals("なおし方を見る", homeTargetLabel("なおし方を見る", t(HomePlanKind.GUIDED_FIX), null))
+        assertEquals("10/15(水) Cｵの直し方を見る", homeTargetLabel("直し方を見る", t(HomePlanKind.GUIDED_FIX), null))
         assertEquals(listOf(CREATION_DONE_TITLE), creationTopLines("10/15(水) Cｵ", headlineTarget = "10/15(水) Cｵ"))
         assertEquals(listOf(CREATION_DONE_TITLE, "次に確認する問題：X"), creationTopLines("X", headlineTarget = "Y"))
     }

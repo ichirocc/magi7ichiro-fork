@@ -225,16 +225,9 @@ class DeltaEvaluator(private val p: Problem) {
         //   in-bucket不変量下では old/nw は常に担当可のため実質no-op（差分恒等性は保たれる）。
         for (c in p.cons2) {
             if (!p.canDo(i, c.shiftIdx)) continue
-            if (p.quantitativeRangeEval) {
-                when (c.shiftIdx) {
-                    old -> d2 += c2Amount(cntSS[i][old] - 1, c.count) - c2Amount(cntSS[i][old], c.count)
-                    nw -> d2 += c2Amount(cntSS[i][nw] + 1, c.count) - c2Amount(cntSS[i][nw], c.count)
-                }
-            } else {
-                when (c.shiftIdx) {
-                    old -> d2 += viol01(cntSS[i][old] - 1 < c.count) - viol01(cntSS[i][old] < c.count)
-                    nw -> d2 += viol01(cntSS[i][nw] + 1 < c.count) - viol01(cntSS[i][nw] < c.count)
-                }
+            when (c.shiftIdx) {
+                old -> d2 += viol01(cntSS[i][old] - 1 < c.count) - viol01(cntSS[i][old] < c.count)
+                nw -> d2 += viol01(cntSS[i][nw] + 1 < c.count) - viol01(cntSS[i][nw] < c.count)
             }
         }
         dC2 = d2
@@ -308,8 +301,7 @@ class DeltaEvaluator(private val p: Problem) {
             var z = 0
             for (ii in 0 until S) if (p.sgrp[ii] == c.groupIdx && a[ii][j] == c.shiftIdx) z++
             val za = z + (if (c.shiftIdx == nw) 1 else 0) - (if (c.shiftIdx == old) 1 else 0)
-            d41 += if (p.quantitativeRangeEval) rangeDistance(za, c.l, c.u) - rangeDistance(z, c.l, c.u)
-                else viol01(za < c.l || c.u < za) - viol01(z < c.l || c.u < z)
+            d41 += viol01(za < c.l || c.u < za) - viol01(z < c.l || c.u < z)
         }
         dC41 = d41
 
@@ -339,8 +331,7 @@ class DeltaEvaluator(private val p: Problem) {
             var z = 0
             for (ii in 0 until S) if (p.ssk[ii] == c.groupIdx && a[ii][j] == c.shiftIdx) z++
             val za = z + (if (c.shiftIdx == nw) 1 else 0) - (if (c.shiftIdx == old) 1 else 0)
-            d41s += if (p.quantitativeRangeEval) rangeDistance(za, c.l, c.u) - rangeDistance(z, c.l, c.u)
-                else viol01(za < c.l || c.u < za) - viol01(z < c.l || c.u < z)
+            d41s += viol01(za < c.l || c.u < za) - viol01(z < c.l || c.u < z)
         }
         dC41s = d41s
 
@@ -554,8 +545,7 @@ class DeltaEvaluator(private val p: Problem) {
         // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
         for (c in p.cons2) for (i in 0 until S) {
             if (!p.canDo(i, c.shiftIdx)) continue
-            tot += if (p.quantitativeRangeEval) c2Amount(cntSS[i][c.shiftIdx], c.count)
-                else if (cntSS[i][c.shiftIdx] < c.count) 1L else 0L
+            tot += if (cntSS[i][c.shiftIdx] < c.count) 1L else 0L
         }
         return tot
     }
@@ -565,7 +555,7 @@ class DeltaEvaluator(private val p: Problem) {
         for (c in p.cons41) for (j in 0 until T) {
             var z = 0
             for (i in 0 until S) if (p.sgrp[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-            tot += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
+            tot += if (z < c.l || c.u < z) 1L else 0L
         }
         return tot
     }
@@ -588,7 +578,7 @@ class DeltaEvaluator(private val p: Problem) {
         for (c in p.cons41s) for (j in 0 until T) {
             var z = 0
             for (i in 0 until S) if (p.ssk[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-            tot += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
+            tot += if (z < c.l || c.u < z) 1L else 0L
         }
         return tot
     }

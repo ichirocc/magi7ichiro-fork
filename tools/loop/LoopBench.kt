@@ -103,49 +103,17 @@ fun main(args: Array<String>) {
     // Iteration 2: 旧＝3.504.x のチェーン（成分修復なし）、新＝巡末尾に違反起点のトランザクション修復を足したもの（3.505.1 で既定）。
     // [Iteration 7] MAGI_BENCH_DETERMINISTIC=1 で両腕とも決定的モード（回数上限で止める＝再現性を仕様にする）。
     val det = System.getenv("MAGI_BENCH_DETERMINISTIC") == "1"
-    // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ。既定（未設定）は Iteration 2 以来の「成分修復の有無」。
+    // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ（必須）。
     val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
     val (oldP, newP) = when (feature) {
-        "c3nmargin" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsEnabled = true)
-        "lnsadaptive" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true)
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
-        "restzero" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, restZeroWindowLnsEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "covorelief" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
-        "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
-        "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
-        "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
+        "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         "combineexhaust" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, combineExhaustPairs = true)
         "aptfairtol" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         // [2026-10-08] 許容 ON 同士で、無害化②（重い SOFT の 1 件増を拒む）の有無。大域フラグなので腕ごとに切り替える（下のループ）。
         "aptfairtolunguarded" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         "countchain" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainEnabled = true)
-        // [3.580.0/backlog#26] 既定OFFの専用修復腕を「対象違反が残る局面でだけ」再活性化する新フラグの
-        //   A/B。旧=フラグ全OFF（現行既定）、新=xxxReactivateだけON（xxxEnabled自体は既定のfalseのまま）。
-        "c2polishreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishReactivate = true)
-        "c42flowreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishReactivate = true)
-        "c1componentreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepairReactivate = true)
-        "c3nmarginreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsReactivate = true)
-        "countchainreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainReactivate = true)
-        // [3.590.0/backlog#27] FairPolishの候補分類をfairTarget(生回数平均)からfairDevOfBucket黒箱観測へ揃える。
-        "fairachievementdirection" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, fairAchievementDirection = true)
-        // [3.597.0/backlog#30] 日ごと厳密割当の対角(自分の現シフト)を常に有限にし、置けない職員/スロットが
-        //   ある日も残りを研磨できるようにする。
-        "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
-        // [3.608.0/backlog#34] チェーン内走行keep-best。パス単体の改善が同一チェーン内の別パスの
-        //   悪化に道連れで捨てられる問題への対処＝postChainRunningKeepBestのA/B。
-        "runningkeepbest" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = true)
-        //   既定設定では各パスが自前の keep-best でチェーンが単調＝巻き戻しが構造的に起きない（230/230 盤面一致）。
-        //   非単調になるのは aptFairSoftTolerance（他ソフト悪化を許容）ON のとき＝実機で道連れ棄却が起きた設定。
-        "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装。許容 ON 同士。
-        "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
-        "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
         // [2026-10-10] 玉突き連鎖パイプライン（利用者提示の仕様）。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         //   pipeoff*＝OFF（3.655.0 までの既定）対パイプライン、pipevsfull*＝従来の常時フル対パイプライン（A1）、pipevsshallow＝浅い予察だけ対全段（A2/A3）。
         //   *end＝パイプラインを最終の違反起点修復の後に置く（pipevsfullallend の旧腕は従来の「修復後の玉突き」）。
@@ -158,13 +126,9 @@ fun main(args: Array<String>) {
         "piperoundsendk", "pipehardendk", "pipecomboendk", "pipecombovsfullendk", "pipehardvsroundsendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
-        "ejectionearlyhard", "ejectionearlyall", "ejectionfinalall", "ejectionearlyallretry", "ejectionafterrepair", "ejectionafterrepairhole", "ejectionafterrepairholesoft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        // [2026-10-07] 後処理チェーン先頭の局所降下（PolishGate.prePostDescent）。大域フラグなので腕ごとに切り替える（下のループ）。
-        "prepostdescent" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
+        else -> error("MAGI_BENCH_FEATURE を指定する（既定の比較だった成分修復の有無は P2d で常に ON）: $feature")
     }
-    System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
+    System.err.println("feature=$feature deterministic=$det")
     // [3.507.6] 再開可能: 既存 CSV の (case,seed,arm) を読み、済みの行は飛ばして追記する（VM 再起動で JVM が消えても続きから）。
     val done = HashSet<String>()
     if (out.exists()) out.readLines().drop(1).forEach { l -> val c = l.split(","); if (c.size > 4) done.add(c[0] + "|" + c[3] + "|" + c[4]) }
@@ -200,30 +164,20 @@ fun main(args: Array<String>) {
                     // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
-                PolishGate.ejectionPipelineAfterRepair = !pf.startsWith("pipe") || pf.endsWith("end")
                 EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
-                // [3.657.0] パイプラインの腕は 1 巡だけ・必須の焦点なしを基準に新腕だけ足す（3.656.0 までの腕の再現）。それ以外の機能は既定（探し直し ON）のまま測る。
-                //   pipehardvsroundsendk だけは両腕とも探し直し ON（既定）で、新腕に必須の焦点を足す。
-                PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) pf == "pipehardvsroundsend" || (arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend")) else true
+                // [3.657.0] 探し直しは P2d で常に ON。新腕だけ必須の焦点を足す。
                 PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend", "pipehardvsroundsend")
-                PolishGate.hardEjectionChainEarly = feature == "ejectionearlyhard" && arm == "new"
-                PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
-                PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"
-                PolishGate.allEjectionChainFinal = feature == "ejectionfinalall" && arm == "new"
-                PolishGate.allEjectionChainAfterRepair = (feature == "ejectionafterrepair" && arm == "new") || feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft" ||
-                    ((pf == "pipevsfullallend" || pf == "pipecombovsfullend") && arm == "old")
                 // ejectionafterrepairhole: 両腕とも修復後の玉突きを ON にし、新腕だけ穴に絞った候補生成（旧腕＝月全体の総当たり）。
                 //   従来の玉突きの腕と *end までのパイプラインの腕は月全体で測った（再現のため据え置き）。それ以外は範囲の既定のまま。
                 val monthScope = feature.startsWith("ejection") || (feature.startsWith("pipe") && !byKind)
                 C1EjectionChainPolish.defaultHoleFocus = !monthScope || ((feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new")
                 C1EjectionChainPolish.defaultHoleSoftOnly = !monthScope || feature == "ejectionafterrepairholesoft"
-                PolishGate.prePostDescent = feature == "prepostdescent" && arm == "new"
                 AptFairPolish.heavySoftGuard = !(feature == "aptfairtolunguarded" && arm == "new")
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
                     var exc = 0; var res: V6PostOptimizationResult? = null
-                    try { res = V6HotfixPasses.runPostOptimization(st, init.copy2D(), "bench", seed = seed.toLong() * 1000003L + 17, deadlineMs = EngineClock.nowMs() + sp.budgetMs, params = prm) }
+                    try { res = V6HotfixPasses.runPostOptimization(st, init.copy2D(), "bench", seed = seed.toLong() * 1000003L + 17, deadlineMs = EngineClock.nowMs() + sp.budgetMs, params = prm.copy(ejection = EngineConfig.snapshot().ejection)) }
                     catch (e: Throwable) { exc = 1 }
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     val peak = peakHeap() / (1024 * 1024)

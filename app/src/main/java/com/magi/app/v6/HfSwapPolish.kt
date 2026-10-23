@@ -21,11 +21,10 @@ import java.util.Random
 internal object HfSwapPolish {
     fun applyHF67InterStaffSwap(
         state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE,
-        quantitativeRangeEval: Boolean = false,
     ): HF67Result {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var current = before
         var swaps = 0
         var shortage = 0
@@ -55,7 +54,7 @@ internal object HfSwapPolish {
                     for (from in highs) {
                         if (to == from) continue
                         val cand = trySwapShiftBetweenStaff(p, work, from, to, k) ?: continue
-                        val rep = UnifiedViolationChecker.check(state, cand.first, quantitativeRangeEval)
+                        val rep = UnifiedViolationChecker.check(state, cand.first)
                         val ref = bestReport ?: current
                         // [厳密ピン保護/3.522.0] 職員間交換はfrom/toの2者の回数を同時に変えうるため他パスと同じガード。
                         if (betterReport(rep, ref) && !exactPinRegression(p, work, cand.first)) {
@@ -78,11 +77,11 @@ internal object HfSwapPolish {
             if (current.soft < before.soft) capacity++
         }
         if (swaps == 0 && !outOfTime()) {
-            val improved = localPairwiseStaffSwap(state, p, work, maxSwaps, { outOfTime() }, quantitativeRangeEval)
+            val improved = localPairwiseStaffSwap(state, p, work, maxSwaps, { outOfTime() })
             work = improved.first
             swaps = improved.second
             rollback = improved.third
-            current = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+            current = UnifiedViolationChecker.check(state, work)
             capacity = swaps
         }
         val logs = listOf(MirrorLog(tag = "HF67", message = "inter-staff swap applied=$swaps rollback=$rollback total ${before.total}->${current.total}"))
@@ -92,11 +91,10 @@ internal object HfSwapPolish {
 
     fun applyHF66IntraStaffRedistribution(
         state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE,
-        quantitativeRangeEval: Boolean = false,
     ): HF66Result {
-        val p = cachedProblem(state, quantitativeRangeEval)
+        val p = cachedProblem(state)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        val before = UnifiedViolationChecker.check(state, work)
         var current = before
         var moves = 0
         var shortageMoves = 0
@@ -127,7 +125,7 @@ internal object HfSwapPolish {
                         if (work[i][j] != give || p.wishLocked(i, j) || p.extBanned(i, j, want)) continue
                         val cand = work.copy2D()
                         cand[i][j] = want
-                        val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
+                        val rep = UnifiedViolationChecker.check(state, cand)
                         // [厳密ピン保護/3.522.0] 職員内の担当替えも自身の回数を変えるため他パスと同じガード。
                         if (betterReport(rep, bestReport ?: current) && !exactPinRegression(p, work, cand)) {
                             bestMove = MoveCandidate(i, j, give, want)
@@ -138,7 +136,7 @@ internal object HfSwapPolish {
             }
             val mv = bestMove ?: break
             work[mv.staff][mv.day] = mv.toShift
-            current = bestReport ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+            current = bestReport ?: UnifiedViolationChecker.check(state, work)
             moves++
             shortageMoves++
             if (current.soft < before.soft) capacityMoves++
@@ -159,7 +157,7 @@ internal object HfSwapPolish {
                             cand[i][j] = allowed[rng.nextInt(allowed.size)]
                             // 拡張希望の禁止へは置かない（乱数を引いた後で判定＝禁止なしは従来どおり）
                             if (cand[i][j] != old && !p.extBanned(i, j, cand[i][j])) {
-                                val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
+                                val rep = UnifiedViolationChecker.check(state, cand)
                                 if (betterReport(rep, current) && !exactPinRegression(p, work, cand)) {
                                     work = cand
                                     current = rep
@@ -185,12 +183,11 @@ internal object HfSwapPolish {
         schedule: Array<IntArray>,
         algoName: String,
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
-        quantitativeRangeEval: Boolean = false,
     ): HF70Result {
-        val invalid = invalidAssignmentCount(state, schedule, quantitativeRangeEval)
+        val invalid = invalidAssignmentCount(state, schedule)
         val impossible = V6SanityPort.detectImpossibleWishes(state).size
         // 希望どうしの衝突が生む c3n/c3w は希望起因＝「希望以外」に数えない（pref・拡張希望の違反と同じ扱い）。
-        val selfConflict = V6SanityPort.wishConflictHard(cachedProblem(state, quantitativeRangeEval), schedule)
+        val selfConflict = V6SanityPort.wishConflictHard(cachedProblem(state), schedule)
         val hardCore = report.hard - (report.breakdown["pref"] ?: 0) - (report.breakdown["extWish"] ?: 0) -
             (selfConflict["c3n"] ?: 0) - (selfConflict["c3w"] ?: 0)
         val issues = ArrayList<String>()
@@ -200,7 +197,7 @@ internal object HfSwapPolish {
         if (hardCore > 0) {
             // [3.692.0] 人員不足のうち日の証明で避けられない分は、人員不足の診断（CoverageDiag の「充足不可」）・設定ミス診断と同じ根拠で言い分ける。
             val proven = minOf(hardCore, report.breakdown["covU"] ?: 0,
-                runCatching { V6PortAnalyzer.dayProofCovU(cachedProblem(state, quantitativeRangeEval), schedule) }.getOrDefault(0))
+                runCatching { V6PortAnalyzer.dayProofCovU(cachedProblem(state), schedule) }.getOrDefault(0))
             issues.add("希望以外HARD $hardCore 件" + if (proven > 0) "（うち人員不足 $proven 件はこの希望と上限のままでは埋まらない）" else "")
         }
         val msg = if (issues.isEmpty()) "HF70: $algoName 異常なし" else "HF70: ${issues.joinToString(" / ")}"
@@ -237,10 +234,9 @@ internal object HfSwapPolish {
 
     private fun localPairwiseStaffSwap(
         state: MagiState, p: Problem, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false },
-        quantitativeRangeEval: Boolean = false,
     ): Triple<Array<IntArray>, Int, Int> {
         var work = schedule.copy2D()
-        var current = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        var current = UnifiedViolationChecker.check(state, work)
         var applied = 0
         var rollback = 0
         loop@ for (i in 0 until p.S) for (i2 in i + 1 until p.S) for (j in 0 until p.T) {
@@ -253,7 +249,7 @@ internal object HfSwapPolish {
             val cand = work.copy2D()
             cand[i][j] = b
             cand[i2][j] = a
-            val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
+            val rep = UnifiedViolationChecker.check(state, cand)
             if (betterReport(rep, current) && !exactPinRegression(p, work, cand)) {
                 work = cand
                 current = rep
@@ -266,8 +262,8 @@ internal object HfSwapPolish {
     }
 
 
-    private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>, quantitativeRangeEval: Boolean = false): Int {
-        val p = cachedProblem(state, quantitativeRangeEval)
+    private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>): Int {
+        val p = cachedProblem(state)
         val s = normalizeSchedule(schedule, p)
         var n = 0
         for (i in 0 until p.S) for (j in 0 until p.T) {

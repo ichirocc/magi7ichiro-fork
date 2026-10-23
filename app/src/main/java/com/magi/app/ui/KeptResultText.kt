@@ -23,7 +23,7 @@ object KeptResultText {
 
     /** 前の勤務表のままにしたときのお知らせ（比べた結果は件数で言う。内部の評価点は出さない）。 */
     fun screen(nowBreakdown: Map<String, Int>, prevBreakdown: Map<String, Int>): String =
-        "再作成した案は前の勤務表より良くなかったため採用していません（再作成した案：${reportCountsText(nowBreakdown)}／前の勤務表：${reportCountsText(prevBreakdown)}）。勤務表は変わっていません。"
+        "再作成の案は前より良くなかったので採用していません（再作成：${reportCountsText(nowBreakdown)}／前：${reportCountsText(prevBreakdown)}）。勤務表はそのままです。"
 
     const val KEPT_TITLE = "再作成しましたが、前の勤務表のほうが良かったため前のままです"
 

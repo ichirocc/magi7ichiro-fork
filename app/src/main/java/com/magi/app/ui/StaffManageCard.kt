@@ -92,7 +92,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             }
             // [3.409.11] 残り1名のとき削除ボタンが理由なく消える（年間マスター側と同じ対象漏れ）。
             if (v.staff.size <= 1) {
-                Text("最後の1名は削除できません（勤務表の行が無くなるため）。先に別の職員を入職させると削除できます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text("最後の1名は削除できません。先に別の職員を追加してください。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             // [3.720.0 S-1] 職員管理の主ボタン（塗り）。下部の再作成が主の間は外枠（INV-09）。
             AddRowButton(ADD_STAFF_BUTTON, onClick = { addOpen = true }, enabled = ui.loaded && !ui.running, filled = addFilled)

@@ -51,19 +51,10 @@ fun main(args: Array<String>) {
             val arms = if (feature == "wishfloor") listOf(WishFloorMode.OFF, WishFloorMode.E0A, WishFloorMode.E0B) else listOf(null, null)
             for ((ai, wfm) in arms.withIndex()) {
                 val armOn = ai > 0
-                // off 腕＝製品の既定（3.673.0 から c3n 壁の短縮なし）。"c3nwall" だけ off 腕が旧既定（短縮あり）。
-                PolishGate.c3nWallShortStall = feature == "c3nwall" && !armOn
                 // "floorstall"＝on 腕で必須違反の下限到達による短縮を外す（PolishGate.floorShortStall=false、通常閾値で粘る）。
                 PolishGate.floorShortStall = !(feature == "floorstall" && armOn)
-                // "head"＝HEAD の壁判定と後期演算の試行中の停止確認を切る（on 腕。入口の確認は残る）。off 腕＝現行。
-                PolishGate.c3nWallLegacy = feature == "head" && armOn
-                PolishGate.lateOpStopPropagation = !(feature == "head" && armOn)
                 // "deep"＝on 腕で経験的な c3n 壁を 1 手探索で反証する（PolishGate.c3nWallDeepCheck、根拠の段階化）。off 腕＝現行。
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
-                // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
-                PolishGate.adaptiveStall = feature == "adaptive" && armOn
-                // "floorup0"＝off 腕が上限0を含めない旧来の床、on 腕が上限0込み（PolishGate.floorCountsUpperZero、3.709.0 から既定）。ほかの機能は既定のまま。
-                PolishGate.floorCountsUpperZero = feature != "floorup0" || armOn
                 // "ejpipe*"＝on 腕で玉突き連鎖パイプライン（BOTH／C1）。"ejpipefull"＝off 腕が従来の全族の常時フル、on 腕がパイプライン BOTH。
                 PolishGate.allFamilyEjectionChain = feature == "ejpipefull" && !armOn
                 PolishGate.ejectionPipelineFocus = when {
@@ -73,10 +64,7 @@ fun main(args: Array<String>) {
                     // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
-                PolishGate.ejectionPipelineAfterRepair = !feature.startsWith("ejpipe") || feature == "ejpipeend"
                 PolishGate.normalStallFraction = if (feature == "earlystall" && armOn) onFraction else 0.9
-                // "leftover"＝on 腕で玉突きの深い探索に締切までの残りを回す（PolishGate.ejectionUseLeftover）。
-                PolishGate.ejectionUseLeftover = feature == "leftover" && armOn
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(

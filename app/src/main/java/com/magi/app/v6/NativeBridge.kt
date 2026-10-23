@@ -110,6 +110,21 @@ object NativeGate {
 
     fun disable(why: String) { enabled = false; reason = why }
 
+    /** 試験用。ゲートを開け直す（プロセス内で共有の状態を、閉じたテストの後へ持ち越さない）。 */
+    internal fun resetForTest() { enabled = true; reason = null }
+
+    /** 1 層目の番兵（C++ チャンクの自己整合）。戻り値が無い・[minSize] 未満・status!=0 は NG。 */
+    fun chunkConsistent(ret: LongArray?, minSize: Int): Boolean = ret != null && ret.size >= minSize && ret[0] == 0L
+
+    /** 2 層目の番兵（Kotlin フル評価と Long== 照合）。不一致なら Kotlin のスコア、一致・照合 OFF は null。
+     *  照合 OFF では [kotlin] を呼ばない（フル評価の費用を払わない）。 */
+    inline fun parityMismatch(native: Long, kotlin: () -> Long): Long? {
+        if (!parityCheckEnabled) return null
+        TuningTelemetry.parityChecks.incrementAndGet()
+        val k = kotlin()
+        return if (k == native) null else k
+    }
+
     /** ネイティブSAチャンクを使ってよいか（ロード成功×番兵ゲート開×ユーザーON）。 */
     val usable: Boolean get() = enabled && userEnabled && NativeBridge.available
 }

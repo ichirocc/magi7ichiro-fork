@@ -24,8 +24,8 @@ class Review3719Test {
         assertEquals("アリフ 10/8の希望を見る", homeTargetLabel(HOME_WISH_BUTTON, "アリフ", "10/8"))
         assertEquals("アリ 10/8の希望を見る", homeTargetLabel(HOME_WISH_BUTTON, "アリ", "10/8", 1.3f))
         assertEquals(HOME_WISH_BUTTON, homeTargetLabel(HOME_WISH_BUTTON, "アリフ", "10/8", 1.3f))
-        assertEquals("10/8のなおし方を見る", homeTargetLabel("なおし方を見る", null, "10/8", 1.0f))
-        assertEquals("なおし方を見る", homeTargetLabel("なおし方を見る", null, "10/8", 2.0f))   // 9 字まで
+        assertEquals("10/8の直し方を見る", homeTargetLabel("直し方を見る", null, "10/8", 1.0f))
+        assertEquals("直し方を見る", homeTargetLabel("直し方を見る", null, "10/8", 2.0f))   // 9 字まで
     }
 
     @Test fun scheduleMetricsKeepSevenDaysUntilLargeScale() {
