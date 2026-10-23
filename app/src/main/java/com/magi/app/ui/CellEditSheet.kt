@@ -223,7 +223,8 @@ internal fun CellEditSheet(
                     }
                     SheetListButton(onList)
                     SheetUndoButton(canUndo, onUndo)
-                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+                    // 下の固定部に［閉じる］がある段では ✕ を出さない（1 画面に同じ操作を 2 つ置かない）。
+                    if (mode == 0 && step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     badge?.let { MagiTagChip(it, if (status.severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }

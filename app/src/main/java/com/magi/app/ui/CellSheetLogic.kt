@@ -1727,6 +1727,10 @@ internal data class HomePlan(val kind: HomePlanKind, val primary: HomeAction, va
  * ホームの「次にやること」の段を決める（純関数）。主ボタンは常に 1 つ＝組立中と探索中だけ押せない。
  * 保存の失敗（[saveFailed]）と相談中（[consults]）は段を変えない＝完成の見出しと書き出しを止めない（D10）。
  */
+/** ホームの主カードが［勤務表をつくる］を出す段（`homePlan` の MAKE・DRAFT と同じ条件）。このとき下部バーの同じボタンは隠す。 */
+internal fun homeCardShowsMake(running: Boolean, fixSearching: Boolean, hasResult: Boolean, draft: Boolean, infeasible: Boolean): Boolean =
+    !running && !fixSearching && (!hasResult || (draft && !infeasible))
+
 internal fun homePlan(
     running: Boolean, hasResult: Boolean, hard0: Boolean,
     infeasible: Boolean = false, hasPinned: Boolean = false, guided: Boolean = false,

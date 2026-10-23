@@ -825,8 +825,7 @@ internal fun OperatorNextActionCard(
                     }
                     if (saveFailed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg), border = BorderStroke(1.dp, plan.fg)) { Text(SAVE_RETRY_BUTTON) }
-                    // 作成直後の自動探索はカードの中の文字ボタンで止める（下部バーは外枠のまま。止められる性質は 3.402.0 のまま）。
-                    if (kind == HomePlanKind.SEARCHING) TextButton(onClick = onStop, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                    // 探索を止めるのは下部バーの［やめる］だけ（カードに同じボタンを重ねない）。
                 }
                 HomeSection.PROGRESS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1277,7 +1276,8 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
             }
             if (shown.size < diag.entries.size) SettingIssuesShowAll(diag.entries.size - shown.size) { showAll = true }
             DiagDetailToggle(detailOpen, onToggle = { detailOpen = !detailOpen })
-            if (diag.pinConstrained > 0) {
+            // 回数固定の影響カードが出ているときは、同じ行き先のボタンをそちらに任せる。
+            if (diag.pinConstrained > 0 && ui.observedPinBlockedAttempts <= 0) {
                 TextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }
             }
         }

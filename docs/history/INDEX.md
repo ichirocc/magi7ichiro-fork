@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 1 画面に同じボタンを 2 つ置かない（2026-10-23、版なし・出力不変）: セルのシートの ✕ と［閉じる］、ホームの［やめる］2 つ、［勤務表をつくる］カードと下部バー、［個人の回数を見直す］2 枚のカード  → `docs/history/3.4xx.md`
 - 画面の冗長・見切れ・文言（2026-10-23、版なし・出力不変）: セルのシートの前後の日ボタン重複を削除、［自分で勤務を選ぶ］を固定部へ、上部の札の「評価：」を外し 2 行折り返し、案なしの文を短く  → `docs/history/3.4xx.md`
 - 全面改修 P2d-④（2026-10-22、版なし・本番の出力不変）: quantitativeRangeEval（量的評価モード、3.512.0 否決）を Kotlin 45 ファイル・C++ から撤去。JNI meta[7] は 0 固定（ABI 不変）。QuantitativeRangeEvalTest 削除  → `docs/overhaul_design.md` §6.3
 - 全面改修 P2d-③（2026-10-22、版なし・本番の出力不変）: 否決・測定用の腕を削除（SoftCascadePolish・PrePostDescent・C2Polish・C42FlowPolish・C3nMarginLnsPolish・RestZeroWindowLns・StallPolishInjection の 7 ファイル、c1MoveARepair、adaptiveStall、postChainRollbackCountsZero、rsiFocusRotationPersist、c1ComponentRepair、fairAchievementDirection、dayAssignIdentityFallback、各 Reactivate、PortfolioBudgetBench）。戻すときはこの直前のコミットから  → `docs/overhaul_design.md` §6.3

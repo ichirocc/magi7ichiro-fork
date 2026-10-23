@@ -637,7 +637,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList)
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList,
+                        hideMake = tab == 0 && homeCardShowsMake(ui.running, ui.fixSearching, ui.hasResult, ui.draftStage && ui.engineRan, ui.coverageDiag?.allInfeasible == true))
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
@@ -1344,7 +1345,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
                 Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             }
             val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
-            // 作成直後の自動探索（fixSearching）はホームの主カードの文字ボタンで止める＝下部バーは外枠のまま（INV-09）。
+            // 作成直後の自動探索（fixSearching）を止めるのはここだけ（ホームのカードに同じボタンを置かない）。塗りは主カードに譲る（INV-09）。
             if (secondary && !ui.running) OutlinedButton(onClick = { vm.stop() }, modifier = m, contentPadding = pad, content = stopContent)
             else Button(onClick = { vm.stop() }, modifier = m, contentPadding = pad,
                 colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer), content = stopContent)
@@ -1380,7 +1381,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
 }
 
 @Composable
-internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false, onShowList: () -> Unit = {}) {
+internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false, onShowList: () -> Unit = {}, hideMake: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
     // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
@@ -1410,7 +1411,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
+            if (hideMake) Spacer(Modifier.weight(1f)) else PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
         }
         }
     }
