@@ -759,11 +759,12 @@ internal fun DataActionsCard(
                 OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを取り込む") }
                 OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを書き出す") }
             }
-            Text("種類別のCSVを書き出す",
-                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [3.547.0] 3→4項目化でRow等分weightだと1項目あたりの幅が狭まり続けるため、
-            //   幅いっぱいに収まる分だけ並べ余りは折り返すFlowRowへ（ShiftColorCardのチップと同じ考え方）。
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 種類別の書き出し 4 つは畳む（データのカードの常時のボタンを減らす）。
+            var kindsOpen by remember { mutableStateOf(false) }
+            MagiTextButton(onClick = { kindsOpen = !kindsOpen }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (kindsOpen) "種類別のCSVを書き出す ▾" else "種類別のCSVを書き出す ▸")
+            }
+            if (kindsOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員一覧") }
                 OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフト") }
                 OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("各制約") }

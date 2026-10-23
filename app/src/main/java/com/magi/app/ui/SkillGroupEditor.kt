@@ -15,7 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -77,7 +77,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
             AddRowButton("スキルグループを追加する", onClick = { dialog = SkillDlg.Add }, enabled = !ui.running)
 
             if (skills.isNotEmpty()) {
-                Divider()
+                HorizontalDivider()
                 // [3.482.0 編集タブ簡素化] 旧「職員のスキル割当」（職員ごとの ▼ 一覧＝職員管理ドアの ▼ と同じ
                 //   vm.setStaffSkill）は撤去。同じ操作が編集タブ内の2か所にあった。ここは分類の定義だけ。
                 val assigned = staff.count { it.skillIdx in skills.indices }

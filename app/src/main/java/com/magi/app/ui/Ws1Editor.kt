@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -103,7 +103,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
             // use2 は画面に出さない（保存値はそのまま）
-            Divider()
+            HorizontalDivider()
 
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
@@ -132,7 +132,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             }
             AddRowButton("シフトを追加する", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
             AddRowButton("まとめて追加する", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
-            Divider()
+            HorizontalDivider()
 
             // --- groups ---
             Spacer(Modifier.height(8.dp))
@@ -150,7 +150,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 }
             }
             AddRowButton("グループを追加する", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
-            Divider()
+            HorizontalDivider()
 
             // [3.482.0 編集タブ簡素化] 旧「職員」節（氏名/所属の一覧・追加・一括追加・削除）は撤去し、
             //   職員管理ドア（StaffManageCard）へ一本化した。3.114.0 は「同一 vm API の別ビュー・併存」を選び

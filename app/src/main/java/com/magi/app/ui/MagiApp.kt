@@ -3,6 +3,8 @@ package com.magi.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -508,6 +510,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (!visible) scope.launch { sc.animateScrollTo(top) }
     }
     val editScrolls = List(3) { rememberScrollState() }
+    // 下部のタブは下へ送ると縮み、上へ戻すか先頭で広がる（iOS 26 のタブバーと同じ動き。ガラスは使わない＝UD の不透明）。
+    var navCollapsed by remember { mutableStateOf(false) }
+    val pageScroll = if (tab == 2) editScrolls[editScope.coerceIn(0, 2)] else tabScrolls[tab.coerceIn(0, 4)]
+    LaunchedEffect(pageScroll) {
+        var last = pageScroll.value
+        snapshotFlow { pageScroll.value }.collect { v ->
+            navCollapsed = navCollapseNext(navCollapsed, last, v)
+            last = v
+        }
+    }
     // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは月次条件の先頭。
     val openEditLanding: (EditLanding?) -> Unit = { l ->
         tab = 2
@@ -644,7 +656,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
                 }
-                MagiBottomNav(tab) { tab = it }
+                MagiBottomNav(tab, collapsed = navCollapsed, onExpand = { navCollapsed = false }) { tab = it; navCollapsed = false }
             }
         },
         // [3.400.0] 成功と失敗を同じ見た目で出さない（失敗はエラー色）。色は既に SettingIssuesCard 等が
@@ -1430,7 +1442,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
 
 
 @Composable
-internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
+internal fun MagiBottomNav(selected: Int, collapsed: Boolean = false, onExpand: () -> Unit = {}, onSelect: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val items = listOf(
         Triple("ホーム", Icons.Filled.Home, "ホーム"),
@@ -1443,16 +1455,29 @@ internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
     val itemColors = NavigationBarItemDefaults.colors(
         indicatorColor = cs.primaryContainer, selectedIconColor = cs.onPrimaryContainer, selectedTextColor = cs.primary,
     )
-    NavigationBar {
-        items.forEachIndexed { i, item ->
-            NavigationBarItem(
-                selected = selected == i,
-                onClick = { onSelect(i) },
-                icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
-                label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
-                alwaysShowLabel = true,
-                colors = itemColors,
-            )
+    // 画面の端から浮かせた角丸の帯（不透明・境界線で分ける＝影を使わない）。縮むと今のタブだけの小さな帯になり、押すと広がる。
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Surface(color = cs.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge, border = BorderStroke(1.dp, cs.outlineVariant),
+            modifier = if (collapsed) Modifier else Modifier.fillMaxWidth()) {
+            if (collapsed) {
+                val item = items[selected.coerceIn(0, items.lastIndex)]
+                Row(Modifier.clickable(onClickLabel = "タブを広げる", onClick = onExpand).heightIn(min = 48.dp).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(item.second, contentDescription = null, tint = cs.primary)
+                    Text(item.first, style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                }
+            } else NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
+                items.forEachIndexed { i, item ->
+                    NavigationBarItem(
+                        selected = selected == i,
+                        onClick = { onSelect(i) },
+                        icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
+                        label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
+                        alwaysShowLabel = true,
+                        colors = itemColors,
+                    )
+                }
+            }
         }
     }
 }
