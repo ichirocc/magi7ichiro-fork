@@ -1414,7 +1414,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         agentJob = viewModelScope.launch {
             try {
                 val r = withContext(Dispatchers.Default) {
-                    com.magi.app.v6.AgentLoop.run(st, snap, System.currentTimeMillis() + AGENT_BUDGET_MS, active = { isActive })
+                    com.magi.app.v6.AgentLoop.run(st, snap, System.currentTimeMillis() + AGENT_BUDGET_MS, active = { isActive },
+                        widen = { s0, b, leftMs -> V6NativeOptimizer.softPolishOnly(s0, b, (leftMs / 1000L).toInt().coerceIn(1, AGENT_WIDEN_MAX_SEC), shouldStop = { !isActive }) })
                 }
                 val curSched = currentSchedule; val curSt = state
                 if (curSched == null || curSt == null || boardKey(curSched) != key0 || stateKey(curSt) != stKey || optimizeInFlight()) {

@@ -11,6 +11,8 @@ data class AgentRecord(
 
 /** 代行の 1 回の輪の上限（探索 1 回は `AgentLoop.SEARCH_MS`）。 */
 internal const val AGENT_BUDGET_MS = 30_000L
+/** 1 手の案が尽きたときの「自動で整える」の上限（秒）。 */
+internal const val AGENT_WIDEN_MAX_SEC = 10
 
 internal const val AGENT_RUNNING_LINE = "代行で仕上げています…（必須違反を減らす変更を順に当てています）"
 internal const val AGENT_TOGGLE_LABEL = "作成のあと代行で仕上げる"
