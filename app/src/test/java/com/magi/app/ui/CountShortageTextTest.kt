@@ -266,7 +266,7 @@ class CountShortageTextTest {
         assertEquals("必須違反 2件・1人・要調整 4件・2人・9回・30pt", reportCountsText(b))
         assertEquals("下限割れ −6回・禁止の並び +1件", familyDeltaList(listOf("low" to -6, "c3n" to 1)))
         assertEquals("要調整 4件・2人・9回・30pt・配布前の確認", readyBadgeLabel(40, b))
-        assertEquals("評価：必須違反 2件・1人", boardStatusLines(true, true, true, 3, 0, b).second)
+        assertEquals("必須違反 2件・1人", boardStatusLines(true, true, true, 3, 0, b).second)
     }
 
     @Test fun fixFocusFollowsTheStaffIdAcrossReorderAndDeletion() {

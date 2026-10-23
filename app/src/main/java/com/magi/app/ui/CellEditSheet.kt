@@ -357,7 +357,6 @@ internal fun CellEditSheet(
                                 addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"),
                                 singleProblem = fams.singleOrNull()?.let { breakdownLabels[it] ?: it })
                         }
-                        TextButton(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
                     }
                     if (mode == 1 && wish != null) {
                         wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -426,16 +425,19 @@ internal fun CellEditSheet(
                 }
             }
             if (mode == 0 && step == 0) {
-                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
+                // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
+                if (!dilemma || dilemmaChoice == 2) TextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
+                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                     val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
                     val next = adjacentDayLabel(ui.startDate, ui.days, j + 1)
                     TextButton(onClick = { onMove(i to j - 1) }, enabled = prev != null, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text("${prev ?: "前日"}へ", maxLines = 1)
+                        Text("◀ ${prev ?: "前日"}", maxLines = 1)
                     }
                     TextButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text("${next ?: "翌日"}へ", maxLines = 1)
+                        Text("${next ?: "翌日"} ▶", maxLines = 1)
                     }
+                    TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
                 }
                 // 板挟みの選択肢はこの固定部に置く（上の読むところは縦に送るので、長いと画面の外に隠れた）。
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -492,7 +494,7 @@ internal fun CellEditSheet(
                     Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1)
                 }
             }
-            if (step == 0 || mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
+            if (mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                 TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
             // 画面下端のジェスチャー帯の上に、押せるものを置かない 32dp。

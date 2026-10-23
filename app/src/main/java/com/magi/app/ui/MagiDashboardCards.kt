@@ -1079,7 +1079,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                     onClick = { onCancelWish(i, s.dayIndex) },
                                     enabled = !ui.running,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望（${s.shiftSymbol}）を外す", color = cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望（${s.shiftSymbol}）を外す", color = cs.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                             }
                         }
                     }

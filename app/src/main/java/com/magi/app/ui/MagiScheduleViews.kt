@@ -1360,7 +1360,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { detail = null; onEvent(MagiEvent.Condition.RemoveWish(i, dj)) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を外す", color = cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を外す", color = cs.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                             // [実機バグ修正] 希望で固定していない在勤者にも1人にしぼった「直し方を探す」への導線を足す。
@@ -1375,7 +1375,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { person = i },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの変更案を探す", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの変更案を探す", maxLines = 2, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
                         }
@@ -2355,11 +2355,8 @@ private fun NoFixBlock(
         val st = focus.staff; val d = focus.day
         val prev = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d - 1) else null
         val next = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d + 1) else null
-        Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        if (st != null && d != null && (prev != null || next != null)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (prev != null) OutlinedButton(onClick = { nav.onCell(st, d - 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${prev}を開く", maxLines = 1) }
-            if (next != null) OutlinedButton(onClick = { nav.onCell(st, d + 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${next}を開く", maxLines = 1) }
-        }
+        // 前後の日へはシートの固定部の ◀ ▶ で行く（ここに同じボタンを重ねない）。
+        Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall)
         if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
         return
     }

@@ -1380,8 +1380,8 @@ internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが�
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
 internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap(), ranBeforeEdit: Boolean = false): Pair<String, String> =
     (if (engineRan) "自動作成済み" else if (ranBeforeEdit && hasResult) "手で変更あり" else if (hasResult) "手で編集" else "自動作成前") to
-        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hardText(breakdown, hard)}"
-        else if (soft > 0) "評価：要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "評価：違反なし")
+        (if (!checked) "未評価" else if (hard > 0) "必須違反 ${hardText(breakdown, hard)}"
+        else if (soft > 0) "要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "違反なし")
 
 /**
  * 案がこのセルの問題を解消するか（2026-10-14 利用者レビュー: 族の全体の件数が減るだけでは、選んだセルが直るとは限らない）。
@@ -1555,13 +1555,13 @@ internal const val MORE_OPS_LABEL = "ほかの操作 ▸"
 internal fun showCountSection(countKeys: Collection<String>, i: Int, lines: List<String>): Boolean =
     lines.isNotEmpty() && countKeys.any { VioKey.first(it) == i }
 
-internal const val COMPACT_NO_FIX = "この場所を直す案は見つかりませんでした"
+internal const val COMPACT_NO_FIX = "この場所を直す案はありません"
 
 /** セルのシートで案が無いときの 1 行。[single]＝問題が 1 つならその名（前後の日へ案内する）、無ければ先頭の理由を添える。 */
 internal fun compactNoFixLine(reasons: List<String>, single: String?, prevDay: String?, nextDay: String?): String {
     if (single != null) {
         val days = listOfNotNull(prevDay, nextDay)
-        return "このセルの${single}を解消する案は見つかりませんでした" + (if (days.isEmpty()) "" else "。前後の日（${days.joinToString("・")}）を開いて確かめられます")
+        return "このセルの${single}を直す案はありません" + (if (days.isEmpty()) "" else "。前後の日（${days.joinToString("・")}）も確かめてください")
     }
     return reasons.firstOrNull()?.let { "$COMPACT_NO_FIX。$it" } ?: COMPACT_NO_FIX
 }

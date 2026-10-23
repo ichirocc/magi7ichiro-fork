@@ -21,9 +21,9 @@ class Review3683Test {
     }
 
     @Test fun compactNoFixLines() {
-        assertEquals("この場所を直す案は見つかりませんでした。理由A", compactNoFixLine(listOf("理由A", "理由B"), null, null, null))
-        assertEquals("この場所を直す案は見つかりませんでした", compactNoFixLine(emptyList(), null, null, null))
-        assertEquals("このセルの禁止の並びを解消する案は見つかりませんでした。前後の日（11/2・11/4）を開いて確かめられます",
+        assertEquals("この場所を直す案はありません。理由A", compactNoFixLine(listOf("理由A", "理由B"), null, null, null))
+        assertEquals("この場所を直す案はありません", compactNoFixLine(emptyList(), null, null, null))
+        assertEquals("このセルの禁止の並びを直す案はありません。前後の日（11/2・11/4）も確かめてください",
             compactNoFixLine(listOf("理由A"), "禁止の並び", "11/2", "11/4"))
     }
 
