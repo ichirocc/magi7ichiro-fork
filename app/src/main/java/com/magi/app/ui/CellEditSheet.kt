@@ -227,7 +227,7 @@ internal fun CellEditSheet(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     badge?.let { MagiTagChip(it, if (status.severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }
-                    Text(target, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
+                    Text(target, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2), overflow = TextOverflow.Ellipsis)
                 }
                 if (mode == 0 && step == 1) {
                     // ② 自分で勤務を選ぶ: 選ぶと影響の確認へ（この時点では反映しない）。
@@ -551,8 +551,9 @@ private fun PeekBody(
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // 1 行目＝対象、2 行目＝札＋原因（S-2）。
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // 見出しの残り幅は約 180dp＝名前と日付で 1 行に入らないことが多い（2026-10-23 机上検証）。2 行まで。
             Text(target, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             SheetListButton(onList)
             SheetUndoButton(canUndo, onUndo)
             IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
@@ -561,7 +562,7 @@ private fun PeekBody(
             badge?.let { MagiTagChip(it, if (severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }
             Text(if (badge == null) "このセルに違反はありません" else cause, style = MaterialTheme.typography.bodyMedium,
                 color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (tourPrev != null || tourNext != null) {
                 MagiTextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
                 MagiTextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }

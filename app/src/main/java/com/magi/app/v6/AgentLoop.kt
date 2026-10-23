@@ -59,7 +59,8 @@ object AgentLoop {
             val leftNow = deadlineMs - now()
             if (widen == null || widened >= MAX_WIDEN || report.hard <= 0 || leftNow < WIDEN_MIN_LEFT_MS) { stop = Stop.NO_CANDIDATE; break }
             widened++
-            val w = widen(state, cur.copy2D(), leftNow)
+            // 広域の研磨が例外で終わっても、それまでに当てた手は残す（輪全体を捨てない）。
+            val w = try { widen(state, cur.copy2D(), leftNow) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { stop = Stop.NO_CANDIDATE; break }
             val ops = ArrayList<FixCell>()
             for (i in cur.indices) for (j in cur[i].indices) if (w.getOrNull(i)?.getOrNull(j)?.let { it != cur[i][j] } == true) ops += FixCell(i, j, w[i][j])
             val ok = FixApplyGate.apply(state, cur, ops, p, report) as? FixApplyGate.Outcome.Applied

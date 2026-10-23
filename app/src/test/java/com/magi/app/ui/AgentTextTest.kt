@@ -21,4 +21,14 @@ class AgentTextTest {
         assertEquals("判断待ち：希望の見直し 2件・設定を緩める候補・設定ミスの直し 3件", agentPendingLine(agentPendingItems(2, true, 3)))
         assertEquals("判断待ち：設定ミスの直し 1件", agentPendingLine(agentPendingItems(0, false, 1)))
     }
+
+    @Test fun edgeCounts() {
+        assertEquals(emptyList<String>(), agentPendingItems(-1, false, -3))   // 負の数は判断待ちに数えない
+        assertEquals("代行で 12 手を当てました（必須違反 9999→0）", agentHeadline(rec(12, 9999, 0)))
+    }
+
+    @Test fun homeDiagnosisCountAllCards() {
+        val u = UiState(copilotHint = "x", observedPinBlockedAttempts = 1)
+        assertEquals(2, homeDiagnosisCount(u))
+    }
 }
