@@ -18,6 +18,7 @@ class ScheduleWriteSitesTest {
         "applyStructure", "applyStructureWithMessage",            // 編集タブ
         "relaxAndApply", "restoreBeforeRelax", "restore",         // 設定の緩和と、その事後確認・保存失敗の復旧（restore＝RelaxRollback の控え）
         "applyFixSuggestion",                                     // 改善手（FixApplyGate を通る）
+        "maybeRunAgent",                                          // 代行役（AgentLoop の各手が FixApplyGate を通る）
     )
     private val write = Regex("""(\bcurrentSchedule\s*=[^=]|[(,\s]schedule\s*=\s*[a-zA-Z]|MagiEvent\.Board\.SetCell\()""")
     private val fn = Regex("""\bfun\s+(?:<[^>]*>\s*)?(?:[A-Za-z0-9_.]+\.)?([A-Za-z0-9_]+)\s*\(""")
