@@ -16,7 +16,7 @@
 //
 // 移植規約:
 // - 添字・番兵は Kotlin と同一（rangeLo/Hi の未設定 = INT32_MIN/INT32_MAX、apt/wish 未設定 = -1）。
-// - Java の Math.round(double) は floor(x+0.5)（half-up）。jround() で同一化。
+// - Java の Math.round(double) は最も近い整数（端数がちょうど 0.5 なら +∞ 側）。floor(x+0.5) は x+0.5 の丸めで 0.49999999999999994 を 1 にするので、jround() は端数で比べる。
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
 // ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
@@ -31,76 +31,76 @@
 //  L  126  struct C3r
 //  L  127  struct C3wr
 //  L  129  struct MagiProblem
-//  L  221  fn     consIndicesValidN
-//  L  254  fn     weeklyDevOfBucket
-//  L  267  fn     fairDevOfBucket
-//  L  309  fn     rowDeficit
-//  L  326  fn     c3check
-//  L  362  fn     fullEvalParts
-//  L  569  const  SCORE_HARD_UNIT
-//  L  572  const  ACCEPT_REJECT_DELTA
-//  L  574  fn     fullEvalCombined
-//  L  585  struct SaChunk
-//  L  879  fn     wishLockedN
-//  L  886  fn     lockToN
-//  L  892  fn     runSaChunk
-//  L 1025  struct LahcState
-//  L 1044  fn     runLahcChunk
-//  L 1169  fn     collectViolationCells
-//  L 1272  struct GlsPenaltyN
-//  L 1317  fn     glsAcceptN
-//  L 1335  fn     rnInt
-//  L 1343  fn     weeklyMarginalN
-//  L 1361  fn     fairMarginalN
-//  L 1376  fn     reservoirTieN
-//  L 1390  fn     staffCountPenaltyAtN
-//  L 1401  fn     randomAllowedCellN
-//  L 1412  fn     destroyRepairDayAtN
-//  L 1487  fn     destroyRepairStaffAtN
-//  L 1546  fn     destroyRepairViolationsN
-//  L 1592  struct Fix
-//  L 1594  fn     findCovOFixN
-//  L 1621  fn     findC2FixN
-//  L 1638  fn     findRangeLowFixN
-//  L 1662  fn     findRangeHighFixN
-//  L 1693  fn     findC41FamFixN
-//  L 1726  fn     findC3WantFixN
-//  L 1756  fn     findAptFixN
-//  L 1788  fn     findTargetedFixN
-//  L 1813  fn     coverageShortageCostN
-//  L 1821  fn     bestStaffForCoverageN
-//  L 1836  fn     hf67HardRepairN
-//  L 1911  fn     rouletteSelectN
-//  L 1919  fn     thompsonSelectN
-//  L 1933  fn     greatDelugeLevelN
-//  L 1942  struct AlnsState
-//  L 1985  fn     runAlnsChunk
-//  L 2182  struct PolishState
-//  L 2205  fn     polishAcceptN
-//  L 2215  fn     runPolishChunk
-//  L 2327  fn     readIntArray
-//  L 2338  JNI    nativeAbiVersion
-//  L 2345  JNI    nativeAlnsCreate
-//  L 2359  JNI    nativeAlnsDestroy
-//  L 2365  JNI    nativeAlnsChunk
-//  L 2379  JNI    nativeAlnsRead
-//  L 2391  JNI    nativePolishCreate
-//  L 2404  JNI    nativePolishDestroy
-//  L 2410  JNI    nativePolishChunk
-//  L 2423  JNI    nativePolishRead
-//  L 2435  JNI    nativeLahcCreate
-//  L 2448  JNI    nativeLahcDestroy
-//  L 2454  JNI    nativeLahcChunk
-//  L 2467  JNI    nativeLahcRead
-//  L 2481  JNI    nativeSaChunk
-//  L 2511  JNI    nativeCreateProblem
-//  L 2672  JNI    nativeDestroyProblem
-//  L 2678  JNI    nativeFullEval
+//  L  227  fn     consIndicesValidN
+//  L  260  fn     weeklyDevOfBucket
+//  L  273  fn     fairDevOfBucket
+//  L  315  fn     rowDeficit
+//  L  332  fn     c3check
+//  L  368  fn     fullEvalParts
+//  L  581  const  SCORE_HARD_UNIT
+//  L  584  const  ACCEPT_REJECT_DELTA
+//  L  586  fn     fullEvalCombined
+//  L  597  struct SaChunk
+//  L  892  fn     wishLockedN
+//  L  899  fn     lockToN
+//  L  905  fn     runSaChunk
+//  L 1041  struct LahcState
+//  L 1060  fn     runLahcChunk
+//  L 1187  fn     collectViolationCells
+//  L 1291  struct GlsPenaltyN
+//  L 1336  fn     glsAcceptN
+//  L 1354  fn     rnInt
+//  L 1362  fn     weeklyMarginalN
+//  L 1380  fn     fairMarginalN
+//  L 1395  fn     reservoirTieN
+//  L 1409  fn     staffCountPenaltyAtN
+//  L 1420  fn     randomAllowedCellN
+//  L 1433  fn     destroyRepairDayAtN
+//  L 1508  fn     destroyRepairStaffAtN
+//  L 1567  fn     destroyRepairViolationsN
+//  L 1613  struct Fix
+//  L 1615  fn     findCovOFixN
+//  L 1642  fn     findC2FixN
+//  L 1659  fn     findRangeLowFixN
+//  L 1683  fn     findRangeHighFixN
+//  L 1714  fn     findC41FamFixN
+//  L 1747  fn     findC3WantFixN
+//  L 1777  fn     findAptFixN
+//  L 1809  fn     findTargetedFixN
+//  L 1834  fn     coverageShortageCostN
+//  L 1842  fn     bestStaffForCoverageN
+//  L 1857  fn     hf67HardRepairN
+//  L 1937  fn     rouletteSelectN
+//  L 1945  fn     thompsonSelectN
+//  L 1959  fn     greatDelugeLevelN
+//  L 1968  struct AlnsState
+//  L 2011  fn     runAlnsChunk
+//  L 2211  struct PolishState
+//  L 2234  fn     polishAcceptN
+//  L 2244  fn     runPolishChunk
+//  L 2359  fn     readIntArray
+//  L 2370  JNI    nativeAbiVersion
+//  L 2377  JNI    nativeAlnsCreate
+//  L 2391  JNI    nativeAlnsDestroy
+//  L 2397  JNI    nativeAlnsChunk
+//  L 2411  JNI    nativeAlnsRead
+//  L 2423  JNI    nativePolishCreate
+//  L 2436  JNI    nativePolishDestroy
+//  L 2442  JNI    nativePolishChunk
+//  L 2455  JNI    nativePolishRead
+//  L 2467  JNI    nativeLahcCreate
+//  L 2480  JNI    nativeLahcDestroy
+//  L 2486  JNI    nativeLahcChunk
+//  L 2499  JNI    nativeLahcRead
+//  L 2513  JNI    nativeSaChunk
+//  L 2543  JNI    nativeCreateProblem
+//  L 2718  JNI    nativeDestroyProblem
+//  L 2724  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
 
-inline long long jround(double x) { return (long long)std::floor(x + 0.5); }
+inline long long jround(double x) { double f = std::floor(x); return (long long)(x - f >= 0.5 ? f + 1 : f); }
 
 struct C1r { int d1, si, d2; };
 struct C2r { int si, c; };
@@ -2554,7 +2554,8 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     // [backlog #12(a)・実験段階] 旧レイアウト(7要素)との互換のため、8要素目が無ければ既定false。
     p->quantitativeRangeEval = meta.size() >= 8 && meta[7] != 0;
     const int S = p->S, T = p->T, K = p->K, G = p->G;
-    if (S <= 0 || T <= 0 || K <= 0 || G < 0) { delete p; return 0; }
+    // dow0 は曜日の添字（wd[...+(dow0+j)%7] へ書く）。Kotlin は常に 0..6 を渡す＝外れたら拒否して Kotlin へ退化。
+    if (S <= 0 || T <= 0 || K <= 0 || G < 0 || p->dow0 < 0 || p->dow0 > 6) { delete p; return 0; }
 
     auto staff = readIntArray(env, staffArr);          // sgrp(S) + ssk(S)
     auto canDo = readIntArray(env, canDoArr);          // S*K (0/1)
@@ -2691,7 +2692,12 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
         int len = bucket[bi++];
         if (len < 0 || (size_t)len > bucket.size() - bi) { bOk = false; break; }
         p->bucket[g].reserve((size_t)len);
-        for (int l = 0; l < len; l++) p->bucket[g].push_back(bnext());
+        for (int l = 0; l < len; l++) {
+            const int k = bnext();
+            if (k < 0 || k >= K) { bOk = false; break; }   // 評価器が k で S*K・K*T の表を引く
+            p->bucket[g].push_back(k);
+        }
+        if (!bOk) break;
     }
     if (!bOk) { delete p; return 0; }
     p->members.resize((size_t)G);

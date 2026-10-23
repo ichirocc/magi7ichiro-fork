@@ -762,9 +762,13 @@ internal fun noFixReasons(
     fun headcount(k: Int, j: Int) = ui.schedule.count { it.getOrNull(j) == k }
     val i = f.staff; val k = f.shift; val d = f.day
     countShortage(ui, f, limits)?.let { return shortageReasons(ui, f, it, limits, needLimits) }
+    // 手動固定も最適化器と直し方が動かさない（希望と別に言う＝直す場所が勤務表の固定）。
+    fun manual(i2: Int, j: Int) = VioKey.cell(i2, j) in ui.manualPins
+    var pinnedByHand = false
     if (i != null && d != null) {
         val cur = cellAt(i, d)
         if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+        else if (cur != null && manual(i, d)) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は手で固定したマスです。"; pinnedByHand = true }
         // 禁止の並びの相手が本人の希望のセル＝このセルを動かしても並びは希望側に残る。
         if ("vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, d)].orEmpty()) {
             val near = listOf(d - 1, d + 1).filter { n -> ui.wishes["$i,$n"]?.let { it == cellAt(i, n) } == true && "vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, n)].orEmpty() }
@@ -776,6 +780,8 @@ internal fun noFixReasons(
         val pinned = days.filter { ui.wishes["$i,$it"] == k }
         if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
         else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
+        val byHand = days.filter { it !in pinned && manual(i, it) }
+        if (byHand.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${byHand.size} 回は手で固定したマスです。"; pinnedByHand = true }
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
         if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は$ZERO_CAP_LABEL です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
@@ -799,12 +805,17 @@ internal fun noFixReasons(
             out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + pinned.joinToString("・") { (ui.staffNames.getOrNull(it) ?: "#$it") + "さん" } + " は本人の希望で固定されています。"
             wish = true
         }
+        val byHand = here.filter { it !in pinned && manual(it, d) }
+        if (byHand.isNotEmpty()) {
+            out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + byHand.joinToString("・") { (ui.staffNames.getOrNull(it) ?: "#$it") + "さん" } + " は手で固定したマスです。"
+            pinnedByHand = true
+        }
     }
     out += NO_FIX_SCOPE
     val section = if (i == null && k != null) "yr_headcount" else "yr_count"
     // 区分の優先: 矛盾を確かめた＞時間で打ち切った＞固定条件が理由に挙がった＞調べた範囲で無い。
     val contradiction = i != null && d != null && ui.wishSelfConflicts.any { it.staff == i && d in it.days }
-    val fixed = wish || out.any { ZERO_CAP_LABEL in it || "下限＝上限で固定" in it }
+    val fixed = wish || pinnedByHand || out.any { ZERO_CAP_LABEL in it || "下限＝上限で固定" in it }
     val kind = when { contradiction -> NoFixKind.CONTRADICTION; ui.fixTimedOut -> NoFixKind.TIME; fixed -> NoFixKind.FIXED; else -> NoFixKind.SCOPE }
     out[0] = kind.head
     return NoFixExplain(out, wish, section, kind)
