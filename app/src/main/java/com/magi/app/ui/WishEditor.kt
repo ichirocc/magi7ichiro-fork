@@ -264,7 +264,7 @@ private fun WishApplyPanel(
             ) { Text(wishApplyButton(usable.size, shifts.getOrNull(selK) ?: "")) }
         }
         MagiTextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
-            colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+            contentColor = cs.error,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の希望を消す（${clearable.size}件）") }
     }
     if (confirmClear) {

@@ -220,7 +220,7 @@ private fun WishTrialRowView(
                     MagiTextButton(
                         onClick = { onConfirm(view.token) },
                         enabled = !ui.running,
-                        colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                        contentColor = cs.error,
                         modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
                     ) { Text("希望を外して再作成する") }
                 }
@@ -1177,7 +1177,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                         MagiTextButton(
                             onClick = { confirmRule = seqLabel to rows.size },
                             enabled = !ui.running,
-                            colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                            contentColor = cs.error,
                         ) { Text("この並びの禁止を解除") }
                     }
                 }

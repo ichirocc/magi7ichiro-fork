@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
@@ -154,11 +155,13 @@ internal fun MagiTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    shape: Shape = ButtonDefaults.textShape,
+    contentColor: Color = MaterialTheme.colorScheme.primary,
     contentPadding: PaddingValues = ButtonDefaults.TextButtonContentPadding,
     content: @Composable RowScope.() -> Unit,
 ) {
     val tint = MaterialTheme.colorScheme.onSurface
-    TextButton(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = contentPadding,
-        colors = ButtonDefaults.textButtonColors(containerColor = tint.copy(alpha = 0.08f), disabledContainerColor = tint.copy(alpha = 0.04f)),
+    TextButton(onClick = onClick, modifier = modifier, enabled = enabled, shape = shape, contentPadding = contentPadding,
+        colors = ButtonDefaults.textButtonColors(containerColor = tint.copy(alpha = 0.08f), contentColor = contentColor, disabledContainerColor = tint.copy(alpha = 0.04f)),
         content = content)
 }
