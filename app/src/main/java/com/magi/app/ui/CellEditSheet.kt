@@ -266,8 +266,8 @@ internal fun CellEditSheet(
                     // [3.714.0] 問題が 1 つでも説明の文は「詳しく見る」の中（主は「変更案を探す」＝これは文字ボタン）。
                     if (mode == 0 && fams.isNotEmpty() || details) MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(when {
-                            fams.size >= 2 -> if (details) "関連する問題を閉じる" else "関連する問題をすべて見る：ほか${fams.size - 1}件"
-                            else -> if (details) "閉じる" else CELL_DETAIL_BUTTON
+                            fams.size >= 2 -> if (details) "関連する問題 ▾" else "関連する問題（ほか${fams.size - 1}件） ▸"
+                            else -> if (details) CELL_DETAIL_CLOSE else CELL_DETAIL_BUTTON
                         })
                     }
                     if (details) {
@@ -388,7 +388,7 @@ internal fun CellEditSheet(
                     // 希望・手動固定・ルールの見直しは「ほかの操作」に畳む（主の 2 つの操作を先に見せる）。
                     var moreOps by remember(cell) { mutableStateOf(false) }
                     if (mode == 0 && !(dilemma && dilemmaChoice == 0)) MagiTextButton(onClick = { moreOps = !moreOps }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(if (moreOps) "ほかの操作を閉じる" else MORE_OPS_LABEL)
+                        Text(if (moreOps) "ほかの操作 ▾" else MORE_OPS_LABEL)
                     }
                     if (mode == 0 && moreOps) {
                         OutlinedButton(onClick = { onMode(1) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("希望を確認・登録する") }
@@ -418,7 +418,7 @@ internal fun CellEditSheet(
             if (mode == 1) {
                 // 希望の画面: ［割当に戻る］と希望の中身。
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
+                    MagiTextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
                     val wishText = wishTabLine(wish, current, ui.extBanned[VioKey.cell(i, j)], { k -> sym(k) }, pinned)
                     Text(wishText, style = MaterialTheme.typography.bodySmall,
                         color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -472,7 +472,7 @@ internal fun CellEditSheet(
                     }
                 }
                 if (mode == 0) Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                if (mode == 0) OutlinedButton(onClick = { step = 0 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("元の画面に戻る") }
+                if (mode == 0) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("元の画面に戻る") }
             }
             if (mode == 0 && step == 2) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 適用と戻るは固定（比較の部分だけが縦に送られる）。

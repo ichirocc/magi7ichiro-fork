@@ -168,7 +168,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             Spacer(Modifier.height(8.dp))
             Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
             var budgetMore by rememberSaveable { mutableStateOf(false) }
-            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) "閉じる" else "詳しく") }
+            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
@@ -870,7 +870,7 @@ internal fun CollapsibleSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(if (expanded) "▼ 閉じる" else "▶ 開く", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (expanded) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (expanded) {

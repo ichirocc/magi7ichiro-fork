@@ -1460,7 +1460,7 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onRerun, enabled = ui.loaded,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("再作成") }
-                OutlinedButton(onClick = onDismiss,
+                MagiTextButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
         }
@@ -1479,7 +1479,7 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("年間マスターを開く") }
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+                MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
         }
     }

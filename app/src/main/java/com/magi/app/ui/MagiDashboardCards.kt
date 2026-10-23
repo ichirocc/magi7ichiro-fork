@@ -384,7 +384,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
                 var more by remember { mutableStateOf(false) }
-                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) "閉じる" else "詳しく") }
+                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
                 if (more) {
                 p.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
@@ -893,7 +893,7 @@ internal fun OperatorNextActionCard(
                             if (detailOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                             contentDescription = null, tint = plan.fg, modifier = Modifier.size(16.dp),
                         )
-                        Text(if (detailOpen) "ⓘ 詳しい説明を閉じる" else "ⓘ でき具合の意味", style = MaterialTheme.typography.bodySmall, color = plan.fg)
+                        Text(if (detailOpen) "ⓘ でき具合の意味 ▾" else "ⓘ でき具合の意味 ▸", style = MaterialTheme.typography.bodySmall, color = plan.fg)
                     }
                     // [判断設計監査 #1/#2] 数字の根拠（できあがり度の意味）と結果採用の意味（反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
                     if (detailOpen) {
@@ -2046,7 +2046,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                     Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
                     if (allWorse) Text(ALTERNATIVES_ALL_WORSE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
             }
             if (open) {
                 Text("案を押すと、反映する前に確かめます（反映後も「元に戻す」で取り消せます）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2118,7 +2118,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 preDistributionTop(rows).forEach { PreDistRowView(it) }
                 Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) "詳しくを閉じる" else "詳しく") }
+                MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
                 if (details) {
                     preDistributionDetails(rows).forEach { PreDistRowView(it) }
                     Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2129,7 +2129,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
         confirmButton = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onDismiss(); onExport() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("配ると決めて書き出す") }
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("戻る") }
+                MagiTextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("戻る") }
             }
         },
     )

@@ -1812,7 +1812,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
             var general by remember(i) { mutableStateOf(false) }
-            MagiTextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案を閉じる" else STAFF_OTHER_FIXES_LABEL) }
+            MagiTextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案 ▾" else STAFF_OTHER_FIXES_LABEL) }
             if (general) FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
     }
@@ -1918,7 +1918,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
                         verticalAlignment = Alignment.CenterVertically) {
                         Text((if (weeklyOpen) "▼ " else "▶ ") + "${breakdownLabels["weekly"]}（${sheet.weekly.size}件）",
                             style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        Text(if (weeklyOpen) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (weeklyOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (weeklyOpen) {
                         Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -2252,7 +2252,7 @@ internal fun FixSearchPanel(
                             Text(title, style = MaterialTheme.typography.titleSmall)
                             Text(note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) items.take(limit).forEachIndexed { n, x -> card(startN + n + 1, x.sug, x.explain, purposeOverride) }
                 }
@@ -2270,7 +2270,7 @@ internal fun FixSearchPanel(
                             Text(otherFixHeading(others.size), style = MaterialTheme.typography.titleSmall)
                             Text(target?.let { otherFixNote(label, it) } ?: "${addressLabel ?: "選んだ問題"}は解消しません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) others.take(limit).forEachIndexed { n, s -> card(fixing.size.coerceAtMost(limit) + n + 1, s) }
                 }
@@ -2309,7 +2309,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
             if (ui.saveState == SaveState.Failed) Button(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (nextLabel != null) MagiTextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
-                MagiTextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }
+                MagiTextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "今回の変更内容 ▾" else "今回の変更内容 ▸") }
                 if (ui.canUndo) MagiTextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
             }
         }
@@ -2369,7 +2369,7 @@ private fun NoFixBlock(
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (scopeOpen) "閉じる" else "開く") { scopeOpen = !scopeOpen },
             verticalAlignment = Alignment.CenterVertically) {
             Text("探した範囲", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text(if (scopeOpen) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+            Text(if (scopeOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
         }
         if (scopeOpen) Text(SEARCHED_SCOPE_DETAIL, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
     }

@@ -182,7 +182,7 @@ private fun ConstraintHelpExpander(families: List<ConstraintFamilyView>) {
                 .clickable { open = !open },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (open) "ⓘ 詳しい説明を閉じる" else "ⓘ 詳しい説明（それぞれの条件の意味）",
+            Text(if (open) "ⓘ 詳しい説明 ▾" else "ⓘ 詳しい説明（それぞれの条件の意味） ▸",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         if (open) {

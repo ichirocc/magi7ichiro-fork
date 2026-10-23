@@ -555,7 +555,7 @@ internal fun targetSearchingLines(t: FixTarget, label: String): List<String> = l
 internal fun changeSizeLine(ops: List<com.magi.app.v6.FixCell>): String = "変更箇所：${ops.map { it.staff }.distinct().size}人・${ops.size}セル"
 
 /** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
-internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
+internal const val CANCEL_FIX_SEARCH_BUTTON = "探すのをやめる"
 internal const val FIX_SEARCH_CANCELLED = "探すのを止めました。"
 internal const val FIX_SEARCH_RETRY_BUTTON = "もう一度探す"
 
@@ -1337,7 +1337,8 @@ internal fun cellRuleLine(fam: String): String = when (fam) {
     "covO" -> "この日の人数が多すぎます"
     else -> "${breakdownLabels[fam] ?: fam}に当たります"
 }
-internal const val CELL_DETAIL_BUTTON = "詳しく見る"
+internal const val CELL_DETAIL_BUTTON = "詳しく ▸"
+internal const val CELL_DETAIL_CLOSE = "詳しく ▾"
 
 internal fun cellProblemSentence(fam: String): String = when (fam) {
     "c3n" -> "前後の勤務との組み合わせが禁止条件に該当しています"
@@ -1626,8 +1627,8 @@ internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋�
 internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「なおし方を見る」で 1 人ずつ入れられます"
 
 /** [3.712.0] 診断カードの行は 1 行の事実と札だけ。理由・内訳はカードの末尾の「詳しく」に 1 回だけ（利用者仕様: 説明は画面に 1 回）。 */
-internal const val DIAG_DETAILS_LABEL = "詳しく"
-internal const val DIAG_DETAILS_CLOSE = "詳しくを閉じる"
+internal const val DIAG_DETAILS_LABEL = "詳しく ▸"
+internal const val DIAG_DETAILS_CLOSE = "詳しく ▾"
 internal const val SHORTAGE_TAG_INFEASIBLE = "担当が足りない"
 internal const val SHORTAGE_MOVABLE_LINE = "休みや余裕のある勤務から移せます"
 internal const val FORBIDDEN_RETRY_NOTE = "玉突きか隣の日の調整で崩せます。もう一度つくると直る場合があります"
