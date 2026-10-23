@@ -428,14 +428,14 @@ internal fun CellEditSheet(
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
                 if (!dilemma || dilemmaChoice == 2) TextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
-                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。
+                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。前後の日は外枠（文字だけではボタンに見えなかった）。
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                     val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
                     val next = adjacentDayLabel(ui.startDate, ui.days, j + 1)
-                    TextButton(onClick = { onMove(i to j - 1) }, enabled = prev != null, modifier = Modifier.heightIn(min = 48.dp)) {
+                    OutlinedButton(onClick = { onMove(i to j - 1) }, enabled = prev != null, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text("◀ ${prev ?: "前日"}", maxLines = 1)
                     }
-                    TextButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp)) {
+                    OutlinedButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text("${next ?: "翌日"} ▶", maxLines = 1)
                     }
                     TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
