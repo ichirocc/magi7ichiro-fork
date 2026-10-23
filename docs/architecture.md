@@ -203,6 +203,7 @@ ViewModel ハブ
   単セル covU 修正が LNS の余地を先に使い実データで HARD 退行）。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
   10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
+- `AgentLoop.kt` — 代行役（AX）の輪。`FixSuggester` の案を `FixApplyGate` に通し、合格した先頭を当てて探し直す（勤務の変更だけ・入力不変）。画面側は `MagiViewModel.maybeRunAgent`・`AgentCard`・`AgentText.kt`。
 - `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。
 
 UI は `app/src/main/java/com/magi/app/ui/`:

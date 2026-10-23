@@ -145,6 +145,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetWorkers -> vm.setWorkers(e.n)
             is MagiEvent.Settings.SetBudget -> vm.setBudget(e.sec)
             is MagiEvent.Settings.SetSoftPolish -> vm.setSoftPolish(e.on)
+            is MagiEvent.Settings.SetAgentAuto -> vm.setAgentAuto(e.on)
             is MagiEvent.Settings.SetAlgorithm -> vm.setV6Algorithm(e.algorithm)
             is MagiEvent.Settings.SetNativeAccel -> vm.setNativeAccel(e.on)
             is MagiEvent.Settings.SetNativeParity -> vm.setNativeParity(e.on)

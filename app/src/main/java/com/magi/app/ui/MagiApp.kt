@@ -279,6 +279,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val onEvent: (MagiEvent) -> Unit = { mediator.dispatch(it) }
     val onEditEvent: (MagiEvent) -> Unit = { e -> if (e is MagiEvent.Condition || e is MagiEvent.Structure) condEdited = true; onEvent(e) }
     LaunchedEffect(ui.running) { if (ui.running) condEdited = false }
+    // 代行役（AX）: 作成の直後に必須違反が残っていれば、勤務の変更だけを自動で当てる（条件と未見の盤面かは VM が判定）。
+    LaunchedEffect(ui.running, ui.engineRan, ui.bestHard, ui.checkRev) { vm.maybeRunAgent() }
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
@@ -626,7 +628,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         shortShifts = remember(ui, conditionsView) { shortShiftCount(ui, conditionsView) }),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
         ranBeforeEdit = ui.hasResult && (ui.ranBeforeEdit || condEdited), running = ui.running)
-    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
+    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching || ui.agentRunning, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
@@ -724,6 +726,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
+                    AgentCard(ui, onUndo = { vm.undoAgent() })
                     OperatorNextActionCard(
                         stateOf = { vm.state },
                         onRetrySave = { vm.retrySave() },
@@ -1338,7 +1341,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
         // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
         //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
         //   `ui.running` に限定**されており、探索中は止める手段が画面上に一つも無かった。
-        ui.running || ui.fixSearching -> {
+        ui.running || ui.fixSearching || ui.agentRunning -> {
             val stopContent: @Composable RowScope.() -> Unit = {
                 if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
                 Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)

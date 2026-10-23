@@ -115,6 +115,9 @@ data class UiState(
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
+    val agentAuto: Boolean = true,    // 作成のあと代行で仕上げる（AX）。保存しない
+    val agentRunning: Boolean = false,
+    val agentRecord: AgentRecord? = null,
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),
     val staffIds: List<Int> = emptyList(),   // staffNames と同じ並びの職員 ID（相談の対象を ID で引く）

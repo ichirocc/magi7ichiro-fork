@@ -1,0 +1,21 @@
+package com.magi.app.ui
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/** 代行役（AX）のカードの文: 何もしなかった輪は出さない・必須が動けば必須を、動かなければ要調整を言う。 */
+class AgentTextTest {
+    private fun rec(n: Int, hb: Int, ha: Int) = AgentRecord(List(n) { "手$it" }, hb, ha, "10件", "8件", "当てられる手が尽きた")
+
+    @Test fun headline() {
+        assertNull(agentHeadline(rec(0, 3, 3)))
+        assertEquals("代行で 2 手を当てました（必須違反 3→1）", agentHeadline(rec(2, 3, 1)))
+        assertEquals("代行で 1 手を当てました（要調整 10件→8件）", agentHeadline(rec(1, 1, 1)))
+    }
+
+    @Test fun nextLine() {
+        assertEquals("必須違反はありません。配布前の確認に進めます。", agentNextLine(rec(1, 1, 0)))
+        assertEquals("残り 1 件は勤務の変更だけでは直せません。下のカードで判断してください。", agentNextLine(rec(1, 2, 1)))
+    }
+}

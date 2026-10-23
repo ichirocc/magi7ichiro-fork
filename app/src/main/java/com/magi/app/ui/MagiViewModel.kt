@@ -1382,6 +1382,69 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
+    fun setAgentAuto(b: Boolean) { _ui.update { it.copy(agentAuto = b) }; logOp("I", "設定変更: 作成のあと代行で仕上げる → ${if (b) "ON" else "OFF"}") }
+
+    private var agentJob: Job? = null
+    private val agentSeen = HashSet<Long>()   // 代行が一度見た盤面（元に戻した盤面・同じ結果で輪を回し直さない）
+
+    /**
+     * 代行役（AX）: 作成の直後、必須違反が残り未見の盤面なら、[com.magi.app.v6.AgentLoop] で安全ゲート合格の勤務の変更を順に当てる。
+     * 希望・設定は変えない（残りはホームの判断のカードへ）。当てた分は「元に戻す」1 回で戻る。途中で盤面か設定が変われば当てない。
+     */
+    /** 代行のカードの「元に戻す」。代行の段がまだ先頭にあるときだけ戻す（後の別の操作は戻さない）。 */
+    fun undoAgent() {
+        val rec = _ui.value.agentRecord ?: return
+        if (rec.undoSerial != 0L && noticeUndoApplies(undoStack.lastOrNull()?.serial, rec.undoSerial)) {
+            undo(); _ui.update { it.copy(agentRecord = null) }
+        } else _ui.update { it.copy(messageIsError = true, message = "このあとに別の操作があるため、代行の分だけは戻せません（「元に戻す」ボタンで順に戻せます）") }
+    }
+
+    fun maybeRunAgent() {
+        val u = _ui.value
+        if (!u.agentAuto || u.agentRunning || u.running || !u.engineRan || !u.hasResult || u.bestHard <= 0L) return
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        if (optimizeInFlight()) return
+        val key0 = boardKey(sched)
+        if (!agentSeen.add(key0)) return
+        val snap = sched.copy2D(); val stKey = stateKey(st)
+        cancelFixSearch()
+        _ui.update { it.copy(agentRunning = true, agentRecord = null) }
+        logOp("I", "代行: 開始（必須 ${u.bestHard}）")
+        agentJob = viewModelScope.launch {
+            try {
+                val r = withContext(Dispatchers.Default) {
+                    com.magi.app.v6.AgentLoop.run(st, snap, System.currentTimeMillis() + AGENT_BUDGET_MS, active = { isActive })
+                }
+                val curSched = currentSchedule; val curSt = state
+                if (curSched == null || curSt == null || boardKey(curSched) != key0 || stateKey(curSt) != stKey || optimizeInFlight()) {
+                    logOp("W", "代行: 途中で勤務表か設定が変わったため当てませんでした"); return@launch
+                }
+                val softText = { b: Map<String, Int> -> unitTotals(b, com.magi.app.v6.MirrorKeys.soft) ?: "なし" }
+                val rec = AgentRecord(r.steps.map { fixDisplayLabel(it.label) }, r.before.hard, r.after.hard,
+                    softText(r.before.breakdown), softText(r.after.breakdown), agentStopWord(r.stop))
+                r.steps.forEach { s -> logOp("I", "代行: ${fixDisplayLabel(s.label)}（必須 ${s.hardBefore}→${s.hardAfter}・合計 ${s.totalBefore}→${s.totalAfter}）") }
+                logOp("I", "代行: 終了 ${r.steps.size}手（${rec.stop}）必須 ${r.before.hard}→${r.after.hard}")
+                if (r.steps.isEmpty()) { _ui.update { it.copy(agentRecord = rec) }; return@launch }
+                pushUndo("代行（${r.steps.size}手）")
+                val recU = rec.copy(undoSerial = undoStack.lastOrNull()?.serial ?: 0L)
+                currentSchedule = r.schedule
+                state = st.withSchedule(r.schedule)
+                agentSeen.add(boardKey(r.schedule))
+                autoSave()
+                _ui.update { it.copy(schedule = r.schedule.map { row -> row.toList() }, agentRecord = recU,
+                    fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList()) }
+                agentHeadline(recU)?.let { postOpNotice(it) }
+                refreshCheck()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logOp("W", "代行に失敗: ${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                _ui.update { it.copy(agentRunning = false) }
+            }
+        }
+    }
 
     fun refreshCheck() {
         val st = state ?: return
@@ -2529,7 +2592,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stop() {
-        job?.cancel(); checkJob?.cancel(); fixJob?.cancel()
+        job?.cancel(); checkJob?.cancel(); fixJob?.cancel(); agentJob?.cancel()
         cancelWishTrial()
         cancelRelaxTrial()
         // [監査A2] バックグラウンド実行(WorkManager)も停止する。従来は前景jobのみで、bg中は
@@ -3233,6 +3296,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixSearchKey = ""
 
     fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false, auto: Boolean = false) {
+        if (auto && _ui.value.agentRunning) return   // 代行が当て終えた盤面で、ホームの自動の探索がもう一度走る
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""

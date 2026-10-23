@@ -717,8 +717,8 @@ internal fun OperatorNextActionCard(
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
     // [3.643.0] 旧 SmartActionCard の自動探索をここへ。副作用は候補リストの計算だけ＝自動で始めても盤面は変わらない。
-    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName, ui.hasResult, ui.running) {
-        if (!ui.running && ui.hasResult && ui.bestHard > 0 &&
+    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName, ui.hasResult, ui.running, ui.agentRunning) {
+        if (!ui.running && !ui.agentRunning && ui.hasResult && ui.bestHard > 0 &&
             (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched))) onAutoSearch()
     }
 
@@ -2133,4 +2133,33 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
             }
         },
     )
+}
+
+/** 代行役（AX）のカード: 実行中の 1 行、終われば当てた手の数と前後・残りの扱い・手の一覧（畳む）・元に戻す。 */
+@Composable
+internal fun AgentCard(ui: UiState, onUndo: () -> Unit) {
+    val rec = ui.agentRecord
+    val head = rec?.let { agentHeadline(it) }
+    if (!ui.agentRunning && head == null) return
+    val cs = MaterialTheme.colorScheme
+    var open by remember(rec) { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ui.agentRunning) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(Modifier.size(22.dp))
+                    Text(AGENT_RUNNING_LINE, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
+                }
+                return@Column
+            }
+            rec ?: return@Column
+            Text(head ?: return@Column, style = MaterialTheme.typography.titleMedium)
+            Text(agentNextLine(rec), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            if (open) rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (open) "当てた手 ▾" else "当てた手 ▸") }
+                MagiTextButton(onClick = onUndo, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("代行の分を元に戻す") }
+            }
+        }
+    }
 }

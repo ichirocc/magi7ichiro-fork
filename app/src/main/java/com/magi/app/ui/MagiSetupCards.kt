@@ -329,6 +329,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.agentAuto, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAgentAuto(it)) }).semantics(mergeDescendants = true) {}) {
+            Switch(checked = ui.agentAuto, onCheckedChange = null, enabled = !ui.running)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(AGENT_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
+                Text(AGENT_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Column(Modifier.fillMaxWidth()) {
             Text("探す強さ", style = MaterialTheme.typography.titleSmall)
             Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",

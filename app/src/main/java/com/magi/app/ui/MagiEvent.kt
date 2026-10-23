@@ -186,6 +186,7 @@ internal sealed interface MagiEvent {
         data class SetWorkers(val n: Int) : Settings
         data class SetBudget(val sec: Int) : Settings
         data class SetSoftPolish(val on: Boolean) : Settings
+        data class SetAgentAuto(val on: Boolean) : Settings
         data class SetAlgorithm(val algorithm: V6Algorithm) : Settings
         data class SetNativeAccel(val on: Boolean) : Settings
         data class SetNativeParity(val on: Boolean) : Settings
