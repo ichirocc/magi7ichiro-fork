@@ -2140,7 +2140,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
 internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit) {
     val rec = ui.agentRecord
     val head = rec?.let { agentHeadline(it) }
-    val wishCount = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui).size }
+    val wishCount = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui).let { c -> c.direct.size + c.shortfall.sumOf { it.rows.size } } }
     val pending = agentPendingLine(agentPendingItems(wishCount, relaxFound, ui.settingIssues.size)).takeIf { (rec?.hardAfter ?: 0) > 0 }
     if (!ui.agentRunning && head == null && (rec == null || pending == null)) return
     val cs = MaterialTheme.colorScheme
