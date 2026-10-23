@@ -16,6 +16,13 @@ class AgentTextTest {
 
     @Test fun nextLine() {
         assertEquals("必須違反はありません。配布前の確認に進めます。", agentNextLine(rec(1, 1, 0)))
-        assertEquals("残り 1 件は勤務の変更だけでは直せません。下のカードで判断してください。", agentNextLine(rec(1, 2, 1)))
+        assertEquals("残り 1 件は勤務の変更だけでは直せません。", agentNextLine(rec(1, 2, 1)))
+    }
+
+    @Test fun pending() {
+        assertEquals(emptyList<String>(), agentPendingItems(0, false, 0))
+        assertNull(agentPendingLine(emptyList()))
+        assertEquals("判断待ち：希望の見直し 2件・設定を緩める候補・設定ミスの直し 3件", agentPendingLine(agentPendingItems(2, true, 3)))
+        assertEquals("判断待ち：設定ミスの直し 1件", agentPendingLine(agentPendingItems(0, false, 1)))
     }
 }

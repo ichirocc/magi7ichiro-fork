@@ -726,7 +726,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
-                    AgentCard(ui, onUndo = { vm.undoAgent() })
+                    AgentCard(ui, relaxFound = vm.relaxTrialFor() != null, onUndo = { vm.undoAgent() })
                     OperatorNextActionCard(
                         stateOf = { vm.state },
                         onRetrySave = { vm.retrySave() },

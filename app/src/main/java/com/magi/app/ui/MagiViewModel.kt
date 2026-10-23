@@ -1385,7 +1385,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setAgentAuto(b: Boolean) { _ui.update { it.copy(agentAuto = b) }; logOp("I", "設定変更: 作成のあと代行で仕上げる → ${if (b) "ON" else "OFF"}") }
 
     private var agentJob: Job? = null
-    private val agentSeen = HashSet<Long>()   // 代行が一度見た盤面（元に戻した盤面・同じ結果で輪を回し直さない）
+    private val agentSeen = HashSet<Long>()   // 代行が一度見た盤面×設定（元に戻した盤面・同じ結果で輪を回し直さない）
+    private var agentResume = false           // 判断待ちを承認した＝次の検査のあと、作成を待たずに代行が続きを回す
+
+    /** 希望・設定の判断を承認した入口から呼ぶ（再作成まで走る入口は作成の完了で回るので要らない）。 */
+    internal fun agentDecisionApproved() { agentResume = true }
 
     /**
      * 代行役（AX）: 作成の直後、必須違反が残り未見の盤面なら、[com.magi.app.v6.AgentLoop] で安全ゲート合格の勤務の変更を順に当てる。
@@ -1401,12 +1405,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun maybeRunAgent() {
         val u = _ui.value
-        if (!u.agentAuto || u.agentRunning || u.running || !u.engineRan || !u.hasResult || u.bestHard <= 0L) return
+        if (u.running || u.agentRunning || optimizeInFlight()) return
+        val resume = agentResume; agentResume = false
+        if (!u.agentAuto || !(u.engineRan || resume) || !u.hasResult || u.bestHard <= 0L) return
         val st = state ?: return
         val sched = currentSchedule ?: return
-        if (optimizeInFlight()) return
         val key0 = boardKey(sched)
-        if (!agentSeen.add(key0)) return
+        if (!agentSeen.add(key0 * 31 + stateKey(st))) return
         val snap = sched.copy2D(); val stKey = stateKey(st)
         cancelFixSearch()
         _ui.update { it.copy(agentRunning = true, agentRecord = null) }
@@ -1431,7 +1436,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val recU = rec.copy(undoSerial = undoStack.lastOrNull()?.serial ?: 0L)
                 currentSchedule = r.schedule
                 state = st.withSchedule(r.schedule)
-                agentSeen.add(boardKey(r.schedule))
+                agentSeen.add(boardKey(r.schedule) * 31 + stKey)
                 autoSave()
                 _ui.update { it.copy(schedule = r.schedule.map { row -> row.toList() }, agentRecord = recU,
                     fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList()) }
@@ -2381,6 +2386,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val pressed = RelaxApproval.press(f, RelaxApproval.decisionId(f.trialId, System.currentTimeMillis()))?.copy(applied = changes) ?: return
         _ui.update { it.copy(relaxFlow = pressed) }
         logOp("I", RelaxApproval.approvalLog(pressed.decisionId!!, pressed.trialId, reason, changes))
+        agentDecisionApproved()
         val v = relaxAndApply(token)
         _ui.update { it.copy(relaxFlow = RelaxApproval.finish(pressed, v)) }
     }
@@ -3245,6 +3251,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         logOp("I", "禁止の並びを削除: $seqLabel（${removed}件）")
+        agentDecisionApproved()
         applyStructureWithMessage(s.copy(cons3n = remain), "禁止の並び「$seqLabel」を削除しました（${removed}件・元に戻せます）")
     }
 
@@ -3253,6 +3260,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val ns = SettingFixLogic.apply(s, issue)
         if (ns != null) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
+            agentDecisionApproved()
             applyStructure(ns)
         } else if (SettingFixLogic.wishAlreadyRemoved(s, issue)) {
             _ui.update { it.copy(messageIsError = false, message = SettingFixLogic.WISH_ALREADY_REMOVED_MESSAGE) }
@@ -3284,6 +3292,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }.map { it.key }.toSet()
         if (keys.isEmpty()) return
         logOp("I", "担当外の希望を一括クリア: ${keys.size}件")
+        agentDecisionApproved()
         applyStructure(s.copy(wishes = s.wishes - keys), notice = "担当外の希望を${keys.size}件クリアしました")
     }
 

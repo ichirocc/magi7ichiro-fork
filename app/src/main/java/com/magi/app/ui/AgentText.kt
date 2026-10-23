@@ -27,7 +27,21 @@ internal fun agentHeadline(r: AgentRecord): String? =
 /** 見出しの下の 1 行: 残りが人の判断かどうか。 */
 internal fun agentNextLine(r: AgentRecord): String =
     if (r.hardAfter == 0) "必須違反はありません。配布前の確認に進めます。"
-    else "残り ${r.hardAfter} 件は勤務の変更だけでは直せません。下のカードで判断してください。"
+    else "残り ${r.hardAfter} 件は勤務の変更だけでは直せません。"
+
+/** 判断待ちの内訳（ホームの判断のカード・設定ミスのカードにある承認の数）。空なら判断待ちは無い。 */
+internal fun agentPendingItems(wishes: Int, relaxFound: Boolean, issues: Int): List<String> = listOfNotNull(
+    wishes.takeIf { it > 0 }?.let { "希望の見直し ${it}件" },
+    if (relaxFound) "設定を緩める候補" else null,
+    issues.takeIf { it > 0 }?.let { "設定ミスの直し ${it}件" },
+)
+
+internal const val AGENT_NO_STEP_HEADLINE = "代行で当てられる勤務の変更はありませんでした"
+internal const val AGENT_RESUME_NOTE = "承認すると、代行が続きを回します。"
+
+/** 判断待ちの 1 行。 */
+internal fun agentPendingLine(items: List<String>): String? =
+    items.takeIf { it.isNotEmpty() }?.joinToString("・", prefix = "判断待ち：")
 
 /** 輪の止まり方（操作ログ用）。 */
 internal fun agentStopWord(stop: com.magi.app.v6.AgentLoop.Stop): String = when (stop) {

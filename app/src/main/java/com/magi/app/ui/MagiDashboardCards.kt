@@ -2137,10 +2137,12 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
 
 /** 代行役（AX）のカード: 実行中の 1 行、終われば当てた手の数と前後・残りの扱い・手の一覧（畳む）・元に戻す。 */
 @Composable
-internal fun AgentCard(ui: UiState, onUndo: () -> Unit) {
+internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit) {
     val rec = ui.agentRecord
     val head = rec?.let { agentHeadline(it) }
-    if (!ui.agentRunning && head == null) return
+    val wishCount = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui).size }
+    val pending = agentPendingLine(agentPendingItems(wishCount, relaxFound, ui.settingIssues.size)).takeIf { (rec?.hardAfter ?: 0) > 0 }
+    if (!ui.agentRunning && head == null && (rec == null || pending == null)) return
     val cs = MaterialTheme.colorScheme
     var open by remember(rec) { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
@@ -2153,10 +2155,15 @@ internal fun AgentCard(ui: UiState, onUndo: () -> Unit) {
                 return@Column
             }
             rec ?: return@Column
-            Text(head ?: return@Column, style = MaterialTheme.typography.titleMedium)
+            Text(head ?: AGENT_NO_STEP_HEADLINE, style = MaterialTheme.typography.titleMedium)
             Text(agentNextLine(rec), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            // 判断待ちは数だけ（承認のボタンはそれぞれのカードに 1 つ＝同じボタンを 2 か所に置かない）。
+            pending?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(AGENT_RESUME_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
             if (open) rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (rec.steps.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (open) "当てた手 ▾" else "当てた手 ▸") }
                 MagiTextButton(onClick = onUndo, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("代行の分を元に戻す") }
             }
