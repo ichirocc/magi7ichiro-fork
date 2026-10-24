@@ -35,13 +35,9 @@ import com.magi.app.v6.ShiftAppearance
 
 @Composable
 fun SectionSegment(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(10.dp))
-            content()
-        }
+    // 見出しは入れ物の外・補足は下（iOS の一覧の形、2026-10-23）。
+    MagiGroup(title, footer = subtitle) {
+        Column(Modifier.padding(16.dp)) { content() }
     }
 }
 
@@ -84,7 +80,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         ) {
             Text("種別ごとに個別の色（${MirrorKeys.all.size}種" + (if (customN > 0) "・個別設定${customN}件" else "") + "）",
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text(if (famOpen) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+            DisclosureText(if (famOpen) "閉じる" else "開く", famOpen, style = MaterialTheme.typography.labelMedium, color = cs.primary)
         }
         if (famOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MirrorKeys.all.forEach { key ->

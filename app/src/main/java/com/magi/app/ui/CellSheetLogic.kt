@@ -1337,8 +1337,7 @@ internal fun cellRuleLine(fam: String): String = when (fam) {
     "covO" -> "この日の人数が多すぎます"
     else -> "${breakdownLabels[fam] ?: fam}に当たります"
 }
-internal const val CELL_DETAIL_BUTTON = "詳しく ▸"
-internal const val CELL_DETAIL_CLOSE = "詳しく ▾"
+internal const val CELL_DETAIL_BUTTON = "詳しく"
 
 internal fun cellProblemSentence(fam: String): String = when (fam) {
     "c3n" -> "前後の勤務との組み合わせが禁止条件に該当しています"
@@ -1550,7 +1549,7 @@ internal fun shortageCandidates(st: MagiState, p: Problem, sched: Array<IntArray
 internal fun wishDayButton(dayShort: String?): String = if (dayShort.isNullOrBlank()) "希望を見る" else "$dayShort の希望を見る"
 
 internal const val COUNT_SECTION_TITLE = "対象期間の勤務回数"
-internal const val MORE_OPS_LABEL = "ほかの操作 ▸"
+internal const val MORE_OPS_LABEL = "ほかの操作"
 
 /** セルのシートの「対象期間の勤務回数」は、その職員に回数の族（下限・上限・適切回数など）があるときだけ出す。 */
 internal fun showCountSection(countKeys: Collection<String>, i: Int, lines: List<String>): Boolean =
@@ -1569,7 +1568,7 @@ internal fun compactNoFixLine(reasons: List<String>, single: String?, prevDay: S
 
 internal const val VIEW_FIXES_BUTTON = "変更案を見る"
 
-internal const val STAFF_OTHER_FIXES_LABEL = "この職員のほかの変更案 ▸"
+internal const val STAFF_OTHER_FIXES_LABEL = "この職員のほかの変更案"
 
 /** 職員の勤務状況で最初から選んでおく行（選べる行＝勤務のある行が 1 つだけのとき）。 */
 internal fun staffSheetPreselect(shiftIdxs: List<Int>): Int? = shiftIdxs.filter { it >= 0 }.distinct().singleOrNull()
@@ -1627,8 +1626,7 @@ internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋�
 internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「直し方を見る」で 1 人ずつ入れられます"
 
 /** [3.712.0] 診断カードの行は 1 行の事実と札だけ。理由・内訳はカードの末尾の「詳しく」に 1 回だけ（利用者仕様: 説明は画面に 1 回）。 */
-internal const val DIAG_DETAILS_LABEL = "詳しく ▸"
-internal const val DIAG_DETAILS_CLOSE = "詳しく ▾"
+internal const val DIAG_DETAILS_LABEL = "詳しく"
 internal const val SHORTAGE_TAG_INFEASIBLE = "担当が足りない"
 internal const val SHORTAGE_MOVABLE_LINE = "休みや余裕のある勤務から移せます"
 internal const val FORBIDDEN_RETRY_NOTE = "玉突きか隣の日の調整で崩せます。もう一度つくると直る場合があります"

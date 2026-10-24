@@ -32,6 +32,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.clickable
 
 /**
  * MAGI 共通コンポーネント（docs/magi_design_system.md §4）。
@@ -172,4 +187,62 @@ internal fun MagiTextButton(
 internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues) -> Unit) {
     if (bare) content(PaddingValues(0.dp))
     else Card(Modifier.fillMaxWidth()) { content(PaddingValues(16.dp)) }
+}
+
+/**
+ * iOS の設定アプリの一覧の形（2026-10-23）: 入れ物の外に小さな見出し、入れ物の中は同じ高さの行を細い線で区切る、下に注記。
+ * 不透明・影なし（UD 固定・DESIGN P3）。行は [MagiGroupRow]。
+ */
+@Composable
+internal fun MagiGroup(title: String?, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (title != null) Text(title, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp).semantics { heading() })
+        Surface(color = cs.surfaceContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) { Column(content = content) }
+        if (footer != null) Text(footer, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+/** 一覧の 1 行（押すと [onClick]）。右端に「›」（開閉の行は ▸／▾）。最後の行は [divider]=false。 */
+@Composable
+internal fun MagiGroupRow(label: String, enabled: Boolean = true, trailing: String = "›", divider: Boolean = true, color: Color = Color.Unspecified,
+                          open: Boolean? = null, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .then(if (open != null) Modifier.semantics { stateDescription = disclosureState(open) } else Modifier).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f),
+                color = when { !enabled -> cs.onSurface.copy(alpha = 0.38f); color.isSpecified -> color; else -> cs.primary })
+            Text(trailing, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })   // 印は読み上げない
+        }
+        if (divider) HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
+    }
+}
+
+/** カレンダーの日付の数字（iOS のカレンダーの形、2026-10-24）: 選んだ日は塗った丸に白い数字。枠や四角の塗りは使わない。 */
+@Composable
+internal fun CalendarDayNumber(day: Int, selected: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    // 文字の拡大で数字が丸からはみ出さないよう、大きさは最小 32dp（固定にしない）。
+    Box(Modifier.defaultMinSize(32.dp, 32.dp).then(if (selected) Modifier.background(cs.primary, CircleShape) else Modifier).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+        Text("$day", style = MaterialTheme.typography.bodyLarge, color = if (selected) cs.onPrimary else cs.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+/** 開閉の状態の読み上げ（▸／▾ の印は読み上げに渡さない）。 */
+internal fun disclosureState(open: Boolean): String = if (open) "開いています" else "閉じています"
+
+/**
+ * 開閉や行き先の印つきの文字（2026-10-24 視覚弱点者対応）。見た目は「{label} ▸／▾」、読み上げは [label] と状態だけ
+ * （記号は「右向きの三角」などと読まれて意味が通らない）。[open] が null なら行き先の印 ▸ で状態は読まない。
+ */
+@Composable
+internal fun DisclosureText(label: String, open: Boolean?, style: TextStyle = LocalTextStyle.current, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE) {
+    Row(if (open != null) Modifier.semantics { stateDescription = disclosureState(open) } else Modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = style, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(if (open == true) " ▾" else " ▸", style = style, color = color, modifier = Modifier.clearAndSetSemantics { })
+    }
 }

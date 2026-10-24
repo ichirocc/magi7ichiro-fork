@@ -512,11 +512,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val editScrolls = List(3) { rememberScrollState() }
     // 下部のタブは下へ送ると縮み、上へ戻すか先頭で広がる（iOS 26 のタブバーと同じ動き。ガラスは使わない＝UD の不透明）。
     var navCollapsed by remember { mutableStateOf(false) }
+    // 読み上げ（TalkBack）を使っているときは縮めない（タブが見えなくなり、探す手間が増えるため。視覚弱点者対応 2026-10-24）。
+    val navCtx = androidx.compose.ui.platform.LocalContext.current
+    val touchExploring = remember(navCtx) {
+        (navCtx.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager)?.isTouchExplorationEnabled == true
+    }
     val pageScroll = if (tab == 2) editScrolls[editScope.coerceIn(0, 2)] else tabScrolls[tab.coerceIn(0, 4)]
     LaunchedEffect(pageScroll) {
         var last = pageScroll.value
         snapshotFlow { pageScroll.value }.collect { v ->
-            navCollapsed = navCollapseNext(navCollapsed, last, v)
+            navCollapsed = !touchExploring && navCollapseNext(navCollapsed, last, v)
             last = v
         }
     }
@@ -792,7 +797,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     val diagCount = homeDiagnosisCount(ui)
                     var diagOpen by rememberSaveable { mutableStateOf(false) }
                     if (diagCount > 0) MagiTextButton(onClick = { diagOpen = !diagOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(if (diagOpen) "原因の診断 ▾" else "原因の診断（${diagCount}件） ▸")
+                        DisclosureText(if (diagOpen) "原因の診断" else "原因の診断（${diagCount}件）", diagOpen)
                     }
                     if (diagOpen) {
                     CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },

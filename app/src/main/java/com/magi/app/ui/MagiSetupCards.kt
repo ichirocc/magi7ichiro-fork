@@ -59,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.text.style.TextOverflow
@@ -161,14 +163,13 @@ internal fun GuideRow(label: String, value: String, done: Boolean?, onClick: (()
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimize: () -> Unit = {}) {
-    Card(Modifier.fillMaxWidth()) {
+    MagiGroup(SETTINGS_HEADING) {
         Column(Modifier.padding(16.dp)) {
-            // [3.714.0] 見出し「設定」＋組む時間の 1 行＋主ボタン。仕上げの秒数と注記は「詳しく」の中。
-            Text(SETTINGS_HEADING, style = MaterialTheme.typography.titleMedium)
+            // [3.714.0] 組む時間の 1 行＋主ボタン。仕上げの秒数と注記は「詳しく」の中。見出しは入れ物の外（iOS の一覧の形、2026-10-23）。
             Spacer(Modifier.height(8.dp))
             Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
             var budgetMore by rememberSaveable { mutableStateOf(false) }
-            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, budgetMore) }
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
@@ -623,7 +624,7 @@ internal fun AdvancedSettingsSection(
     onExportJson: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }   // 既定は閉
-    Card(Modifier.fillMaxWidth()) {
+    MagiGroup(null) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
             Row(
                 modifier = Modifier
@@ -723,63 +724,39 @@ internal fun DataActionsCard(
     onRestorePrev: () -> Unit = {},
     onRetrySave: () -> Unit = {},
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("データ", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenJson, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを開く") }
-                OutlinedButton(onClick = onSample, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("サンプルで試す") }
+    val ok = ui.loaded && !ui.running
+    // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示（例: CSVのBOM対応は 2.90.0 以降）。
+    val ctx = LocalContext.current
+    val versionLabel = remember(ctx) {
+        runCatching {
+            val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+            "${pi.versionName} (${pi.longVersionCode})"
+        }.getOrDefault("不明")
+    }
+    // [3.529.0] 自動保存の状態は変化がある間だけ。失敗は時間のカードの上（SettingsSaveFailedBanner）に出す＝ここでは重ねない（3.706.0 S4）。
+    val saveNote = when (ui.saveState) { SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"; SaveState.Saving -> "保存中…"; else -> null }
+    // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
+    val restoreNote = if (ui.prevBackupAvailable) "「開く前のデータに戻す」はもう一度押すと、今のデータと入れ替わります。" else null
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        MagiGroup("データ", footer = listOfNotNull(restoreNote, saveNote).joinToString("\n").ifEmpty { null }) {
+            MagiGroupRow("データを開く", enabled = !ui.running, onClick = onOpenJson)
+            MagiGroupRow("サンプルで試す", enabled = !ui.running, onClick = onSample)
+            if (ui.prevBackupAvailable) MagiGroupRow("開く前のデータに戻す", enabled = !ui.running, onClick = onRestorePrev)
+            MagiGroupRow("データを保存する", enabled = ok, onClick = onSaveJson)
+            MagiGroupRow("いま診断し直す", enabled = ok, divider = false, onClick = onCheck)
+        }
+        // 種類別の書き出し 4 つは畳む（データの常時の行を減らす）。
+        var kindsOpen by remember { mutableStateOf(false) }
+        MagiGroup("CSV", footer = "バージョン: $versionLabel") {
+            MagiGroupRow("CSVを取り込む", enabled = ok, onClick = onOpenCsv)
+            MagiGroupRow("CSVを書き出す", enabled = ok, onClick = onSaveCsv)
+            MagiGroupRow("種類別のCSVを書き出す", trailing = if (kindsOpen) "▾" else "▸", divider = kindsOpen, open = kindsOpen, onClick = { kindsOpen = !kindsOpen })
+            if (kindsOpen) {
+                MagiGroupRow("　職員一覧", enabled = ok, onClick = onSaveStaffCsv)
+                MagiGroupRow("　希望シフト", enabled = ok, onClick = onSaveWishesCsv)
+                MagiGroupRow("　各制約", enabled = ok, onClick = onSaveConstraintsCsv)
+                MagiGroupRow("　シフト色", enabled = ok, divider = false, onClick = onSaveShiftColorsCsv)
             }
-            // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
-            if (ui.prevBackupAvailable) {
-                MagiTextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
-                    Text("開く前のデータに戻す")
-                }
-                Text("もう一度押すと、今のデータと入れ替わります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            // [3.529.0/外部仕様書取り入れ] 自動保存の状態。既定(Saved)では出さず、変化がある間だけ表示。
-            //   失敗は時間のカードの上（SettingsSaveFailedBanner）に出す＝ここでは重ねない（3.706.0 S4）。
-            if (ui.saveState == SaveState.Dirty || ui.saveState == SaveState.Saving) {
-                Text(
-                    when (ui.saveState) {
-                        SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
-                        SaveState.Saving -> "保存中…"
-                        SaveState.Failed -> "自動保存できていません。端末の空き容量を確かめてから「$SAVE_RETRY_BUTTON」を押してください"
-                        SaveState.Saved -> ""
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (ui.saveState == SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存する") }
-                OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを取り込む") }
-                OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSVを書き出す") }
-            }
-            // 種類別の書き出し 4 つは畳む（データのカードの常時のボタンを減らす）。
-            var kindsOpen by remember { mutableStateOf(false) }
-            MagiTextButton(onClick = { kindsOpen = !kindsOpen }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(if (kindsOpen) "種類別のCSVを書き出す ▾" else "種類別のCSVを書き出す ▸")
-            }
-            if (kindsOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員一覧") }
-                OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフト") }
-                OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("各制約") }
-                OutlinedButton(onClick = onSaveShiftColorsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("シフト色") }
-            }
-            // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
-            //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
-            val ctx = LocalContext.current
-            val versionLabel = remember(ctx) {
-                runCatching {
-                    val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-                    "${pi.versionName} (${pi.longVersionCode})"
-                }.getOrDefault("不明")
-            }
-            Text("バージョン: $versionLabel", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -792,9 +769,8 @@ internal fun AppearanceCard(
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
     leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {}, inner: (@Composable () -> Unit)? = null) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
-    Card(Modifier.fillMaxWidth()) {
+    MagiGroup("外観") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("外観", style = MaterialTheme.typography.titleMedium)
             Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = oneHand, role = Role.Switch, onValueChange = onOneHand).semantics(mergeDescendants = true) {}) {
@@ -868,18 +844,21 @@ internal fun CollapsibleSection(
         }
     }
     Column(Modifier.fillMaxWidth()) {
+        // 節の見出しは一覧の 1 行と同じ形（地・角丸・右端の ▸／▾、iOS の一覧の形、2026-10-23）。
         Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).bringIntoViewRequester(headingRequester).clickable { expanded = !expanded },
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).bringIntoViewRequester(headingRequester).clickable { expanded = !expanded }
+                .semantics { stateDescription = disclosureState(expanded) },
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(if (expanded) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (expanded) "▾" else "▸", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clearAndSetSemantics { })
             }
         }
         if (expanded) {

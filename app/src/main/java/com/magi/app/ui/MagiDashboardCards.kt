@@ -384,7 +384,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
                 var more by remember { mutableStateOf(false) }
-                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, more) }
                 if (more) {
                 p.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
@@ -895,7 +895,7 @@ internal fun OperatorNextActionCard(
                             if (detailOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                             contentDescription = null, tint = plan.fg, modifier = Modifier.size(16.dp),
                         )
-                        Text(if (detailOpen) "ⓘ でき具合の意味 ▾" else "ⓘ でき具合の意味 ▸", style = MaterialTheme.typography.bodySmall, color = plan.fg)
+                        DisclosureText("ⓘ でき具合の意味", detailOpen, style = MaterialTheme.typography.bodySmall, color = plan.fg)
                     }
                     // [判断設計監査 #1/#2] 数字の根拠（できあがり度の意味）と結果採用の意味（反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
                     if (detailOpen) {
@@ -930,10 +930,10 @@ private fun DiagDetailToggle(
     onToggle: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     closedText: String = "ⓘ 詳細（内部の記録）",
-    openText: String = "ⓘ 詳細を閉じる",
+    openText: String = "ⓘ 詳細（内部の記録）",
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onToggle),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onToggle).semantics { stateDescription = disclosureState(open) },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
@@ -1086,7 +1086,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 }
                 if (shownSurpluses.size < diag.surpluses.size) SettingIssuesShowAll(diag.surpluses.size - shownSurpluses.size) { allSurpluses = true }
             }
-            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_CLOSE)
+            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_LABEL)
         }
     }
 }
@@ -1150,7 +1150,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
             }
             if (shownRuns.size < diag.runs.size) SettingIssuesShowAll(diag.runs.size - shownRuns.size) { allRuns = true }
             if (details && diag.runs.any { it.hint == com.magi.app.v6.V6PortAnalyzer.FORBIDDEN_CHAIN_HINT }) Text(FORBIDDEN_RETRY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_CLOSE)
+            DiagDetailToggle(details, { details = !details }, closedText = DIAG_DETAILS_LABEL, openText = DIAG_DETAILS_LABEL)
 
             // [壁の名指しと緩和] 「崩せない」判定の run を並び（ルール）ごとに集約し、そのルールを
             //   その場で削除できるようにする。制約画面へ行って行を探す往復を省く導線。
@@ -2048,7 +2048,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                     Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
                     if (allWorse) Text(ALTERNATIVES_ALL_WORSE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                DisclosureText(if (open) "閉じる" else "開く", open, color = cs.primary, style = MaterialTheme.typography.bodyMedium)
             }
             if (open) {
                 Text("案を押すと、反映する前に確かめます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2120,7 +2120,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 preDistributionTop(rows).forEach { PreDistRowView(it) }
                 Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+                MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, details) }
                 if (details) {
                     preDistributionDetails(rows).forEach { PreDistRowView(it) }
                     Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2165,7 +2165,7 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bar
             }
             if (open) rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (open) "当てた手 ▾" else "当てた手 ▸") }
+                MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText("当てた手", open) }
                 MagiTextButton(onClick = onUndo, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("代行の分を元に戻す") }
             }
         }
