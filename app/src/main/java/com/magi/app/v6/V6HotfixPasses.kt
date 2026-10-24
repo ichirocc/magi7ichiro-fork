@@ -618,6 +618,76 @@ object V6HotfixPasses {
     }
 
     /** 後処理の前段（全面改修 P4b）: HF80 → HF67（残予算の半分まで）→ HF66（残予算の半分まで）。 */
+    private class MidStages(val cluster: ClusterOutcome, val tC1Lns: Long, val tPersonalLns: Long)
+
+    /** 後処理の中段（全面改修 P4c）: 厳密日割当 → 巡回研磨クラスタ → 曜日平準化・交互最適化 → c1 共同 LNS（→ 従来の玉突き）→ 個人回数の共同 LNS。 */
+    private fun runMidStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, seed: Long, shouldStop: () -> Boolean, deadlineMs: Long, t66Done: Long): MidStages {
+        val ej = params.ejection
+        val pipelineOn = ej.pipelineFocus != EjectionChainPipeline.Focus.OFF
+        // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
+        val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE || params.deterministic) 0L
+            else BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66Done), params.jointLnsReserveMaxMs)
+        val clusterDeadline = if (deadlineMs == Long.MAX_VALUE || params.deterministic) Long.MAX_VALUE else deadlineMs - jointLnsReserve
+        val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
+
+        chain.adopt(chain.timed(PostStages.DAY_ASSIGN) { work ->
+            DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop)
+        })
+
+        // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
+        val preSoftRep = UnifiedViolationChecker.check(state, chain.work)
+        val cluster = runPolishCluster(state, chain, params, seed, clusterStop, preSoftRep)
+
+        // weekly は同日 2 者スワップでは動かない（曜日別の勤務/休が不変）→ 被覆保存の 2 職員×2 日 長方形交換。
+        chain.adopt(chain.timed(PostStages.WEEKLY_REBALANCE) { work ->
+            CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = params.weeklyRebalancePasses, shouldStop = clusterStop)
+        })
+        // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
+        chain.adopt(chain.timed(PostStages.ALTERNATING) { work ->
+            DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop)
+        })
+
+        // 最終 LNS 2 本（高コストなので巡回ループでなく最終 1 回）。残予算は既定比 8:6 で按分（3.255.0）。
+        val tC1Lns = EngineClock.nowMs()
+        val lnsTotal = params.c1LnsMaxMs + params.personalLnsMaxMs
+        chain.adopt(chain.timed(PostStages.C1_JOINT_LNS) { work ->
+            val cap = BudgetShare.proportional(EngineClock.remainingMs(deadlineMs, tC1Lns), params.remainingClampMs, params.c1LnsMaxMs, lnsTotal)
+            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
+                else C1JointLnsPolish.Config(maxMillis = cap)
+            // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
+            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
+            val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop)
+            if (r1.applied == 0) r1
+            else {
+                val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+            }
+        })
+        if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
+            val tEj = EngineClock.nowMs()
+            val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
+            chain.adopt(chain.timed(PostStages.C1_EJECTION) { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = BudgetShare.quarter(EngineClock.remainingMs(deadlineMs, tEj), ej.maxMillis))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop)
+            })
+        }
+        val tPersonalLns = EngineClock.nowMs()
+        chain.adopt(chain.timed(PostStages.PERSONAL_LNS) { work ->
+            val cap = BudgetShare.upTo(EngineClock.remainingMs(deadlineMs, tPersonalLns), params.personalLnsMaxMs)
+            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
+                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
+            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
+            val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
+            if (r1.applied == 0) r1
+            else {
+                val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+            }
+        })
+        return MidStages(cluster, tC1Lns, tPersonalLns)
+    }
+
     private class PreStages(val r80: HF80Result, val r67: HF67Result, val r66: HF66Result, val t67: Long, val t66: Long)
 
     private fun runPreStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, seed: Long, shouldStop: () -> Boolean, deadlineMs: Long): PreStages {
@@ -679,67 +749,7 @@ object V6HotfixPasses {
         val pre = runPreStages(state, chain, params, seed, shouldStop, deadlineMs)
         val t66Done = EngineClock.nowMs()
 
-        // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
-        val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE || params.deterministic) 0L
-            else BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66Done), params.jointLnsReserveMaxMs)
-        val clusterDeadline = if (deadlineMs == Long.MAX_VALUE || params.deterministic) Long.MAX_VALUE else deadlineMs - jointLnsReserve
-        val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
-
-        chain.adopt(chain.timed(PostStages.DAY_ASSIGN.label, PostStages.DAY_ASSIGN.key) { work ->
-            DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop)
-        })
-
-        // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
-        val preSoftRep = UnifiedViolationChecker.check(state, chain.work)
-        val cluster = runPolishCluster(state, chain, params, seed, clusterStop, preSoftRep)
-
-        // weekly は同日 2 者スワップでは動かない（曜日別の勤務/休が不変）→ 被覆保存の 2 職員×2 日 長方形交換。
-        chain.adopt(chain.timed(PostStages.WEEKLY_REBALANCE.label, PostStages.WEEKLY_REBALANCE.key) { work ->
-            CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = params.weeklyRebalancePasses, shouldStop = clusterStop)
-        })
-        // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
-        chain.adopt(chain.timed(PostStages.ALTERNATING.label, PostStages.ALTERNATING.key) { work ->
-            DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop)
-        })
-
-        // 最終 LNS 2 本（高コストなので巡回ループでなく最終 1 回）。残予算は既定比 8:6 で按分（3.255.0）。
-        val tC1Lns = EngineClock.nowMs()
-        val lnsTotal = params.c1LnsMaxMs + params.personalLnsMaxMs
-        chain.adopt(chain.timed(PostStages.C1_JOINT_LNS.label, PostStages.C1_JOINT_LNS.key) { work ->
-            val cap = BudgetShare.proportional(EngineClock.remainingMs(deadlineMs, tC1Lns), params.remainingClampMs, params.c1LnsMaxMs, lnsTotal)
-            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
-                else C1JointLnsPolish.Config(maxMillis = cap)
-            // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
-            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
-            val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop)
-            if (r1.applied == 0) r1
-            else {
-                val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
-                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-            }
-        })
-        if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
-            val tEj = EngineClock.nowMs()
-            val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
-            chain.adopt(chain.timed(PostStages.C1_EJECTION.label, PostStages.C1_EJECTION.key) { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = BudgetShare.quarter(EngineClock.remainingMs(deadlineMs, tEj), ej.maxMillis))
-                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop)
-            })
-        }
-        val tPersonalLns = EngineClock.nowMs()
-        chain.adopt(chain.timed(PostStages.PERSONAL_LNS.label, PostStages.PERSONAL_LNS.key) { work ->
-            val cap = BudgetShare.upTo(EngineClock.remainingMs(deadlineMs, tPersonalLns), params.personalLnsMaxMs)
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
-            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
-            val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
-            if (r1.applied == 0) r1
-            else {
-                val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
-                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-            }
-        })
+        val mid = runMidStages(state, chain, params, seed, shouldStop, deadlineMs, t66Done)
 
         if (!shouldStop()) {
             // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
@@ -780,8 +790,8 @@ object V6HotfixPasses {
         val tEnd = EngineClock.nowMs()
         chain.logs.add(MirrorLog(level = "I", tag = "POST",
             message = "後処理タイミング 総${tEnd - t0}ms: HF80=${pre.t67 - t0}ms HF67=${pre.t66 - pre.t67}ms HF66=${t66Done - pre.t66}ms" +
-                " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${tC1Lns - t66Done}ms" +
-                " C1共同LNS+玉突き連鎖=${tPersonalLns - tC1Lns}ms 個人共同LNS=${tHf - tPersonalLns}ms" +
+                " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${mid.tC1Lns - t66Done}ms" +
+                " C1共同LNS+玉突き連鎖=${mid.tPersonalLns - mid.tC1Lns}ms 個人共同LNS=${tHf - mid.tPersonalLns}ms" +
                 " 最終検査+HF70=${tEnd - tHf}ms"))
         // パスごとの内訳（多い順・上位 N）。「時間を食っているのに採用0」のパスが各パス自身の行と突き合わせられる（3.339.0）。
         if (chain.passMs.isNotEmpty()) {
@@ -793,7 +803,7 @@ object V6HotfixPasses {
 
         chain.logs.add(MirrorLog(level = "I", tag = "POST", message = "後処理 収支: " + ChangeSummary.familyLine(ChangeSummary.familyDeltas(report0, report))))
 
-        val plateauOut = finalC1Plateau(state, work, report, cluster.c1Plateau)
+        val plateauOut = finalC1Plateau(state, work, report, mid.cluster.c1Plateau)
         val allLogs = ArrayList<MirrorLog>(chain.logs)
         allLogs.addAll(report.logs)
         return V6PostOptimizationResult(
