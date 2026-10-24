@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- T-15・T-16 と、やり直し・許可リストの対策（2026-10-24、版なし、ユーザー「マルチスレッドでのやり直し対策と許可リスト不足の対策する」）: 並列のエージェントで `StateRoundTripTest`（JSON 往復・CSV 書き出しの冪等）と `BoundaryFixtureTest`（B-2 の境界）を作成（T-9 は先行コミット）。worktree が main から作られ古い版で書かれた・続けて push して CI が中止になった反省から、fork に HEAD を checkout させる・push は 1 回・`tools/prepush_check.sh` を `docs/environment.md` と CLAUDE.md に。weight_lint は断片が別ファイルへ移っても失敗にせず移った先を注意として出す（`test_weight_lint.py` に自己テスト）。`StateParser.DERIVED_KEYS` を internal にしてテストが写しを持たない
 - 修復の候補選び・研磨の見積りの重みを PenaltyWeights に（2026-10-24、版なし・出力不変、外部レビュー「評価式を 5 箇所にコピペ」の照合→「推奨で」）: destroy-repair/polish 系 4 ファイル・17 か所の重みの数値（low/high/apt/fair/weekly/covU/covO）を `MirrorKeys.weights` から初期化時に 1 回読む定数に。式の形（下限 0 を数えない等の前提の違い）は変えない。weight_lint の許可 11 行を外した。あわせて P10b 以来 V6 Engine Check を落としていた weight_lint の許可（`iter % 120L`・`iter % 50L`）のファイル名を AlnsSearch.kt に直した（lessons 追記）
 - T-7 を CI に（2026-10-24、版なし、外部レビュー「DoD T-1〜T-19 を CI に繋ぐ」の照合）: `PolishGateAccessTest`＝エンジンで `PolishGate.` を参照するのは `EngineConfig.kt` だけ。照合: T-1〜T-6・T-8・T-10・T-11・T-13・T-14 は既に実在して V6 Engine Check で全件回る、`safety_inventory.md` は 28 項目すべてに固定テストと CI 列あり（「CI に紐付いていない」は誤り）。残る T-9（各段が締切を守る）・T-15（JSON 往復・CSV バイト一致）・T-16（境界 fixture）・T-17（統計）・T-18（実機）・T-19（C#、停止中）
 - 全面改修 P6e（2026-10-24、版なし・出力不変）: ViewModel の CSV 取込を `MagiViewModelCsv.kt` へ。盤面の書き込みは本体の `commitCsvBoard` だけ  → `docs/overhaul_design.md` §6.7

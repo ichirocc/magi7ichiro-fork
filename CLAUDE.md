@@ -17,6 +17,7 @@
   3.552.0 で取り込んだ起動診断・`.so` 整列検査はこの repo 単体の機能として維持する。
 - 2 層番兵（C++ 自己整合＋Kotlin `fullEval` 照合）は正しさの根幹＝削らない。不一致なら `NativeGate` が閉じて Kotlin へ退化する（誤出力でなく速度低下として現れる）。
 - 片手一本指（ドラッグ不可、例外は編集タブのシフト種別/グループ/職員一覧の並び替えのみ＝3.515.6・3.530.0 ユーザー明示指示）・最小デザイン。色/角丸/影は `docs/DESIGN.md` の原則と `tools/design_lint.py`。
+- 並列のエージェント（fork）を使うときは作業ブランチの HEAD を checkout させ、push はまとめて 1 回、ファイルの分割・移動のあとは `bash tools/prepush_check.sh`（`docs/environment.md`）。
 - Serena は名前の分かるシンボルの定義/参照に使い、意味検索・文言・docs は Grep。初期化に失敗したら Grep で進める。
 - リポジトリは `ichirocc/magi7ichiro-fork`（作業用 fork）。環境固有の手順（CI 監視・probe・プラグイン）は `docs/environment.md`。
 

@@ -263,13 +263,15 @@ def engine_files():
 
 
 def scan(by_value):
-    """戻り値: (findings, used_exempt, ambiguous_lines)。used_exempt は WEIGHT_LINT_EXEMPT のキー ->
+    """戻り値: (findings, used_exempt, ambiguous_lines, moved_exempt)。moved_exempt は宣言したファイルでなく
+    別の v6 ファイルで一致した抑止のキー -> 一致したファイル（関数の移動・ファイル分割で断片ごと移った＝失敗にせず場所の更新を促す）。used_exempt は WEIGHT_LINT_EXEMPT のキー ->
     一致した検出行の [(行番号, その行でマッチした数値の集合)]（`main()` が一致行数と宣言族名の
     “現在の”重みを突き合わせる）。ambiguous_lines は複数の抑止の断片に一致した行。
     """
     findings = []
     used_exempt = {}
     ambiguous_lines = []
+    moved_exempt = {}
     by_file = {}
     for (rel, snip) in WEIGHT_LINT_EXEMPT:
         by_file.setdefault(rel, []).append(snip)
@@ -289,6 +291,11 @@ def scan(by_value):
             if not hits:
                 continue
             keys = [(rel, sn) for sn in snips if sn in raw[i]]
+            if not keys:
+                # 宣言したファイルに無い断片が別のファイルで一致した＝移動。数え方・値の照合はそのまま続ける。
+                keys = [(r, sn) for (r, sn) in WEIGHT_LINT_EXEMPT if r != rel and sn in raw[i]]
+                for key in keys:
+                    moved_exempt[key] = rel
             if len(keys) > 1:
                 ambiguous_lines.append((rel, n, [k[1] for k in keys]))
             if keys:
@@ -302,7 +309,7 @@ def scan(by_value):
                         continue
                     fams = [hit_fam]
                 findings.append((rel, n, text, fams, raw[i].strip()))
-    return findings, used_exempt, ambiguous_lines
+    return findings, used_exempt, ambiguous_lines, moved_exempt
 
 
 def main():
@@ -311,7 +318,7 @@ def main():
     a = ap.parse_args()
 
     by_family, by_value = parse_weights()
-    findings, used_exempt, ambiguous_lines = scan(by_value)
+    findings, used_exempt, ambiguous_lines, moved_exempt = scan(by_value)
 
     # 空振り（断片が検出行に一致しない）・一致行数の不一致（断片が曖昧）・値ミスマッチ（宣言した族の
     #   “現在の”重みがその行の値の中に無い＝正本だけ変更し複製を更新し忘れた可能性）を分けて検出する。
@@ -345,6 +352,11 @@ def main():
             print(f"    {rel}:{n}  {text} が重み {fam_label}({by_family[fams[0]]:g}) と一致: {src}")
     print(f"\n合計 {len(findings)} 件")
     blockers = bool(findings)
+    if moved_exempt:
+        # 失敗にしない（関数の移動・ファイル分割のたびに CI を落とさない）。断片と値の照合は移った先で済んでいる。
+        print(f"\n注意: 抑止の断片が別のファイルへ移っています（{len(moved_exempt)} 件、失敗にはしない）。WEIGHT_LINT_EXEMPT のパスを直してください:")
+        for (rel, sn), new in sorted(moved_exempt.items()):
+            print(f"    {rel} -> {new}: {sn!r}")
     if findings:
         print(
             "MirrorKeys.weightOf(family) / MirrorKeys.weights[...] 経由に直すか、"

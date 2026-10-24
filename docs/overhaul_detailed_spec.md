@@ -330,8 +330,8 @@ object ConstraintCatalog { val all: List<ConstraintSpec> /* 21 件 */ }
 | T-12 | 結合 | UI 層の既存テストが全件合格 | 既存 | P6 |
 | T-13 | 結合 | 退化経路で同じ結果 | `NativeGateFallbackTest` | P1 |
 | T-14 | 結合 | 保存の再試行の配線 | `SaveRetryWiringTest` | P1 |
-| T-15 | 結合 | JSON の往復で差分 0、CSV 書き出しのバイト一致 | 既存＋新設 | P0 |
-| T-16 | 結合 | 境界 fixture（B-2）で落ちない・番兵を通る | 新設 | P0 |
+| T-15 | 結合 | JSON の往復で差分 0、CSV 書き出しのバイト一致 | `CsvRoundTripTest`＋`StateRoundTripTest`（6 fixture の JSON 往復と冪等・CSV 書き出しの決定性と冪等、2026-10-24） | P0 |
+| T-16 | 結合 | 境界 fixture（B-2）で落ちない・番兵を通る | `BoundaryFixtureTest`（1 名・30 名 × 1 日・28〜31 日、2026-10-24） | P0 |
 | T-17 | 統計 | 時間制の対比較（5.1） | `tools/loop/` | 最終 |
 | T-18 | 実機 | 機能の棚卸し F1〜F15、TalkBack、端末幅 | 利用者の確認 | 最終 |
 | T-19 | C# | Kotlin のテストを 1 対 1 で写し、C# のゴールデンが一致 | `MagiEngine.Tests` | 停止明け |
