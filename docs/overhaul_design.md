@@ -434,6 +434,7 @@ HARD を先にして、診断と修正提案の食い違いを早く潰します
 Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize・Persistence・RelaxTrial・Restore・SmartInitial・WishTrial・Ws1。
 `MagiMediator`／`MagiArbiter` はそのままです。合格: G6・G12、ViewModel のテスト。
 - P6a（2026-10-24、出力不変）: FixSuggestions を `MagiViewModelFixSuggestions.kt` へ（`findFixSuggestions`・`applyFixSuggestion`・`cancelFixSearch`・`undoNotice`・`clearOpNotice` を extension 関数に）。指紋と探索ジョブの状態は本体に残し、拡張から触るメンバ（`pushUndo`・`boardKey`・`undoStack` など 17 個）を private から internal へ。ViewModel はホストでコンパイルされないので `android-sdk` で確認。
+- P6b（2026-10-24、出力不変）: RelaxTrial を `MagiViewModelRelaxTrial.kt` へ（試算の開始・取消・照合 6 種・承認フロー 5 種）。試算の状態と、盤面を書き換える確定 `relaxAndApply`・`restoreBeforeRelax` は本体に残す（state/currentSchedule の書き込みは本体だけ）。
 
 ### 6.8 P7 文書の正規化
 `docs/architecture.md`・`docs/sudo_model.md` を新しい構造に合わせ、取り残し（21 族など）を直します。
