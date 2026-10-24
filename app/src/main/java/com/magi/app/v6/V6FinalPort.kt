@@ -504,11 +504,12 @@ object V6FinalPort {
         // 後処理は元々 deadline も progress も持たず、optimize が予算を使い切った後も走り続け、
         // 合計が予算を大きく超過していた(実機44分。当時の上限は600s)。ここで全体に hardDeadline を張り、
         // coroutine キャンセル(計算を止める)と束ねて後処理へ伝播する。
-        val startMs = EngineClock.nowMs()
-        val budgetMs = seconds.toLong() * 1000L
-        // 制限時間は探索の時間。後処理と玉突きの取り分はその後ろに足す（全体＝制限時間＋POST_RESERVE_SEC＋CHAIN_RESERVE_SEC）。
-        val postReserveFixedMs = (POST_RESERVE_SEC + CHAIN_RESERVE_SEC) * 1000L
-        val hardDeadlineMs = startMs + budgetMs + postReserveFixedMs
+        // 予算の定義は TimeBudget だけ（P3a）。制限時間は探索の時間で、後処理と玉突きの取り分はその後ろに足す。
+        val tb = TimeBudget.start(seconds)
+        val startMs = tb.startMs
+        val budgetMs = tb.searchMs
+        val postReserveFixedMs = tb.reserveMs
+        val hardDeadlineMs = tb.hardDeadlineMs
         // [仮説数上限撤廃・ユーザー指示] 診断ログ表示専用。実際の dispatch は V6NativeOptimizer.optimize()
         //   内の同名関数呼出が担うため、ここも同じ HypothesisPlanning.hypothesisCount から導出し独立再計算による
         //   表示/実挙動の乖離を防ぐ（3.212.0 と同じ設計原則）。
@@ -538,7 +539,7 @@ object V6FinalPort {
         //   指定すると minRunMs / postReserveMs が予算を上回り、searchDeadlineMs が hardDeadlineMs を
         //   追い越して**要求したタイムアウトを超えて**いた。予算そのものでクランプして searchDeadline
         //   <= hardDeadline を構造的に保証する（10 秒以上では minRunMs が支配するため結果は不変）。
-        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs, config.normalStallFraction, postReserveFixedMs = postReserveFixedMs)
+        val wdb = tb.watchdog(config.normalStallFraction)
         val minRunMs = wdb.minRunMs   // 最初の猶予（早すぎる停止を防ぐ）
         // [後処理予約] 探索が予算を使い切ると後処理(平準化/fair等のkeep-best研磨)が時間切れ(実機8ms)になる。
         //   末尾に postReserveMs を予約し、探索は searchDeadlineMs で止め、後処理は hardDeadlineMs まで走らせる。
@@ -887,7 +888,7 @@ object V6FinalPort {
             }
         }
         val tExtra1 = EngineClock.nowMs()
-        val overBudget = tExtra1 - startMs > budgetMs + postReserveFixedMs
+        val overBudget = tb.overBudget(tExtra1)
         val timingLog = MirrorLog(
             level = if (overBudget) "W" else "I",
             tag = "TIME",

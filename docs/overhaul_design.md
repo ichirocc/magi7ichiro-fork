@@ -412,7 +412,7 @@ P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
 |---|---|
-| P3a | `TimeBudget` 型と、`V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）の移行 |
+| P3a | `TimeBudget` 型と、`V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）の移行 — **済**（2026-10-24。`TimeBudget.start`・`watchdog`・`overBudget`、旧式との一致は `TimeBudgetTest`＝T-8） |
 | P3b | `SaParams`、共同 LNS、`EjectionChainPipeline`、`CombinatorialRepair` を子予算へ |
 合格: 決定的モードで G8。時間制は各段の割当 ms のログが前後で同じ。
 
