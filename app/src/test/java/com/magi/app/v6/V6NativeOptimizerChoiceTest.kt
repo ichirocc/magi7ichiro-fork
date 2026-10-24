@@ -939,21 +939,21 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val goodReport = UnifiedViolationChecker.check(st, sched)  // hard=0/total=0（休のみ・制約なし）
         val goodSched = arrayOf(intArrayOf(0))
-        V6NativeOptimizer.publishLiveBest(goodReport, goodSched)
-        assertEquals(listOf(listOf(0)), V6NativeOptimizer.liveBest)
+        OptimizerRuntime.publishLiveBest(goodReport, goodSched)
+        assertEquals(listOf(listOf(0)), OptimizerRuntime.liveBest)
 
         // 明確に劣る report をでっち上げて publish を試みる（同一 hard・total だけ悪化させた copy）。
         val worseReport = goodReport.copy(total = goodReport.total + 999_999)
         val worseSched = arrayOf(intArrayOf(999))
-        V6NativeOptimizer.publishLiveBest(worseReport, worseSched)
+        OptimizerRuntime.publishLiveBest(worseReport, worseSched)
         // 劣る report は無視され、liveBest は直前の良好な盤面のまま。
-        assertEquals(listOf(listOf(0)), V6NativeOptimizer.liveBest)
+        assertEquals(listOf(listOf(0)), OptimizerRuntime.liveBest)
 
         // 更に良い report(total を減らす)なら正しく更新される。
         val betterReport = goodReport.copy(total = -1)
         val betterSched = arrayOf(intArrayOf(7))
-        V6NativeOptimizer.publishLiveBest(betterReport, betterSched)
-        assertEquals(listOf(listOf(7)), V6NativeOptimizer.liveBest)
+        OptimizerRuntime.publishLiveBest(betterReport, betterSched)
+        assertEquals(listOf(listOf(7)), OptimizerRuntime.liveBest)
     }
 
     // [3.240.0/5ラウンド完全停滞の修正] destroyRepairStaffReps は destroyRepairDay(1回で最大S人分の
@@ -998,15 +998,15 @@ class V6NativeOptimizerChoiceTest {
     // ---- [3.288.0/ログ強化=状態軸] HF63 学習族の実行横断 union ----
 
     @Test fun recordInfeasibleUnionsAcrossCallsAndClearResets() {
-        V6NativeOptimizer.clearInfeasible()
-        assertEquals(emptySet<String>(), V6NativeOptimizer.lastInfeasibleFamilies)
-        V6NativeOptimizer.recordInfeasible(listOf("covU"))
-        V6NativeOptimizer.recordInfeasible(listOf("c3n", "covU"))
-        assertEquals(setOf("covU", "c3n"), V6NativeOptimizer.lastInfeasibleFamilies)
-        V6NativeOptimizer.recordInfeasible(emptyList())   // 空は no-op
-        assertEquals(setOf("covU", "c3n"), V6NativeOptimizer.lastInfeasibleFamilies)
-        V6NativeOptimizer.clearInfeasible()
-        assertEquals(emptySet<String>(), V6NativeOptimizer.lastInfeasibleFamilies)
+        OptimizerRuntime.clearInfeasible()
+        assertEquals(emptySet<String>(), OptimizerRuntime.lastInfeasibleFamilies)
+        OptimizerRuntime.recordInfeasible(listOf("covU"))
+        OptimizerRuntime.recordInfeasible(listOf("c3n", "covU"))
+        assertEquals(setOf("covU", "c3n"), OptimizerRuntime.lastInfeasibleFamilies)
+        OptimizerRuntime.recordInfeasible(emptyList())   // 空は no-op
+        assertEquals(setOf("covU", "c3n"), OptimizerRuntime.lastInfeasibleFamilies)
+        OptimizerRuntime.clearInfeasible()
+        assertEquals(emptySet<String>(), OptimizerRuntime.lastInfeasibleFamilies)
     }
 
     // ---- [3.335.0/外部レビュー P1] 実行ごとの成果物は返り値で受け取る ----
@@ -1017,8 +1017,8 @@ class V6NativeOptimizerChoiceTest {
     // 勤務表にはならないが、診断が別の実行のものになる。
 
     @Test fun runSlotKeepsEachRunsOwnOutputs() {
-        val a = V6NativeOptimizer.RunSlot(1)
-        val b = V6NativeOptimizer.RunSlot(2)
+        val a = OptimizerRuntime.RunSlot(1)
+        val b = OptimizerRuntime.RunSlot(2)
         a.addInfeasible(listOf("covU"))
         b.addInfeasible(listOf("c3n"))
         a.addInfeasible(listOf("pref", "covU"))
@@ -1036,7 +1036,7 @@ class V6NativeOptimizerChoiceTest {
             V6OptimizerOptions(V6Algorithm.V5, totalBudgetSec = 1, workers = 1),
         )
         // 返り値の器が存在し、static とは独立に読めること（V5 単発では中身は空でよい）。
-        assertEquals(V6NativeOptimizer.lastInfeasibleFamilies, r.infeasibleFamilies)
+        assertEquals(OptimizerRuntime.lastInfeasibleFamilies, r.infeasibleFamilies)
         assertEquals(st.staffCount, r.schedule.size)
     }
 
@@ -1044,12 +1044,12 @@ class V6NativeOptimizerChoiceTest {
         // 仮説多並列/多チェーンの採用盤面は onProgress だけでなく liveBest にも出る（E0/c3n壁の判定が読む）。
         val st = canDoState(emptyMap())
         for (alg in listOf(V6Algorithm.ALNS, V6Algorithm.RSI)) {
-            V6NativeOptimizer.resetLiveBestForTest()
+            OptimizerRuntime.resetLiveBestForTest()
             val r = V6NativeOptimizer.optimize(
                 st, st.schedule.toIntArray2D(),
                 V6OptimizerOptions(alg, totalBudgetSec = 1, workers = 2),
             )
-            val live = V6NativeOptimizer.liveBest
+            val live = OptimizerRuntime.liveBest
             assertNotNull("$alg: liveBest が publish されていない", live)
             val liveHard = UnifiedViolationChecker.check(st, live!!.map { it.toIntArray() }.toTypedArray()).hard
             assertEquals("$alg: liveBest の必須が採用結果と食い違う", r.report.hard, liveHard)

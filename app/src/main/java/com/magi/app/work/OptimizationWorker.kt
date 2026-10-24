@@ -222,7 +222,7 @@ class OptimizationWorker(
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
                     if (wallElapsed - lastSnapMs > 8_000L) {
                         lastSnapMs = wallElapsed
-                        com.magi.app.v6.V6NativeOptimizer.liveBest?.let { live ->
+                        com.magi.app.v6.OptimizerRuntime.liveBest?.let { live ->
                             // [3.327.0] 所有権を失っていたら書かない（8秒間引きの中なので追加I/Oは無視できる）。
                             if (ownsFiles()) {
                                 // [3.410.0/B-03] 非原子な writeText をやめる。8秒ごとに数百KBを書くので

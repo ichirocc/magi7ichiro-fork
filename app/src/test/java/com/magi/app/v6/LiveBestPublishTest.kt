@@ -43,8 +43,8 @@ class LiveBestPublishTest {
         val worst = threads * perThread
 
         repeat(6) { attempt ->
-            V6NativeOptimizer.resetLiveBestForTest()
-            assertNull("各試行はクリアな状態から始める", V6NativeOptimizer.liveBest)
+            OptimizerRuntime.resetLiveBestForTest()
+            assertNull("各試行はクリアな状態から始める", OptimizerRuntime.liveBest)
 
             val barrier = CyclicBarrier(threads)
             val failure = AtomicReference<Throwable?>(null)
@@ -55,7 +55,7 @@ class LiveBestPublishTest {
                         // 各スレッドが降順に publish する＝常に「勝てる」候補を出し続けて競合を最大化。
                         for (i in 0 until perThread) {
                             val h = worst - (i * threads + t)
-                            V6NativeOptimizer.publishLiveBest(rep(h), board(h))
+                            OptimizerRuntime.publishLiveBest(rep(h), board(h))
                         }
                     } catch (e: Throwable) {
                         failure.compareAndSet(null, e)
@@ -66,7 +66,7 @@ class LiveBestPublishTest {
             ts.forEach { it.join() }
             failure.get()?.let { throw AssertionError("publish 中に例外 (attempt=$attempt)", it) }
 
-            val b = V6NativeOptimizer.liveBest
+            val b = OptimizerRuntime.liveBest
                 ?: throw AssertionError("publish したのに liveBest が null (attempt=$attempt)")
             // 盤面に埋め込んだ評価値が最良と一致していなければ、劣るスレッドが後から上書きしている。
             assertEquals("最終盤面が最良の評価に対応していない (attempt=$attempt)", best, b[0][0])
@@ -79,27 +79,27 @@ class LiveBestPublishTest {
     /** 劣る評価では publish されない（既存の単調性）。 */
     @Test
     fun worseOrEqualPublishIsIgnored() {
-        V6NativeOptimizer.resetLiveBestForTest()
-        V6NativeOptimizer.publishLiveBest(rep(5), board(5))
-        assertEquals(5, V6NativeOptimizer.liveBest!![0][0])
+        OptimizerRuntime.resetLiveBestForTest()
+        OptimizerRuntime.publishLiveBest(rep(5), board(5))
+        assertEquals(5, OptimizerRuntime.liveBest!![0][0])
 
-        V6NativeOptimizer.publishLiveBest(rep(9), board(9))   // 劣る
-        assertEquals("劣る publish で退行してはいけない", 5, V6NativeOptimizer.liveBest!![0][0])
+        OptimizerRuntime.publishLiveBest(rep(9), board(9))   // 劣る
+        assertEquals("劣る publish で退行してはいけない", 5, OptimizerRuntime.liveBest!![0][0])
 
-        V6NativeOptimizer.publishLiveBest(rep(5), board(7))   // 同値
-        assertEquals("同値の publish でも差し替えない", 5, V6NativeOptimizer.liveBest!![0][0])
+        OptimizerRuntime.publishLiveBest(rep(5), board(7))   // 同値
+        assertEquals("同値の publish でも差し替えない", 5, OptimizerRuntime.liveBest!![0][0])
 
-        V6NativeOptimizer.publishLiveBest(rep(2), board(2))   // 真に改善
-        assertEquals(2, V6NativeOptimizer.liveBest!![0][0])
+        OptimizerRuntime.publishLiveBest(rep(2), board(2))   // 真に改善
+        assertEquals(2, OptimizerRuntime.liveBest!![0][0])
     }
 
     /** publish 後に呼出側が自分の盤面を書き換えても、publish 済みスナップショットは動かない。 */
     @Test
     fun publishedSnapshotIsIndependentOfTheCallersArray() {
-        V6NativeOptimizer.resetLiveBestForTest()
+        OptimizerRuntime.resetLiveBestForTest()
         val mine = board(3)
-        V6NativeOptimizer.publishLiveBest(rep(3), mine)
+        OptimizerRuntime.publishLiveBest(rep(3), mine)
         mine[0][0] = 99
-        assertEquals("publish はコピーであって参照共有ではない", 3, V6NativeOptimizer.liveBest!![0][0])
+        assertEquals("publish はコピーであって参照共有ではない", 3, OptimizerRuntime.liveBest!![0][0])
     }
 }

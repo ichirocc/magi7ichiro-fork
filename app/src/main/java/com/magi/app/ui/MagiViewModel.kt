@@ -1860,7 +1860,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             //   壁時計(startMs基準)に統一する。
                             elapsedMs = System.currentTimeMillis() - startMs,
                             // [DefragLiveView] 計算中の最良盤面をライブ表示用に反映（節目で更新される）。
-                            liveSchedule = V6NativeOptimizer.liveBest ?: it.liveSchedule,
+                            liveSchedule = OptimizerRuntime.liveBest ?: it.liveSchedule,
                             // [3.400.0] 旧: `message = "V6 $phase 実行中…"`。3.399.0 で message が Snackbar に
                             //   なったため、フェーズが変わるたびに（実行中ずっと）Snackbar が出続ける副作用に
                             //   なっていた。これは**イベントでなく状態**で、実行中であることは上部バッジと

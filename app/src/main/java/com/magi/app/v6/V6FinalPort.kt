@@ -455,7 +455,7 @@ object V6FinalPort {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
         //   落としていたため、AUTO の 31〜210秒帯（RSI → ALNS → ExtraRefine で optimize() を最大3回）では
         //   後続が先行ぶんを上書きし、診断に出るのは最後の pass だけだった。
-        V6NativeOptimizer.beginTelemetry()
+        OptimizerRuntime.beginTelemetry()
         require(state.dayCount > 0) { "対象期間が無効です。基本情報で終了日を開始日より後にしてください" }
         // [3.360.3] 期間には T>0 のガードがあるのに職員数には無く、非対称だった。S=0 は編集画面からは
         //   作れない（Ws1Ops.removeStaff が最後の1名を消さない）が、**JSON/CSV 取込で外部から入りうる**。
@@ -685,7 +685,7 @@ object V6FinalPort {
                 val now = EngineClock.nowMs()
                 if (now - wishStaleCheckAtMs.get() < 200L) return false
                 wishStaleCheckAtMs.set(now)
-                val board = V6NativeOptimizer.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
+                val board = OptimizerRuntime.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
                 val hb = wd.bestHard.get()
                 val ok = wishReachedOn(board, hb)
                 // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
@@ -1204,7 +1204,7 @@ object V6FinalPort {
         // [3.387.0/3.388.0] 並行アクセスの実レースは実機でしか確かめられない、と記録してきた項目の
         //   唯一の実測点。`publishLiveBest` の CAS が再試行した回数＝別スレッドと同時に publish が
         //   起きた回数。0 のときは出さない（毎回出すとログが太るだけで、意味があるのは非ゼロのとき）。
-        val contentionLog = V6NativeOptimizer.liveBestContentionCount().let { n ->
+        val contentionLog = OptimizerRuntime.liveBestContentionCount().let { n ->
             if (n <= 0) emptyList()
             else listOf(
                 MirrorLog(

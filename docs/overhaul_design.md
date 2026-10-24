@@ -443,6 +443,11 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 ### 6.8 P7 文書の正規化
 `docs/architecture.md`・`docs/sudo_model.md` を新しい構造に合わせ、取り残し（21 族など）を直します。
 
+### 6.8b P10 探索器の分割（2026-10-24 追加、ユーザー「推奨で」＝外部の構造レビューの照合から）
+`V6NativeOptimizer.kt`（約 2,300 行）に同居する公開入口・実行状態・ポートフォリオ・ALNS・RSI・探索直後の研磨を、出力を変えずにファイルと境界で分ける。各段で BoardHash・T-10・全ホストテストが一致すること。
+- **P10a 済**（2026-10-24）: 実行状態を `OptimizerRuntime.kt` へ（`RunSlot`・最良盤面の公開・他の案・エリート・充足困難な族・計測の始まり。`beginRun`／`inSlot`／`publishRunOutputs`）。呼び出し側（V6FinalPort・OptimizationWorker・MagiViewModel・テスト）は `OptimizerRuntime.*` を読む。
+- 残り: P10b（Portfolio・Alns・Rsi のファイル分割、入口は方針と結果だけ）／P10c（`hf80PostPolish` を探索直後の研磨として分ける）／P10d（採否の合成を表にし、検査の漏れをテストで塞ぐ）。
+
 ### 6.9 P8・P9（完了済み）
 - P8 グループ上限 0: グループのレンジ（c41/c41s）の上限 0 は SOFT の目標のまま。全員に「入れない」を付けるときは「グループ単位の回数」で上限 0（個人の上限 0 になり、最適化器は置かない）。`docs/business-logic.md`。
 - P9 職員の照合: `Staff.id` で照合済み。CSV は名前で照合し、同姓同名はスキップして報告。`docs/data-models.md`。
