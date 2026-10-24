@@ -22,6 +22,11 @@ internal object ConstraintCatalog {
     }
     private val byKey = all.associateBy { it.key }
 
+    /** 必須の族。 */
+    val hardKeys: Set<String> = all.filter { it.hard }.map { it.key }.toSet()
+    /** 必須でセルに記録される族（人員不足を除く 5 族）。 */
+    val hardCellKeys: Set<String> = all.filter { it.hard && it.space == KeySpace.CELL }.map { it.key }.toSet()
+
     fun spec(key: String): ConstraintSpec? = byKey[key]
     fun space(key: String): KeySpace? = byKey[key]?.space
 }

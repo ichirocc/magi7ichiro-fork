@@ -14,6 +14,9 @@ class ConstraintCatalogTest {
         assertEquals(MirrorKeys.hard.toSet(), ConstraintCatalog.all.filter { it.hard }.map { it.key }.toSet())
         assertEquals(MirrorKeys.weights.keys, ConstraintCatalog.all.map { it.key }.toSet())
         ConstraintCatalog.all.forEach { assertEquals(MirrorKeys.weights.getValue(it.key), it.weight, 0.0) }
+        // P5b: 消費者が持っていた必須の族の組と同じ（C1EjectionChainPolish・セルのシート・確認一覧）。
+        assertEquals(setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish"), ConstraintCatalog.hardKeys)
+        assertEquals(setOf("c3n", "c3w", "pref", "groupViol", "extWish"), ConstraintCatalog.hardCellKeys)
     }
 
     /** チェッカーが記録した位置の族が、表の空間と同じ表（セル・回数・人数）に入っている（6 fixture）。 */

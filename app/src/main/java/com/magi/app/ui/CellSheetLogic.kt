@@ -605,13 +605,12 @@ internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): 
 /** 手動固定を付けたセルが担当外／必須違反を抱えているときの一文（付けない＝空）。固定の挙動は変えない＝知らせるだけ。 */
 internal fun pinRegisterHint(canDo: Boolean, families: List<String>): String = when {
     !canDo -> PIN_NOT_CANDO_HINT
-    families.any { familyOfVioClass(it) in PIN_HARD_CELL_FAMILIES } -> PIN_HARD_HINT
+    families.any { familyOfVioClass(it) in com.magi.app.v6.ConstraintCatalog.hardCellKeys } -> PIN_HARD_HINT
     else -> ""
 }
 // 手動固定の通知「…を手動固定しました（自動では変更しません）」の後ろに付く＝同じことを繰り返さない。
 internal const val PIN_HARD_HINT = "このセルには必須違反があります。"
 internal const val PIN_NOT_CANDO_HINT = "担当外のシフトなので、必須違反が残ります。"
-private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol", "extWish")
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "${name}さんの ${DayText.full(startDate, day)} を ${symbol} に変更しました"
