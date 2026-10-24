@@ -126,10 +126,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var job: Job? = null
     private var checkJob: Job? = null
-    private var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
+    internal var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
     private var checkSeq = 0L
     /** [3.392.0] 直し方の探索も seq で世代管理する（cancel() が非同期なため。詳細は findFixSuggestions）。 */
-    private var fixSeq = 0L
+    internal var fixSeq = 0L
 
     /** 「完了時に盤面と設定を丸ごと差し替える前景ジョブ」の段階。短い違反チェック(`checkJob`)を
      *  ここへ入れてはいけない＝検査の完了で実行中が解除され全ガードが素通りになる（history 3.328.0/3.404.0）。 */
@@ -201,9 +201,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   「元に戻す: <label>」に使う。redo() へ渡すときも同じ label を引き継ぐ（同じ操作を指すため）。
     //   alts は snap の盤面/設定に対して有効だった「他の案」＝元に戻す/やり直すで盤面と一緒に一覧も戻す。
     //   colorKey は表示色だけの段（applyDisplayOnly）で変えた色の対象。非 null なら元に戻す/やり直すも結果を外さない。
-    private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null, val serial: Long = 0)
-    private class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long)
-    private val undoStack = ArrayDeque<UndoSnap>()
+    internal data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null, val serial: Long = 0)
+    internal class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long)
+    internal val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
     private fun snapNow(label: String? = null, colorKey: String? = null): UndoSnap? {
         val st = state ?: return null; val sc = currentSchedule ?: return null
@@ -215,7 +215,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var opNoticeSeq = 0L
 
     /** 操作の結果を通知で出す（[setCell] と同じ形。[undoable] なら直前に積んだ元に戻すの段に結ぶ）。再検査の文言では上書きされない。 */
-    private fun postOpNotice(text: String, undoable: Boolean = true) {
+    internal fun postOpNotice(text: String, undoable: Boolean = true) {
         val n = OpNotice(++opNoticeSeq, text, undoStack.lastOrNull()?.serial ?: 0L, undoable)
         _ui.update { it.copy(messageIsError = false, opNotice = n) }
     }
@@ -845,7 +845,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * ②容量不足などで保存できていないのに画面もログも無反応＝利用者は保存されたと信じて編集を続ける。
      * 1.2秒ごとに走るので毎回は出さず、**成功→失敗へ変わった瞬間**だけ出す。
      */
-    private fun autoSave() {
+    internal fun autoSave() {
         if (!hydrated) return
         _ui.update { it.copy(saveState = SaveState.Dirty) }   // [3.529.0] SaveState の KDoc 参照
         saveJob?.cancel()
@@ -979,7 +979,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 段を積めたら true（積めないときに通知を前の操作の段へ結ばないため）。 */
-    private fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null): Boolean {
+    internal fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null): Boolean {
         if (invalidate) dropCsvPartial()
         val snap = snapNow(label, colorKey) ?: return false
         undoStack.addLast(snap)
@@ -1628,7 +1628,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 盤面の内容から決まる指紋。S×T が小さい（30×31）ので毎回の計算コストは無視できる。[3.694.0] 実体は `StateFingerprint.ofBoard`（書き出しの拡張関数と共有）。 */
     /** 直前に完了した作成の（状態指紋, 結果の盤面指紋）。同じ組が続けば「前回と同じ結果」を出す。 */
     private var lastRunKeys: Pair<Long, Long>? = null
-    private var emptyStreak: EmptySearchStreak? = null
+    internal var emptyStreak: EmptySearchStreak? = null
 
     /** [3.716.0] [kept]＝前の勤務表のままにした実行。結果の盤面は捨てたので同じ結果とは言わず、前の印も消す。 */
     private fun noteRunResult(hard: Int, kept: Boolean) {
@@ -1642,7 +1642,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { u -> u.copy(sameResult = if (same) SameResultNote(hard, keys.first, u.schedule, floor) else null) }
     }
 
-    private fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)
+    internal fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)
 
     /** [3.694.0] 実行の開始点で 1 回だけ読む設定（利用者の設定値と PolishGate の現在値）。語は「設定の効き」と同じ源（`TuningTelemetry.toggleWords`）。 */
     private fun settingsStartWords(): String = com.magi.app.v6.TuningTelemetry.startSettings(
@@ -1657,7 +1657,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [3.328.0/外部レビュー → 3.330.0 で v6 へ移動] 勤務表の意味を決める入力すべての指紋。
      * 実体は [com.magi.app.v6.StateFingerprint]（Android 非依存＝ホストでテストできる）。
      */
-    private fun stateKey(st: MagiState): Long = com.magi.app.v6.StateFingerprint.of(st)
+    internal fun stateKey(st: MagiState): Long = com.magi.app.v6.StateFingerprint.of(st)
 
     /** 研磨診断を「この盤面のもの」として保存する。null/0 は診断なし。 */
     private fun setPolishDiagnostics(
@@ -2138,7 +2138,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===== [S5] 「この希望を取り消したら」試算と確定（docs/s5_wish_trial.md §6・§8・§14 D） =====
     /** 試算の文脈。state は参照（===）で見る（どの編集でも state が差し替わる＝指紋より厳しい、§7 I4）。 */
-    private class TrialCtx(val st: MagiState, val boardKey: Long)
+    internal class TrialCtx(val st: MagiState, val boardKey: Long)
     private class StalledSnap(val st: MagiState, val boardKey: Long, val families: List<String>)
     private var wishTrialJob: Job? = null
     /** cancel() は非同期なので世代で古い完了を捨てる（fixSeq と同じ理由）。 */
@@ -2149,7 +2149,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
     private var cancelOutcomeCtx: TrialCtx? = null
     // [3.643.0] 直し方を当てた結果の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
-    private var fixOutcomeCtx: TrialCtx? = null
+    internal var fixOutcomeCtx: TrialCtx? = null
     /** [3.644.0/仕様 5.4] 勤務表 CSV の保存済みの印（純粋な部分は `CsvSavedMark`）。 */
     private val csvMark = CsvSavedMark()
     internal fun noteCsvExport(st: MagiState, sched: Array<IntArray>, csv: String) = csvMark.noteExport(st, sched, csv)
@@ -2284,7 +2284,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 背景で起点 3 件まで試算する（§8）。同じ ctx で済んでいる・走っているなら何もしない。 */
-    private fun startRelaxTrial() {
+    internal fun startRelaxTrial() {
         if (!RELAX_TRIAL_ENABLED) return
         val st = state ?: return
         val b = currentSchedule ?: return
@@ -2969,7 +2969,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** [3.697.0] 変更の確認を開いた時刻（0＝開いていない）。「改善手を適用」の末尾の「案を見てから N秒」に使う。 */
-    private var chainPreviewOpenedAtMs = 0L
+    internal var chainPreviewOpenedAtMs = 0L
     private fun notePreviewOpened(label: String) { chainPreviewOpenedAtMs = System.currentTimeMillis(); logOp("I", OpLogText.previewOpenLine(label)) }
 
     /** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
@@ -3117,7 +3117,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    private fun busyEditMessage(): String =
+    internal fun busyEditMessage(): String =
         (MagiArbiter.arbitrate(busyPhase(), MagiEventKind.BoardEdit) as? Arbitration.Reject)?.userMessage ?: ""
 
     /** `MagiMediator` が弾いたイベントの拒否を、画面側と同じ経路で出す。 */
@@ -3296,178 +3296,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(s.copy(wishes = s.wishes - keys), notice = "担当外の希望を${keys.size}件クリアしました")
     }
 
-    /**
-     * [改善提案] 違反を減らす「1手（変更/交換）」を探索して UI に提示する。
-     * focusStaff != null のときはそのスタッフが関わる手だけに絞る（違反タップ起点）。重い処理のため非同期。
-     */
     /** [3.475.0/論理監査] 改善提案を計算した盤面/設定の指紋（適用時に照合する。0=未計算）。 */
-    private var fixBoardKey = 0L
-    private var fixStateKey = 0L
-    private var fixSearchKey = ""
-
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false, auto: Boolean = false) {
-        if (auto && _ui.value.agentRunning) return   // 代行が当て終えた盤面で、ホームの自動の探索がもう一度走る
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
-        val snap = sched.copy2D()
-        fixBoardKey = boardKey(snap)
-        fixStateKey = stateKey(st)
-        // [3.392.0] 旧実装は catch が1つも無く、探索が例外で終わると `fixSearching=true` が**永久に残った**
-        //   （「直し方を探す」が探索中のまま戻らない）。3.382.0 が長い4経路で潰した「旗を立てて確実に戻さない」
-        //   型の残り。`seq` を持つのは refreshCheck と同じ理由＝`cancel()` は非同期なので、後続の探索が
-        //   `fixSearching=true` を立てた**後**に古いジョブの後始末が走ると、新しい探索の旗を消してしまう。
-        val seq = ++fixSeq
-        fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
-        fixSearchKey = focusKey
-        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "", fixFailedKey = "", fixCancelledKey = "") }
-        fixJob = viewModelScope.launch {
-            try {
-                // セルのシートは締切 3 秒（手は 1 件でよい。8 秒待たせると答えが無いときも長い＝3.646.0 実機報告）。ホーム・分析は 8 秒。
-                val deadline = if (quick) FIX_SEARCH_QUICK_MS else FIX_SEARCH_MS
-                var timedOut = false
-                // 集計・日の印から来た依頼は、見ている問題（回数・その日の人数）を変える案を先に（2026-10-14 利用者レビュー:
-                //   11/3 の不足に別の日の案だけが並んだ）。広めに集めて並べ替え、上位 8 件を返す。
-                val cv0 = conditionsViewOf(st, cachedProblem(st))
-                val target = if (exceptStaff == null) panelTarget(_ui.value, cv0, FixFocus(focusStaff, focusShift, day, allDays = allDays)) else null
-                // [3.697.0] 起点は画面の見出しと同じ語（対象＝fixTargetLabel、職員＝氏名、どちらも無ければ全体）。
-                val searchStartMs = System.currentTimeMillis()
-                val origin = target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }
-                logOp("I", OpLogText.fixSearchStartLine(origin, auto))
-                var tiers: FixTierView? = null
-                val list = withContext(Dispatchers.Default) {
-                    (if (exceptStaff != null && day != null) {
-                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
-                    } else if (target != null) {
-                        // 入り口の範囲の中の 1 セルの変更を先に評価し、探索の案と合わせて段に分ける。
-                        val entry = entryMoves(st, snap, target, restShiftIndex(st))
-                        val found = rankForTarget(FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true),
-                            snap.map { it.toList() }, target).take(8)
-                        classifyTiers(st, snap, target, entry, found, cv0::needCellLimits).copy(key = focusKey).also { tiers = it }.items.map { it.sug }
-                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true))
-                        .also { timedOut = FixSuggester.lastTimedOut }
-                }
-                if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
-                // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。
-                if (optimizeInFlight()) { _ui.update { it.copy(fixSearching = false) }; return@launch }
-                // [思考誘導S0/レビュー] 探索中に盤面か設定が変わったら（元に戻す・セル編集・実行の完了など）、古い盤面の
-                //   結果と「探索済み」を書き戻さず、今の盤面で探し直す。
-                val curSched = currentSchedule; val curSt = state
-                if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
-                    _ui.update { it.copy(fixSearching = false) }
-                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day, quick, allDays, auto)
-                    return@launch
-                }
-                // [3.716.0] 鍵に quick（セルのシートか全面か）を含め、自動の探索は数えない（開いただけで「続けて」にしない）。
-                emptyStreak = nextEmptySearchStreak(emptyStreak, "$focusKey|$origin|$quick", boardKey(snap), stateKey(st), list.size, auto)
-                val repeatKey = if ((emptyStreak?.count ?: 0) >= 2) focusKey else null
-                _ui.update { it.copy(fixSuggestions = list, fixTiers = tiers, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey,
-                    fixEmptyRepeatKey = repeatKey) }
-                logOp("I", OpLogText.fixSearchEndLine(list.size, System.currentTimeMillis() - searchStartMs, auto))
-                // [S6 §8] 全体の 1 手探索が必須を減らす候補なしで終わったら、背景で設定の壁を探す。
-                if (focusName.isBlank() && list.none { it.deltaHard < 0 } && _ui.value.bestHard > 0) startRelaxTrial()
-            } catch (e: CancellationException) {
-                if (seq == fixSeq) _ui.update { it.copy(fixSearching = false) }
-                throw e
-            } catch (e: Throwable) {
-                logOp("W", "直し方の探索に失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == fixSeq) _ui.update { it.copy(messageIsError = true, fixSearching = false, fixFailedKey = focusKey, message = "${if (focusName.isBlank()) "" else "${focusName}さんの"}直し方を探せませんでした（${failureWords(e, FailureKind.ENGINE)}）。もう一度お試しください") }
-            }
-        }
-    }
-
-    /** 通知の「元に戻す」。その操作がまだ元に戻すの先頭にあるときだけ戻す（後の別の操作は戻さない）。 */
-    fun undoNotice(n: OpNotice) {
-        if (noticeUndoApplies(undoStack.lastOrNull()?.serial, n.undoSerial)) undo()
-        else _ui.update { it.copy(messageIsError = true, message = "このあとに別の操作があるため、通知からは戻せません（「元に戻す」ボタンで順に戻せます）") }
-    }
-
-    fun clearOpNotice(id: Long) {
-        _ui.update { if (it.opNotice?.id == id) it.copy(opNotice = null) else it }
-    }
-
-    /** 走行中の直し方の探索を捨てる（世代を進めるので、完了間際の結果も書き戻さない）。 */
-    fun cancelFixSearch() {
-        ++fixSeq
-        fixJob?.cancel()
-        fixJob = null
-        if (_ui.value.fixSearching) _ui.update { it.copy(fixSearching = false, fixCancelledKey = fixSearchKey) }
-    }
-
-    /**
-     * [改善提案] 改善手を適用（ops のセル代入を一括反映）。Undo 可・自動再診断・自動保存。適用したら true（断ったら false、理由は message）。
-     * [fixTarget] の持ち回り: 枠や問題を見て出した案（案の一覧・不足枠の 1 手・相談に積んだ案）は対象を運び、その数が減らない手は断る。
-     * ホームと分析タブの「この手を使う」は全体の研磨の案＝[globalPolish]（対象を持たず、全体の評価と [com.magi.app.v6.FixApplyGate] だけで判定）。
-     * 対象が null で [globalPolish] も無い案は断る（呼び手がどちらかを明示する）。
-     * [fromPreview] の案は案を出したときの指紋が必須＝[originBoard] が 0 なら断る（全体の指紋で代わりに通さない）。
-     */
-    fun applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, focusKey: String? = null, fixTarget: FixTarget? = null,
-                           fromPreview: Boolean = false, globalPolish: Boolean = false): Boolean {
-        val st = state ?: return false
-        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return false }
-        val sched = currentSchedule ?: return false
-        if (s.ops.isEmpty()) return false
-        (fixOriginRefusal(originBoard, fromPreview) ?: fixTargetRefusal(fixTarget, globalPolish))?.let { msg ->
-            logOp("W", OpLogText.fixRefusalLine(s.label, msg))   // [3.694.0] 断った案も操作ログに残す（画面の文言は不変、G2）
-            _ui.update { it.copy(messageIsError = true, message = msg) }; return false
-        }
-        // [3.475.0/論理監査] 提案は計算時の盤面/設定に対する差分。旧: 指紋を持たず、その後のセル編集・
-        //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
-        //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
-        //   [3.650.0] 照合は案を出したときの指紋（相談に積んだ案は自分の指紋を運ぶ＝あとの探索で上書きされた全体の指紋で通さない）。
-        val boardNow = boardKey(sched); val stateNow = stateKey(st)   // [3.694.0] 照合と「適用」「見送り」の行が同じ値を使う
-        if (originBoard != 0L && (originBoard != boardNow || originState != stateNow)) {
-            logOp("W", OpLogText.fixMismatchLine(s.label, originBoard, boardNow, originState, stateNow))
-            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
-                message = "勤務表か設定が変わったため、この提案は適用できません。「変更案を探す」をもう一度押してください") }
-            return false
-        }
-        // 見ている問題の数が減らない案は、全体の評価が良くなっても当てない（統合仕様 INV-03。案の一覧の主一覧と同じ判定）。
-        if (!improvesTarget(fixTarget, sched.map { it.toList() }, s.ops)) {
-            logOp("W", "改善手を見送り: ${s.label}（見ている問題が減らない）")
-            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
-                message = NOT_IMPROVING_TARGET_MESSAGE) }
-            return false
-        }
-        // [3.509.4/自動化方針] 適用直前に仮盤面で完全再評価し、辞書式で改善しない・固定を崩す提案は反映しない。
-        val gate = com.magi.app.v6.FixApplyGate.apply(st, sched, s.ops)
-        if (gate !is com.magi.app.v6.FixApplyGate.Outcome.Applied) {
-            val why = (gate as com.magi.app.v6.FixApplyGate.Outcome.Rejected).reason
-            logOp("W", "改善手を見送り: ${s.label}（$why）")
-            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
-                message = "この提案は見送りました（$why）。「変更案を探す」で探し直してください") }
-            return false
-        }
-        pushUndo(s.label)
-        val applied = gate.schedule
-        currentSchedule = applied
-        state = st.withSchedule(applied)
-        autoSave()
-        val seenMs = if (fromPreview && chainPreviewOpenedAtMs > 0L) System.currentTimeMillis() - chainPreviewOpenedAtMs else null
-        chainPreviewOpenedAtMs = 0L
-        logOp("I", OpLogText.fixLine(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total,
-            st.startDate, st.endDate, st.dayCount, boardNow, boardKey(applied), stateNow).let { l -> seenMs?.let { OpLogText.withSeenSeconds(l, it) } ?: l })
-        _ui.update { it.copy(
-            messageIsError = false,
-            hasResult = true,
-            relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
-            schedule = applied.map { it.toList() },
-            fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
-            appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget,
-                gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft, gate.before.breakdown, gate.after.breakdown) },
-            fixOutcome = FixOutcome(fixOutcomeText(fixDisplayLabel(s.label), gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", gate.after.breakdown, gate.before.breakdown) + fixResultDetail(gate.before, gate.after) +
-                (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
-        ) }
-        // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
-        postOpNotice("${fixDisplayLabel(s.label)} を適用しました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
-            else "要調整 ${unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}→${unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}") + "）")
-        fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
-        refreshCheck()
-        return true
-    }
+    internal var fixBoardKey = 0L
+    internal var fixStateKey = 0L
+    internal var fixSearchKey = ""
 
     /** 並びの条件のいちばん長い窓（希望の前日の禁止は 2 日）。月の境目の注記に使う。 */
-    private fun maxPatternLen(st: MagiState): Int =
+    internal fun maxPatternLen(st: MagiState): Int =
         (listOf(st.cons3, st.cons3n, st.cons3m, st.cons3mn).flatten().maxOfOrNull { it.pattern.size } ?: 0)
             .coerceAtLeast(if (st.cons3w.isNotEmpty()) 2 else 0)
 

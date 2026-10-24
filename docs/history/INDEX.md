@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P6a（2026-10-24、版なし・出力不変）: ViewModel の直し方（変更案の探索・適用）を `MagiViewModelFixSuggestions.kt` へ extension 関数として分けた  → `docs/overhaul_design.md` §6.7
 - 全面改修 P4a・T-10・P5a（2026-10-24、版なし・出力不変）: 後処理の段の名前を `PostStages` に集約、T-10（段の並び・採用数を基準版 39a639e と照合）、`ConstraintCatalog`（21 族の位置の空間）と T-11、場所一覧の族の場合分けを表から引く  → `docs/overhaul_design.md` §6.5〜6.6
 - 全面改修 P3b（2026-10-24、版なし・出力不変）: 後処理の各段の取り分の式（半分・4 分の 1・按分・上限まで）を `BudgetShare` に集め、HF67・HF66・共同 LNS・玉突きの 7 か所から呼ぶ。旧式との一致を `TimeBudgetTest`  → `docs/overhaul_design.md` §6.4
 - 全面改修 P3a（2026-10-24、版なし・出力不変）: `TimeBudget`（開始時に 1 回だけ作る予算の型）を新設し、`V6FinalPort` の開始時刻・制限時間・取り分・全体の締切・停滞の見張り・超過の判定をそこから読む。旧式との一致を `TimeBudgetTest`（T-8、予算 1・30・31・60・210・211・300 秒）  → `docs/overhaul_design.md` §6.4

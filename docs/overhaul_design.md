@@ -429,6 +429,7 @@ HARD を先にして、診断と修正提案の食い違いを早く潰します
 `MagiViewModel.kt` を、C# の partial と同じ名前・同じ境界で分けます:
 Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize・Persistence・RelaxTrial・Restore・SmartInitial・WishTrial・Ws1。
 `MagiMediator`／`MagiArbiter` はそのままです。合格: G6・G12、ViewModel のテスト。
+- P6a（2026-10-24、出力不変）: FixSuggestions を `MagiViewModelFixSuggestions.kt` へ（`findFixSuggestions`・`applyFixSuggestion`・`cancelFixSearch`・`undoNotice`・`clearOpNotice` を extension 関数に）。指紋と探索ジョブの状態は本体に残し、拡張から触るメンバ（`pushUndo`・`boardKey`・`undoStack` など 17 個）を private から internal へ。ViewModel はホストでコンパイルされないので `android-sdk` で確認。
 
 ### 6.8 P7 文書の正規化
 `docs/architecture.md`・`docs/sudo_model.md` を新しい構造に合わせ、取り残し（21 族など）を直します。
