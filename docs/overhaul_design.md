@@ -438,11 +438,13 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 - P6a（2026-10-24、出力不変）: FixSuggestions を `MagiViewModelFixSuggestions.kt` へ（`findFixSuggestions`・`applyFixSuggestion`・`cancelFixSearch`・`undoNotice`・`clearOpNotice` を extension 関数に）。指紋と探索ジョブの状態は本体に残し、拡張から触るメンバ（`pushUndo`・`boardKey`・`undoStack` など 17 個）を private から internal へ。ViewModel はホストでコンパイルされないので `android-sdk` で確認。
 - P6b（2026-10-24、出力不変）: RelaxTrial を `MagiViewModelRelaxTrial.kt` へ（試算の開始・取消・照合 6 種・承認フロー 5 種）。試算の状態と、盤面を書き換える確定 `relaxAndApply`・`restoreBeforeRelax` は本体に残す（state/currentSchedule の書き込みは本体だけ）。
 - P6c（2026-10-24、出力不変）: WishTrial を `MagiViewModelWishTrial.kt` へ（試算の開始・取消・行の表示・対照・確定の結果行と `ctxMatches`）。state を書き換える確定 `cancelWishAndRebuild` は本体に残す。
+- P6f（2026-10-24、出力不変）: 診断（重い解析の並列実行 `analyzeParallel`・結果の反映 `pushReport`・ログの圧縮・人員過剰の深追い・上限 0 を外した採点）を `MagiViewModelDiagnostics.kt` へ。診断の全文の退避（`rawDiagLogs`・`lastDiagSerial`・`lastRunDiag*`）は本体の `commitDiag`、`UiState` の組み立ては本体の `makeUi`、解析の束 `Analysis` は本体の入れ子に残す。
 - P6e（2026-10-24、出力不変）: CSV 取込（重ね合わせ・部分取込の確認・反映前の確認）を `MagiViewModelCsv.kt` へ。盤面の差し替えは本体の `commitCsvBoard`（呼べるのは `runCsvImport` だけ＝`ScheduleWriteSitesTest`）、失敗時の巻き戻しは本体の `rollbackBoardCommit`。
 - P6d（2026-10-24、出力不変）: 変更の確認の画面（不足枠の候補・玉突きの手順・案の一覧の 3 経路と `openPreview`・相談の入れ替えの再開）を `MagiViewModelFixSuggestions.kt` へ。
 
 ### 6.8 P7 文書の正規化
 `docs/architecture.md`・`docs/sudo_model.md` を新しい構造に合わせ、取り残し（21 族など）を直します。
+- **P7 済**（2026-10-24、文書のみ）: architecture.md＝レイヤ図と実行の流れを handleOptimize→探索器（P10）→探索直後の研磨→後処理の 3 段へ、21 族・新ファイル（OptimizerRuntime・探索器 3 つ・SearchPolish・EngineConfig/TimeBudget・ConstraintCatalog・PenaltyWeights）の行、タブ名、`Hf63Infeasibility` は使われている、repo 名。sudo_model.md＝`Staff.id`・breakdown のキー 21・`ConstraintCatalog`・weekly の現行式・休の識別（`ShiftRole.Rest`）・重みの写しと `docs/adoption.md`。P6f（Diagnostics）は未反映。
 
 ### 6.8b P10 探索器の分割（2026-10-24 追加、ユーザー「推奨で」＝外部の構造レビューの照合から）
 `V6NativeOptimizer.kt`（約 2,300 行）に同居する公開入口・実行状態・ポートフォリオ・ALNS・RSI・探索直後の研磨を、出力を変えずにファイルと境界で分ける。各段で BoardHash・T-10・全ホストテストが一致すること。
@@ -450,6 +452,34 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 - **P10b 済**（2026-10-24）: 探索を `PortfolioSearch.kt`（適応ポートフォリオ・多ワーカー・停止の確認・入口の摂動）・`AlnsSearch.kt`（V5 の SA 多点・ALNS）・`RsiSearch.kt`（RSI・RSI++）へ。`V6NativeOptimizer.kt` は 2,160→585 行（公開入口・方針の選択・探索直後の研磨・共通の小関数）。互いの呼び出しは object メンバーの import でつなぐ＝呼び出しの字面は不変。
 - **P10c 済**（2026-10-24）: 探索直後の研磨（`hf80PostPolish`・ネイティブの研磨チャンク・`PolishResult`）を `SearchPolish.kt` へ。後処理チェーン（`V6HotfixPasses`）とは別物と KDoc に明記。公開入口 `softPolishOnly`（自動で整える）は `V6NativeOptimizer` に残す。
 - **P10d 済**（2026-10-24）: 採否の合成を `docs/adoption.md` の 1 枚の表に（層ごとに比較・固定・回数固定・拡張希望・必須の検査）。照合で漏れは無かった（探索層が回数固定を検査しないのは方針＝研磨と画面の変更案の層が受け持つ）。P10 はこれで完了。
+
+- **P10e 済**（2026-10-24）: 探索器と入口が共有する小関数（`better`・`nowMs`・`actualSeed`・`extBanInDiff`）を `SearchCommon.kt` へ、GLS の定数を `AlnsSearch` へ、
+  入口の摂動（`hypothesisStartFor`・`forceDiverseKick`）を `PortfolioSearch` へ。探索器から `V6NativeOptimizer` への import が 0 になり、依存は一方向（下の図）。
+
+#### P10 の仕様（2026-10-24、外部の仕様レビューを反映）
+P10 の目的は**設計の完成ではなく安全な構造分割**（現物の移設。名前・API の再設計はしない）。
+
+挙動不変の範囲（何をもって「変えていない」とするか）:
+
+| 区分 | 対象 | 確かめ方 |
+|---|---|---|
+| 絶対不変 | 最終の採用盤面・`ViolationReport`・keep-best の意味論（`reportComparator`） | BoardHash（決定的モード）・T-10（段の並びと採用数）・全ホストテスト |
+| 実質不変 | 実行ごとの隔離（`RunSlot`）・他の案・エリート・充足困難な族・最良盤面の公開（CAS） | `LiveBestPublishTest`・`V6NativeOptimizerChoiceTest`・`StopSemanticsTest` |
+| 差を許す（ただし今回は変えていない） | ログの並び・進捗の通知の間隔・競合の計測値 | 字面は移しただけ（文言・呼び出し順は不変） |
+
+各ファイルの役割（肯定形）と、入口に残す基準:
+- `V6NativeOptimizer` = 公開の契約（`optimize`・`softPolishOnly`）と方針の選択（AUTO・アルゴリズムの振り分け）。**公開の契約を作るものだけを残す**。
+- `OptimizerRuntime` = 実行の隔離と最良結果の公開（探索の中身を知らない）。
+- `PortfolioSearch` = 仮説の配分・再配属・停止の確認・集約（ALNS・RSI は入口の関数だけを呼ぶ）。
+- `AlnsSearch`／`RsiSearch` = 探索の実行。`SearchPolish` = 探索器が直接呼ぶ研磨の本体（後処理の枠組みは持たない）。
+- `SearchCommon` = 複数の探索器が共有する小関数（新しい共通の小関数はここ）。
+
+据え置きの理由: `Problem`・`MirrorCore`（チェッカー）は意味論の source of truth なので動かさない。`V6HotfixPasses` は後処理の枠組みで、探索器の分割とは軸が違う（P4 で段の 3 関数化まで）。
+
+最終構造（P10e で達成。中間の段では探索器が `V6NativeOptimizer` の小関数を import する一時的な相互依存があった）:
+`V6NativeOptimizer → PortfolioSearch → RsiSearch → AlnsSearch`、`RsiSearch → SearchPolish`、すべて `→ SearchCommon`／`OptimizerRuntime`（逆向きの import は 0）。
+
+設計の完了条件（2026-10-24 に確認）: ①`OptimizerRuntime` は探索器を import しない ②`PortfolioSearch` は ALNS・RSI の入口だけを呼ぶ ③`V6NativeOptimizer` は公開の契約と振り分け（346→286 行）④探索器から入口への import が 0。
 
 ### 6.9 P8・P9（完了済み）
 - P8 グループ上限 0: グループのレンジ（c41/c41s）の上限 0 は SOFT の目標のまま。全員に「入れない」を付けるときは「グループ単位の回数」で上限 0（個人の上限 0 になり、最適化器は置かない）。`docs/business-logic.md`。

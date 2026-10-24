@@ -1,6 +1,6 @@
 # SUDO モデル（システム関連図 / ユースケース図 / ドメインモデル図 / オブジェクト図）
 
-> **最終更新**：2026-10-09（3.653.0: 族と重みの節を 21族・HARD 6族（extWish 8000）へ。他の節は下の照合のまま）。2026-09-25（2026-09-25（3.612.0 時点の main）と再照合＝20族・HARD 5族（c3w）・3.556.0 の重み、O の実測 8990、fair 達成率モード v2・apt の D9、HardDelta 前段・WishTrial・RunMarker）
+> **最終更新**：2026-10-24（全面改修 P7: `Staff.id`・21族のキー数・`ConstraintCatalog`（位置の空間）・weekly の現行式・休の識別（`ShiftRole.Rest`）・重みの写しの場所（`PenaltyWeights`）・採否の一覧 `docs/adoption.md` を反映）。2026-10-09（3.653.0: 族と重みの節を 21族・HARD 6族（extWish 8000）へ。他の節は下の照合のまま）。2026-09-25（2026-09-25（3.612.0 時点の main）と再照合＝20族・HARD 5族（c3w）・3.556.0 の重み、O の実測 8990、fair 達成率モード v2・apt の D9、HardDelta 前段・WishTrial・RunMarker）
 > **前回**：2026-09-06（3.505.7）
 > **初版**：2026-08-17（3.389.0）
 > **これは何か**：ログラス松岡さん（@little_hand_s）提唱の **SUDO モデリング**（DDD のモデリングを実装へ落とし込む
@@ -223,6 +223,7 @@ classDiagram
     +name: String
     +groupIdx: Int
     +skillIdx: Int
+    +id: Int
   }
   class Range {
     +lo: String
@@ -281,6 +282,12 @@ classDiagram
     +weights: Map~String,Double~
     +weightOf(family) Double
   }
+  class ConstraintCatalog {
+    <<定数・MirrorKeys から導出>>
+    +all: List~ConstraintSpec~
+    +space(key) KeySpace
+    +hardKeys/hardCellKeys/countKeys/distKeys
+  }
 
   MagiState "1" *-- "K" Shift : shifts
   MagiState "1" *-- "G" Group : groups（ユニット群）
@@ -297,7 +304,8 @@ classDiagram
   Staff ..> Group : skillIdx → skillGroups[g]（-1=未所属）
   Problem ..> MagiState : 純粋関数（===でメモ化）
   ViolationReport ..> Problem : check(state, schedule)
-  ViolationReport ..> MirrorKeys : breakdown のキー = all（20）
+  ViolationReport ..> MirrorKeys : breakdown のキー = all（21）
+  ConstraintCatalog ..> MirrorKeys : 族・必須・重みを読むだけ（位置の空間 CELL/COUNT/NEED/DIST を足す）
 ```
 
 ### なぜ `Problem` と `ViolationReport` を別集約にしないか
@@ -376,8 +384,8 @@ groupViol 11000 > covU 10000 > c3n 9000 = c3w 9000 > pref 8000 = extWish 8000 > 
 - **`mayPlace(i,k) = canDo(i,k) && !(rangeHi==0 && k!=restIdx)`**（3.507.0）— 最適化器の候補生成・入口 hf66・最終番兵の基準だけが見る。評価は canDo のまま＝上限 0 に置かれていれば high 25。
 - **`wishLocked(i,j) = wish>=0 && canDo(i,wish)`** — 実現不能な希望はロックしない（凍結すると座礁する）。
 - **fair**（達成率モード v2、3.541.0）：群 × 担当ONシフトごとに `Problem.fairDevOfBucket`。個人の範囲帯または実効 apt 目標を基準に達成率を出し、幅を重みにした中央値からの偏差 `round(|達成率−基準|×幅)` を足す。基準の無い人が1人でもいれば生回数の `round(平均)` からの L1 偏差へフォールバック。**m<2 の群は対象外**。
-- **weekly**：職員 × **シフト**ごとに、曜日別カウントの `round(そのシフトの回数/7)` からの L1 偏差和。
-  回数が7の倍数でない (職員,シフト) は**構造的な下限**を持つ（`weeklyFloorOfCount`）。
+- **weekly**：職員 × **シフト**ごとに、曜日別カウント w_d の `Σ|7×w_d − 回数| ÷ 7`（整数切り捨て、3.526.0。旧: `round(回数/7)` からの L1 は回数が少ないと目標 0 に丸まる死角があった）。
+  共通ソースは `weeklyDevOfBucket(wd[7])`。均等でない配り方は必ず 1 以上になり、回数が7の倍数でない (職員,シフト) は**構造的な下限**を持つ（`weeklyFloorOfCount`）。
 - **apt** は担当可能シフトのみ展開し、**個人の下限/上限がある (職員,シフト) には群目標を適用しない**（D9、3.509.0。旧: 個人範囲でクランプ）。適用される組は構造的に到達できる範囲へクランプする（3.508.0）。
 - **辞書式パック**：`score = hard × SCORE_HARD_UNIT + soft`。`soft < SCORE_HARD_UNIT`(1e9) を
   `Evaluator.fullEval` が強制する（超えると HARD ゲートが静かに壊れる）。
@@ -385,12 +393,12 @@ groupViol 11000 > covU 10000 > c3n 9000 = c3w 9000 > pref 8000 = extWish 8000 > 
 - **拒否候補の再利用**（3.505.x）：各研磨パスは単独では不採用にした候補を `CyclicSwapResult.rejectedCandidates` で返し、
   後処理チェーンが巡の末尾（拒否候補の結合）と共同 LNS の後の最終段（違反起点からの候補生成つき）で `ViolationComponentRepair` に
   束ねさせる。採用の判定はどこでも同じ `betterReport`＋`exactPinRegression`＝新しい採用基準は増えていない
-（`QualityVector` は計測専用）。
+（`QualityVector` は計測専用）。盤面を採る経路ごとの検査の一覧は `docs/adoption.md`。
 - **HARD Δの前段**（`HardDelta`／`PolishGate.hardDeltaPrefilter`、既定 ON）：候補の HARD 正味差分を変わったセル・行・日だけから数え、「必ず却下する」候補だけ checker を省く＝採用集合・盤面は不変の速度専用。
 - **c3w**（3.542.0）：希望固定（`wishLocked`）した X の**前日**が Y なら前日側セルに違反（HARD 9000）。希望でない X・初日は対象外。
 
-**「休」の扱い** — 識別は**記号ベース**（`shifts.indexOfFirst { it.kigou == "休" } ?: 0`）で、
-見つからないと**先頭シフトを黙って休として扱う**（検査 2g が警告する）。`Problem.restIdx` が単一ソース。
+**「休」の扱い** — 識別は**役割ベース**（`Shift.role == ShiftRole.Rest`、3.603.0。旧: 記号「休」で探し、無ければ先頭シフトを黙って休にしていた）。
+`restShiftIndex(state)` は休が無ければ **null** を返し、`Problem.restIdx`（`Int?`）が単一ソース。休が要る経路（下書き・destroy-repair）は null なら何もしないか明示の例外で断る。
 **休は「特殊な OFF」ではなく通常のシフト種の一つ**（3.345.0）。**編集規則も同じ**（3.416.0）＝
 削除・改名とも他シフトと同一経路（旧: 3.106.0 の削除禁止と 3.415.0 の改名禁止は撤廃。削除セルは
 削除後一覧の既定シフトへ・改名は `renameShiftInConstraints` が制約参照を追従させる）。
@@ -410,8 +418,8 @@ groupViol 11000 > covU 10000 > c3n 9000 = c3w 9000 > pref 8000 = extWish 8000 > 
 3リストに理由つきで記録し、`V6SanityPort` が「この行は評価されていません」と案内する（3.309.0/3.320.0）。
 
 **HF77（変更規律）** — 重みを変えるときは `MirrorKeys.weights` / `Evaluator.fullEvalParts` のリテラル /
-`DeltaEvaluator` / `magi_native.cpp` の**4面を同時に**変える（加えて言語跨ぎ期待値と `docs/business-logic.md`）（Kotlin 側のずれは `ObjectiveParityTest`、
-C++ 側は native-parity CI が捕まえる）。
+`DeltaEvaluator` / `magi_native.cpp` の**4面を同時に**変える（加えて言語跨ぎ期待値と `docs/business-logic.md`。手順の正は `.claude/rules/weights.md`）（Kotlin 側のずれは `ObjectiveParityTest`、
+C++ 側は native-parity CI が捕まえる）。修復の候補選び・研磨の見積り（destroy-repair/polish 系 4 ファイル）は 2026-10-24 から `PenaltyWeights`（`MirrorKeys.weights` を初期化時に 1 回読む）を掛けるので直さなくてよい。
 
 ---
 
@@ -426,7 +434,7 @@ C++ 側は native-parity CI が捕まえる）。
 **なぜ golden を選んだか**：実データ由来の fixture は2つある（もう1つは `sample_state_v6.json`＝
 native-parity CI の2つ目の形状で、入力盤面 `hard=15`＝C++ の HARD 族パスを実データで exercise するために
 3.362.0 で追加した）。**golden は `hard=0` に到達済み＝「配布できる盤面」の具体例**として O 図に向く。
-`hard=15` の方はどの族がどう壊れているかの例としては良いが、20族が同時に発火して図が読めなくなる。
+`hard=15` の方はどの族がどう壊れているかの例としては良いが、多くの族が同時に発火して図が読めなくなる。
 
 ```mermaid
 flowchart TB
@@ -508,7 +516,7 @@ flowchart TB
    ドリフトしていた。**→ 3.390.0 で §4 を全82フィールドへ刷新**（旧記述は30フィールドが未記載＝`*Families` 3種・
    result 専用マップ7種・調整トグル4種・診断5種などが丸ごと落ちていた）。以後は各グループの**件数**を
    `MagiUiState.kt` の `val` 宣言数と機械照合できる形にしてある。
-4. **`docs/business-logic.md` は重み・族数とも実装と一致**（20族・c1=50・c3mn=90・covO=10・c42 の C(n,2)・
+4. **`docs/business-logic.md` は重み・族数とも実装と一致**（当時 20族、3.653.0 の extWish で 21族・c1=50・c3mn=90・covO=10・c42 の C(n,2)・
    keep-best の hard→weightedScore→total。3.522.0の全面見直し後の値で3.577.0再照合）。ここは信用してよい
    （この節自身が古い値のまま3.572.0の族数修正まで放置されていた＝backlog#23で発見・3.577.0で修正）。
 5. ~~**コード内コメントの stale が1件**：`MirrorKeys.weights` の「窓の要件(c1)=5」~~ → 3.428.0 までに「現在値はどちらも 30」へ
@@ -522,7 +530,7 @@ flowchart TB
 - **`C3Row` / `C41Row` / `C42Row` も複数のコレクションで使い回される**（C3Row は4本、C41Row/C42Row は各2本）。
   型は同じでも意味はコレクション名で決まる。
 - **3つのキー空間**を混ぜない：セル `"i,j"`（violations, wishes）／回数 `"i,k"`（countViolations, staffRange）／
-  被覆 `"k,j"`（needViolations, needDay1/2）。族ごとにどの空間へ載るかが決まっている。
+  被覆 `"k,j"`（needViolations, needDay1/2）。族ごとにどの空間へ載るかが決まっている（正は `ConstraintCatalog.space`＝`KeySpace` の CELL/COUNT/NEED/DIST、T-11 `ConstraintCatalogTest` がチェッカーの記録先との一致を守る）。
 - **`fair` と `weekly` はセル位置を持たない**ので `violations` には出ず、`distLocations` にのみ出る。
 - **制約族の粒度**：c41/c41s は「1日の人数」、c2/apt/low/high は「月間の回数」。単位が違う。
 - **盤面は二重の立場を持つ**：`MagiState.schedule`（保存された盤面）と、評価器へ引数で渡る
