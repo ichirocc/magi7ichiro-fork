@@ -206,7 +206,7 @@ internal fun CellEditSheet(
             onSearch = { searchOnOpen = true; onToggleExpand() },
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
             MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
-                Text("小さく表示 ▾")
+                DisclosureText("小さく表示", open = true)
             }
             val partners = remember(rev, cell) {
                 if (status.severity == CellSeverity.NONE) emptyList()
@@ -265,10 +265,10 @@ internal fun CellEditSheet(
                     var details by remember(cell) { mutableStateOf(false) }
                     // [3.714.0] 問題が 1 つでも説明の文は「詳しく見る」の中（主は「変更案を探す」＝これは文字ボタン）。
                     if (mode == 0 && fams.isNotEmpty() || details) MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(when {
-                            fams.size >= 2 -> if (details) "関連する問題 ▾" else "関連する問題（ほか${fams.size - 1}件） ▸"
-                            else -> if (details) CELL_DETAIL_CLOSE else CELL_DETAIL_BUTTON
-                        })
+                        DisclosureText(when {
+                            fams.size >= 2 -> if (details) "関連する問題" else "関連する問題（ほか${fams.size - 1}件）"
+                            else -> CELL_DETAIL_BUTTON
+                        }, details)
                     }
                     if (details) {
                         val detailLines = remember(rev, cell) {
@@ -388,7 +388,7 @@ internal fun CellEditSheet(
                     // 希望・手動固定・ルールの見直しは「ほかの操作」に畳む（主の 2 つの操作を先に見せる）。
                     var moreOps by remember(cell) { mutableStateOf(false) }
                     if (mode == 0 && !(dilemma && dilemmaChoice == 0)) MagiTextButton(onClick = { moreOps = !moreOps }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(if (moreOps) "ほかの操作 ▾" else MORE_OPS_LABEL)
+                        DisclosureText(MORE_OPS_LABEL, moreOps)
                     }
                     if (mode == 0 && moreOps) {
                         OutlinedButton(onClick = { onMode(1) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("希望を確認・登録する") }
@@ -603,7 +603,7 @@ private fun PeekBody(
                             }
                         }
                         MagiTextButton(onClick = onToggleExpand, modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
-                            contentPadding = PaddingValues(0.dp)) { Text("詳しく ▸", maxLines = 1) }
+                            contentPadding = PaddingValues(0.dp)) { DisclosureText(CELL_DETAIL_BUTTON, open = false, maxLines = 1) }
                     }
                     if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
                         Text(PEEK_HARD_RISK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

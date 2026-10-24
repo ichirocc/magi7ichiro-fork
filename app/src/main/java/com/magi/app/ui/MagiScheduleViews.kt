@@ -339,7 +339,7 @@ internal fun ScheduleToolsCard(
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTextButton(onClick = { legendOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方とシフトの色）" }) {
-                    Text("凡例 ▸", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    DisclosureText("凡例", open = null, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
                 // [3.650.0] 短い一覧は枠と印（形だけでは意味が分からないもの）。シフトの色はセルに記号が出るので［凡例 ▸］のシートへ。
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
@@ -1162,7 +1162,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("シフト集計", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                DisclosureText(if (open) "閉じる" else "開く", open, style = MaterialTheme.typography.labelMedium, color = cs.primary)
             }
             if (open) {
             Spacer(Modifier.height(8.dp))
@@ -1812,7 +1812,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
             var general by remember(i) { mutableStateOf(false) }
-            MagiTextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案 ▾" else STAFF_OTHER_FIXES_LABEL) }
+            MagiTextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(STAFF_OTHER_FIXES_LABEL, general) }
             if (general) FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
     }
@@ -1918,7 +1918,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
                         verticalAlignment = Alignment.CenterVertically) {
                         Text((if (weeklyOpen) "▼ " else "▶ ") + "${breakdownLabels["weekly"]}（${sheet.weekly.size}件）",
                             style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        Text(if (weeklyOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        DisclosureText(if (weeklyOpen) "閉じる" else "開く", weeklyOpen, color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (weeklyOpen) {
                         Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -2149,7 +2149,7 @@ internal fun FixSearchPanel(
                                 changes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 // [3.712.0] 日ごとの人数と回数の影響は確認の画面が言う＝案のカードでは「詳しく」の中だけ。
                                 var more by remember(s) { mutableStateOf(false) }
-                                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+                                MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, more) }
                                 // 見ている日のほかの勤務と、別の日へ移る影響を分ける（必要・適正は設定の値で言う）。
                                 val (sameDay, otherDays) = remember(s, ui.schedule, cv) {
                                     headcountImpact(ui.schedule, s.ops, ui.shiftSymbols, ui.startDate, cv?.let { c -> c::needCellLimits }, target?.day?.let { target.shift to it })
@@ -2252,7 +2252,7 @@ internal fun FixSearchPanel(
                             Text(title, style = MaterialTheme.typography.titleSmall)
                             Text(note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        DisclosureText(if (open) "閉じる" else "開く", open, color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) items.take(limit).forEachIndexed { n, x -> card(startN + n + 1, x.sug, x.explain, purposeOverride) }
                 }
@@ -2270,7 +2270,7 @@ internal fun FixSearchPanel(
                             Text(otherFixHeading(others.size), style = MaterialTheme.typography.titleSmall)
                             Text(target?.let { otherFixNote(label, it) } ?: "${addressLabel ?: "選んだ問題"}は解消しません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text(if (open) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                        DisclosureText(if (open) "閉じる" else "開く", open, color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (open) others.take(limit).forEachIndexed { n, s -> card(fixing.size.coerceAtMost(limit) + n + 1, s) }
                 }
@@ -2309,7 +2309,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
             if (ui.saveState == SaveState.Failed) Button(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (nextLabel != null) MagiTextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
-                MagiTextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "今回の変更内容 ▾" else "今回の変更内容 ▸") }
+                MagiTextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText("今回の変更内容", showChanges) }
                 if (ui.canUndo) MagiTextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
             }
         }
@@ -2369,7 +2369,7 @@ private fun NoFixBlock(
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (scopeOpen) "閉じる" else "開く") { scopeOpen = !scopeOpen },
             verticalAlignment = Alignment.CenterVertically) {
             Text("探した範囲", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text(if (scopeOpen) "閉じる ▾" else "開く ▸", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+            DisclosureText(if (scopeOpen) "閉じる" else "開く", scopeOpen, color = cs.primary, style = MaterialTheme.typography.bodyMedium)
         }
         if (scopeOpen) Text(SEARCHED_SCOPE_DETAIL, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
     }

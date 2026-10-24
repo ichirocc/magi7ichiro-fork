@@ -80,7 +80,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         ) {
             Text("種別ごとに個別の色（${MirrorKeys.all.size}種" + (if (customN > 0) "・個別設定${customN}件" else "") + "）",
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text(if (famOpen) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+            DisclosureText(if (famOpen) "閉じる" else "開く", famOpen, style = MaterialTheme.typography.labelMedium, color = cs.primary)
         }
         if (famOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MirrorKeys.all.forEach { key ->

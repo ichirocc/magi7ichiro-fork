@@ -59,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,7 +169,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             Spacer(Modifier.height(8.dp))
             Text(budgetShortLine(ui.budgetSec), style = MaterialTheme.typography.bodyMedium)
             var budgetMore by rememberSaveable { mutableStateOf(false) }
-            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (budgetMore) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
+            MagiTextButton(onClick = { budgetMore = !budgetMore }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, budgetMore) }
             if (budgetMore) {
                 Text(budgetStatusLine(ui.budgetSec, com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodySmall)
                 // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない）。改善が止まると早く終わる。
@@ -748,7 +750,7 @@ internal fun DataActionsCard(
         MagiGroup("CSV", footer = "バージョン: $versionLabel") {
             MagiGroupRow("CSVを取り込む", enabled = ok, onClick = onOpenCsv)
             MagiGroupRow("CSVを書き出す", enabled = ok, onClick = onSaveCsv)
-            MagiGroupRow("種類別のCSVを書き出す", trailing = if (kindsOpen) "▾" else "▸", divider = kindsOpen, onClick = { kindsOpen = !kindsOpen })
+            MagiGroupRow("種類別のCSVを書き出す", trailing = if (kindsOpen) "▾" else "▸", divider = kindsOpen, open = kindsOpen, onClick = { kindsOpen = !kindsOpen })
             if (kindsOpen) {
                 MagiGroupRow("　職員一覧", enabled = ok, onClick = onSaveStaffCsv)
                 MagiGroupRow("　希望シフト", enabled = ok, onClick = onSaveWishesCsv)
@@ -846,7 +848,8 @@ internal fun CollapsibleSection(
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).bringIntoViewRequester(headingRequester).clickable { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).bringIntoViewRequester(headingRequester).clickable { expanded = !expanded }
+                .semantics { stateDescription = disclosureState(expanded) },
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -854,7 +857,8 @@ internal fun CollapsibleSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(if (expanded) "▾" else "▸", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (expanded) "▾" else "▸", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clearAndSetSemantics { })
             }
         }
         if (expanded) {
