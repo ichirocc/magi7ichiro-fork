@@ -1,6 +1,11 @@
 package com.magi.app.ui
 
 import androidx.lifecycle.viewModelScope
+import com.magi.app.model.MagiState
+import com.magi.app.toHankakuKigou
+import com.magi.app.v6.FixCell
+import com.magi.app.v6.FixKind
+import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.FixSuggester
 import com.magi.app.v6.FixSuggestion
@@ -12,7 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// [MagiViewModel] の直し方（変更案の探索・適用・通知の元に戻す）。本体から extension 関数として抽出（全面改修 P6a）。
+// [MagiViewModel] の直し方（変更案の探索・確認の画面・適用・通知の元に戻す）。本体から extension 関数として抽出（全面改修 P6a・P6d）。
 //   指紋と探索ジョブの状態（fixBoardKey/fixStateKey/fixSearchKey/fixJob/fixSeq）は本体に残す。
 
 /**
@@ -177,4 +182,121 @@ fun MagiViewModel.applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBo
     fixOutcomeCtx = state?.let { MagiViewModel.TrialCtx(it, boardKey(applied)) }
     refreshCheck()
     return true
+}
+
+// ---- 変更の確認の画面（不足枠の候補・玉突き・案の一覧の 3 経路、全面改修 P6d） ----
+
+/** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員（判定は [shortageCandidates]）。 */
+fun MagiViewModel.shortageFixCandidates(dayIndex: Int, shiftIndex: Int): List<FixCandidate> {
+    val st = state ?: return emptyList()
+    val sched = currentSchedule ?: return emptyList()
+    return shortageCandidates(st, cachedProblem(st), sched, dayIndex, shiftIndex, restShiftIndex(st))   // [監査A5] 休は記号解決
+}
+
+/** 不足枠の候補を 1 セルの変更案として確認の画面へ（直接は書かない＝指紋照合・FixApplyGate・INV-03 を通す）。 */
+fun MagiViewModel.previewShortageCandidate(staff: Int, dayIndex: Int, shiftIndex: Int, label: String) {
+    val st = state ?: return
+    val sched = currentSchedule ?: return
+    val need = conditionsViewOf(st, cachedProblem(st)).needCellLimits(shiftIndex, dayIndex)
+    val target = need?.let { FixTarget(null, shiftIndex, dayIndex, it.first, true, "必要人数") }
+    val s = V6PortAnalyzer.evaluatedSuggestion(st, sched, FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label)
+    previewFixSuggestion(s, boardKey(sched), stateKey(st), target)
+}
+
+/**
+ * [3.642.0/UX監査 高1 → 3.644.0/UX-03] 不足枠を玉突き（複数人の入替）で埋める手順を求め、当てる**前**に一覧（だれの・どの日の・
+ * 何→何と必須の増減）を [ChainFixPreview] として見せる。手順は分析と同じ `findCovUChain`、当てるのは [applyChainPreview]＝
+ * [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。
+ */
+fun MagiViewModel.prepareShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
+    val st = state ?: return
+    val sched = currentSchedule ?: return
+    if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
+    val snap = sched.copy2D()
+    fixBoardKey = boardKey(snap)
+    fixStateKey = stateKey(st)
+    val p = cachedProblem(st)
+    val slot = "${DayText.full(st.startDate, dayIndex)} の「${toHankakuKigou(st.shifts.getOrNull(shiftIndex)?.kigou ?: "")}」"
+    _ui.update { it.copy(messageIsError = false, message = "$slot を複数人の入れ替えで埋める手順を探しています…") }
+    viewModelScope.launch {
+        val found = withContext(Dispatchers.Default) {
+            V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label)?.let { it to newHardLabels(st, snap, it.ops, _ui.value.staffNames, _ui.value.shiftSymbols) }
+        }
+        if (found == null) _ui.update { it.copy(messageIsError = true, message = "$slot を埋める入れ替えの手順が見つかりませんでした。「変更案を探す」で探し直してください") }
+        else {
+            val (s, newHard) = found
+            val u = _ui.value
+            val target = ChainTarget(isoDate(u.startDate, dayIndex) ?: "", u.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
+                boardKey = boardKey(snap), stateKey = stateKey(st))
+            val need = conditionsViewOf(st, p).needCellLimits(shiftIndex, dayIndex)?.let { n -> FixTarget(null, shiftIndex, dayIndex, n.first, true, "必要人数") }
+            openPreview(s, snap, st, target, fixTarget = need, newHard = newHard)
+        }
+    }
+}
+
+/** 一覧で確認した入替を当てる（案を出したときの盤面か設定が今と違えば [applyFixSuggestion] が断る）。 */
+fun MagiViewModel.applyChainPreview() {
+    val p = _ui.value.chainPreview ?: return
+    val t = p.target
+    // 指紋の無い案は全体の指紋へ落とさず断る（applyFixSuggestion の fromPreview）。断られたら確認の画面は残す（理由は message）。
+    if (applyFixSuggestion(p.suggestion, t?.boardKey ?: 0L, t?.stateKey ?: 0L, p.focusKey, p.fixTarget, fromPreview = true, globalPolish = p.globalPolish))
+        _ui.update { it.copy(chainPreview = null) }
+    else _ui.update { it.copy(chainPreview = it.chainPreview?.copy(applyError = it.message)) }
+}
+
+/** [afterConsult]＝相談に残してから閉じた（「今は変更しない」とは数えない）。 */
+fun MagiViewModel.dismissChainPreview(afterConsult: Boolean = false) {
+    pendingGuided = null
+    _ui.value.chainPreview?.let { if (!afterConsult) logOp("I", OpLogText.previewDismissLine(it.target?.label ?: it.suggestion.label)) }
+    chainPreviewOpenedAtMs = 0L
+    _ui.update { it.copy(chainPreview = null) }
+}
+
+internal fun MagiViewModel.notePreviewOpened(label: String) { chainPreviewOpenedAtMs = System.currentTimeMillis(); logOp("I", OpLogText.previewOpenLine(label)) }
+
+/** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
+ *  枠を持たない案は一覧をもう一度出す（当てるときは [applyFixSuggestion] の指紋照合と適用の門が守る）。 */
+fun MagiViewModel.resumeConsultChain(c: ConsultItem) {
+    val t = c.chain ?: return
+    val u = _ui.value
+    val target = consultChainTarget(t, u.startDate, u.shiftSymbols, u.days)
+    val sched = currentSchedule; val st = state
+    when {
+        target != null -> prepareShortageChainFix(target.first, target.second, t.label)
+        t.suggestion != null && sched != null && st != null && !consultChainStale(t, boardKey(sched), stateKey(st)) ->
+            previewFixSuggestion(t.suggestion, t.boardKey, t.stateKey, t.fixTarget, t.globalPolish)
+        t.suggestion != null -> _ui.update { it.copy(messageIsError = true, message = CONSULT_STALE) }
+        else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days, u.staffIds) ?: "この枠はいまのデータにありません") }
+    }
+}
+
+/** 案を当てる前に確認の画面（だれの・どの日の・何→何）を出す。[fixTarget] は見ている問題（あれば適用時にその数が減るかを確かめる）。 */
+fun MagiViewModel.previewFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, fixTarget: FixTarget? = null, globalPolish: Boolean = false) {
+    // 1 セルの案も当てる前に確認の画面を出す（2026-10-14 利用者レビュー「案の一覧から直接適用しない」）。
+    val sched = currentSchedule ?: return
+    val st = state ?: return
+    val snap = sched.copy2D()
+    val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
+    openPreview(s, snap, st, target, fixTarget = fixTarget, globalPolish = globalPolish)
+}
+
+/** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
+fun MagiViewModel.previewFix(s: FixSuggestion, purpose: String?, effect: List<String>, focusKey: String? = null, fixTarget: FixTarget? = null) {
+    val sched = currentSchedule ?: return
+    val st = state ?: return
+    val snap = sched.copy2D()
+    val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
+    openPreview(s, snap, st, target, purpose, effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null)
+}
+
+/** 確認の画面を組み立てる 1 か所（候補・玉突き・案の一覧の 3 経路）。目的・対象の数の変化・前後の 1 行は [fillPreview] が埋める。 */
+internal fun MagiViewModel.openPreview(s: FixSuggestion, snap: Array<IntArray>, st: MagiState, target: ChainTarget, purpose: String? = null, effect: List<String> = emptyList(),
+                        fromList: Boolean = false, focusKey: String? = null, fixTarget: FixTarget? = null, globalPolish: Boolean = false,
+                        newHard: List<String>? = newHardLabels(st, snap, s.ops, _ui.value.staffNames, _ui.value.shiftSymbols)) {
+    _ui.update {
+        val base = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
+            .copy(target = target, purpose = purpose, effect = effect, fromList = fromList, focusKey = focusKey, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHard)
+        it.copy(chainPreview = fillPreview(base, snap.map { r -> r.toList() }, it.shiftSymbols, it.startDate, it.staffNames))
+    }
+    notePreviewOpened(s.label)
 }

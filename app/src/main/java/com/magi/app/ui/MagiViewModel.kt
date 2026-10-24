@@ -2156,8 +2156,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 別のデータや別の月に移ったら、前の CSV の保存は今の内容と関係がない＝印を消す。 */
     internal fun clearCsvSaved() { csvMark.clear(); _ui.update { it.copy(csvSavedAt = null) } }
     /** 「なおし方を見る」で 1 人を入れた直後に覚えておく枠。再検査の結果（pushReport）でその枠がまだ足りないかを見て 1 行にする。 */
-    private data class GuidedFixNote(val dayIndex: Int, val shiftIndex: Int, val dayLabel: String, val shiftSymbol: String)
-    private var pendingGuided: GuidedFixNote? = null
+    internal data class GuidedFixNote(val dayIndex: Int, val shiftIndex: Int, val dayLabel: String, val shiftSymbol: String)
+    internal var pendingGuided: GuidedFixNote? = null
     internal fun noteGuidedFix(dayIndex: Int, shiftIndex: Int, dayLabel: String, shiftSymbol: String) { pendingGuided = GuidedFixNote(dayIndex, shiftIndex, dayLabel, shiftSymbol) }
     internal fun fixOutcomeLine(): String? = _ui.value.fixOutcome?.takeIf { ctxMatches(fixOutcomeCtx) }?.line
     /** 保存した内容と今の内容を区別する（仕様 5.4）: 同じなら「この内容で保存済み」、違えば「保存した CSV は今の内容と違う」。 */
@@ -2723,122 +2723,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
 
-    /** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員（判定は [shortageCandidates]）。 */
-    fun shortageFixCandidates(dayIndex: Int, shiftIndex: Int): List<FixCandidate> {
-        val st = state ?: return emptyList()
-        val sched = currentSchedule ?: return emptyList()
-        return shortageCandidates(st, cachedProblem(st), sched, dayIndex, shiftIndex, restShiftIndex(st))   // [監査A5] 休は記号解決
-    }
-
-    /** 不足枠の候補を 1 セルの変更案として確認の画面へ（直接は書かない＝指紋照合・FixApplyGate・INV-03 を通す）。 */
-    fun previewShortageCandidate(staff: Int, dayIndex: Int, shiftIndex: Int, label: String) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        val need = conditionsViewOf(st, cachedProblem(st)).needCellLimits(shiftIndex, dayIndex)
-        val target = need?.let { FixTarget(null, shiftIndex, dayIndex, it.first, true, "必要人数") }
-        val s = V6PortAnalyzer.evaluatedSuggestion(st, sched, FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label)
-        previewFixSuggestion(s, boardKey(sched), stateKey(st), target)
-    }
-
-    /**
-     * [3.642.0/UX監査 高1 → 3.644.0/UX-03] 不足枠を玉突き（複数人の入替）で埋める手順を求め、当てる**前**に一覧（だれの・どの日の・
-     * 何→何と必須の増減）を [ChainFixPreview] として見せる。手順は分析と同じ `findCovUChain`、当てるのは [applyChainPreview]＝
-     * [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。
-     */
-    fun prepareShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
-        val snap = sched.copy2D()
-        fixBoardKey = boardKey(snap)
-        fixStateKey = stateKey(st)
-        val p = cachedProblem(st)
-        val slot = "${DayText.full(st.startDate, dayIndex)} の「${toHankakuKigou(st.shifts.getOrNull(shiftIndex)?.kigou ?: "")}」"
-        _ui.update { it.copy(messageIsError = false, message = "$slot を複数人の入れ替えで埋める手順を探しています…") }
-        viewModelScope.launch {
-            val found = withContext(Dispatchers.Default) {
-                V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label)?.let { it to newHardLabels(st, snap, it.ops, _ui.value.staffNames, _ui.value.shiftSymbols) }
-            }
-            if (found == null) _ui.update { it.copy(messageIsError = true, message = "$slot を埋める入れ替えの手順が見つかりませんでした。「変更案を探す」で探し直してください") }
-            else {
-                val (s, newHard) = found
-                val u = _ui.value
-                val target = ChainTarget(isoDate(u.startDate, dayIndex) ?: "", u.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
-                    boardKey = boardKey(snap), stateKey = stateKey(st))
-                val need = conditionsViewOf(st, p).needCellLimits(shiftIndex, dayIndex)?.let { n -> FixTarget(null, shiftIndex, dayIndex, n.first, true, "必要人数") }
-                openPreview(s, snap, st, target, fixTarget = need, newHard = newHard)
-            }
-        }
-    }
-
-    /** 一覧で確認した入替を当てる（案を出したときの盤面か設定が今と違えば [applyFixSuggestion] が断る）。 */
-    fun applyChainPreview() {
-        val p = _ui.value.chainPreview ?: return
-        val t = p.target
-        // 指紋の無い案は全体の指紋へ落とさず断る（applyFixSuggestion の fromPreview）。断られたら確認の画面は残す（理由は message）。
-        if (applyFixSuggestion(p.suggestion, t?.boardKey ?: 0L, t?.stateKey ?: 0L, p.focusKey, p.fixTarget, fromPreview = true, globalPolish = p.globalPolish))
-            _ui.update { it.copy(chainPreview = null) }
-        else _ui.update { it.copy(chainPreview = it.chainPreview?.copy(applyError = it.message)) }
-    }
-
-    /** [afterConsult]＝相談に残してから閉じた（「今は変更しない」とは数えない）。 */
-    fun dismissChainPreview(afterConsult: Boolean = false) {
-        pendingGuided = null
-        _ui.value.chainPreview?.let { if (!afterConsult) logOp("I", OpLogText.previewDismissLine(it.target?.label ?: it.suggestion.label)) }
-        chainPreviewOpenedAtMs = 0L
-        _ui.update { it.copy(chainPreview = null) }
-    }
-
     /** [3.697.0] 変更の確認を開いた時刻（0＝開いていない）。「改善手を適用」の末尾の「案を見てから N秒」に使う。 */
     internal var chainPreviewOpenedAtMs = 0L
-    private fun notePreviewOpened(label: String) { chainPreviewOpenedAtMs = System.currentTimeMillis(); logOp("I", OpLogText.previewOpenLine(label)) }
-
-    /** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
-     *  枠を持たない案は一覧をもう一度出す（当てるときは [applyFixSuggestion] の指紋照合と適用の門が守る）。 */
-    fun resumeConsultChain(c: ConsultItem) {
-        val t = c.chain ?: return
-        val u = _ui.value
-        val target = consultChainTarget(t, u.startDate, u.shiftSymbols, u.days)
-        val sched = currentSchedule; val st = state
-        when {
-            target != null -> prepareShortageChainFix(target.first, target.second, t.label)
-            t.suggestion != null && sched != null && st != null && !consultChainStale(t, boardKey(sched), stateKey(st)) ->
-                previewFixSuggestion(t.suggestion, t.boardKey, t.stateKey, t.fixTarget, t.globalPolish)
-            t.suggestion != null -> _ui.update { it.copy(messageIsError = true, message = CONSULT_STALE) }
-            else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days, u.staffIds) ?: "この枠はいまのデータにありません") }
-        }
-    }
-
-    /** 案を当てる前に確認の画面（だれの・どの日の・何→何）を出す。[fixTarget] は見ている問題（あれば適用時にその数が減るかを確かめる）。 */
-    fun previewFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, fixTarget: FixTarget? = null, globalPolish: Boolean = false) {
-        // 1 セルの案も当てる前に確認の画面を出す（2026-10-14 利用者レビュー「案の一覧から直接適用しない」）。
-        val sched = currentSchedule ?: return
-        val st = state ?: return
-        val snap = sched.copy2D()
-        val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
-        openPreview(s, snap, st, target, fixTarget = fixTarget, globalPolish = globalPolish)
-    }
-
-    /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
-    fun previewFix(s: FixSuggestion, purpose: String?, effect: List<String>, focusKey: String? = null, fixTarget: FixTarget? = null) {
-        val sched = currentSchedule ?: return
-        val st = state ?: return
-        val snap = sched.copy2D()
-        val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
-        openPreview(s, snap, st, target, purpose, effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null)
-    }
-
-    /** 確認の画面を組み立てる 1 か所（候補・玉突き・案の一覧の 3 経路）。目的・対象の数の変化・前後の 1 行は [fillPreview] が埋める。 */
-    private fun openPreview(s: FixSuggestion, snap: Array<IntArray>, st: MagiState, target: ChainTarget, purpose: String? = null, effect: List<String> = emptyList(),
-                            fromList: Boolean = false, focusKey: String? = null, fixTarget: FixTarget? = null, globalPolish: Boolean = false,
-                            newHard: List<String>? = newHardLabels(st, snap, s.ops, _ui.value.staffNames, _ui.value.shiftSymbols)) {
-        _ui.update {
-            val base = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
-                .copy(target = target, purpose = purpose, effect = effect, fromList = fromList, focusKey = focusKey, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHard)
-            it.copy(chainPreview = fillPreview(base, snap.map { r -> r.toList() }, it.shiftSymbols, it.startDate, it.staffNames))
-        }
-        notePreviewOpened(s.label)
-    }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 

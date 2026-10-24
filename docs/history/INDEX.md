@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P6d（2026-10-24、版なし・出力不変）: ViewModel の変更の確認の画面（3 経路）を `MagiViewModelFixSuggestions.kt` へ  → `docs/overhaul_design.md` §6.7
 - 全面改修 P6c（2026-10-24、版なし・出力不変）: ViewModel の「この希望を取り消したら」試算を `MagiViewModelWishTrial.kt` へ  → `docs/overhaul_design.md` §6.7
 - 全面改修 P5c（2026-10-24、版なし・出力不変）: 回数・偏りの族の組を `ConstraintCatalog` から引く（E7 フィルタ・RSI の職員単位の破壊）  → `docs/overhaul_design.md` §6.6
 - 全面改修 P6b（2026-10-24、版なし・出力不変）: ViewModel の「設定を緩めたら」試算と承認フローを `MagiViewModelRelaxTrial.kt` へ  → `docs/overhaul_design.md` §6.7
