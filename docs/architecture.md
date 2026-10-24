@@ -204,7 +204,7 @@ ViewModel ハブ
   10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
 - `ConstraintCatalog.kt` — 違反の族 21 個の表（必須か・位置の空間 セル/回数/人数/偏り）。重みは `MirrorKeys.weights` を読むだけ（全面改修 P5）。
-- `PostStages.kt` — 後処理の段の名前（進捗の語と記録の key）の定義（全面改修 P4）。
+- `PostStages.kt` — 後処理の段の名前（進捗の語と記録の key）の定義（全面改修 P4）。実行の順は `V6HotfixPasses.runPostOptimization` が前段 `runPreStages`（HF80・HF67・HF66）→ 中段 `runMidStages`（厳密日割当・巡回研磨・曜日/交互・共同 LNS）→ 終段 `runFinalStages`（最終の修復・玉突きパイプライン・人員過剰の退避）の 3 呼び出しで決める。
 - `TimeBudget.kt` — 1 回の作成の時間予算（開始時刻・制限時間・後処理と玉突きの取り分・全体の締切・停滞の見張り）。予算の定義はここだけ（全面改修 P3）。
 - `AgentLoop.kt` — 代行役（AX）の輪。`FixSuggester` の案を `FixApplyGate` に通し、合格した先頭を当てて探し直す（勤務の変更だけ・入力不変）。画面側は `MagiViewModel.maybeRunAgent`・`AgentCard`・`AgentText.kt`。
 - `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。
@@ -213,6 +213,9 @@ UI は `app/src/main/java/com/magi/app/ui/`:
 - `MagiApp.kt` — タブ: 0=ようす(ダッシュボード), 1=勤務表(編集+集計), 2=設定, 3=詳細, else=外観/データ。
 - `MagiViewModel.kt` — 状態管理。`findFixSuggestions`/`applyFixSuggestion`、`refreshCheck`(currentSchedule検査)。
   ジョブ: `job`/`checkJob`/`fixJob`（連続タップ競合回避）。
+  extension 関数の分割先（state/currentSchedule の書き込みは本体だけ、拡張は読むか本体の入口を呼ぶ）:
+  `MagiViewModelFixSuggestions.kt`（変更案の探索・確認の画面・適用、全面改修 P6a・P6d）／ `MagiViewModelRelaxTrial.kt`（設定を緩める試算と承認フロー、P6b）／
+  `MagiViewModelWishTrial.kt`（希望を取り消したらの試算、P6c）／ `MagiViewModelConditions.kt`・`MagiViewModelConstraints.kt`・`MagiViewModelWs1.kt`・`MagiViewModelIo.kt`（既存）。
 - `MagiUiState.kt` — `schedule`, `staffNames`, `staffGroupSymbols`, `shiftSymbols`, `countViolations("i,k")`,
   `needViolations("k,j")`, `needFamilies("k,j")`, `breakdown` 等。
   （`resultSchedule` は `MagiViewModel` のメンバで `UiState` には無い。UiState 側の結果スナップショットは
