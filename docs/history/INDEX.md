@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P4d・P4e（2026-10-24、版なし・出力不変）: 後処理の終段（最終の修復・玉突きパイプライン・人員過剰の退避）を `runFinalStages` に。T-10 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P4c（2026-10-24、版なし・出力不変）: 後処理の中段を `runMidStages` に切り出した。T-10 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P4b（2026-10-24、版なし・出力不変）: 後処理の前段（HF80・HF67・HF66）を `runPreStages` に切り出した。T-10 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P5b（2026-10-24、版なし・出力不変）: 必須の族の組（6 族・セルの 5 族）を `ConstraintCatalog` から引く（C1 玉突き・固定の注意・確認一覧）  → `docs/overhaul_design.md` §6.6

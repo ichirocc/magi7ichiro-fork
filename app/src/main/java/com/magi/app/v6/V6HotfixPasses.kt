@@ -618,6 +618,43 @@ object V6HotfixPasses {
     }
 
     /** 後処理の前段（全面改修 P4b）: HF80 → HF67（残予算の半分まで）→ HF66（残予算の半分まで）。 */
+    /** 後処理の終段（全面改修 P4d・P4e）: 違反起点修復（最終）→ 玉突きパイプライン（有効時。有効なら中段の従来の玉突きは走らない）→ 人員過剰の退避。 */
+    private fun runFinalStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, shouldStop: () -> Boolean, deadlineMs: Long) {
+        val ej = params.ejection
+        val pipelineFocus = ej.pipelineFocus
+        val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
+        fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
+            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
+                deepMaxMillis = ej.maxMillis, hardLeg = ej.pipelineHardLeg,
+                holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
+            previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
+            shouldStop = shouldStop)
+        if (!shouldStop()) {
+            // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
+            val remainingFinal = EngineClock.remainingMs(deadlineMs)
+            val base = params.componentRepair
+            val timeWidened = if (params.deterministic || remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
+            val finalStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            chain.adopt(chain.timed(PostStages.COMPONENT_REPAIR_FINAL) { work ->
+                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop)
+            })
+            chain.rejectedPool.clear()
+        }
+
+        if (pipelineOn && !shouldStop()) {
+            chain.adopt(chain.timed(PostStages.EJECTION_PIPELINE) { work -> runPipeline(work) })
+        }
+
+        if (!shouldStop()) {
+            // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
+            val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            val r = chain.timed(PostStages.COVO_RELIEF) { work ->
+                CovOReliefPolish.apply(state, work, shouldStop = reliefStop)
+            }
+            chain.replaceBoard(r.newSchedule, r.logs, r.report)
+        }
+    }
+
     private class MidStages(val cluster: ClusterOutcome, val tC1Lns: Long, val tPersonalLns: Long)
 
     /** 後処理の中段（全面改修 P4c）: 厳密日割当 → 巡回研磨クラスタ → 曜日平準化・交互最適化 → c1 共同 LNS（→ 従来の玉突き）→ 個人回数の共同 LNS。 */
@@ -734,16 +771,6 @@ object V6HotfixPasses {
         val report0 = UnifiedViolationChecker.check(state, schedule)
         val chain = PostChain(onPhase, schedule, state, report0,
             aptFairSoftTolerance = params.aptFairSoftTolerance)
-        // 玉突きパイプラインが有効なら、従来の玉突き（どの置き場所も）は走らせない。
-        val ej = params.ejection
-        val pipelineFocus = ej.pipelineFocus
-        val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
-        fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
-            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
-                deepMaxMillis = ej.maxMillis, hardLeg = ej.pipelineHardLeg,
-                holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
-            previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
-            shouldStop = shouldStop)
         val t0 = EngineClock.nowMs()
 
         val pre = runPreStages(state, chain, params, seed, shouldStop, deadlineMs)
@@ -751,30 +778,7 @@ object V6HotfixPasses {
 
         val mid = runMidStages(state, chain, params, seed, shouldStop, deadlineMs, t66Done)
 
-        if (!shouldStop()) {
-            // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
-            val remainingFinal = EngineClock.remainingMs(deadlineMs)
-            val base = params.componentRepair
-            val timeWidened = if (params.deterministic || remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
-            val finalStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            chain.adopt(chain.timed(PostStages.COMPONENT_REPAIR_FINAL.label, PostStages.COMPONENT_REPAIR_FINAL.key) { work ->
-                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop)
-            })
-            chain.rejectedPool.clear()
-        }
-
-        if (pipelineOn && !shouldStop()) {
-            chain.adopt(chain.timed(PostStages.EJECTION_PIPELINE.label, PostStages.EJECTION_PIPELINE.key) { work -> runPipeline(work) })
-        }
-
-        if (!shouldStop()) {
-            // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
-            val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            val r = chain.timed(PostStages.COVO_RELIEF.label, PostStages.COVO_RELIEF.key) { work ->
-                CovOReliefPolish.apply(state, work, shouldStop = reliefStop)
-            }
-            chain.replaceBoard(r.newSchedule, r.logs, r.report)
-        }
+        runFinalStages(state, chain, params, shouldStop, deadlineMs)
 
         val tHf = EngineClock.nowMs()
         if (shouldStop()) {

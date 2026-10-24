@@ -421,6 +421,7 @@ P4a（`Stage` 型とパイプライン）→ P4b（前段: 入口・hf66／hf67�
 P4e（終段: 玉突き、最終番兵の前）。各コミットで、段の順序・中身を変えず、`PostStageRecord` の並びが同じこと。
 - **P4b 済**（2026-10-24、出力不変）: 前段（HF80→HF67→HF66）を `runPreStages` に切り出し、`PostChain.timed(stage)` で段の名前を `PostStages` から渡す。T-10 一致。
 - **P4c 済**（2026-10-24、出力不変）: 中段（厳密日割当→巡回研磨→曜日・交互→c1 共同 LNS→従来の玉突き→個人回数の共同 LNS）を `runMidStages` に。T-10 一致。
+- **P4d・P4e 済**（2026-10-24、出力不変）: 終段（違反起点修復（最終）→玉突きパイプライン→人員過剰の退避）を `runFinalStages` に。`runPostOptimization` は前段・中段・終段の 3 呼び出しと最終検査・ログだけになった。T-10 一致。
 
 ### 6.6 P5 ConstraintCatalog
 族ごとにコミットを分けます。順は HARD 6 族 → 個人回数（low・high）→ c1・c2 → c3 系 → グループ（c41・c42・c41s・c42s）→ covO → 分布（fair・apt・weekly）。
