@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -17,7 +18,7 @@ class ScheduleWriteSitesTest {
         "generateSmartInitial", "applyAlternative", "applyWishes", // 下書き・別案・希望の反映
         "applyStructure", "applyStructureWithMessage",            // 編集タブ
         "relaxAndApply", "restoreBeforeRelax", "restore",         // 設定の緩和と、その事後確認・保存失敗の復旧（restore＝RelaxRollback の控え）
-        "applyFixSuggestion",                                     // 改善手（FixApplyGate を通る）
+        "applyFixSuggestion", "commitFixBoard",                   // 改善手（FixApplyGate を通る）。commitFixBoard は applyFixSuggestion だけが呼ぶ（下の検査）
         "maybeRunAgent",                                          // 代行役（AgentLoop の各手が FixApplyGate を通る）
     )
     private val write = Regex("""(\bcurrentSchedule\s*=[^=]|[(,\s]schedule\s*=\s*[a-zA-Z]|MagiEvent\.Board\.SetCell\()""")
@@ -38,5 +39,15 @@ class ScheduleWriteSitesTest {
         }
         assertTrue("書き込みの場所が見つかりません（検索の式が古い）", sites > 10)
         assertTrue("勤務表を書き換える新しい場所があります: $bad。案内からの修正は previewFixSuggestion → applyFixSuggestion（FixApplyGate）を通してください", bad.isEmpty())
+        // 本体の書き込み口 commitFixBoard（extension の applyFixSuggestion 用、全面改修 P6a）をほかの関数から呼ばない。
+        val callers = mutableListOf<String>()
+        dir.listFiles { f -> f.extension == "kt" }!!.forEach { f ->
+            var cur = "?"
+            f.readLines().forEach { line ->
+                fn.find(line)?.let { cur = it.groupValues[1] }
+                if (Regex("""\bcommitFixBoard\(""").containsMatchIn(line) && !line.contains("fun commitFixBoard")) callers += cur
+            }
+        }
+        assertEquals(listOf("applyFixSuggestion"), callers)
     }
 }
