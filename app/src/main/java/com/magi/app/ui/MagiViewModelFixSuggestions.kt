@@ -5,7 +5,6 @@ import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.FixSuggester
 import com.magi.app.v6.FixSuggestion
 import com.magi.app.v6.copy2D
-import com.magi.app.v6.withSchedule
 import com.magi.app.v6.restShiftIndex
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -155,8 +154,7 @@ fun MagiViewModel.applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBo
     }
     pushUndo(s.label)
     val applied = gate.schedule
-    currentSchedule = applied
-    state = st.withSchedule(applied)
+    commitFixBoard(st, applied)
     autoSave()
     val seenMs = if (fromPreview && chainPreviewOpenedAtMs > 0L) System.currentTimeMillis() - chainPreviewOpenedAtMs else null
     chainPreviewOpenedAtMs = 0L
@@ -176,7 +174,7 @@ fun MagiViewModel.applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBo
     // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
     postOpNotice("${fixDisplayLabel(s.label)} を適用しました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
         else "要調整 ${unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}→${unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}") + "）")
-    fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
+    fixOutcomeCtx = state?.let { MagiViewModel.TrialCtx(it, boardKey(applied)) }
     refreshCheck()
     return true
 }

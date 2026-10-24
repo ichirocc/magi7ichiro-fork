@@ -3296,6 +3296,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(s.copy(wishes = s.wishes - keys), notice = "担当外の希望を${keys.size}件クリアしました")
     }
 
+    /** 直し方の適用が盤面を差し替える入口（state/currentSchedule の書き込みは本体だけ）。 */
+    internal fun commitFixBoard(st: MagiState, applied: Array<IntArray>) { currentSchedule = applied; state = st.withSchedule(applied) }
+
     /** [3.475.0/論理監査] 改善提案を計算した盤面/設定の指紋（適用時に照合する。0=未計算）。 */
     internal var fixBoardKey = 0L
     internal var fixStateKey = 0L
