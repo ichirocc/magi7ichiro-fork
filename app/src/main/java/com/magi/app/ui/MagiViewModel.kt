@@ -2140,14 +2140,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 試算の文脈。state は参照（===）で見る（どの編集でも state が差し替わる＝指紋より厳しい、§7 I4）。 */
     internal class TrialCtx(val st: MagiState, val boardKey: Long)
     private class StalledSnap(val st: MagiState, val boardKey: Long, val families: List<String>)
-    private var wishTrialJob: Job? = null
+    internal var wishTrialJob: Job? = null
     /** cancel() は非同期なので世代で古い完了を捨てる（fixSeq と同じ理由）。 */
-    private var wishTrialSeq = 0L
+    internal var wishTrialSeq = 0L
     /** 結果と対照は 1 世代だけ。別の ctx で新しい試算を始めたときにだけ入れ替える（読む・確定するでは消さない）。 */
-    private var trialCtx: TrialCtx? = null
-    private var trialControl: WishTrial.Outcome? = null
-    private val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
-    private var cancelOutcomeCtx: TrialCtx? = null
+    internal var trialCtx: TrialCtx? = null
+    internal var trialControl: WishTrial.Outcome? = null
+    internal val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
+    internal var cancelOutcomeCtx: TrialCtx? = null
     // [3.643.0] 直し方を当てた結果の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
     internal var fixOutcomeCtx: TrialCtx? = null
     /** [3.644.0/仕様 5.4] 勤務表 CSV の保存済みの印（純粋な部分は `CsvSavedMark`）。 */
@@ -2173,71 +2173,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
     /** 確定の直前の stalledHardFamilies。確定を元に戻して同じ (state, 盤面) に戻ったら復元する（§14 D）。 */
     private var stalledBeforeConfirm: StalledSnap? = null
-
-    private fun ctxMatches(c: TrialCtx?): Boolean {
-        val st = state ?: return false
-        val b = currentSchedule ?: return false
-        return c != null && c.st === st && c.boardKey == boardKey(b)
-    }
-
-    /** 1 行の試算を始める。本実行・背景実行の最中は始めない（I11）。盤面は複製して渡す（I1）。 */
-    fun startWishTrial(i: Int, j: Int) {
-        val st = state ?: return
-        val b = currentSchedule ?: return
-        if (optimizeInFlight()) return
-        val k = st.wishes["$i,$j"] ?: return
-        val bKey = boardKey(b)
-        val ctx = trialCtx?.takeIf { it.st === st && it.boardKey == bKey }
-            ?: TrialCtx(st, bKey).also { trialCtx = it; trialControl = null; trialResults.clear() }
-        wishTrialJob?.cancel()
-        val seq = ++wishTrialSeq
-        val board = b.copy2D()
-        val ctl0 = trialControl
-        _ui.update { it.copy(wishTrialBusy = "$i,$j") }
-        wishTrialJob = viewModelScope.launch {
-            try {
-                val (ctl, out) = withContext(Dispatchers.Default) {
-                    val stop = { !isActive }
-                    val c = ctl0 ?: WishTrial.control(st, board, stop)
-                    c to (if (c is WishTrial.ControlOutcome) WishTrial.trial(st, board, i, j, c.control, stop) else c)
-                }
-                if (seq != wishTrialSeq || trialCtx !== ctx) return@launch
-                if (ctl !is WishTrial.Stopped) trialControl = ctl
-                if (out != null && out !is WishTrial.Stopped) trialResults["$i,$j,$k"] = out
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                logOp("W", "希望の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == wishTrialSeq && trialCtx === ctx) trialResults["$i,$j,$k"] = WishTrial.Unavailable("計算の途中で止まりました。もう一度お試しください")
-            } finally {
-                if (seq == wishTrialSeq) _ui.update { it.copy(wishTrialBusy = null, wishTrialRev = it.wishTrialRev + 1) }
-            }
-        }
-    }
-
-    /** 試算ジョブの取消だけ（CPU を返す）。結果は消さない＝正しさは読むときの照合が守る（§8）。 */
-    fun cancelWishTrial() {
-        wishTrialJob?.cancel()
-        ++wishTrialSeq
-        if (_ui.value.wishTrialBusy != null) _ui.update { it.copy(wishTrialBusy = null) }
-    }
-
-    /** 行の表示。読むたびに ctx を照合し、ずれていれば [WishTrialView.Stale]（結果は消さない）。 */
-    internal fun wishTrialFor(i: Int, j: Int, k: Int): WishTrialView {
-        if (_ui.value.wishTrialBusy == "$i,$j") return WishTrialView.Busy
-        val o = trialResults["$i,$j,$k"] ?: return WishTrialView.None
-        val c = trialCtx
-        if (c == null || !ctxMatches(c) || state?.wishes?.get("$i,$j") != k) return WishTrialView.Stale
-        return WishTrialView.Ready(o, WishTrialToken(c.st, c.boardKey, i, j, k, o as? WishTrial.Result))
-    }
-
-    /** いまの (state, 盤面) の対照。Rk < H0 ならダイアログの先頭行を出す（§5）。 */
-    internal fun wishTrialControlFor(): WishTrial.Control? =
-        if (ctxMatches(trialCtx)) (trialControl as? WishTrial.ControlOutcome)?.control else null
-
-    /** 直近の確定の結果 1 行。確定の後の (state, 盤面) から変わったら出さない（§9）。 */
-    internal fun wishCancelOutcomeLine(): String? =
-        _ui.value.wishCancelOutcome?.takeIf { ctxMatches(cancelOutcomeCtx) }?.line
 
     /** 確定「希望を取り消して再作成」（§6 の 1〜10。ガードはすべて最初の書き換えより前＝I5）。 */
     internal fun cancelWishAndRebuild(token: WishTrialToken) {
