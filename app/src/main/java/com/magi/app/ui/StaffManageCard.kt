@@ -18,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -47,17 +48,16 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
     // [3.482.0 編集タブ簡素化] 一括追加は年間マスター①の職員節（撤去）から移設。職員の一覧・入退職はこのドアだけ。
     var bulkOpen by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("職員の一覧", style = MaterialTheme.typography.titleSmall)
-            Text("タップで編集、${DRAG_HANDLE_GLYPH}を長押しで並び替え。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+    // 職員の行は 1 つの入れ物に入れ、行の間を細い線で区切る（iOS の一覧の形、2026-10-23）。追加のボタンは入れ物の外。
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MagiGroup("職員の一覧", footer = "タップで編集、${DRAG_HANDLE_GLYPH}を長押しで並び替え。") {
             // [3.530.0] シフト種別/グループ（3.515.6）と同じ形へ統一（経緯: docs/history/3.4xx.md）。
             ReorderableRows(items = v.staff, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveStaff(from, to)) }) { i, st, dragHandle ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
+                Column {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                        .clickable(enabled = !ui.running) { edit = Triple(i, st.name, st.groupIdx) },
+                    Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        .clickable(enabled = !ui.running) { edit = Triple(i, st.name, st.groupIdx) }.padding(end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = cs.onSurfaceVariant,
@@ -89,7 +89,10 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
                     }
                     Text("›", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
                 }
+                if (i < v.staff.lastIndex) HorizontalDivider(Modifier.padding(start = 48.dp), color = cs.outlineVariant)
+                }
             }
+        }
             // [3.409.11] 残り1名のとき削除ボタンが理由なく消える（年間マスター側と同じ対象漏れ）。
             if (v.staff.size <= 1) {
                 Text("最後の1名は削除できません。先に別の職員を追加してください。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -97,7 +100,6 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             // [3.720.0 S-1] 職員管理の主ボタン（塗り）。下部の再作成が主の間は外枠（INV-09）。
             AddRowButton(ADD_STAFF_BUTTON, onClick = { addOpen = true }, enabled = ui.loaded && !ui.running, filled = addFilled)
             AddRowButton("まとめて追加する", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)
-        }
     }
     if (bulkOpen) {
         BulkAddDialog("職員を一括追加", "名前を改行で区切って複数入力します。全員を既定グループに追加します（後で1人ずつ変更できます）。",
