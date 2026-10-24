@@ -1222,6 +1222,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
             )
         }
+        ui.csvImportPrompt?.let { lines ->
+            ConfirmDialog(CSV_PREVIEW_TITLE, lines, CSV_PREVIEW_CONFIRM, { vm.confirmCsvImport() }, CSV_PREVIEW_CANCEL, { vm.cancelCsvImport() })
+        }
         ui.csvPartialPrompt?.let { prompt ->
             ConfirmDialog("読める部分だけ取り込みますか？", listOf(prompt), com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, { vm.confirmCsvPartialImport() },
                 com.magi.app.v6.CsvPartialImport.CANCEL_LABEL, { vm.cancelCsvPartialImport() })

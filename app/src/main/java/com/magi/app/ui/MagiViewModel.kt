@@ -3142,6 +3142,31 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.csvPartialPrompt != null) _ui.update { it.copy(csvPartialPrompt = null) }
     }
 
+    /** 反映前の確認待ちの取込（結果と、作った時点の設定・盤面の指紋）。ui.csvImportPrompt と同時に立て外す。保存しない。 */
+    private class CsvImportPending(val result: ScheduleRunResult, val stateKey: Long, val boardKey: Long)
+    private var csvImportPending: CsvImportPending? = null
+
+    private fun dropCsvImport() {
+        csvImportPending = null
+        if (_ui.value.csvImportPrompt != null) _ui.update { it.copy(csvImportPrompt = null) }
+    }
+
+    /** 確認の「取り込む」。指紋が作成時と同じときだけ、確認済みとして同じ結果を当てる。 */
+    fun confirmCsvImport() {
+        val pending = csvImportPending ?: run { dropCsvImport(); return }
+        dropCsvImport()
+        if (runBlockedByInFlight("CSV取込")) return
+        val st = state; val sched = currentSchedule
+        if (st == null || sched == null || stateKey(st) != pending.stateKey || boardKey(sched) != pending.boardKey) { notify(CsvPartialImport.STALE, "W"); return }
+        runCsvImport(st, sched, partial = false, confirmed = true) { pending.result }
+    }
+
+    fun cancelCsvImport() {
+        val had = csvImportPending != null
+        dropCsvImport()
+        if (had) notify(CsvPartialImport.CANCELLED)
+    }
+
     /** 確認待ちの部分取込。ui.csvPartialPrompt と同時に立て外す（[dropCsvPartial]）。保存しない＝プロセスが死ねば消える。 */
     private var csvPartialPending: CsvPartialImport.Pending? = null
 
@@ -3168,7 +3193,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 取込の適用本体。[produce] が null なら適用しない。[partial]＝確認済みの部分取込（結果メッセージに注意を残す）。 */
-    private fun runCsvImport(st: MagiState, sched: Array<IntArray>, partial: Boolean, produce: suspend () -> ScheduleRunResult?) {
+    private fun runCsvImport(st: MagiState, sched: Array<IntArray>, partial: Boolean, confirmed: Boolean = false, produce: suspend () -> ScheduleRunResult?) {
         _ui.update { it.copy(messageIsError = false, running = true, message = "CSV取込中…") }
         val boardToken = beginBoardJob(MagiPhase.Importing)
         var pushedUndo = false
@@ -3184,6 +3209,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         "CSVを取り込めませんでした。一致する職員名がありません。CSVの1列目の氏名と列の並び（氏名, 1日目, 2日目, …）を今のデータに合わせてから、もう一度取り込んでください"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
                     logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
+                    return@launch
+                }
+                // 反映の前に件数と注意を見せる（部分取込は引用符の確認で既に 1 度聞いた＝重ねて聞かない）。
+                if (!partial && !confirmed) {
+                    val hardNow = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st, sched.copy2D()).hard }
+                    csvImportPending = CsvImportPending(res, stateKey(st), boardKey(sched))
+                    _ui.update { it.copy(running = false, messageIsError = false, message = null, csvImportPrompt = csvImportPreviewLines(res, st.staff.size, sched, hardNow)) }
+                    logOp("I", "CSV取込 確認待ち: ${res.matched}/${st.staff.size}名一致 必須=${res.report.hard}")
                     return@launch
                 }
                 ui0 = _ui.value; result0 = resultSchedule
