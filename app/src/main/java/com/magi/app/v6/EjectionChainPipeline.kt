@@ -196,6 +196,7 @@ object EjectionChainPipeline {
         tel.endReason = when {
             tel.committed > 0 -> "committed"
             stop() -> "stopped"
+            !tel.deepRan -> "probe_only"   // 深い探索の予算が尽きた（前の巡・前の焦点で使い切った）か予察のみの測定
             else -> "deep_done"
         }
         return LegOut(cur, curRep, cells, deepMs, if (cfg.deterministic) deepEvaluations else 0L)
