@@ -113,7 +113,7 @@ class BudgetOverrunTest {
         fun trivialResult() = V6OptimizerResult(schedule, report, V6Algorithm.V5, emptyList(), 0L, 0L)
 
         val t0 = EngineClock.nowMs()
-        val partial = V6NativeOptimizer.runMultiWorker(4, V6OptimizerOptions(workers = 4), onProgress = { _, _, _, _ -> }) { i, _, _ ->
+        val partial = PortfolioSearch.runMultiWorker(4, V6OptimizerOptions(workers = 4), onProgress = { _, _, _, _ -> }) { i, _, _ ->
             if (i % 2 == 0) throw RuntimeException("injected w=$i") else trivialResult()
         }
         assertTrue("部分失敗が2秒以内に戻らなかった", EngineClock.nowMs() - t0 < 2_000L)
@@ -121,7 +121,7 @@ class BudgetOverrunTest {
 
         val t1 = EngineClock.nowMs()
         runCatching {
-            V6NativeOptimizer.runMultiWorker(4, V6OptimizerOptions(workers = 4), onProgress = { _, _, _, _ -> }) { i, _, _ ->
+            PortfolioSearch.runMultiWorker(4, V6OptimizerOptions(workers = 4), onProgress = { _, _, _, _ -> }) { i, _, _ ->
                 throw RuntimeException("injected all w=$i")
             }
         }

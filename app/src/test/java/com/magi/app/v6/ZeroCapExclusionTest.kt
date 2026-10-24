@@ -165,7 +165,7 @@ class ZeroCapExclusionTest {
         val p = cachedProblem(s)
         for (seed in 1L..5L) {
             val b = arrayOf(intArrayOf(0, 0, 0, 0), intArrayOf(1, 1, 1, 1), intArrayOf(1, 1, 1, 1))
-            V6NativeOptimizer.personSwapKick(p, b, java.util.Random(seed), pairs = 1)
+            PortfolioSearch.personSwapKick(p, b, java.util.Random(seed), pairs = 1)
             assertEquals("seed=$seed", 0, countA(b, 0))
             assertTrue(p.capZeroCells(b).isEmpty())
         }

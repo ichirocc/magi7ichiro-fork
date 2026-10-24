@@ -1116,7 +1116,7 @@ class V6NativeOptimizerChoiceTest {
         assertTrue("前提: 初回は真", transient())
         calls = 0
         assertFalse("一瞬のシグナルは確認されない（走行を続ける）",
-            V6NativeOptimizer.confirmStop(transient, deadline = Long.MAX_VALUE, stopIsFinal = { false }))
+            PortfolioSearch.confirmStop(transient, deadline = Long.MAX_VALUE, stopIsFinal = { false }))
     }
 
     @Test
@@ -1124,10 +1124,10 @@ class V6NativeOptimizerChoiceTest {
         // 常に真＝本物の停滞。確認窓ぶん待ってから真を返す（従来どおり離脱する）。
         val t0 = EngineClock.nowMs()
         assertTrue("続くシグナルは本物と判定する",
-            V6NativeOptimizer.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { false }))
+            PortfolioSearch.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { false }))
         val waited = EngineClock.nowMs() - t0
         assertTrue("確認窓のあいだ待ってから確定する（実測 ${waited}ms）",
-            waited >= V6NativeOptimizer.STOP_CONFIRM_MS / 2)
+            waited >= PortfolioSearch.STOP_CONFIRM_MS / 2)
     }
 
     @Test
@@ -1137,7 +1137,7 @@ class V6NativeOptimizerChoiceTest {
         // 「必ず過ぎている値」として 0 を渡す（壁時計を混ぜると別の物差しになる）。
         val t0 = EngineClock.nowMs()
         assertTrue("締切超過は即確定",
-            V6NativeOptimizer.confirmStop({ true }, deadline = 0L, stopIsFinal = { false }))
+            PortfolioSearch.confirmStop({ true }, deadline = 0L, stopIsFinal = { false }))
         assertTrue("待たない", EngineClock.nowMs() - t0 < 1_000L)
     }
 
@@ -1147,7 +1147,7 @@ class V6NativeOptimizerChoiceTest {
         // ここでも5秒待ち、探索が締切を超えて後処理予約を食っていた（実測 探索109.99s→114.998s）。
         val t0 = EngineClock.nowMs()
         assertTrue("単調な停止は即確定",
-            V6NativeOptimizer.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { true }))
+            PortfolioSearch.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { true }))
         assertTrue("待たない", EngineClock.nowMs() - t0 < 1_000L)
     }
 

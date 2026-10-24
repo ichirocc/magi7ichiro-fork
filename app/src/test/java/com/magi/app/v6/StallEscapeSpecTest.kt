@@ -85,7 +85,7 @@ class StallEscapeSpecTest {
 
     // §5.5 停止確認の窓
     @Test fun stopConfirmWindowIsFiveSeconds() {
-        assertEquals(5_000L, V6NativeOptimizer.STOP_CONFIRM_MS)
+        assertEquals(5_000L, PortfolioSearch.STOP_CONFIRM_MS)
     }
 
     // §7.1 HF63 が追跡する 13 族と effortIters の式

@@ -90,7 +90,7 @@ class WishPinStrictTest {
         val p = Problem(st)
         for (seed in 1L..3L) {
             val on = kept.toIntArray2D()
-            V6NativeOptimizer.personSwapKick(p, on, Random(seed), pairs = 1)
+            PortfolioSearch.personSwapKick(p, on, Random(seed), pairs = 1)
             assertEquals("seed=$seed: 希望固定の日は動かない", emptyList<Pair<Int, Int>>(), brokenWishes(p, on))
             assertEquals("seed=$seed: 希望の無い日は入れ替わる", listOf(rest, rest, rest, rest, rest), on[0].toList())
             assertEquals("seed=$seed: 相手も希望の日だけ残る", listOf(a, a, a, a, a), on[1].toList())

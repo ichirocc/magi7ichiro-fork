@@ -10,7 +10,7 @@ import org.junit.Test
 import java.util.Random
 
 /**
- * [3.517.0] PERSON_SWAP_ILS の摂動本体 `V6NativeOptimizer.personSwapKick` の固定テスト。
+ * [3.517.0] PERSON_SWAP_ILS の摂動本体 `PortfolioSearch.personSwapKick` の固定テスト。
  * fair(公平化)が交換で不変であること・fair負担が最大のペアを優先して選ぶことを固定する
  * （負担は personSwapKick 内の旧式＝生回数 round(平均) からの L1 偏差。評価器の fair（達成率モード）とは別式）。
  */
@@ -44,7 +44,7 @@ class PersonSwapKickTest {
             val st = fixture()
             val p = Problem(st)
             val sched = st.schedule.toIntArray2D()
-            V6NativeOptimizer.personSwapKick(p, sched, Random(seed), pairs = 1)
+            PortfolioSearch.personSwapKick(p, sched, Random(seed), pairs = 1)
             // a<->b が丸ごと入れ替わっている（c,dは無傷）。
             assertEquals("seed=$seed: a は b の元の行を持つ", listOf(0, 0, 0, 0), sched[0].toList())
             assertEquals("seed=$seed: b は a の元の行を持つ", listOf(1, 1, 1, 1), sched[1].toList())
@@ -59,7 +59,7 @@ class PersonSwapKickTest {
         val p = Problem(st)
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         val sched = st.schedule.toIntArray2D()
-        V6NativeOptimizer.personSwapKick(p, sched, Random(1), pairs = 1)
+        PortfolioSearch.personSwapKick(p, sched, Random(1), pairs = 1)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("交換前後でfairは不変（群内の回数集合が変わらないため）", before.breakdown["fair"] ?: 0, after.breakdown["fair"] ?: 0)
         assertTrue("非自明のケース（実際にfairが立っている）", (before.breakdown["fair"] ?: 0) > 0)
