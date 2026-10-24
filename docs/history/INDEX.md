@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- T-7 を CI に（2026-10-24、版なし、外部レビュー「DoD T-1〜T-19 を CI に繋ぐ」の照合）: `PolishGateAccessTest`＝エンジンで `PolishGate.` を参照するのは `EngineConfig.kt` だけ。照合: T-1〜T-6・T-8・T-10・T-11・T-13・T-14 は既に実在して V6 Engine Check で全件回る、`safety_inventory.md` は 28 項目すべてに固定テストと CI 列あり（「CI に紐付いていない」は誤り）。残る T-9（各段が締切を守る）・T-15（JSON 往復・CSV バイト一致）・T-16（境界 fixture）・T-17（統計）・T-18（実機）・T-19（C#、停止中）
 - 全面改修 P6e（2026-10-24、版なし・出力不変）: ViewModel の CSV 取込を `MagiViewModelCsv.kt` へ。盤面の書き込みは本体の `commitCsvBoard` だけ  → `docs/overhaul_design.md` §6.7
 - 全面改修 P10d（2026-10-24、文書のみ）: 採否の合成を `docs/adoption.md` に（盤面を採る 10 経路 × 比較・固定・回数固定・拡張希望・必須）。漏れなし。P10 完了  → `docs/adoption.md`
 - 全面改修 P10c（2026-10-24、版なし・出力不変）: 探索直後の研磨を `SearchPolish.kt` へ（後処理チェーンとは別物と明記）  → `docs/overhaul_design.md` §6.8b
