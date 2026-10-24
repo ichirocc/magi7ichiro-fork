@@ -35,13 +35,9 @@ import com.magi.app.v6.ShiftAppearance
 
 @Composable
 fun SectionSegment(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(10.dp))
-            content()
-        }
+    // 見出しは入れ物の外・補足は下（iOS の一覧の形、2026-10-23）。
+    MagiGroup(title, footer = subtitle) {
+        Column(Modifier.padding(16.dp)) { content() }
     }
 }
 
