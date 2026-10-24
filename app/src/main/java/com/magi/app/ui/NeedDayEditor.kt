@@ -286,7 +286,8 @@ private fun NeedMonthGrid(
             }
         }
         val dayCells: List<Int?> = List(sdow) { null } + ranges.indices.toList()
-        dayCells.chunked(7).forEach { wk ->
+        dayCells.chunked(7).forEachIndexed { wi, wk ->
+            if (wi > 0) HorizontalDivider(color = cs.outlineVariant)   // 週の間の細い線（iOS のカレンダー）
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { j ->
                     if (j == null) Box(Modifier.weight(1f).heightIn(min = 64.dp))
@@ -301,8 +302,6 @@ private fun NeedMonthGrid(
                         }
                         Box(
                             Modifier.weight(1f).heightIn(min = 64.dp)
-                                .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
-                                .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(j + 1) }
                                 .semantics {
                                     contentDescription = "${j + 1}日を" + (if (sel) "選択解除" else "選択") +
@@ -311,19 +310,13 @@ private fun NeedMonthGrid(
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text("${j + 1}", style = MaterialTheme.typography.bodyMedium,
-                                        color = if (sel) cs.onPrimaryContainer else cs.onSurface,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
-                                    // 選択中=✓ / 個別設定=小さな印 / それ以外=印なし。
-                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.onPrimaryContainer, modifier = Modifier.size(12.dp))
-                                    else if (individual) Box(Modifier.size(5.dp).background(cs.primary, CircleShape))
-                                }
+                                // 選択中＝塗った丸 / 個別設定＝数字の下の小さな点（iOS のカレンダーの予定の点と同じ位置）。
+                                CalendarDayNumber(j + 1, sel)
+                                Box(Modifier.size(5.dp).then(if (individual) Modifier.background(cs.primary, CircleShape) else Modifier))
                                 Text(
                                     rangeLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when {
-                                        sel -> cs.onPrimaryContainer
                                         range == null -> cs.outlineVariant
                                         else -> cs.onSurface
                                     },

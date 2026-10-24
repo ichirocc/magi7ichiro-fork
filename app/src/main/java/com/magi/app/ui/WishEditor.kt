@@ -406,7 +406,8 @@ private fun WishMonthGrid(
             }
         }
         val dayCells: List<Int?> = List(sdow) { null } + (1..maxDay).toList()
-        dayCells.chunked(7).forEach { wk ->
+        dayCells.chunked(7).forEachIndexed { wi, wk ->
+            if (wi > 0) HorizontalDivider(color = cs.outlineVariant)   // 週の間の細い線（iOS のカレンダー）
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { d ->
                     if (d == null) Box(Modifier.weight(1f).heightIn(min = 64.dp))
@@ -415,8 +416,6 @@ private fun WishMonthGrid(
                         val k = marked[d]
                         Box(
                             Modifier.weight(1f).heightIn(min = 64.dp)
-                                .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
-                                .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(d) }
                                 .semantics {
                                     contentDescription = "${d}日を" + (if (sel) "選択解除" else "選択") +
@@ -426,12 +425,7 @@ private fun WishMonthGrid(
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text("$d", style = MaterialTheme.typography.bodyMedium,
-                                        color = if (sel) cs.onPrimaryContainer else cs.onSurface,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
-                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.onPrimaryContainer, modifier = Modifier.size(12.dp))
-                                }
+                                CalendarDayNumber(d, sel)
                                 if (k != null) {
                                     val chipBg = hexToColor(shiftColorHex.getOrElse(k) { "" })
                                     val chipFg = hexToColor(shiftTextHex.getOrElse(k) { "" })
@@ -442,7 +436,7 @@ private fun WishMonthGrid(
                                 extMarked[d]?.let { ex ->
                                     // 記号が 3 つ以上はセル幅に入らないので件数で（実機 12/5「×休PｼD」が切れた）。全文は一覧チップにある。
                                     Text(if (ex.size <= 2) "×" + ex.joinToString("") else "×${ex.size}種", style = MaterialTheme.typography.labelSmall,
-                                        color = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, maxLines = 1)
+                                        color = cs.onSurfaceVariant, maxLines = 1)
                                 }
                             }
                         }

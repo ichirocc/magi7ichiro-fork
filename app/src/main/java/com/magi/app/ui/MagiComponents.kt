@@ -32,6 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
@@ -207,5 +211,15 @@ internal fun MagiGroupRow(label: String, enabled: Boolean = true, trailing: Stri
             Text(trailing, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
         }
         if (divider) HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
+    }
+}
+
+/** カレンダーの日付の数字（iOS のカレンダーの形、2026-10-24）: 選んだ日は塗った丸に白い数字。枠や四角の塗りは使わない。 */
+@Composable
+internal fun CalendarDayNumber(day: Int, selected: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.size(32.dp).then(if (selected) Modifier.background(cs.primary, CircleShape) else Modifier), contentAlignment = Alignment.Center) {
+        Text("$day", style = MaterialTheme.typography.bodyLarge, color = if (selected) cs.onPrimary else cs.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
     }
 }
