@@ -125,7 +125,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         private set
     internal var resultSchedule: Array<IntArray>? = null
         private set
-    private var job: Job? = null
+    internal var job: Job? = null
     private var checkJob: Job? = null
     internal var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
     private var checkSeq = 0L
@@ -145,7 +145,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     @Volatile private var activeRunSerial = 0
 
-    private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
+    internal fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
         dropCsvPartial()    // 確認待ちの部分取込は、盤面を動かすジョブが始まった時点で古い
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         cancelRelaxTrial()  // [S6 §8] 同じ
@@ -161,7 +161,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return jobToken
     }
 
-    private fun endBoardJob(token: Int) {
+    internal fun endBoardJob(token: Int) {
         if (phases.end(token)) {
             activeRunSerial = 0
             _ui.update { it.copy(keepScreenOn = false) }
@@ -2804,7 +2804,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 起きない」、解析する側から見れば「実行が重なったのか単に押していないのか区別できない」）。
      * 兄弟の `structuralEditBlocked`（3.328.0）は同じ状況を既にログしており、こちらが対象漏れだった。
      */
-    private fun runBlockedByInFlight(what: String): Boolean {
+    internal fun runBlockedByInFlight(what: String): Boolean {
         if (!optimizeInFlight()) return false
         reject(MagiArbiter.arbitrate(busyPhase(), MagiEventKind.RunStart, what))
         return true
@@ -3109,180 +3109,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return null
     }
 
-    fun importCsv(rawText: String) {
-        // [3.404.0] 旧: 入口ガードが無く、`job = viewModelScope.launch` が走行中の最適化の参照を
-        //   **キャンセルせずに上書き**していた＝その最適化は「やめる」で止められないゾンビになる
-        //   （3.271.0 が generateSmartInitial で直したのと同型の取り残し）。
-        if (runBlockedByInFlight("CSV取込")) return
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        runCsvImport(st, sched, partial = false) { parseCsvOrAsk(st, sched, rawText) }
-    }
-
-    /** 「この部分だけ取り込む」。指紋が作成時と同じときだけ、通常の取込と同じ適用（[runCsvImport]）へ渡す。 */
-    fun confirmCsvPartialImport() {
-        val pending = csvPartialPending ?: run { dropCsvPartial(); return }
-        dropCsvPartial()
-        if (runBlockedByInFlight("CSV取込")) return
-        val st = state; val sched = currentSchedule
-        val resolution = if (st != null && sched != null) CsvPartialImport.resolve(pending, stateKey(st), boardKey(sched))
-            else CsvPartialImport.Resolution.Stale
-        if (resolution is CsvPartialImport.Resolution.Apply && st != null && sched != null)
-            runCsvImport(st, sched, partial = true) { resolution.pending.ask.result }
-        else notify(CsvPartialImport.STALE, "W")
-    }
-
-    fun cancelCsvPartialImport() {
-        val had = csvPartialPending != null
-        dropCsvPartial()
-        if (had) notify(CsvPartialImport.CANCELLED)
-    }
-
-    private fun dropCsvPartial() {
-        csvPartialPending = null
-        if (_ui.value.csvPartialPrompt != null) _ui.update { it.copy(csvPartialPrompt = null) }
-    }
-
     /** 反映前の確認待ちの取込（結果と、作った時点の設定・盤面の指紋）。ui.csvImportPrompt と同時に立て外す。保存しない。 */
-    private class CsvImportPending(val result: ScheduleRunResult, val stateKey: Long, val boardKey: Long)
-    private var csvImportPending: CsvImportPending? = null
-
-    private fun dropCsvImport() {
-        csvImportPending = null
-        if (_ui.value.csvImportPrompt != null) _ui.update { it.copy(csvImportPrompt = null) }
-    }
-
-    /** 確認の「取り込む」。指紋が作成時と同じときだけ、確認済みとして同じ結果を当てる。 */
-    fun confirmCsvImport() {
-        val pending = csvImportPending ?: run { dropCsvImport(); return }
-        dropCsvImport()
-        if (runBlockedByInFlight("CSV取込")) return
-        val st = state; val sched = currentSchedule
-        if (st == null || sched == null || stateKey(st) != pending.stateKey || boardKey(sched) != pending.boardKey) { notify(CsvPartialImport.STALE, "W"); return }
-        runCsvImport(st, sched, partial = false, confirmed = true) { pending.result }
-    }
-
-    fun cancelCsvImport() {
-        val had = csvImportPending != null
-        dropCsvImport()
-        if (had) notify(CsvPartialImport.CANCELLED)
-    }
-
+    internal class CsvImportPending(val result: ScheduleRunResult, val stateKey: Long, val boardKey: Long)
+    internal var csvImportPending: CsvImportPending? = null
     /** 確認待ちの部分取込。ui.csvPartialPrompt と同時に立て外す（[dropCsvPartial]）。保存しない＝プロセスが死ねば消える。 */
-    private var csvPartialPending: CsvPartialImport.Pending? = null
+    internal var csvPartialPending: CsvPartialImport.Pending? = null
 
-    /** 適用してよい結果を返す。引用符が閉じていないときは確認待ち／断りを画面に出して null。 */
-    private suspend fun parseCsvOrAsk(st: MagiState, sched: Array<IntArray>, rawText: String): ScheduleRunResult? {
-        val text = MojibakeRepair.repair(rawText)
-        // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
-        if (MojibakeRepair.wasDecoded(rawText, text)) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました。元のファイル自体は修復されません")
-        when (val v = withContext(Dispatchers.Default) { CsvPartialImport.judge(text, st, sched) }) {
-            is CsvPartialImport.Verdict.Ask -> {
-                csvPartialPending = CsvPartialImport.Pending(v, stateKey(st), boardKey(sched))
-                _ui.update { it.copy(running = false, messageIsError = false, message = null, csvPartialPrompt = v.prompt) }
-                logOp("I", "CSV取込 確認待ち: 引用符が閉じていません（${v.endLine}行目まで ${v.matched}名分が読めました）")
-                return null
-            }
-            CsvPartialImport.Verdict.NothingReadable -> {
-                _ui.update { it.copy(messageIsError = true, running = false, message = "CSVを取り込めませんでした。${CsvPartialImport.NOTHING_READABLE}。引用符（\"）の閉じ忘れを直してから、もう一度取り込んでください") }
-                logOp("W", "CSV取込 失敗: 引用符が閉じていなくて読めた職員の行がないため取込を中止しました")
-                return null
-            }
-            CsvPartialImport.Verdict.WellFormed -> Unit
-        }
-        return withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
-    }
-
-    /** 取込の適用本体。[produce] が null なら適用しない。[partial]＝確認済みの部分取込（結果メッセージに注意を残す）。 */
-    private fun runCsvImport(st: MagiState, sched: Array<IntArray>, partial: Boolean, confirmed: Boolean = false, produce: suspend () -> ScheduleRunResult?) {
-        _ui.update { it.copy(messageIsError = false, running = true, message = "CSV取込中…") }
-        val boardToken = beginBoardJob(MagiPhase.Importing)
-        var pushedUndo = false
-        var ui0 = _ui.value; var result0 = resultSchedule
-        job = viewModelScope.launch {
-            try {
-                val res = produce() ?: return@launch
-                // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
-                if (res.matched == 0) {
-                    val why = if (res.ambiguousNames.isNotEmpty())
-                        "CSVを取り込めませんでした。${csvAmbiguousText(res.ambiguousNames)}。編集タブ＞職員管理とCSVの両方で名前を区別してから、もう一度取り込んでください"
-                    else
-                        "CSVを取り込めませんでした。一致する職員名がありません。CSVの1列目の氏名と列の並び（氏名, 1日目, 2日目, …）を今のデータに合わせてから、もう一度取り込んでください"
-                    _ui.update { it.copy(messageIsError = true, running = false, message = why) }
-                    logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
-                    return@launch
-                }
-                // 反映の前に件数と注意を見せる（部分取込は引用符の確認で既に 1 度聞いた＝重ねて聞かない）。
-                if (!partial && !confirmed) {
-                    val hardNow = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st, sched.copy2D()).hard }
-                    csvImportPending = CsvImportPending(res, stateKey(st), boardKey(sched))
-                    _ui.update { it.copy(running = false, messageIsError = false, message = null, csvImportPrompt = csvImportPreviewLines(res, st.staff.size, sched, hardNow)) }
-                    logOp("I", "CSV取込 確認待ち: ${res.matched}/${st.staff.size}名一致 必須=${res.report.hard}")
-                    return@launch
-                }
-                ui0 = _ui.value; result0 = resultSchedule
-                pushUndo("CSV取込")
-                pushedUndo = true
-                boardReplaceRev++
-                currentSchedule = res.schedule.copy2D()
-                autoSave()
-                resultSchedule = res.schedule.copy2D()
-                // 取込で値が変わったセルの手動固定は取り込んだ値へ追従させる（手の編集 setCell と同じ規約）。同じ undo 段。
-                val (followed, pinsMoved) = st.withPinsFollowingBoard(sched, res.schedule)
-                state = followed.withSchedule(res.schedule)
-                val pinNote = if (pinsMoved > 0) "｜手動固定 ${pinsMoved} 件を取り込んだ値に合わせました" else ""
-                val total = st.staff.size
-                // [3.410.0/I-01] シフト一覧に無い記号は取り込めない。旧: 黙って読み飛ばしていたため、
-                //   誤字や凡例漏れが「休のまま」「元のまま」として静かに混入した。件数と記号を必ず出す。
-                // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝「氏名不一致でスキップ」と
-                //   区別が付かず部分的な成功に見える。必ず名指しする。
-                val quoteWarn = if (partial) CsvPartialImport.APPLIED_WARNING else ""
-                val unk = if (res.unknownCells > 0)
-                    "｜読めない記号 ${res.unknownCells}セル(${res.unknownSymbols.joinToString("・")})は取り込めませんでした"
-                else ""
-                // [3.592.0] 実日付ヘッダが今の対象期間とズレたまま列位置で取り込んだ場合の警告。
-                val dateWarn = if (res.headerDateMismatches > 0)
-                    "｜⚠ CSVヘッダの日付が今の期間と${res.headerDateMismatches}列ズレています（列の位置で取り込みました）" else ""
-                val dupWarn = (if (res.ambiguousNames.isNotEmpty()) "｜⚠ ${csvAmbiguousText(res.ambiguousNames)}" else "") +
-                    (if (res.duplicateRowNames.isNotEmpty()) "｜⚠ 同じ職員の行が複数あり、後の行で上書きしました: ${res.duplicateRowNames.joinToString("・")}" else "")
-                val msg = if (res.matched in 1 until total)
-                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
-                else
-                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
-                pushReport(state ?: st, res.schedule, res.report) { it.copy(
-                    messageIsError = res.unknownCells > 0 || partial || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
-                    running = false,
-                    hasResult = true,
-                    relaxedBoard = false, engineRan = false, ranBeforeEdit = false, keptPrevious = false,   // [3.475.0] CSV取込は手操作扱い
-                    message = msg,
-                ) }
-                if (res.matched in 1 until total) {
-                    logOp("W", "CSV取込 一部のみ反映: ${res.matched}/${total}名一致（${total - res.matched}名は氏名不一致）")
-                }
-                if (partial) logOp("W", "CSV取込 引用符が閉じていないため、読めた部分だけを取り込みました")
-                if (res.unknownCells > 0) {
-                    logOp("W", "CSV取込 読めない記号 ${res.unknownCells}セル: ${res.unknownSymbols.joinToString("・")}（シフト一覧に無い記号）")
-                }
-                if (dupWarn.isNotEmpty()) logOp("W", "CSV取込 ${dupWarn.removePrefix("｜⚠ ").replace("｜⚠ ", " / ")}")
-                logOp("I", "CSV取込 完了 ${res.matched}名一致 必須=${res.report.hard} 合計=${res.report.total}")
-            } catch (e: CancellationException) {
-                // [3.592.0] pushUndo済み(=盤面を既に書き換え済み)なら取込前へロールバックする。旧: 診断
-                //   (pushReport)の中止・例外を捕まえても内部盤面・自動保存は書き換えたままだった。
-                if (pushedUndo) rollbackBoardCommit(st, sched, result0, ui0)
-                _ui.update { it.copy(messageIsError = false, running = false, message = "CSV取込を中止しました") }   // [3.404.0]
-                throw e
-            } catch (e: Throwable) {
-                if (pushedUndo) rollbackBoardCommit(st, sched, result0, ui0)
-                _ui.update { it.copy(running = false, message = "CSVを取り込めませんでした（${failureWords(e, FailureKind.LOAD)}）。ファイルの中身を確認して、もう一度お試しください", messageIsError = true) }
-            } finally {
-                endBoardJob(boardToken)
-            }
-        }
+    /** CSV 取込の盤面の差し替え（state/currentSchedule/resultSchedule の書き込みは本体だけ）。取込で値が変わったセルの手動固定は
+     *  取り込んだ値へ追従させる（手の編集 setCell と同じ規約、同じ undo 段）。追従した固定の数を返す。 */
+    internal fun commitCsvBoard(st: MagiState, sched: Array<IntArray>, res: ScheduleRunResult): Int {
+        boardReplaceRev++
+        currentSchedule = res.schedule.copy2D()
+        autoSave()
+        resultSchedule = res.schedule.copy2D()
+        val (followed, pinsMoved) = st.withPinsFollowingBoard(sched, res.schedule)
+        state = followed.withSchedule(res.schedule)
+        return pinsMoved
     }
 
     /** [3.592.0] importCsv・下書きづくりの診断失敗時、pushUndo直後の状態(st/sched)へ戻す。pushUndoが積んだ段も外す。
      *  [ui0] は pushUndo の前の画面状態＝pushUndo と開始時の書き込みが外した完了要約・直し方・結果の旗も戻す。 */
-    private fun rollbackBoardCommit(st: MagiState, sched: Array<IntArray>, result: Array<IntArray>?, ui0: UiState) {
+    internal fun rollbackBoardCommit(st: MagiState, sched: Array<IntArray>, result: Array<IntArray>?, ui0: UiState) {
         currentSchedule = sched
         state = st
         resultSchedule = result
@@ -3445,7 +3292,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val (cleared, n) = com.magi.app.v6.HardRepairCore.clearCappedCells(st, sched)
         return if (n > 0) UnifiedViolationChecker.check(st, cleared) else null
     }
-    private suspend fun pushReport(
+    internal suspend fun pushReport(
         st: MagiState,
         schedule: Array<IntArray>,
         report: ViolationReport,

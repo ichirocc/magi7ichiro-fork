@@ -218,7 +218,7 @@ UI は `app/src/main/java/com/magi/app/ui/`:
   ジョブ: `job`/`checkJob`/`fixJob`（連続タップ競合回避）。
   extension 関数の分割先（state/currentSchedule の書き込みは本体だけ、拡張は読むか本体の入口を呼ぶ）:
   `MagiViewModelFixSuggestions.kt`（変更案の探索・確認の画面・適用、全面改修 P6a・P6d）／ `MagiViewModelRelaxTrial.kt`（設定を緩める試算と承認フロー、P6b）／
-  `MagiViewModelWishTrial.kt`（希望を取り消したらの試算、P6c）／ `MagiViewModelConditions.kt`・`MagiViewModelConstraints.kt`・`MagiViewModelWs1.kt`・`MagiViewModelIo.kt`（既存）。
+  `MagiViewModelWishTrial.kt`（希望を取り消したらの試算、P6c）／ `MagiViewModelCsv.kt`（CSV 取込、P6e）／ `MagiViewModelConditions.kt`・`MagiViewModelConstraints.kt`・`MagiViewModelWs1.kt`・`MagiViewModelIo.kt`（既存）。
 - `MagiUiState.kt` — `schedule`, `staffNames`, `staffGroupSymbols`, `shiftSymbols`, `countViolations("i,k")`,
   `needViolations("k,j")`, `needFamilies("k,j")`, `breakdown` 等。
   （`resultSchedule` は `MagiViewModel` のメンバで `UiState` には無い。UiState 側の結果スナップショットは

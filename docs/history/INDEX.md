@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P6e（2026-10-24、版なし・出力不変）: ViewModel の CSV 取込を `MagiViewModelCsv.kt` へ。盤面の書き込みは本体の `commitCsvBoard` だけ  → `docs/overhaul_design.md` §6.7
 - 全面改修 P10d（2026-10-24、文書のみ）: 採否の合成を `docs/adoption.md` に（盤面を採る 10 経路 × 比較・固定・回数固定・拡張希望・必須）。漏れなし。P10 完了  → `docs/adoption.md`
 - 全面改修 P10c（2026-10-24、版なし・出力不変）: 探索直後の研磨を `SearchPolish.kt` へ（後処理チェーンとは別物と明記）  → `docs/overhaul_design.md` §6.8b
 - 全面改修 P10b（2026-10-24、版なし・出力不変）: 探索を PortfolioSearch・AlnsSearch・RsiSearch の 3 ファイルへ。V6NativeOptimizer は 2,160→585 行  → `docs/overhaul_design.md` §6.8b

@@ -438,6 +438,7 @@ Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize
 - P6a（2026-10-24、出力不変）: FixSuggestions を `MagiViewModelFixSuggestions.kt` へ（`findFixSuggestions`・`applyFixSuggestion`・`cancelFixSearch`・`undoNotice`・`clearOpNotice` を extension 関数に）。指紋と探索ジョブの状態は本体に残し、拡張から触るメンバ（`pushUndo`・`boardKey`・`undoStack` など 17 個）を private から internal へ。ViewModel はホストでコンパイルされないので `android-sdk` で確認。
 - P6b（2026-10-24、出力不変）: RelaxTrial を `MagiViewModelRelaxTrial.kt` へ（試算の開始・取消・照合 6 種・承認フロー 5 種）。試算の状態と、盤面を書き換える確定 `relaxAndApply`・`restoreBeforeRelax` は本体に残す（state/currentSchedule の書き込みは本体だけ）。
 - P6c（2026-10-24、出力不変）: WishTrial を `MagiViewModelWishTrial.kt` へ（試算の開始・取消・行の表示・対照・確定の結果行と `ctxMatches`）。state を書き換える確定 `cancelWishAndRebuild` は本体に残す。
+- P6e（2026-10-24、出力不変）: CSV 取込（重ね合わせ・部分取込の確認・反映前の確認）を `MagiViewModelCsv.kt` へ。盤面の差し替えは本体の `commitCsvBoard`（呼べるのは `runCsvImport` だけ＝`ScheduleWriteSitesTest`）、失敗時の巻き戻しは本体の `rollbackBoardCommit`。
 - P6d（2026-10-24、出力不変）: 変更の確認の画面（不足枠の候補・玉突きの手順・案の一覧の 3 経路と `openPreview`・相談の入れ替えの再開）を `MagiViewModelFixSuggestions.kt` へ。
 
 ### 6.8 P7 文書の正規化
