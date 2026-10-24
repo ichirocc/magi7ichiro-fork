@@ -3,7 +3,7 @@
 この文書は、MAGI ShiftOptimizer の全面改修について、**何を・なぜ・どの順で・何をもって合格とするか**を決めた正本です。
 この repo を初めて読む開発者や、他社の AI が、この 1 冊だけで改修に参加できるように、背景・用語・根拠となるコードの場所まで書いています。
 
-- 版: v4（2026-10-22、最終）。v3 に、S1 の対象となる既存機能の棚卸し（§2.5）、意義の反映の自己検査（§2.6）、コミットごとの確認表（§14.1）を足したもの。v3 は v2 を机上検証し（§15）、用語と背景を補って書き直したもの。
+- 版: v5（2026-10-22、最終）。v4 に詳細設計仕様書（`docs/overhaul_detailed_spec.md`）とフラグ棚卸し（`docs/flag_inventory.md`）を添えたもの（#396）。v4 は v3 に、S1 の対象となる既存機能の棚卸し（§2.5）、意義の反映の自己検査（§2.6）、コミットごとの確認表（§14.1）を足したもの。v3 は v2 を机上検証し（§15）、用語と背景を補って書き直したもの。
 - 決定者: リポジトリの所有者（以下「利用者」）。本文の「決定」はすべて利用者の指示で、日付を添えています。
 - 正本の優先順位: 業務ルールは `docs/business-logic.md`、データ項目は `docs/data-models.md`、アプリの振る舞いの不変条件は `docs/invariants.md`、
   重みの値は `MirrorKeys.weights`（`app/src/main/java/com/magi/app/v6/MirrorCore.kt`）が正です。本書はそれらを変えません。
@@ -408,6 +408,7 @@ P2 の後片付け（2026-10-22）: ②d で本番から外れた `C3nWallProof.
 （`C3nWallProof` は残存分析の `diagnoseBoard` だけ）。消したフラグを指していた古いコメント 4 か所を直した。
 P2 の残り: エンジン内で `PolishGate` を直接読むのは `wideC3nBreakDays`（探索の内側 `V6SearchOperators` と「設定の効き」）だけ。探索の奥まで引数を通すので
 P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す。背景 Worker の `PolishGate.restore` はそれまで残す。
+→ **済**（2026-10-24、出力不変）: `EngineConfig.wideC3nBreakDays`（写し）→ `PostOptimizationParams`・`PersonalBalanceJointLnsPolish.Config`・`V6OptimizerOptions.config` から、研磨 9 種・RSI の 5 関数・`findCovUChain`／`tryFixForbiddenRunViaAdjacentDay`／`breakableDaysFor` まで引数で渡す。「設定の効き」の行も写しを読む。実行の外（分析・変更案の探索）は `EngineConfig.currentWideC3nBreakDays()`（いまの設定）。エンジンで `PolishGate` を読むのは `EngineConfig` だけになった。`EngineConfigTest` に写しの固定を追加。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |

@@ -1080,6 +1080,7 @@ object V6FinalPort {
             combineExhaustPairs = postParams.combineExhaustPairs,
             aptFairSoftTolerance = postParams.aptFairSoftTolerance,
             countChainPolish = postParams.countChainEnabled,
+            wideC3nBreakDays = postParams.wideC3nBreakDays,
         ))
         // [3.694.0] 容認採用の中身（族・件数・合計・必須・容認量・差）を最大 5 行。件数は上の 6% 許容の行と同じ源（G4）。
         val toleratedLogs = TuningTelemetry.toleratedLines(TuningTelemetry.aptFairToleranceUsed.get()).map { MirrorLog(level = "I", tag = "容認採用", message = it) }

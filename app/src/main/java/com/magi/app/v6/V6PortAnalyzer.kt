@@ -290,14 +290,14 @@ object V6PortAnalyzer {
 
     /** `findCovUChain`（探索本体と同一関数）を [Probe.CHAIN_SEEDS] 通りの rng 順で試し、1 つでも成立すれば真。 */
     private fun chainFills(p: Problem, board: Array<IntArray>, k: Int, j: Int, exclude: Int = -1): Boolean =
-        (0 until Probe.CHAIN_SEEDS).any { seed -> findCovUChain(p, board, k, j, java.util.Random(seed.toLong()), exclude = exclude) != null }
+        (0 until Probe.CHAIN_SEEDS).any { seed -> findCovUChain(p, board, k, j, java.util.Random(seed.toLong()), EngineConfig.currentWideC3nBreakDays(), exclude = exclude) != null }
 
     /** [3.642.0/UX監査 高1] 玉突き（多人数の入替）の手順。[chainFills] と同じ `findCovUChain`・同じ seed 順で、最初に成立した手順を返す。
      *  盤面は変えない。`chainVerified` の枠では必ず見つかる（同じ関数・同じ順序）。 */
     internal fun chainFixOps(p: Problem, schedule: Array<IntArray>, k: Int, j: Int): List<FixCell>? {
         val norm = normalizeSchedule(schedule, p)
         for (seed in 0 until Probe.CHAIN_SEEDS) {
-            val moves = findCovUChain(p, norm, k, j, java.util.Random(seed.toLong())) ?: continue
+            val moves = findCovUChain(p, norm, k, j, java.util.Random(seed.toLong()), EngineConfig.currentWideC3nBreakDays()) ?: continue
             return moves.map { FixCell(it[0], it[1], it[2]) }
         }
         return null
@@ -857,7 +857,7 @@ object V6PortAnalyzer {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。
                 if (adjOk == null && chainOk == null) {
                     val tmp = Array(p.S) { norm[it].clone() }
-                    val extra = tryFixForbiddenRunViaAdjacentDay(p, tmp, i, j, m, java.util.Random(Probe.ADJACENT_SEED))
+                    val extra = tryFixForbiddenRunViaAdjacentDay(p, tmp, i, j, m, java.util.Random(Probe.ADJACENT_SEED), EngineConfig.currentWideC3nBreakDays())
                     if (extra != null) {
                         // 隣接日の手＋本セルの変更を適用し、本セルの離脱穴が残るなら連鎖で埋まるかまで確認。
                         for (mv in extra) tmp[mv[0]][mv[1]] = mv[2]

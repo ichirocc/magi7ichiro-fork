@@ -235,11 +235,11 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * ここでは実際に成立している窓がまたぐ日をビット走査で求め、その全部を候補にする。
  * [3.469.0] 走査は `C3nRowScan` 経由＝T>64 も同じ意味論のスカラーへ退避する（旧: そこだけ j±1 に落ちていた）。
  */
-internal fun breakableDaysFor(p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int): IntArray {
+internal fun breakableDaysFor(p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int, wide: Boolean): IntArray {
     // [既定 OFF・3.303.0] 一般化として正しいが実データ3件で利得が一貫しなかった（PolishGate の
     //   docstring に計測値）。既定は従来どおり j±1 のみで、ゲートを ON にしたときだけ広げる。
     TuningTelemetry.wideC3nCalls.incrementAndGet()
-    if (!PolishGate.wideC3nBreakDays) return intArrayOf(j - 1, j + 1)
+    if (!wide) return intArrayOf(j - 1, j + 1)
     if (i !in sched.indices) return intArrayOf(j - 1, j + 1)
     // [3.469.0/周辺再検証] 旧実装は `C3nBitScan` を**直叩き**しており、`C3nRowScan`（3.305.0 で
     //   「呼び出し側がビット経路かどうかを分岐しない」ために作られた窓口）を**この関数だけが迂回**していた
@@ -276,11 +276,11 @@ internal fun breakableDaysFor(p: Problem, sched: Array<IntArray>, i: Int, j: Int
  * （下記 findCovUChain の docstring 参照）。
  */
 internal fun tryFixForbiddenRunViaAdjacentDay(
-    p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int, rng: Random,
+    p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int, rng: Random, wideC3n: Boolean,
     allowCrossDayFix: Boolean = true, maxDepth: Int = (p.K - 1).coerceAtLeast(1),
 ): List<IntArray>? {
     if (!allowCrossDayFix) return null
-    for (j2 in breakableDaysFor(p, sched, i, j, fillShift)) {
+    for (j2 in breakableDaysFor(p, sched, i, j, fillShift, wideC3n)) {
         if (j2 !in 0 until p.T || p.wishLocked(i, j2)) continue
         val oldJ2 = sched[i][j2]
         if (oldJ2 !in 0 until p.K) continue
@@ -295,7 +295,7 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
             if (!jOk || !j2Ok) { sched[i][j2] = oldJ2; continue }
             if (p.covUCell(oldJ2, j2, cntBefore - 1) > p.covUCell(oldJ2, j2, cntBefore)) {
                 // i の離脱で oldJ2 が covU 悪化 → 同アルゴリズムを1段だけ再帰して埋め直す。
-                val subChain = findCovUChain(p, sched, oldJ2, j2, rng, maxDepth = maxDepth, exclude = i, allowCrossDayFix = false)
+                val subChain = findCovUChain(p, sched, oldJ2, j2, rng, wideC3n, maxDepth = maxDepth, exclude = i, allowCrossDayFix = false)
                 sched[i][j2] = oldJ2
                 if (subChain != null) return listOf(intArrayOf(i, j2, alt)) + subChain
             } else {
@@ -338,7 +338,7 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
  * スコアリング不変・退化不能）。見つからなければ null。
  */
 internal fun findCovUChain(
-    p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = (p.K - 1).coerceAtLeast(1), exclude: Int = -1, allowCrossDayFix: Boolean = true,
+    p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, wideC3n: Boolean, maxDepth: Int = (p.K - 1).coerceAtLeast(1), exclude: Int = -1, allowCrossDayFix: Boolean = true,
     // [C1研磨・手B強化] 候補(staff,shift,day)がその職員自身のc1不足解消にも資するかの述語。
     //   非nullのとき candidates() の返り値を「述語=true」優先に並べ替えるだけ（探索ロジック自体は不変）。
     //   既定null=既存呼出元は完全に挙動不変。
@@ -366,7 +366,7 @@ internal fun findCovUChain(
     //   i の割当を別シフトへ変えてパターンを崩せないか試す（共通ヘルパー tryFixForbiddenRunViaAdjacentDay
     //   に汎用化・3.226.0でapplyCovOFreeからも再利用）。
     fun tryFixC3nViaAdjacentDay(i: Int, fillShift: Int): List<IntArray>? =
-        tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, fillShift, rng, allowCrossDayFix, maxDepth)
+        tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, fillShift, rng, wideC3n, allowCrossDayFix, maxDepth)
 
     // BFS ノード = 「fillShift へ staff が入る」手。子 = staff が空けた現シフトを埋める手。
     // extra = 禁止連続を回避するための追加手（隣接日調整＋サブ連鎖。無ければ null）。

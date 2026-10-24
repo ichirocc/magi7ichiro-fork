@@ -93,7 +93,7 @@ internal object AptFairPolish {
      * 採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定(movable)・禁止連続
      * (makesForbiddenRun)を事前ガード。
      */
-    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -192,7 +192,7 @@ internal object AptFairPolish {
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "AptChain", label(i, fromK)))
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
+            val chain = findCovUChain(p, work, fromK, j, rng, wideC3n, exclude = i,
                 rangeAvoid = { st, fk -> worsensOwnApt(st, fk) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
@@ -325,7 +325,7 @@ internal object AptFairPolish {
      * 拒否するだけ）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定
      * (movable)・禁止連続(makesForbiddenRun)を事前ガード。
      */
-    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -432,7 +432,7 @@ internal object AptFairPolish {
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "FairChain", label(i, fromK)))
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
+            val chain = findCovUChain(p, work, fromK, j, rng, wideC3n, exclude = i,
                 rangeAvoid = { st, fk -> worsensOwnFair(st, fk) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }

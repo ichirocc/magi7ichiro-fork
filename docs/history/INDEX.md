@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P3 の残り（2026-10-24、版なし・出力不変）: `wideC3nBreakDays` を `EngineConfig` の写しに入れ、探索の奥まで引数で渡す（実行中に「探索の強さ」を切り替えてもその実行には効かない）。外部の静的レビューの照合: 差分評価の HARD/SOFT 分離（soft の桁あふれ）は `Evaluator.fullEval` の `check` が 3.336.0 から契約として検査済み＝不具合ではない  → `docs/overhaul_design.md` §6.3
 - 外部の敵対検証（3.725.0）の照合（2026-10-24、版なし）: 重みの 4 箇所一致は確認済みと同じ。指摘 4 件のうち直したのは玉突きパイプラインの終了理由だけ（深い探索が走らなかった焦点を `deep_done` でなく `probe_only` と書く）。BUG-1「2 巡目で予算枯渇＝実質 1 巡」は過大（深い探索の上限は焦点と巡の合計で、2 巡目以降も浅・中の予察と採用は走る。配分を巡ごとに変えるのは探索動学の変更＝測ってから）。BUG-2「深さ 3〜4 の手が出ない」は誤り（`branching=(2,1)` の 3 手目以降は分岐 1 で出る）。BUG-3 は既定値の出所が `EjectionFlags` 1 か所で本番は設定の写しを渡す＝不具合ではない。BUG-4・shallowDepth・holeSoftOnly などの数値は HF77（明示の数値指示＋測定）待ち
 - 全面改修 P6d（2026-10-24、版なし・出力不変）: ViewModel の変更の確認の画面（3 経路）を `MagiViewModelFixSuggestions.kt` へ  → `docs/overhaul_design.md` §6.7
 - 全面改修 P6c（2026-10-24、版なし・出力不変）: ViewModel の「この希望を取り消したら」試算を `MagiViewModelWishTrial.kt` へ  → `docs/overhaul_design.md` §6.7

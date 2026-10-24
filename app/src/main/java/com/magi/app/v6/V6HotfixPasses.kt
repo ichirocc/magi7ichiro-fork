@@ -352,6 +352,7 @@ object TuningTelemetry {
     fun summary(
         nativeOn: Boolean, parityOn: Boolean, softPolishOn: Boolean,
         combineExhaustPairs: Boolean, aptFairSoftTolerance: Boolean, countChainPolish: Boolean,
+        wideC3nBreakDays: Boolean = false,
     ): String {
         fun eff(on: Boolean, n: Int, unit: String): String =
             if (!on) "OFF" else if (n > 0) "ON($n$unit)" else "ON(この実行では観測なし)"
@@ -359,7 +360,7 @@ object TuningTelemetry {
         val calls = wideC3nCalls.get()
         val differed = wideC3nDiffered.get()
         val wide = when {
-            !PolishGate.wideC3nBreakDays -> "OFF"
+            !wideC3nBreakDays -> "OFF"
             calls == 0 -> "ON(この実行では出番なし)"
             differed == 0 -> "ON(${calls}回呼ばれたが既定(前後1日)と同じ範囲＝OFFと差なし)"
             else -> "ON(${calls}回中${differed}回は既定(前後1日)と違う範囲を探索)"
@@ -462,6 +463,8 @@ object V6HotfixPasses {
         val aptFairSoftTolerance: Boolean = false,
         /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
         val countChainEnabled: Boolean = false,
+        /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
+        val wideC3nBreakDays: Boolean = false,
         /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
         val ejection: EjectionFlags = EjectionFlags(),
     )
@@ -712,8 +715,8 @@ object V6HotfixPasses {
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed(PostStages.PERSONAL_LNS) { work ->
             val cap = BudgetShare.upTo(EngineClock.remainingMs(deadlineMs, tPersonalLns), params.personalLnsMaxMs)
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
+            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(wideC3nBreakDays = params.wideC3nBreakDays, maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
+                else PersonalBalanceJointLnsPolish.Config(wideC3nBreakDays = params.wideC3nBreakDays, maxMillis = cap)
             val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
             val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
             if (r1.applied == 0) r1
@@ -884,13 +887,13 @@ object V6HotfixPasses {
             // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
             if (C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work))) {
                 val rC1 = chain.timed(PostStages.C1_SAME_DAY.label + tag, PostStages.C1_SAME_DAY.key) { work ->
-                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs)
+                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
                 }
                 take("c1", rC1)
                 // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
                 rC1.plateau?.let { fresh -> c1Plateau = c1Plateau?.mergedWith(fresh) ?: fresh }
                 take("c1", chain.timed(PostStages.C1_INDEX.label + tag, PostStages.C1_INDEX.key) { work ->
-                    C1RepairOperators.indexChainRepair(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_INDEX, round))
+                    C1RepairOperators.indexChainRepair(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_INDEX, round), wideC3n = params.wideC3nBreakDays)
                 })
             }
             // 時系列 DP＋同日ジョイント再割当（3.254.0 の ablation で一本化）。広域ビームより前に置く（逆順は golden で劣化を実測）。
@@ -901,7 +904,7 @@ object V6HotfixPasses {
                 )
             })
             take("c1", chain.timed(PostStages.C1_BEAM.label + tag, PostStages.C1_BEAM.key) { work ->
-                C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_BEAM, round))
+                C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_BEAM, round), wideC3n = params.wideC3nBreakDays)
             })
             // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
             take("c1", memoTimed(PostStages.C1_EXACT.label + tag, PostStages.C1_EXACT.key) { work, stop ->
@@ -919,19 +922,19 @@ object V6HotfixPasses {
                 })
             }
             take("c3mn玉突き", chain.timed(PostStages.C3MN.label + tag, PostStages.C3MN.key) { work ->
-                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs)
+                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
             })
             take("c3n", chain.timed(PostStages.C3N.label + tag, PostStages.C3N.key) { work ->
-                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs)
+                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
             })
             take("range玉突き", chain.timed(PostStages.RANGE.label + tag, PostStages.RANGE.key) { work ->
-                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs)
+                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
             })
             take("c3run玉突き", chain.timed(PostStages.C3_RUN.label + tag, PostStages.C3_RUN.key) { work ->
-                C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round))
+                C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round), wideC3n = params.wideC3nBreakDays)
             })
             take("c3pattern玉突き", chain.timed(PostStages.C3_PATTERN.label + tag, PostStages.C3_PATTERN.key) { work ->
-                C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3PATTERN, round))
+                C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3PATTERN, round), wideC3n = params.wideC3nBreakDays)
             })
             // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
             take("アンカー窓交換", memoTimed(PostStages.ANCHORED_WINDOW.label + tag, PostStages.ANCHORED_WINDOW.key) { work, stop ->
@@ -962,10 +965,10 @@ object V6HotfixPasses {
                 })
             }
             take("apt玉突き", chain.timed(PostStages.APT.label + tag, PostStages.APT.key) { work ->
-                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
+                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
             }, toleranceFamily = "apt")
             take("fair玉突き", chain.timed(PostStages.FAIR.label + tag, PostStages.FAIR.key) { work ->
-                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
+                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
             }, toleranceFamily = "fair")
             // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()

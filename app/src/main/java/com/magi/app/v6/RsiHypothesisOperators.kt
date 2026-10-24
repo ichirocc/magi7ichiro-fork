@@ -39,6 +39,8 @@ internal object RsiHypothesisOperators {
         state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random,
         // [3.313.0] free repair 群へ締切を通す。既定 `{ false }` ＝既存の直接呼出・テストは挙動不変。
         shouldStop: () -> Boolean = { false },
+        /** 禁止連続の崩し範囲を広げる（実行の [EngineConfig.wideC3nBreakDays]）。 */
+        wideC3n: Boolean = false,
     ): Array<IntArray> {
         val out = base.copy2D()
         val p = cachedProblem(state)
@@ -54,17 +56,17 @@ internal object RsiHypothesisOperators {
             //   （need>0のシフトを埋める設計）で自動的に再修復されるため実害は薄いが、covO/c42/c42s
             //   の過剰・違反ペア解消はrepairの対象外で影響が直接的。順序を「destroyRepairDay×6→
             //   専用free関数」へ統一し、hypothesisの最終状態に専用オペレータの改善が必ず残るようにする。
-            "covU" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng, shouldStop) }
+            "covU" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng, shouldStop, wideC3n) }
             // [3.209.0/covOと同型の穴=c41/c41sがfocusされてもdestroyRepairDayのc41DayMargは副次効果でしか
             //   効かない] markNeed系(needViolations)にしか載らずGLSキック/destroyRepairViolationsのヒントを
             //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
-            "c41" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c41s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true, shouldStop = shouldStop) }
+            "c41" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false, shouldStop = shouldStop, wideC3n = wideC3n) }
+            "c41s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true, shouldStop = shouldStop, wideC3n = wideC3n) }
             // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
             // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
             // 片側を直接動かす専用オペレータへ。
-            "c42" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c42s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop) }
+            "c42" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false, shouldStop = shouldStop, wideC3n = wideC3n) }
+            "c42s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop, wideC3n = wideC3n) }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(DestroyRepairMarginalCost.staffCountPenaltyAt)は既にaptを織込み済みのため、low/high/c2と同じ経路へ合流するだけで
@@ -94,7 +96,7 @@ internal object RsiHypothesisOperators {
             //   専用オペレータ applyCovOFree を新設し、covU chain(applyCovUChains)と対称に配線する。
             //   [3.241.0] destroyRepairDayを先に(順序バグ修正、上記covUコメント参照)＝covOは特にneed<=0
             //   シフト(休等)の過剰が主対象でrepair段階の恩恵が皆無のため、この順序修正の効果が最も直接的。
-            "covO" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng, shouldStop) }
+            "covO" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng, shouldStop, wideC3n) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
@@ -121,7 +123,7 @@ internal object RsiHypothesisOperators {
     //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
     internal fun applyCovUChains(
         state: MagiState, sched: Array<IntArray>, rng: Random,
-        shouldStop: () -> Boolean = { false },
+        shouldStop: () -> Boolean = { false }, wideC3n: Boolean = false,
     ): Int {
         val p = cachedProblem(state)
         if (p.S == 0 || p.T == 0) return 0
@@ -133,7 +135,7 @@ internal object RsiHypothesisOperators {
             for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
             for (k in 0 until p.K) {
                 if (p.covUCell(k, j, cnt[k]) <= 0) continue
-                val chain = findCovUChain(p, sched, k, j, rng) ?: continue
+                val chain = findCovUChain(p, sched, k, j, rng, wideC3n) ?: continue
                 for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
                 applied++
                 // 同日に複数 covU があり得るので当日カウントを再計算。
@@ -168,7 +170,7 @@ internal object RsiHypothesisOperators {
     //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
     internal fun applyCovOFree(
         state: MagiState, sched: Array<IntArray>, rng: Random,
-        shouldStop: () -> Boolean = { false },
+        shouldStop: () -> Boolean = { false }, wideC3n: Boolean = false,
     ): Int {
         val p = cachedProblem(state)
         if (p.S == 0 || p.T == 0) return 0
@@ -194,7 +196,7 @@ internal object RsiHypothesisOperators {
                             if (!p.wishMoveAllowed(i, j, k, m)) continue   // 未反映の希望固定セルは希望へだけ
                             if (p.extBanned(i, j, m)) continue   // 拡張希望の禁止へは置かない
                             if (p.makesForbiddenRun(sched, i, j, m)) {
-                                val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng) ?: continue
+                                val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng, wideC3n) ?: continue
                                 candidates.add(fix + listOf(intArrayOf(i, j, m)))
                             } else {
                                 candidates.add(listOf(intArrayOf(i, j, m)))
@@ -228,7 +230,7 @@ internal object RsiHypothesisOperators {
     //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
     internal fun applyC41Free(
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
-        shouldStop: () -> Boolean = { false },
+        shouldStop: () -> Boolean = { false }, wideC3n: Boolean = false,
     ): Int {
         val p = cachedProblem(state)
         if (p.S == 0 || p.T == 0) return 0
@@ -267,7 +269,7 @@ internal object RsiHypothesisOperators {
                             // 玉突き連鎖版（離脱先を先に適用してから探索＝本人がまだ在籍中に見える誤判定を防ぐ既定の作法）。
                             val oldK = sched[i][j]
                             sched[i][j] = m
-                            val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
+                            val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, wideC3n, exclude = i)
                             sched[i][j] = oldK
                             if (chain != null) candidates.add(listOf(intArrayOf(i, j, m)) + chain)
                         }
@@ -290,7 +292,7 @@ internal object RsiHypothesisOperators {
                         if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
                         candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)))
                         sched[i][j] = c.shiftIdx
-                        val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
+                        val chain = findCovUChain(p, sched, old, j, rng, wideC3n, exclude = i)
                         sched[i][j] = old
                         if (chain != null) candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)) + chain)
                     }
@@ -322,7 +324,7 @@ internal object RsiHypothesisOperators {
     //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
     internal fun applyC42Free(
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
-        shouldStop: () -> Boolean = { false },
+        shouldStop: () -> Boolean = { false }, wideC3n: Boolean = false,
     ): Int {
         val p = cachedProblem(state)
         if (p.S == 0 || p.T == 0) return 0
@@ -344,7 +346,7 @@ internal object RsiHypothesisOperators {
                     out.add(listOf(intArrayOf(i, j, m)))
                     val oldK = sched[i][j]
                     sched[i][j] = m
-                    val chain = findCovUChain(p, sched, fromShift, j, rng, exclude = i)
+                    val chain = findCovUChain(p, sched, fromShift, j, rng, wideC3n, exclude = i)
                     sched[i][j] = oldK
                     if (chain != null) out.add(listOf(intArrayOf(i, j, m)) + chain)
                 }

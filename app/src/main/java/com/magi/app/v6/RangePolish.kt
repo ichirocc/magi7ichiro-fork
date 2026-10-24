@@ -147,7 +147,7 @@ internal object RangePolish {
      * 空く/埋まる側の被覆(covUCell)が悪化する場合は`findCovUChain`で玉突き修復する（C1Polish手B/
      * C3mnPolishと同一パターン）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。
      */
-    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, combineExhaustPairs: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -217,7 +217,7 @@ internal object RangePolish {
                 else recordBlock(target, "不採用", after = rep, before = bestRep)
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
+            val chain = findCovUChain(p, work, fromK, j, rng, wideC3n, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; recordBlock(target, "候補なし"); return false }
             val usedAvoided = chain.any { mv -> exceedsOwnRangeHi(p, work, mv[0], mv[2]) }
@@ -527,7 +527,7 @@ internal object RangePolish {
                                     val key = i to newK
                                     val fix = adjacentFix.getOrPut(key) {
                                         // 隣接日の調整手も拡張希望の禁止へは置かない
-                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng)
+                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng, wideC3n)
                                             ?.takeUnless { f -> f.any { p.extBanned(it[0], it[1], it[2]) } } ?: emptyList()
                                     }
                                     if (fix.isEmpty()) continue

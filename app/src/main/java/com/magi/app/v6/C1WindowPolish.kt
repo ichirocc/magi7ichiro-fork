@@ -162,7 +162,7 @@ internal object C1WindowPolish {
      */
     fun applyC1IndexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L, wideC3n: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -222,7 +222,7 @@ internal object C1WindowPolish {
                     // (b) 旧シフトを抜いて covU 穴が空くなら玉突き連鎖で埋め直す（exclude=本人で自己選択防止）。
                     val cntOldAfter = (0 until p.S).count { trial[it][d] == old }
                     if (old in 0 until p.K && p.covUCell(old, d, cntOldAfter) > 0) {
-                        val chain = findCovUChain(p, trial, old, d, rng, exclude = staff)
+                        val chain = findCovUChain(p, trial, old, d, rng, wideC3n, exclude = staff)
                         if (chain != null && chain.none { p.extBanned(it[0], it[1], it[2]) }) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
                             val repChain = UnifiedViolationChecker.check(state, trial)
@@ -275,7 +275,7 @@ internal object C1WindowPolish {
      * 採否は既存と同じ betterReport(hard→weighted→total) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
      * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
-    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, combineExhaustPairs: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -479,7 +479,7 @@ internal object C1WindowPolish {
                         //   （除外しないと「i が a に戻る」= i の移動そのものを打ち消す退行手をBFSが選びうる）。
                         // c1Pref=c1Deficient: 連鎖の相手選びを「その相手自身のc1不足も一緒に解消するか」で
                         //   優先付け（並べ替えのみ・見つからなければ従来どおり）。
-                        val chain = findCovUChain(p, work, a, j, rng, exclude = i,
+                        val chain = findCovUChain(p, work, a, j, rng, wideC3n, exclude = i,
                             c1Pref = { s2, sh, dy -> c1Deficient(s2, sh, dy) })
                             ?.takeIf { ch -> ch.none { p.extBanned(it[0], it[1], it[2]) } }   // 禁止を含む連鎖は無し扱い
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
@@ -696,7 +696,7 @@ internal object C1WindowPolish {
      */
     fun applyC1BeamPolish(
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, patience: Int = 20,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, patience: Int = 20, wideC3n: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.375.0/ユーザー指示「停滞脱出のログにイテ回数と時間を出す」] 停滞打ち切りの所要時間。
         //   旧: 「steps=22/最良が20手更新されず打ち切り」と手数だけで、その空振りが一瞬なのか
@@ -750,7 +750,7 @@ internal object C1WindowPolish {
                 return w
             }
             w[i][j] = x
-            val chain = findCovUChain(p, w, a0, j, rng, exclude = i,
+            val chain = findCovUChain(p, w, a0, j, rng, wideC3n, exclude = i,
                 c1Pref = { s2, sh, dy -> c1Deficient(w, s2, sh, dy) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) return w
             chain.forEach { mv -> w[mv[0]][mv[1]] = mv[2] }

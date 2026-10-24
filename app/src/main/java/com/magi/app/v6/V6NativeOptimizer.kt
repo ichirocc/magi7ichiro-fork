@@ -401,7 +401,7 @@ object V6NativeOptimizer {
         var resultRep = UnifiedViolationChecker.check(state, resultSched)
         if (resultRep.hard > 0 && (resultRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
             val cand = resultSched.copy2D()
-            val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
+            val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL), wideC3n = options.config.wideC3nBreakDays)
             if (n > 0) {
                 val candRep = UnifiedViolationChecker.check(state, cand)
                 if (better(candRep, resultRep) && p.keepsExtBan(resultSched, cand)) {
@@ -666,6 +666,7 @@ object V6NativeOptimizer {
                         assignment = assignment,
                         seed = roleSeed,
                         shouldStop = shouldStop,
+                        wideC3n = options.config.wideC3nBreakDays,
                     )
                     // 拡張希望の禁止へ置いた入口は採らず、自分の軌道から続ける
                     if (!p.keepsExtBan(trajectory, start)) start = trajectory.copy2D()
@@ -987,6 +988,7 @@ object V6NativeOptimizer {
         assignment: HypothesisEpochAssignment,
         seed: Long,
         shouldStop: () -> Boolean,
+        wideC3n: Boolean,
     ): Array<IntArray> {
         val p = cachedProblem(state)
         val rng = Random(seed)
@@ -1017,7 +1019,7 @@ object V6NativeOptimizer {
                         (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
                         else -> RsiFocusSelection.maxViolatedFamily(rep)
                     }
-                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng, wideC3n = wideC3n)
                 }
                 out
             }
@@ -1041,7 +1043,7 @@ object V6NativeOptimizer {
                         (rep.breakdown["fair"] ?: 0) > 0 -> "fair"
                         else -> "total"
                     }
-                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng, wideC3n = wideC3n)
                 }
                 out
             }
@@ -1856,7 +1858,7 @@ object V6NativeOptimizer {
             focusTrail.add(focus)
             val focusedBefore = bestReport.breakdown[focus] ?: 0
             lastFocus = focus   // [レビュー#5] 次ラウンド頭の HF63 更新へ「このラウンドの投入先」を渡す
-            val hypothesis = RsiHypothesisOperators.rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop)
+            val hypothesis = RsiHypothesisOperators.rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop, wideC3n = options.config.wideC3nBreakDays)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
             var candSched = phase.schedule
