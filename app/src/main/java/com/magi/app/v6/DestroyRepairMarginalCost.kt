@@ -38,10 +38,10 @@ internal object DestroyRepairMarginalCost {
         //   なり発火せず、かつ Evaluator 側もガードを持たない＝既に一致しているので触らない。
         //   apt は `Problem` 構築時に bucket=canDo でガード済み。
         // [3.522.0] low 90→120, apt 1→4。
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 120L
-        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 25L
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * PenaltyWeights.LOW
+        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * PenaltyWeights.HIGH
         val t = p.apt[i][k]
-        if (t >= 0) pen += kotlin.math.abs(n - t).toLong() * 4L
+        if (t >= 0) pen += kotlin.math.abs(n - t).toLong() * PenaltyWeights.APT
         return pen
     }
 
@@ -68,7 +68,7 @@ internal object DestroyRepairMarginalCost {
             acc += (weeklyDevOfBucket(b) - before).toLong()
             b[bucket]--
         }
-        return acc * 2L  // [3.522.0] weekly 1→2
+        return acc * PenaltyWeights.WEEKLY  // [3.522.0] weekly 1→2
     }
 
 
@@ -83,7 +83,7 @@ internal object DestroyRepairMarginalCost {
         counts[i][k] += delta
         val after = p.fairDevOfBucket(g, k, members = false) { x -> counts[x][k] }.total
         counts[i][k] -= delta
-        return (after - before).toLong() * 5L  // [3.522.0] fair 1→2、[3.647.0] 2→5（weeklyMarginalAtと同型で内部適用）
+        return (after - before).toLong() * PenaltyWeights.FAIR  // [3.522.0] fair 1→2、[3.647.0] 2→5（weeklyMarginalAtと同型で内部適用）
     }
 
 

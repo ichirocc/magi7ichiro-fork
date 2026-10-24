@@ -69,10 +69,10 @@ internal object DayAssignmentPolish {
                         // [ソフト研磨・候補生成の重み整合] proxy は目的関数(Evaluator / staffCountPenaltyAt /
                         //   UnifiedViolationChecker)と同一の重みに整合させ、生成候補を真の目的へ寄せる（CLAUDE.md既知）。
                         //   [3.522.0] low 90→120, apt 1→4。採否は従来どおり keep-best(isBetter)が担うため退化なし。
-                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 120L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
+                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) PenaltyWeights.LOW * maxOf(0, lo - x) else 0L) + PenaltyWeights.HIGH * maxOf(0, x - hi)
                         var cost = rangePen(x1) - rangePen(x0)                     // range の限界費用
                         val t = aptTarget(i, k)
-                        if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * 4L  // apt の限界費用
+                        if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * PenaltyWeights.APT  // apt の限界費用
                         cost
                     }
                 }
@@ -157,10 +157,10 @@ internal object DayAssignmentPolish {
                             val lo = p.rangeLo[i][k]
                             val hi = V6HotfixPasses.effectiveHi(p, i, k)
                             // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy。[3.522.0] low/apt/weekly 90/1/1→120/4/2。
-                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 120L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
+                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) PenaltyWeights.LOW * maxOf(0, lo - x) else 0L) + PenaltyWeights.HIGH * maxOf(0, x - hi)
                             var cost = rangePen(x1) - rangePen(x0)
                             val t = aptTarget(i, k)
-                            if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * 4L
+                            if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * PenaltyWeights.APT
                             // [3.345.0] weekly 限界費用: 当日を k にしたときの、職員 i の**シフト k の**曜日
                             //   バケットの L1 偏差変化。当日の元シフトを失う項は行(i)ごとの定数＝
                             //   割当の argmin を変えないため省く（列ごとに効く項だけを費用に入れる）。
@@ -172,7 +172,7 @@ internal object DayAssignmentPolish {
                                 b[wdj] += 1
                                 val devAfter = weeklyDevOfBucket(b)
                                 b[wdj] += had - 1                              // 復元
-                                cost += (devAfter - devBefore).toLong() * 2L
+                                cost += (devAfter - devBefore).toLong() * PenaltyWeights.WEEKLY
                             }
                             cost
                         }

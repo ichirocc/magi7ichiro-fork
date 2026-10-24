@@ -67,33 +67,7 @@ WEIGHT_LINT_EXEMPT = {
         (("covU",), "重みではない。fmtIter の「万」の桁の閾値が covU(10000) と同値なだけ"),
     ("app/src/main/java/com/magi/app/v6/V6FinalPort.kt", "format(n / 10_000)"):
         (("covU",), "重みではない。fmtIter の「万」への換算"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 120L"):
-        (("low",), "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "abs(n - t).toLong() * 4L"):
-        (("apt",), "apt(4) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - count).toLong() * 120L"):
-        (("low",), "low(120) の複製。weights.md 明記の既知重複"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(count - hiLim).toLong() * 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - c).toLong() * 120L"):
-        (("low",), "low(120) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(c - hi).toLong() * 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", "fun rangePen(x: Int) = "):
-        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複", 2),
-    # [dayPenalty] covU(10000)/covO(10) の候補見積り。C1TemporalFlowPolish.kt・DayAssignmentPolish.kt
-    #   と同じ「ホットパスで MirrorKeys.weightOf を避ける」設計だが、weights.md の destroy-repair/polish
-    #   系チェックリストには covU/covO の組までは列挙されていない（low/high の組だけが明記）。
-    #   4ファイルで完全に同一の1行関数（[3.522.0] タグ＝covO の重み改定と同時に更新済み＝ドリフトなし）
-    #   ＝新規に紛れ込んだ複製ではなく既存の一貫した実装。weights.md のチェックリストへの追記は別途検討。
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "(lo - c).toLong() * 120L"):
-        (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数のhigh(25)・apt(4)と同型）"),
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
+    # [3.726 前・2026-10-24] destroy-repair/polish 系の重みの写しは PenaltyWeights（MirrorKeys.weights を初期化時に 1 回読む）へ移した＝ここに許可は要らない。
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
     ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", "50 + deficit, GoalKind.RANGE_LOW"):
         ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
@@ -107,9 +81,9 @@ WEIGHT_LINT_EXEMPT = {
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
         "KDoc参照）。MirrorKeys由来ではない（200がhigh=25と一致しないことがその証拠）。120がlow(120)と"
         "偶然一致しているだけ"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 50L == 0L"):
+    ("app/src/main/java/com/magi/app/v6/AlnsSearch.kt", "iter % 50L == 0L"):
         ((), "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 120L == 0L"):
+    ("app/src/main/java/com/magi/app/v6/AlnsSearch.kt", "iter % 120L == 0L"):
         ((), "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致"),
 }
 
