@@ -423,6 +423,7 @@ P4e（終段: 玉突き、最終番兵の前）。各コミットで、段の順
 ### 6.6 P5 ConstraintCatalog
 族ごとにコミットを分けます。順は HARD 6 族 → 個人回数（low・high）→ c1・c2 → c3 系 → グループ（c41・c42・c41s・c42s）→ covO → 分布（fair・apt・weekly）。
 HARD を先にして、診断と修正提案の食い違いを早く潰します。合格: G1・G3、チェッカーと診断のスナップショット一致。
+- **P5a 済**（2026-10-24）: `ConstraintCatalog`（21 族・必須・位置の空間 CELL/COUNT/NEED/DIST、重みは `MirrorKeys.weights` を読むだけ）と T-11（`ConstraintCatalogTest`＝MirrorKeys・チェッカーの記録先との一致）。画面の「違反の場所一覧」（`breakdownLocations`）の族の場合分けを表の空間から引く形へ。残りの消費者（診断・修復・セルのシート）は族ごとに移す。
 
 ### 6.7 P6 ViewModel の分割
 `MagiViewModel.kt` を、C# の partial と同じ名前・同じ境界で分けます:

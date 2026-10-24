@@ -1593,28 +1593,29 @@ internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, 
     fun needHits(target: String): List<String> =
         if (ui.needFamilies.isNotEmpty()) ui.needFamilies.entries.filter { target in it.value }.map { it.key }
         else ui.needViolations.entries.filter { it.value == target }.map { it.key }
-    return when (famKey) {
-        "low", "high", "c2" -> countHits(want).mapNotNull {
+    // 位置の空間は族の表（ConstraintCatalog、全面改修 P5）から引く。apt だけは不足/超過の 2 クラスで記録される。
+    val space = com.magi.app.v6.ConstraintCatalog.space(famKey)
+    return when {
+        famKey == "apt" -> (countHits("vio-aptLow") + countHits("vio-aptHigh")).distinct().mapNotNull {
             val p = it.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
-        // 適切回数(apt) は不足=vio-aptLow / 超過=vio-aptHigh の2クラスで countViolations(i,k) に入る。
-        "apt" -> (countHits("vio-aptLow") + countHits("vio-aptHigh")).distinct().mapNotNull {
+        space == com.magi.app.v6.KeySpace.COUNT -> countHits(want).mapNotNull {
             val p = it.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
-        "covU", "covO", "c41", "c41s" -> needHits(want).mapNotNull {
+        space == com.magi.app.v6.KeySpace.NEED -> needHits(want).mapNotNull {
             val p = it.split(","); val k = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
             if (k == null || j == null) null else ("${dayMD(ui.startDate, j)} 「${sym(k)}」" to null)
         }
         // [場所表示] fair/weekly はセル単位でなく職員×シフト単位の偏り。distLocations から整形。
         // [3.345.0] weekly も職員×シフト（旧: 職員のみ）。休も1シフトとして出る。
-        "weekly" -> (ui.distLocations["weekly"] ?: emptyList()).mapNotNull { e ->
+        famKey == "weekly" -> (ui.distLocations["weekly"] ?: emptyList()).mapNotNull { e ->
             val i = e.getOrNull(0) ?: return@mapNotNull null; val k = e.getOrNull(1) ?: return@mapNotNull null
             val dev = e.getOrNull(2) ?: 0
             "${nm(i)} 「${sym(k)}」（曜日の偏り ${dev}）" to i
         }
-        "fair" -> (ui.distLocations["fair"] ?: emptyList()).mapNotNull { e ->
+        famKey == "fair" -> (ui.distLocations["fair"] ?: emptyList()).mapNotNull { e ->
             val i = e.getOrNull(0) ?: return@mapNotNull null; val k = e.getOrNull(1) ?: return@mapNotNull null; val dev = e.getOrNull(2) ?: 0
             "${nm(i)} 「${sym(k)}」（偏り ${dev}）" to i
         }
