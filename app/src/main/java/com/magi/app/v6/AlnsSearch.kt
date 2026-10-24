@@ -24,12 +24,10 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 import kotlin.math.PI
 import java.util.Random
-import com.magi.app.v6.V6NativeOptimizer.GLS_DECAY_EVERY
-import com.magi.app.v6.V6NativeOptimizer.GLS_TRIGGER
-import com.magi.app.v6.V6NativeOptimizer.actualSeed
-import com.magi.app.v6.V6NativeOptimizer.better
-import com.magi.app.v6.V6NativeOptimizer.extBanInDiff
-import com.magi.app.v6.V6NativeOptimizer.nowMs
+import com.magi.app.v6.SearchCommon.actualSeed
+import com.magi.app.v6.SearchCommon.better
+import com.magi.app.v6.SearchCommon.extBanInDiff
+import com.magi.app.v6.SearchCommon.nowMs
 
 /** V5（SA の多点）と ALNS（破壊と修復のチェーン、全面改修 P10b で V6NativeOptimizer から分けた）。探索の意味論は移す前と同じ。 */
 internal object AlnsSearch {
@@ -524,4 +522,8 @@ internal object AlnsSearch {
         if (better(baseReport, globalReport)) { globalBest = baseBest; globalReport = baseReport }
         return V6OptimizerResult(globalBest, globalReport.copy(logs = logs + globalReport.logs), V6Algorithm.ALNS, logs, itersTotal, nowMs() - started)
     }
+
+    /** [GLS移植] 最良未更新がこの反復数を超えたら GLS penalty を強化（Web版 glsTrigger 既定200）。 */
+    internal const val GLS_TRIGGER = 200L
+    internal const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 }

@@ -25,7 +25,11 @@ import kotlin.math.sqrt
 import kotlin.math.PI
 import java.util.Random
 import com.magi.app.v6.SearchPolish.PolishResult
+import com.magi.app.v6.SearchCommon.actualSeed
+import com.magi.app.v6.SearchCommon.better
 import com.magi.app.v6.SearchPolish.hf80PostPolish
+import com.magi.app.v6.PortfolioSearch.hypothesisStartFor
+import com.magi.app.v6.SearchCommon.nowMs
 import com.magi.app.v6.PortfolioSearch.runAdaptivePortfolio
 import com.magi.app.v6.AlnsSearch.runAlns
 import com.magi.app.v6.PortfolioSearch.runMultiWorker
@@ -104,60 +108,8 @@ data class V6OptimizerResult(
 }
 
 object V6NativeOptimizer {
-    /** [GLS移植] 最良未更新がこの反復数を超えたら GLS penalty を強化（Web版 glsTrigger 既定200）。 */
-    internal const val GLS_TRIGGER = 200L
-    internal const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
-    /**
-     * [3.266.0/hypothesis basin diversity] 非ベースライン仮説に構造的に異なる吸引域を与える。
-     * W0/W4 は現行盤面の完全コピーのまま＝既存の安全フロアは維持される。
-     */
-    internal fun hypothesisStartFor(
-        state: MagiState,
-        base: Array<IntArray>,
-        index: Int,
-        seed: Long,
-    ): Array<IntArray> {
-        val out = base.copy2D()
-        val plan = HypothesisDiversityPolicy.startPlanFor(index)
-        if (plan.mode == HypothesisStartMode.BASELINE) return out
-        val p = cachedProblem(state)
-        val rng = Random(actualSeed(seed) xor 0xD1A5EEDL xor
-            (index.toLong() * -0x61c8864680b583ebL))
-        repeat(plan.intensity) {
-            when (plan.mode) {
-                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
-                HypothesisStartMode.MIXED_REPAIR -> {
-                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
-                }
-                HypothesisStartMode.BASELINE -> Unit
-            }
-        }
-        // 拡張希望の禁止へ置いた入口は採らない（入口を base に戻し、下の kick で離す）
-        if (!p.keepsExtBan(base, out)) for (i in out.indices) base[i].copyInto(out[i])
-        if (RoleDiversityHelpers.scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
-        return out
-    }
 
-    internal fun forceDiverseKick(p: Problem, out: Array<IntArray>, rng: Random, target: Int) {
-        if (p.S == 0 || p.T == 0) return
-        val touched = HashSet<Long>()
-        var changed = 0
-        var attempts = 0
-        val maxAttempts = max(32, p.S * p.T * 4)
-        while (changed < target && attempts++ < maxAttempts) {
-            val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
-            val key = i.toLong() * max(1, p.T) + j
-            if (!touched.add(key) || p.wishLocked(i, j)) continue
-            val old = out[i][j]
-            val alternatives = p.allowedShiftsForStaff(i).filter { it != old && !p.extBanned(i, j, it) }
-            if (alternatives.isEmpty()) continue
-            out[i][j] = alternatives[rng.nextInt(alternatives.size)]
-            changed++
-        }
-    }
 
 
     /**
@@ -329,18 +281,6 @@ object V6NativeOptimizer {
     ): Array<IntArray> = hf80PostPolish(state, cachedProblem(state).withManualPins(schedule), max(1, seconds), seed, shouldStop).schedule
 
 
-    /** diffBuf の先頭 n セルのうち、cand の値が拡張希望の禁止に当たるものがあるか。 */
-    internal fun extBanInDiff(p: Problem, cand: Array<IntArray>, diffBuf: IntArray, n: Int): Boolean {
-        for (idx in 0 until n) {
-            val flat = diffBuf[idx]; val i = flat / p.T; val j = flat % p.T
-            if (p.extBanned(i, j, cand[i][j])) return true
-        }
-        return false
-    }
 
-    // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
-    internal fun better(a: ViolationReport, b: ViolationReport): Boolean = betterReport(a, b)
 
-    internal fun nowMs(): Long = System.nanoTime() / 1_000_000L
-    internal fun actualSeed(seed: Long): Long = if (seed == 0L) System.nanoTime() else seed
 }

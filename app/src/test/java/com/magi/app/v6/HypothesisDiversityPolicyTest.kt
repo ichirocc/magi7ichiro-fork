@@ -64,7 +64,7 @@ class HypothesisDiversityPolicyTest {
         val st = state()
         val base = st.schedule.toIntArray2D()
         val starts = (0 until 8).map { i ->
-            V6NativeOptimizer.hypothesisStartFor(st, base, i, 1000L + i)
+            PortfolioSearch.hypothesisStartFor(st, base, i, 1000L + i)
         }
         assertTrue(base.contentDeepEquals(starts[0]))
         assertTrue(base.contentDeepEquals(starts[4]))
@@ -77,8 +77,8 @@ class HypothesisDiversityPolicyTest {
     fun startGenerationIsDeterministicForSameRoleAndSeed() {
         val st = state()
         val base = st.schedule.toIntArray2D()
-        val a = V6NativeOptimizer.hypothesisStartFor(st, base, 7, 12345L)
-        val b = V6NativeOptimizer.hypothesisStartFor(st, base, 7, 12345L)
+        val a = PortfolioSearch.hypothesisStartFor(st, base, 7, 12345L)
+        val b = PortfolioSearch.hypothesisStartFor(st, base, 7, 12345L)
         assertTrue(a.contentDeepEquals(b))
     }
 

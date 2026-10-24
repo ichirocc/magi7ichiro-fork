@@ -24,9 +24,9 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 import kotlin.math.PI
 import java.util.Random
-import com.magi.app.v6.V6NativeOptimizer.better
-import com.magi.app.v6.V6NativeOptimizer.extBanInDiff
-import com.magi.app.v6.V6NativeOptimizer.nowMs
+import com.magi.app.v6.SearchCommon.better
+import com.magi.app.v6.SearchCommon.extBanInDiff
+import com.magi.app.v6.SearchCommon.nowMs
 
 /**
  * 探索直後の研磨（全面改修 P10c）: 探索器が返した盤面を、差分評価を生スコア源にして局所研磨する（hard を増やさない SA、最後に入力と番兵比較）。

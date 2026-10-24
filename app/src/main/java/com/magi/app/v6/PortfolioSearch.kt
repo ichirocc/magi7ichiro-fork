@@ -24,11 +24,9 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 import kotlin.math.PI
 import java.util.Random
-import com.magi.app.v6.V6NativeOptimizer.actualSeed
-import com.magi.app.v6.V6NativeOptimizer.better
-import com.magi.app.v6.V6NativeOptimizer.forceDiverseKick
-import com.magi.app.v6.V6NativeOptimizer.hypothesisStartFor
-import com.magi.app.v6.V6NativeOptimizer.nowMs
+import com.magi.app.v6.SearchCommon.actualSeed
+import com.magi.app.v6.SearchCommon.better
+import com.magi.app.v6.SearchCommon.nowMs
 import com.magi.app.v6.AlnsSearch.runAlns
 import com.magi.app.v6.RsiSearch.runRsi
 import com.magi.app.v6.RsiSearch.runRsiPlus
@@ -865,5 +863,55 @@ internal object PortfolioSearch {
             "解間距離=${pairDistances.minOrNull()}..${pairDistances.maxOrNull()}セル"
         val verifyLog = MirrorLog(tag = "仮説検証", message = "各仮説 ${results.size} 本の結果: $perHyp / 相異なる解=${distinctSols}件 / $distanceNote / 他の案として保持=${OptimizerRuntime.lastAlternatives.size}件")
         best.copy(phaseLogs = best.phaseLogs + extra + verifyLog, iterations = totalIters)
+    }
+
+    /**
+     * [3.266.0/hypothesis basin diversity] 非ベースライン仮説に構造的に異なる吸引域を与える。
+     * W0/W4 は現行盤面の完全コピーのまま＝既存の安全フロアは維持される。
+     */
+    internal fun hypothesisStartFor(
+        state: MagiState,
+        base: Array<IntArray>,
+        index: Int,
+        seed: Long,
+    ): Array<IntArray> {
+        val out = base.copy2D()
+        val plan = HypothesisDiversityPolicy.startPlanFor(index)
+        if (plan.mode == HypothesisStartMode.BASELINE) return out
+        val p = cachedProblem(state)
+        val rng = Random(actualSeed(seed) xor 0xD1A5EEDL xor
+            (index.toLong() * -0x61c8864680b583ebL))
+        repeat(plan.intensity) {
+            when (plan.mode) {
+                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                HypothesisStartMode.MIXED_REPAIR -> {
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                }
+                HypothesisStartMode.BASELINE -> Unit
+            }
+        }
+        // 拡張希望の禁止へ置いた入口は採らない（入口を base に戻し、下の kick で離す）
+        if (!p.keepsExtBan(base, out)) for (i in out.indices) base[i].copyInto(out[i])
+        if (RoleDiversityHelpers.scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
+        return out
+    }
+    internal fun forceDiverseKick(p: Problem, out: Array<IntArray>, rng: Random, target: Int) {
+        if (p.S == 0 || p.T == 0) return
+        val touched = HashSet<Long>()
+        var changed = 0
+        var attempts = 0
+        val maxAttempts = max(32, p.S * p.T * 4)
+        while (changed < target && attempts++ < maxAttempts) {
+            val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
+            val key = i.toLong() * max(1, p.T) + j
+            if (!touched.add(key) || p.wishLocked(i, j)) continue
+            val old = out[i][j]
+            val alternatives = p.allowedShiftsForStaff(i).filter { it != old && !p.extBanned(i, j, it) }
+            if (alternatives.isEmpty()) continue
+            out[i][j] = alternatives[rng.nextInt(alternatives.size)]
+            changed++
+        }
     }
 }
