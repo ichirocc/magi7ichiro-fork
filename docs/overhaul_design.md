@@ -428,6 +428,7 @@ P4e（終段: 玉突き、最終番兵の前）。各コミットで、段の順
 HARD を先にして、診断と修正提案の食い違いを早く潰します。合格: G1・G3、チェッカーと診断のスナップショット一致。
 - **P5a 済**（2026-10-24）: `ConstraintCatalog`（21 族・必須・位置の空間 CELL/COUNT/NEED/DIST、重みは `MirrorKeys.weights` を読むだけ）と T-11（`ConstraintCatalogTest`＝MirrorKeys・チェッカーの記録先との一致）。画面の「違反の場所一覧」（`breakdownLocations`）の族の場合分けを表の空間から引く形へ。残りの消費者（診断・修復・セルのシート）は族ごとに移す。
 - **P5b 済**（2026-10-24、出力不変）: HARD 族。`ConstraintCatalog.hardKeys`（必須 6 族）・`hardCellKeys`（セルに記録される必須 5 族）を足し、各所が持っていた同じ組の写しを表から引く形へ（`C1EjectionChainPolish.HARD_FAMILIES`・セルのシートの固定の注意 `pinRegisterHint`・確認一覧の「必須」印）。T-11 で旧の組と一致を確認。
+- **P5c 済**（2026-10-24、出力不変）: 回数（low・high・apt・c2）と偏り（fair・weekly）。`countKeys`・`distKeys`・`keysIn` を足し、E7 フィルタの「回数」バケツ・バケツ外の族（`VioBuckets`）と RSI の職員単位の破壊の分岐（`RsiHypothesisOperators`）を表から引く。
 
 ### 6.7 P6 ViewModel の分割
 `MagiViewModel.kt` を、C# の partial と同じ名前・同じ境界で分けます:

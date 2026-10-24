@@ -32,6 +32,9 @@ import com.magi.app.model.MagiState
  * に移るため無修飾のまま）。
  */
 internal object RsiHypothesisOperators {
+    /** 職員単位の破壊（destroyRepairStaff）を当てる族＝回数と偏り（全面改修 P5c、ConstraintCatalog から）。 */
+    private val COUNT_OR_DIST = ConstraintCatalog.keysIn(KeySpace.COUNT, KeySpace.DIST)
+
     internal fun rsiGenerateHypothesis(
         state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random,
         // [3.313.0] free repair 群へ締切を通す。既定 `{ false }` ＝既存の直接呼出・テストは挙動不変。
@@ -80,7 +83,7 @@ internal object RsiHypothesisOperators {
             //   total不変のまま予算を使い切っていた（runV5の入力比番兵はhypothesis自体との比較のため
             //   この過大摂動を防げない）。destroyRepairDay基準(6回×S人ぶんのセル変化)に総攪乱セル数を
             //   揃えるよう reps を動的計算する（S>=T のデータでは reps>=6 相当まで許容＝挙動退化なし）。
-            "low", "high", "c2", "apt", "weekly", "fair" -> {
+            in COUNT_OR_DIST -> {
                 repeat(DestroyRepairMarginalCost.destroyRepairStaffReps(p.S, p.T)) { DestroyRepairOperators.destroyRepairStaff(state, out, rng) }
             }
             // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に

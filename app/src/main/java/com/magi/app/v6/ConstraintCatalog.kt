@@ -22,6 +22,13 @@ internal object ConstraintCatalog {
     }
     private val byKey = all.associateBy { it.key }
 
+    /** 回数の族（職員×シフトの回数＝"i,k"）。 */
+    val countKeys: Set<String> = keysIn(KeySpace.COUNT)
+    /** 偏りの族（場所の表を持たない）。 */
+    val distKeys: Set<String> = keysIn(KeySpace.DIST)
+
+    fun keysIn(vararg spaces: KeySpace): Set<String> = all.filter { it.space in spaces }.map { it.key }.toSet()
+
     /** 必須の族。 */
     val hardKeys: Set<String> = all.filter { it.hard }.map { it.key }.toSet()
     /** 必須でセルに記録される族（人員不足を除く 5 族）。 */

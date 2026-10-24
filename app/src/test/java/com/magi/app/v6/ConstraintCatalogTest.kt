@@ -17,6 +17,9 @@ class ConstraintCatalogTest {
         // P5b: 消費者が持っていた必須の族の組と同じ（C1EjectionChainPolish・セルのシート・確認一覧）。
         assertEquals(setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish"), ConstraintCatalog.hardKeys)
         assertEquals(setOf("c3n", "c3w", "pref", "groupViol", "extWish"), ConstraintCatalog.hardCellKeys)
+        // P5c: 回数・偏りの族（E7 フィルタの「回数」・バケツ外、RSI の職員単位の破壊）。
+        assertEquals(setOf("low", "high", "apt", "c2"), ConstraintCatalog.countKeys)
+        assertEquals(setOf("fair", "weekly"), ConstraintCatalog.distKeys)
     }
 
     /** チェッカーが記録した位置の族が、表の空間と同じ表（セル・回数・人数）に入っている（6 fixture）。 */

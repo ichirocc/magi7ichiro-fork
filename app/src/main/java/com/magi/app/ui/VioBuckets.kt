@@ -20,7 +20,7 @@ internal val vioBuckets: List<VioBucket> = listOf(
     VioBucket("need", "人員", setOf("covU", "covO")),
     VioBucket("pref", "希望", setOf("pref", "extWish")),
     VioBucket("seq", "並び", setOf("c3", "c3n", "c3m", "c3mn", "c3w")),
-    VioBucket("count", "回数", setOf("low", "high", "apt", "c2")),
+    VioBucket("count", "回数", com.magi.app.v6.ConstraintCatalog.countKeys),
     VioBucket("group", "グループルール", setOf("groupViol", "c41", "c42", "c41s", "c42s")),
     VioBucket("window", "期間の制約", setOf("c1")),
 )
@@ -35,7 +35,7 @@ internal val vioBuckets: List<VioBucket> = listOf(
  * どちらにも入れ忘れると `bucketOfFamily` が null を返し、E7 フィルタで**常に表示**へ静かに落ちる
  * （例外も警告も出ない）。`VioBucketsTest` がこの一致を両方向で固定する。
  */
-internal val vioBucketlessFamilies: Set<String> = setOf("fair", "weekly")
+internal val vioBucketlessFamilies: Set<String> = com.magi.app.v6.ConstraintCatalog.distKeys
 
 /** vio-class（"vio-covU"/"vio-aptLow" 等）→ 族キー。aptLow/aptHigh は apt に畳む。 */
 internal fun familyOfVioClass(cls: String): String =
