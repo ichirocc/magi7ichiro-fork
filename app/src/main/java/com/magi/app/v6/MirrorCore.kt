@@ -381,10 +381,12 @@ object UnifiedViolationChecker {
             }
         }
 
-        checkC3Family(p, s, p.cons3, "c3", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3n, "c3n", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3m, "c3m", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3mn, "c3mn", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
+        // 並びの窓の照合に使う職員×シフトの勤務日ビット（4 族で共有、T≤64 で盤面が揃っているときだけ）。
+        val c3Masks = if (!forceScalarC3 && (p.cons3n.isNotEmpty() || p.cons3mn.isNotEmpty() || p.cons3.isNotEmpty() || p.cons3m.isNotEmpty()) && C3nBitScan.usable(p) && s.size >= p.S && (0 until p.S).all { s[it].size >= p.T }) c3RowMasks(p, s) else null
+        checkC3Family(p, s, c3Masks, p.cons3, "c3", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3n, "c3n", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3m, "c3m", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3mn, "c3mn", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
 
         // [3.542.0] 希望の前日に禁止(c3w, HARD)。前日側のセル（動かせる側）を違反箇所にする。
         if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T) {
@@ -561,9 +563,23 @@ object UnifiedViolationChecker {
         }
     }
 
+    /** 職員 i・シフト k の勤務日ビットを [i * K + k] に並べた 1 本の配列（範囲外のセルはどこにも立てない）。 */
+    private fun c3RowMasks(p: Problem, s: Array<IntArray>): LongArray {
+        val out = LongArray(p.S * p.K)
+        for (i in 0 until p.S) {
+            val row = s[i]; val base = i * p.K
+            for (j in 0 until p.T) { val k = row[j]; if (k in 0 until p.K) out[base + k] = out[base + k] or (1L shl j) }
+        }
+        return out
+    }
+
+    /** テスト専用: 並びの窓の照合をスカラーの走査に固定する（ビット経路との一致の検査に使う）。 */
+    @Volatile internal var forceScalarC3: Boolean = false
+
     private fun checkC3Family(
         p: Problem,
         schedule: Array<IntArray>,
+        masks: LongArray?,
         list: List<C3>,
         key: String,
         forbidden: Boolean,
@@ -600,6 +616,27 @@ object UnifiedViolationChecker {
                             r = 0; runStart = -1
                         }
                         j++
+                    }
+                }
+                continue
+            }
+            // 窓の照合は職員×シフトの勤務日ビットの AND と popcount で（T≤64・シフトが範囲内のとき）。窓の開始日の昇順に
+            //   inc/mark を呼ぶので、数も印の順もスカラーの走査と同じ。`C3FamilyBitTest` が両者の一致を固定する。
+            if (masks != null && seq.all { it in 0 until p.K }) {
+                val kk = p.K
+                val n = p.T - d + 1
+                val starts = if (n >= 64) -1L else (1L shl n) - 1
+                for (i in 0 until p.S) {
+                    val base = i * kk
+                    var rest = -1L
+                    for (l in 1 until d) rest = rest and (masks[base + seq[l]] ushr l)
+                    val first = masks[base + seq[0]] and starts
+                    var fires = if (forbidden) first and rest else first and rest.inv()
+                    while (fires != 0L) {
+                        val j = java.lang.Long.numberOfTrailingZeros(fires)
+                        fires = fires and (fires - 1)
+                        inc(key, 1)
+                        if (forbidden) { for (l in 0 until d) mark(i, j + l, key) } else mark(i, j, key)
                     }
                 }
                 continue

@@ -411,14 +411,16 @@ class Problem(val state: MagiState) {
             if (d == 0 || d > T) continue
             val sLo = (j - d + 1).coerceAtLeast(0)
             val sHi = j.coerceAtMost(T - d)
+            // 窓が日 j を含むので、seq[j - s] が newK の窓だけが完全一致しうる。残りの日は最初の不一致で打ち切る（判定は不変）。
             var s = sLo
             while (s <= sHi) {
-                var z = 0
-                for (l in 0 until d) {
-                    val v = if (s + l == j) newK else schedule[i][s + l]
-                    if (v == seq[l]) z++
+                if (seq[j - s] == newK) {
+                    var all = true
+                    for (l in 0 until d) {
+                        if (s + l != j && schedule[i][s + l] != seq[l]) { all = false; break }
+                    }
+                    if (all) return true
                 }
-                if (z == d) return true
                 s++
             }
         }
