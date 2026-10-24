@@ -1064,13 +1064,6 @@ internal fun restOverIntro(allZero: Boolean): List<String> = listOfNotNull(
 internal fun restOverRow(ui: UiState, k: Int, j: Int, need: Pair<Int, Int>?): String =
     "${DayText.full(ui.startDate, j)}　休み ${ui.schedule.count { it.getOrNull(j) == k }}人／適正 " + (need?.let { "${it.second}人" } ?: "未設定")
 
-/** 日の人員のシートで、過不足のある勤務が 2 つ以上のときの問い。 */
-internal fun dayPickHeading(marks: List<CoverageMark>): String = when {
-    marks.all { it.under } -> "どの勤務の不足を確認しますか？"
-    marks.none { it.under } -> "どの勤務の過剰を確認しますか？"
-    else -> "どの勤務の過不足を確認しますか？"
-}
-
 /** 選ぶ行: 「Aア　配置 0人／必要 1人　1人不足」。 */
 internal fun dayPickRow(ui: UiState, j: Int, m: CoverageMark, need: Pair<Int, Int>?): String {
     val sym = ui.shiftSymbols.getOrNull(m.shift) ?: "${m.shift}"

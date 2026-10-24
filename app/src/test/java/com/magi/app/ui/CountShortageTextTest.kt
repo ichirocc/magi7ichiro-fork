@@ -110,8 +110,6 @@ class CountShortageTextTest {
 
     @Test fun dayPickNamesEachShiftWithItsGap() {
         val u = UiState(shiftSymbols = listOf("休", "A", "B"), schedule = schedule)
-        assertEquals("どの勤務の不足を確認しますか？", dayPickHeading(listOf(CoverageMark(1, true), CoverageMark(2, true))))
-        assertEquals("どの勤務の過不足を確認しますか？", dayPickHeading(listOf(CoverageMark(1, true), CoverageMark(2, false))))
         assertEquals("A　配置 0人／必要 1人　1人不足", dayPickRow(u, 3, CoverageMark(1, true), 1 to 1))
         assertEquals("B　配置 1人／適正 0人　1人多い", dayPickRow(u, 3, CoverageMark(2, false), 0 to 0))
     }

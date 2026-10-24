@@ -1671,7 +1671,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
             .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${DayText.full(ui.startDate, d)} ${holidayName[d]}" } else Modifier)
-            .then(if (covMarks.isNotEmpty()) Modifier.clickable(onClickLabel = "人員の内訳") { daySheet = d } else Modifier),
+            .clickable(onClickLabel = DAY_DETAIL_OPEN) { daySheet = d },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
             // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
@@ -1818,23 +1818,37 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
     daySheet?.let { j ->
         val marks = vs.coverageMarks.getOrNull(j).orEmpty()
-        // 2 つ以上の勤務に過不足があれば、どれを直すかを選んでから案を探す（2026-10-14 利用者レビュー: 先頭の勤務だけで探し、
-        //   どの不足を直す案か分からなかった）。1 つならそのまま探す。
+        val rows = remember(ui.schedule, ui.shiftSymbols, j, cv) { daySlotRows(ui.schedule, ui.shiftSymbols, j) { k, d -> cv?.needCellLimits(k, d) } }
+        // 過不足が 1 つだけならそのまま案を探す。2 つ以上なら行の「変更案を見る」で選ぶ（2026-10-14 利用者レビュー: どの不足を直す案か分からなかった）。
         var picked by remember(j) { mutableStateOf(marks.singleOrNull()?.shift) }
-        GridMarkDialog("${DayText.full(ui.startDate, j)}の人員", if (marks.size >= 2) emptyList() else dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), empty = marks.isEmpty(), onDismiss = { daySheet = null }) {
-            if (marks.size >= 2) {
-                Text(dayPickHeading(marks), style = MaterialTheme.typography.bodyMedium)
-                marks.forEach { m ->
-                    val row = dayPickRow(ui, j, m, cv?.needCellLimits(m.shift, j))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == m.shift) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
-                        if (picked == m.shift) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        else MagiTextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
+        GridMarkDialog(DayText.full(ui.startDate, j), emptyList(), empty = false, onDismiss = { daySheet = null }) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                dayStep(j, -1, days)?.let { p -> MagiTextButton(onClick = { daySheet = p }, modifier = Modifier.heightIn(min = 48.dp)
+                    .semantics { contentDescription = "前の日 ${DayText.full(ui.startDate, p)}" }) { Text("‹ ${DayText.short(ui.startDate, p)}") } } ?: Spacer(Modifier)
+                dayStep(j, 1, days)?.let { n -> MagiTextButton(onClick = { daySheet = n }, modifier = Modifier.heightIn(min = 48.dp)
+                    .semantics { contentDescription = "次の日 ${DayText.full(ui.startDate, n)}" }) { Text("${DayText.short(ui.startDate, n)} ›") } }
+            }
+            rows.forEach { r ->
+                val markOf = marks.firstOrNull { it.shift == r.shift }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(r.line, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
+                        fontWeight = if (r.state == DaySlotState.UNDER || r.state == DaySlotState.OVER) FontWeight.Bold else FontWeight.Normal,
+                        color = when (r.state) { DaySlotState.UNDER -> cs.error; DaySlotState.OVER -> ensureReadable(cs.surface, vioSoftColor); else -> cs.onSurface })
+                    if (markOf != null && marks.size >= 2) {
+                        if (picked == r.shift) Text("選択中", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                        else MagiTextButton(onClick = { picked = r.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
+                    }
+                }
+                if (r.staff.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    r.staff.forEach { i ->
+                        MagiTextButton(onClick = { daySheet = null; onCellClick(i, j) }, modifier = Modifier.heightIn(min = 48.dp)
+                            .semantics { contentDescription = "${ui.staffNames.getOrNull(i) ?: ""} ${r.symbol}、セルを開く" }) {
+                            Text(ui.staffNames.getOrNull(i) ?: "職員${i + 1}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
-            if (marks.size >= 2) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { daySheet = null; fixNav.onDay(j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${DayText.short(ui.startDate, j)}の勤務を見る") }
+            if (marks.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_headcount")) }
             }
             picked?.let { k ->
