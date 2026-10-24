@@ -324,7 +324,7 @@ object ConstraintCatalog { val all: List<ConstraintSpec> /* 21 件 */ }
 | T-6 | 単体 | `EngineConfig.build` が現行の本番既定と同じ値を作る（フラグごと） | 新設 | P2 |
 | T-7 | 単体 | `PolishGate` への書き込みが 0 | `PolishGateAccessTest`（エンジンで `PolishGate.` を参照するのは `EngineConfig.kt` だけ、2026-10-24） | P2 |
 | T-8 | 単体 | `TimeBudget` の各取り分が現行の式と同じ値（予算 1・30・31・60・210・211・300 秒、決定的モード） | 新設 | P3 |
-| T-9 | 単体 | 各段が締切を守る（時計を差し替えて境界を作る） | 新設 | P3 |
+| T-9 | 単体 | 各段が締切を守る（時計を差し替えて境界を作る） | `PostStageDeadlineTest`（締切を過去・直近に置いて境界を作る、2026-10-24） | P3 |
 | T-10 | 結合 | 段の名前の列が基準版と同順 | 新設（記録の段名を比べる） | P4 |
 | T-11 | 単体 | `ConstraintCatalog` の 21 件が `MirrorKeys.weights` と一致 | 新設＋weight_lint | P5 |
 | T-12 | 結合 | UI 層の既存テストが全件合格 | 既存 | P6 |
