@@ -205,6 +205,7 @@ ViewModel ハブ
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
 - `ConstraintCatalog.kt` — 違反の族 21 個の表（必須か・位置の空間 セル/回数/人数/偏り）。重みは `MirrorKeys.weights` を読むだけ（全面改修 P5）。
 - `PortfolioSearch.kt`／`AlnsSearch.kt`／`RsiSearch.kt` — 探索器（適応ポートフォリオ・多ワーカー／V5 の SA 多点・ALNS／RSI・RSI++、全面改修 P10b で `V6NativeOptimizer` から分けた）。`V6NativeOptimizer` は公開入口と方針の選択。
+- `SearchPolish.kt` — 探索直後の研磨（`hf80PostPolish`、全面改修 P10c）。各探索の最後と「自動で整える」から呼ぶ。後処理チェーン（`V6HotfixPasses`）とは別。
 - `OptimizerRuntime.kt` — 最適化の実行基盤（実行ごとの成果物入れ `RunSlot`・最良盤面のライブ公開・他の案・エリート・充足困難な族・計測の始まり、全面改修 P10a）。探索の意味論は持たない。
 - `PostStages.kt` — 後処理の段の名前（進捗の語と記録の key）の定義（全面改修 P4）。実行の順は `V6HotfixPasses.runPostOptimization` が前段 `runPreStages`（HF80・HF67・HF66）→ 中段 `runMidStages`（厳密日割当・巡回研磨・曜日/交互・共同 LNS）→ 終段 `runFinalStages`（最終の修復・玉突きパイプライン・人員過剰の退避）の 3 呼び出しで決める。
 - `TimeBudget.kt` — 1 回の作成の時間予算（開始時刻・制限時間・後処理と玉突きの取り分・全体の締切・停滞の見張り）。予算の定義はここだけ（全面改修 P3）。

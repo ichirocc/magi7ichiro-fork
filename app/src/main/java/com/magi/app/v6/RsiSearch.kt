@@ -24,10 +24,10 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 import kotlin.math.PI
 import java.util.Random
-import com.magi.app.v6.V6NativeOptimizer.PolishResult
+import com.magi.app.v6.SearchPolish.PolishResult
 import com.magi.app.v6.V6NativeOptimizer.actualSeed
 import com.magi.app.v6.V6NativeOptimizer.better
-import com.magi.app.v6.V6NativeOptimizer.hf80PostPolish
+import com.magi.app.v6.SearchPolish.hf80PostPolish
 import com.magi.app.v6.V6NativeOptimizer.nowMs
 import com.magi.app.v6.AlnsSearch.runAlns
 import com.magi.app.v6.AlnsSearch.runV5

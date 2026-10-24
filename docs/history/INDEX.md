@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P10c（2026-10-24、版なし・出力不変）: 探索直後の研磨を `SearchPolish.kt` へ（後処理チェーンとは別物と明記）  → `docs/overhaul_design.md` §6.8b
 - 全面改修 P10b（2026-10-24、版なし・出力不変）: 探索を PortfolioSearch・AlnsSearch・RsiSearch の 3 ファイルへ。V6NativeOptimizer は 2,160→585 行  → `docs/overhaul_design.md` §6.8b
 - 公平化の偏差・禁止の並びの数え上げの無駄を除く（2026-10-24、版なし・出力不変、同上の続き）: `fairDevOfBucket` は回数を 1 人 1 回だけ数え、合計だけの呼び出し（差分評価・フル評価・修復の候補選び）は内訳のリストを作らない（`members = false`）。`C1DeltaPrefilter.staffC3nFires` は最初の不一致で打ち切る（ビット走査の答え合わせの正本なのでビットには替えない）。公平化・差分評価・ビット走査のテスト 59 件と BoardHash・T-10 一致
 - 正式チェッカーの並びの照合をビット演算に・禁止の並びの判定を早期打ち切りに（2026-10-24、版なし・出力不変、ユーザー「ビット演算などで高速化する」）: JFR（後処理の決定的モード）で `UnifiedViolationChecker.check` が 36%、うち `checkC3Family` が自己 10%、`Problem.makesForbiddenRun` が自己 6%。並びの窓（複数シフト・禁止）を職員×シフトの勤務日ビットの AND と popcount に（マスクは check ごとに 1 回・4 族で共有、開始日の昇順に印＝数・場所・順が同じ。単一シフト連と T>64 は従来の走査）。`makesForbiddenRun` は seq[j−s]≠newK の窓を飛ばし、最初の不一致で打ち切る（判定は不変）。チェッカー単体 実データ 5 件で 11〜32% 短縮（6 名×14 日は ±0）、後処理テスト全体の CPU サンプル 2,284→1,706（checkC3Family 234→14・makesForbiddenRun 136→76）。`C3FamilyBitTest`（6 fixture×ランダム盤面 20）でビットとスカラーの一致、BoardHash・T-10・チェッカーのスナップショット一致

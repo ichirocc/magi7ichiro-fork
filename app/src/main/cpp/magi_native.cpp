@@ -2189,7 +2189,7 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
 
 // ============================================================================
 // [Stage10/第3期] hf80PostPolish（最終研磨）の C++ チャンク。
-// Kotlin V6NativeOptimizer.hf80PostPolish と同一のオペ構成(11-way: 0=単一セル/
+// Kotlin SearchPolish.hf80PostPolish と同一のオペ構成(11-way: 0=単一セル/
 // 1=行内2日swap/2=同日2者swap/3..8=targetedFix/9-10=copy系DR+hard時hf67)・
 // 同一受理(best-hard ゲート＋SA temp0.15固定)・keep-best。GLS/適応重みは無し
 // (Kotlin 側に無いため)。番兵1層目=チャンク末尾の自己整合（差分スコア==フル再計算）。
