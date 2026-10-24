@@ -79,9 +79,9 @@ internal object DestroyRepairMarginalCost {
         if (delta == 0 || k !in 0 until p.K) return 0L
         val g = p.sgrp[i]
         if (p.groupMembers[g].size < 2 || k !in p.bucket[g]) return 0L
-        val before = p.fairDevOfBucket(g, k) { x -> counts[x][k] }.total
+        val before = p.fairDevOfBucket(g, k, members = false) { x -> counts[x][k] }.total
         counts[i][k] += delta
-        val after = p.fairDevOfBucket(g, k) { x -> counts[x][k] }.total
+        val after = p.fairDevOfBucket(g, k, members = false) { x -> counts[x][k] }.total
         counts[i][k] -= delta
         return (after - before).toLong() * 5L  // [3.522.0] fair 1→2、[3.647.0] 2→5（weeklyMarginalAtと同型で内部適用）
     }

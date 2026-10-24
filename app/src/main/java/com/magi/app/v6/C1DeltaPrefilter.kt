@@ -103,9 +103,9 @@ object C1DeltaPrefilter {
             var j = 0
             while (j <= p.T - d) {
                 if (row[j] == seq[0]) {
-                    var z = 0
-                    for (l in 1 until d) if (row[j + l] == seq[l]) z++
-                    if (z == d - 1) fires++
+                    var l = 1
+                    while (l < d && row[j + l] == seq[l]) l++   // 最初の不一致で打ち切る（完全一致だけを数える＝数は不変）
+                    if (l == d) fires++
                 }
                 j++
             }

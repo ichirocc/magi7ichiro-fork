@@ -675,7 +675,7 @@ class DeltaEvaluator(private val p: Problem) {
      *  UnifiedViolationChecker の "fair" と一致。 */
     private fun fairDevAt(g: Int, k: Int, special: Int, delta: Int): Long {
         if (p.groupMembers[g].size < 2) return 0L
-        return p.fairDevOfBucket(g, k) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
+        return p.fairDevOfBucket(g, k, members = false) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
     }
     private fun fairAll(): Long {
         var h = 0L

@@ -229,7 +229,7 @@ class Evaluator(private val p: Problem) {
             for (g in 0 until p.G) {
                 val mem = p.groupMembers[g]
                 if (mem.size < 2) continue
-                for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k) { x -> ssn[x][k] }.total.toLong()
+                for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k, members = false) { x -> ssn[x][k] }.total.toLong()
             }
             soft += raw * 5L; record("fair", raw)
         }
