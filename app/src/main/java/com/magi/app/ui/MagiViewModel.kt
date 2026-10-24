@@ -30,6 +30,7 @@ import com.magi.app.v6.C1PlateauDiagnosis
 import com.magi.app.v6.PinBlockAttribution
 import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.V6FinalPort
+import com.magi.app.v6.OptimizerRuntime
 import com.magi.app.v6.V6NativeOptimizer
 import com.magi.app.v6.V6SanityPort
 import com.magi.app.v6.V6SanityReport
