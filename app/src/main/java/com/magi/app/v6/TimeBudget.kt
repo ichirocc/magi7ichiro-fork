@@ -22,3 +22,22 @@ internal class TimeBudget private constructor(val startMs: Long, val searchMs: L
             TimeBudget(clock(), seconds.toLong() * 1000L, POST_RESERVE_SEC * 1000L, CHAIN_RESERVE_SEC * 1000L)
     }
 }
+
+/**
+ * 後処理の各段の取り分（全面改修 P3b）。式は移す前の各所と同じ（値を変えない移行。`TimeBudgetTest` が旧式との一致を守る）。
+ * 取り分の決め方をここ 1 か所に集め、各段は残り時間をこの関数に渡して自分の締切を受け取るだけにする。
+ */
+internal object BudgetShare {
+    /** 残りの半分、ただし上限まで（HF67・HF66・共同 LNS 2 本の確保・玉突きの深い段）。 */
+    fun half(remainingMs: Long, capMs: Long): Long = (remainingMs / 2).coerceAtMost(capMs)
+
+    /** 残りの 4 分の 1、0〜上限（c1 の玉突き連鎖）。 */
+    fun quarter(remainingMs: Long, maxMs: Long): Long = (remainingMs / 4).coerceIn(0L, maxMs)
+
+    /** 残り（上限 [clampMs]）を [partMaxMs]:[totalMaxMs] で按分、ただし [partMaxMs] まで（c1 共同 LNS＝既定 8:6、3.255.0）。 */
+    fun proportional(remainingMs: Long, clampMs: Long, partMaxMs: Long, totalMaxMs: Long): Long =
+        if (totalMaxMs <= 0L) 0L else (remainingMs.coerceAtMost(clampMs) * partMaxMs / totalMaxMs).coerceAtMost(partMaxMs)
+
+    /** 残り全部、ただし上限まで（個人回数の共同 LNS）。 */
+    fun upTo(remainingMs: Long, capMs: Long): Long = remainingMs.coerceAtMost(capMs)
+}

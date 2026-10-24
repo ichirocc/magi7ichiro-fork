@@ -30,4 +30,21 @@ class TimeBudgetTest {
         assertFalse(tb.overBudget(tb.hardDeadlineMs))      // ちょうど締切は超過ではない（旧: > ）
         assertTrue(tb.overBudget(tb.hardDeadlineMs + 1))
     }
+
+    /** P3b: 各段の取り分が移す前の式と同じ（残り 0・端数・上限に届く/届かない）。 */
+    @Test fun budgetSharesMatchTheFormerInlineFormulas() {
+        for (rem in listOf(0L, 1L, 7L, 999L, 8_000L, 13_501L, 60_000L, 600_001L)) {
+            for (cap in listOf(0L, 3_000L, 6_000L, 25_000L)) {
+                assertEquals((rem / 2).coerceAtMost(cap), BudgetShare.half(rem, cap))
+                assertEquals(minOf(cap, rem / 2), BudgetShare.half(rem, cap))                  // EjectionChainPipeline の旧式
+                assertEquals((rem / 4).coerceIn(0L, cap), BudgetShare.quarter(rem, cap))
+                assertEquals(rem.coerceAtMost(cap), BudgetShare.upTo(rem, cap))
+            }
+            for ((part, total) in listOf(8_000L to 14_000L, 0L to 0L, 5_000L to 5_000L)) {
+                val clamp = 30_000L
+                val old = if (total <= 0L) 0L else (rem.coerceAtMost(clamp) * part / total).coerceAtMost(part)
+                assertEquals(old, BudgetShare.proportional(rem, clamp, part, total))
+            }
+        }
+    }
 }

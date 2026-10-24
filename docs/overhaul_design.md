@@ -413,7 +413,7 @@ P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す
 | コミット | 中身 |
 |---|---|
 | P3a | `TimeBudget` 型と、`V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）の移行 — **済**（2026-10-24。`TimeBudget.start`・`watchdog`・`overBudget`、旧式との一致は `TimeBudgetTest`＝T-8） |
-| P3b | `SaParams`、共同 LNS、`EjectionChainPipeline`、`CombinatorialRepair` を子予算へ |
+| P3b | `SaParams`、共同 LNS、`EjectionChainPipeline`、`CombinatorialRepair` を子予算へ — **済（後処理の取り分）**（2026-10-24。HF67・HF66・共同 LNS の確保・c1 共同 LNS の按分・c1 玉突き連鎖・個人共同 LNS・玉突きパイプラインの深い段を `BudgetShare` の 4 つの式へ。`CombinatorialRepair` は時間の予算を持たず評価回数だけ＝対象なし。`SaParams` の時間は探索の締切（`TimeBudget`）から渡る＝式は無い） |
 合格: 決定的モードで G8。時間制は各段の割当 ms のログが前後で同じ。
 
 ### 6.5 P4 PostPipeline

@@ -654,7 +654,7 @@ object V6HotfixPasses {
 
         val t67 = EngineClock.nowMs()
         val r67 = chain.timed("後処理 HF67 職員間スワップ", "HF67InterStaffSwap") { work ->
-            val cap = (EngineClock.remainingMs(deadlineMs, t67) / 2).coerceAtMost(params.hf67CapMs)
+            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t67), params.hf67CapMs)
             HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap)
         }
         chain.replaceBoard(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
@@ -662,7 +662,7 @@ object V6HotfixPasses {
         val t66 = EngineClock.nowMs()
         val r66 = chain.timed("後処理 HF66 職員内再配分", "HF66IntraStaffRedistribution") { work ->
             // HF66 は手ごとに全候補をフル check する高コストパス＝残予算の半分（後段の研磨群へ残り半分）で打ち切る。
-            val cap = (EngineClock.remainingMs(deadlineMs, t66) / 2).coerceAtMost(params.hf66CapMs)
+            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66), params.hf66CapMs)
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
@@ -670,7 +670,7 @@ object V6HotfixPasses {
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
         val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE || params.deterministic) 0L
-            else ((deadlineMs - t66Done).coerceAtLeast(0L) / 2).coerceAtMost(params.jointLnsReserveMaxMs)
+            else BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66Done), params.jointLnsReserveMaxMs)
         val clusterDeadline = if (deadlineMs == Long.MAX_VALUE || params.deterministic) Long.MAX_VALUE else deadlineMs - jointLnsReserve
         val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
 
@@ -695,8 +695,7 @@ object V6HotfixPasses {
         val tC1Lns = EngineClock.nowMs()
         val lnsTotal = params.c1LnsMaxMs + params.personalLnsMaxMs
         chain.adopt(chain.timed("後処理 期間要件(c1)共同LNS", "C1共同LNS") { work ->
-            val remaining = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(params.remainingClampMs)
-            val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
+            val cap = BudgetShare.proportional(EngineClock.remainingMs(deadlineMs, tC1Lns), params.remainingClampMs, params.c1LnsMaxMs, lnsTotal)
             val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
                 else C1JointLnsPolish.Config(maxMillis = cap)
             // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
@@ -713,13 +712,13 @@ object V6HotfixPasses {
             val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, ej.maxMillis))
+                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = BudgetShare.quarter(EngineClock.remainingMs(deadlineMs, tEj), ej.maxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop)
             })
         }
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
-            val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
+            val cap = BudgetShare.upTo(EngineClock.remainingMs(deadlineMs, tPersonalLns), params.personalLnsMaxMs)
             val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
                 else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
             val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
