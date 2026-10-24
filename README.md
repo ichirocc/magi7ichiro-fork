@@ -16,6 +16,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/requirements.md`](./docs/requirements.md) | 要件定義。ユーザーストーリーと受け入れ条件（なぜ存在するか） |
 | [`docs/design.md`](./docs/design.md) | 設計。主要インタフェースと処理フロー（どう作られているか） |
 | [`docs/architecture.md`](./docs/architecture.md) | レイヤー構成・依存関係・どのファイルが何を担当するか（地図） |
+| [`docs/adoption.md`](./docs/adoption.md) | 盤面を採る経路ごとの採否の検査（比較・固定・回数固定・拡張希望・必須）の一覧 |
 | [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み21種）・エラー方針（**業務ルールの正解**） |
 | [`docs/overhaul_detailed_spec.md`](./docs/overhaul_detailed_spec.md) | 全面改修の詳細設計仕様書（完全版・机上検証済み、2026-10-22。課題と新設計の対比・選定根拠、前処理/後処理パイプラインの手順と状態遷移・計算量、入出力の写像と型、境界値と例外の机上検証、性能目標とテスト観点 T-1〜T-19・DoD） |
 | [`docs/overhaul_design.md`](./docs/overhaul_design.md) | 全面改修の設計書（完全版・最終 v5・机上検証済み、2026-10-22。改修の背景・変えない前提・網羅性チェック（例外・境界・非機能・テスト）・用語・現状の構造・定義・意義と受け入れ基準 S1〜S6 と追跡表・ゲート G1〜G16・一括置き換え・段階 P0〜P9・机上検証の記録、付録に Q-05/Q-06 調査） |
@@ -43,6 +44,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-24（版なし: 全面改修 P10＝探索器の分割（OptimizerRuntime・PortfolioSearch・AlnsSearch・RsiSearch・SearchPolish）と採否の一覧 docs/adoption.md・チェッカーの並びの照合のビット化）
 **最終更新**：2026-10-24（版なし: 勤務表 CSV の取込の前に件数と注意を確認）
 **最終更新**：2026-10-24（版なし: 日の配置のシート（日ヘッダをどの日でも開き、シフトごとの人数と職員を縦に・前後の日へ）・`wideC3nBreakDays` を EngineConfig の写しへ）
 **最終更新**：2026-10-24（版なし: 全面改修 P4b〜P4e（後処理を前段・中段・終段の 3 関数へ）・P5b・P5c（必須・回数・偏りの族の組を ConstraintCatalog から）・P6a〜P6d（ViewModel の直し方・設定を緩める試算・希望の試算を別ファイルへ））

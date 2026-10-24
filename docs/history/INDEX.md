@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P10d（2026-10-24、文書のみ）: 採否の合成を `docs/adoption.md` に（盤面を採る 10 経路 × 比較・固定・回数固定・拡張希望・必須）。漏れなし。P10 完了  → `docs/adoption.md`
 - 全面改修 P10c（2026-10-24、版なし・出力不変）: 探索直後の研磨を `SearchPolish.kt` へ（後処理チェーンとは別物と明記）  → `docs/overhaul_design.md` §6.8b
 - 全面改修 P10b（2026-10-24、版なし・出力不変）: 探索を PortfolioSearch・AlnsSearch・RsiSearch の 3 ファイルへ。V6NativeOptimizer は 2,160→585 行  → `docs/overhaul_design.md` §6.8b
 - 公平化の偏差・禁止の並びの数え上げの無駄を除く（2026-10-24、版なし・出力不変、同上の続き）: `fairDevOfBucket` は回数を 1 人 1 回だけ数え、合計だけの呼び出し（差分評価・フル評価・修復の候補選び）は内訳のリストを作らない（`members = false`）。`C1DeltaPrefilter.staffC3nFires` は最初の不一致で打ち切る（ビット走査の答え合わせの正本なのでビットには替えない）。公平化・差分評価・ビット走査のテスト 59 件と BoardHash・T-10 一致
