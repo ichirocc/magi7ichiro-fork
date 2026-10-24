@@ -537,6 +537,9 @@ object V6HotfixPasses {
             passMs.merge(key, 0L) { a, b -> a + b }
         }
 
+        /** [stage] の名前で [timed]（巡の印を足さない段）。 */
+        fun <R> timed(stage: PostStages.Stage, block: (Array<IntArray>) -> R): R = timed(stage.label, stage.key, block)
+
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
             onPhase(phase)
             val t = EngineClock.nowMs()
@@ -614,6 +617,32 @@ object V6HotfixPasses {
         }
     }
 
+    /** 後処理の前段（全面改修 P4b）: HF80 → HF67（残予算の半分まで）→ HF66（残予算の半分まで）。 */
+    private class PreStages(val r80: HF80Result, val r67: HF67Result, val r66: HF66Result, val t67: Long, val t66: Long)
+
+    private fun runPreStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, seed: Long, shouldStop: () -> Boolean, deadlineMs: Long): PreStages {
+        val r80 = chain.timed(PostStages.HF80) { work ->
+            applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
+        }
+        chain.replaceBoard(r80.newSchedule, r80.logs, r80.report)
+
+        val t67 = EngineClock.nowMs()
+        val r67 = chain.timed(PostStages.HF67) { work ->
+            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t67), params.hf67CapMs)
+            HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap)
+        }
+        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
+
+        val t66 = EngineClock.nowMs()
+        val r66 = chain.timed(PostStages.HF66) { work ->
+            // HF66 は手ごとに全候補をフル check する高コストパス＝残予算の半分（後段の研磨群へ残り半分）で打ち切る。
+            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66), params.hf66CapMs)
+            HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap)
+        }
+        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+        return PreStages(r80, r67, r66, t67, t66)
+    }
+
     /**
      * [review: budget] 後処理チェーン HF80 -> HF67 -> HF66 -> 厳密日割当 -> 巡回研磨クラスタ（最大 maxRounds 巡）->
      * 曜日/交互研磨 -> 共同 LNS 2 本 -> HF70。全パス keep-best（正式チェッカーの HARD→weighted→total）なので
@@ -647,25 +676,7 @@ object V6HotfixPasses {
             shouldStop = shouldStop)
         val t0 = EngineClock.nowMs()
 
-        val r80 = chain.timed(PostStages.HF80.label, PostStages.HF80.key) { work ->
-            applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
-        }
-        chain.replaceBoard(r80.newSchedule, r80.logs, r80.report)
-
-        val t67 = EngineClock.nowMs()
-        val r67 = chain.timed(PostStages.HF67.label, PostStages.HF67.key) { work ->
-            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t67), params.hf67CapMs)
-            HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap)
-        }
-        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
-
-        val t66 = EngineClock.nowMs()
-        val r66 = chain.timed(PostStages.HF66.label, PostStages.HF66.key) { work ->
-            // HF66 は手ごとに全候補をフル check する高コストパス＝残予算の半分（後段の研磨群へ残り半分）で打ち切る。
-            val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66), params.hf66CapMs)
-            HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap)
-        }
-        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+        val pre = runPreStages(state, chain, params, seed, shouldStop, deadlineMs)
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
@@ -768,7 +779,7 @@ object V6HotfixPasses {
 
         val tEnd = EngineClock.nowMs()
         chain.logs.add(MirrorLog(level = "I", tag = "POST",
-            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${t67 - t0}ms HF67=${t66 - t67}ms HF66=${t66Done - t66}ms" +
+            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${pre.t67 - t0}ms HF67=${pre.t66 - pre.t67}ms HF66=${t66Done - pre.t66}ms" +
                 " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${tC1Lns - t66Done}ms" +
                 " C1共同LNS+玉突き連鎖=${tPersonalLns - tC1Lns}ms 個人共同LNS=${tHf - tPersonalLns}ms" +
                 " 最終検査+HF70=${tEnd - tHf}ms"))
@@ -786,7 +797,7 @@ object V6HotfixPasses {
         val allLogs = ArrayList<MirrorLog>(chain.logs)
         allLogs.addAll(report.logs)
         return V6PostOptimizationResult(
-            work, report.copy(logs = allLogs), r80, r67, r66, r70, chain.logs, plateauOut,
+            work, report.copy(logs = allLogs), pre.r80, pre.r67, pre.r66, r70, chain.logs, plateauOut,
             chain.pinBlocksAll.attempts, chain.pinBlocksAll, chain.stageRecords.toList(),
         )
     }

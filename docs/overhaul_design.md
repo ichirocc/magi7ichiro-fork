@@ -419,6 +419,7 @@ P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す
 ### 6.5 P4 PostPipeline
 P4a（`Stage` 型とパイプライン）→ P4b（前段: 入口・hf66／hf67）→ P4c（中段: 各 Polish・共同 LNS）→ P4d（修復: `ViolationComponentRepair`・退避）→
 P4e（終段: 玉突き、最終番兵の前）。各コミットで、段の順序・中身を変えず、`PostStageRecord` の並びが同じこと。
+- **P4b 済**（2026-10-24、出力不変）: 前段（HF80→HF67→HF66）を `runPreStages` に切り出し、`PostChain.timed(stage)` で段の名前を `PostStages` から渡す。T-10 一致。
 
 ### 6.6 P5 ConstraintCatalog
 族ごとにコミットを分けます。順は HARD 6 族 → 個人回数（low・high）→ c1・c2 → c3 系 → グループ（c41・c42・c41s・c42s）→ covO → 分布（fair・apt・weekly）。

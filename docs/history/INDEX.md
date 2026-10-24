@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P4b（2026-10-24、版なし・出力不変）: 後処理の前段（HF80・HF67・HF66）を `runPreStages` に切り出した。T-10 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P5b（2026-10-24、版なし・出力不変）: 必須の族の組（6 族・セルの 5 族）を `ConstraintCatalog` から引く（C1 玉突き・固定の注意・確認一覧）  → `docs/overhaul_design.md` §6.6
 - 全面改修 P6a（2026-10-24、版なし・出力不変）: ViewModel の直し方（変更案の探索・適用）を `MagiViewModelFixSuggestions.kt` へ extension 関数として分けた  → `docs/overhaul_design.md` §6.7
 - 全面改修 P4a・T-10・P5a（2026-10-24、版なし・出力不変）: 後処理の段の名前を `PostStages` に集約、T-10（段の並び・採用数を基準版 39a639e と照合）、`ConstraintCatalog`（21 族の位置の空間）と T-11、場所一覧の族の場合分けを表から引く  → `docs/overhaul_design.md` §6.5〜6.6
