@@ -334,7 +334,13 @@ internal fun sameResultVisible(note: SameResultNote?, stateKey: Long, schedule: 
     note != null && note.stateKey == stateKey && note.schedule == schedule
 
 internal fun sameResultNotice(hard: Int): String =
-    if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。"
+    (if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。") + SAME_RESULT_NEXT_DRAFT
+
+/** 同じ結果のあとの次の作成は下書きから作り直す（今の盤面からでは同じ谷の底に戻る）。採るのは今より良いときだけ。 */
+internal const val SAME_RESULT_NEXT_DRAFT = "次の作成は下書きから作り直し、今より良くなったときだけ置き換えます。"
+internal const val RERUN_FROM_DRAFT_LOG = "前回と同じ結果のため、下書きから作り直します（今より良いときだけ採る）"
+internal const val RERUN_FROM_DRAFT_KEPT = "下書きから作り直しましたが、今の勤務表の方が良かったので、そのまま残しました。"
+internal const val RERUN_FROM_DRAFT_ADOPTED = "下書きから作り直して、今より良い勤務表になりました"
 
 /** 残る必須違反がすべて「何度つくっても残る」もので、前回から何も変わっていない（[fresh]＝[sameResultVisible]）。再作成しても同じ結果になる。 */
 internal fun rerunDemoted(hard: Int, floor: Int, fresh: Boolean): Boolean = fresh && hard > 0 && hard <= floor

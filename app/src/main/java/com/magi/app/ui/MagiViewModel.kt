@@ -1771,6 +1771,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 停止・失敗で入力の盤面へ戻すときは、実行前の旗へ戻す（一度も計算していない盤面を「計算済み」にしない＝3.500.1）。
         val hadResult = _ui.value.hasResult
         val engineRanBefore = _ui.value.engineRan
+        // 前回と同じ結果（今の盤面から作り直しても同じ谷の底に戻る）のあとの 1 回だけ、下書きから作り直して別の谷を探す。
+        //   採るのは今の勤務表より良いときだけ（下の keep-best の比較は今の盤面 sched0 のまま）。2026-10-25 計測: 同じ結果の場面で 6 勝 0 敗。
+        val fromDraft = s5 == null && sameResultVisible(_ui.value.sameResult, stateKey(st0), _ui.value.schedule)
         _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, stopSummary = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         writeRunMarker("fg", s5?.let { com.magi.app.work.RunMarker.S5(it.staff, it.day, it.symbol, it.name) })
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
@@ -1820,9 +1823,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     initBaseKey = baseKey
                     _ui.update { it.copy(initHard = baseReport.hard.toLong(), initSoft = baseReport.soft.toLong(), initBreakdown = baseReport.breakdown) }
                 }
+                val start = if (!fromDraft) sched0 else
+                    runCatching { V6FinalPort.handleSmartInitial(st0.withSchedule(sched0), allowImpossible = true).schedule }
+                        .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                        ?.also { logOp("I", OpLogText.withBoard(RERUN_FROM_DRAFT_LOG, boardKey(it))) } ?: sched0
                 val res = V6FinalPort.handleOptimize(
                     state = st0,
-                    schedule = sched0.copy2D(),
+                    schedule = start.copy2D(),
                     secondsRaw = _ui.value.budgetSec,
                     workers = _ui.value.workers,
                     softPolish = _ui.value.softPolish,
@@ -1959,7 +1966,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     val nowScore = KeptResultText.Score(newHard, res.report.weightedScore, newTotal)
                     val baseScore = KeptResultText.Score(baseHard, baseReport.weightedScore, baseTotal)
                     val capNote = res.capZero?.keptNote()
-                    val keptMsg = if (s5 == null) KeptResultText.withNote(KeptResultText.screen(res.report.breakdown, baseReport.breakdown), capNote)
+                    val keptMsg = if (s5 == null && start !== sched0) RERUN_FROM_DRAFT_KEPT
+                    else if (s5 == null) KeptResultText.withNote(KeptResultText.screen(res.report.breakdown, baseReport.breakdown), capNote)
                     else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を調整しました（希望は外れています）。必須違反は ${s5.h0}件 → ${hardText(baseReport.breakdown, baseReport.hard.toLong())}（外した分だけ）。再作成しても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
                     else "希望（${s5.label}）を調整しましたが（希望は外れています）、再作成しても必須違反は減りませんでした（必須違反 ${hardText(baseReport.breakdown, baseReport.hard.toLong())}）。元に戻すで希望と勤務表をまとめて戻せます。"
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
@@ -1984,7 +1992,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
                     val adoptedMsg = if (s5 == null) completedText(res.report.hard, res.report.breakdown, "") +
-                        (adoptedDespiteMoreText(baseReport.total, res.report.total, baseReport.weightedScore, res.report.weightedScore)?.let { "。$it" } ?: "")
+                        (adoptedDespiteMoreText(baseReport.total, res.report.total, baseReport.weightedScore, res.report.weightedScore)?.let { "。$it" } ?: "") +
+                        (if (start !== sched0) "。$RERUN_FROM_DRAFT_ADOPTED" else "")
                     else "希望（${s5.label}）を調整して（希望は外しました）、再作成しました: 必須違反 ${s5.h0}件 → ${hardText(res.report.breakdown, res.report.hard.toLong())}（試算の見込み ${s5.pCancel}件）" +
                         (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。再作成するか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
                         else if (res.report.hard > 0) "。残りの必須違反 ${hardText(res.report.breakdown, res.report.hard.toLong())} は、次にやることカードから直します。" else "")
