@@ -870,11 +870,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 自動保存の書き込み本体（IO）。null＝より新しい世代が先に書かれた。 */
     private suspend fun writeAutosave(gen: Int, json: String): Boolean? = withContext(Dispatchers.IO) {
-        saveGate.writeIfLatest(gen) {
-            runCatching {
-                com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-            }.getOrDefault(false)
-        }
+        saveGate.writeTextIfLatest(gen, autosaveFile, json) { nonAtomicSaveSeen = true }
     }
 
     /**
@@ -971,11 +967,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.410.0/U-03] 即時保存も同じ扱い（原子書き込み＋失敗の通知）。
         // saveNow は同期（main）なので旗を立てたその場で記録して構わない。
         // [3.485.0] 走行中の自動保存とはゲートのロックで直列化（同期呼出しの世代は常に最新＝捨てられない）。
-        val ok = saveGate.writeIfLatest(gen) {
-            runCatching {
-                com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-            }.getOrDefault(false)
-        } ?: true
+        val ok = saveGate.writeTextIfLatest(gen, autosaveFile, json) { nonAtomicSaveSeen = true } ?: true
         _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
         reportNonAtomicSave()
         reportAutoSave(ok)

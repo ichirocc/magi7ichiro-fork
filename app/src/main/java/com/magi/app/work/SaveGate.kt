@@ -22,4 +22,8 @@ class SaveGate {
         if (ok) lastWritten = gen
         ok
     }
+
+    /** 自動保存・即時保存（「もう一度保存する」も）の書き込み本体。例外は失敗（false）に畳む。戻り値は [writeIfLatest] と同じ。 */
+    fun writeTextIfLatest(gen: Int, target: java.io.File, text: String, onNonAtomic: () -> Unit = {}): Boolean? =
+        writeIfLatest(gen) { runCatching { writeFileAtomically(target, text, onNonAtomic = onNonAtomic) }.getOrDefault(false) }
 }
