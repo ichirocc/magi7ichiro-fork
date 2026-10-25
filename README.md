@@ -44,6 +44,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-25（版なし: 確認待ちの取り消しを実行中でも通す・背景実行の停止で実行中が残る窓を塞ぐ・進捗の通知を直列化・復元中の背景実行で実行中を下げない）
 **最終更新**：2026-10-25（版なし: 違反の巡回で直した直後の「次へ」を飛ばさない・手動固定と表示色が走行中の検査で戻らない・実行中の設定変更を VM でも断る）
 **最終更新**：2026-10-25（版なし: M-04 RSI++ を短い予算で予算どおりに止める）
 **最終更新**：2026-10-24（版なし: 全面改修 P10＝探索器の分割（OptimizerRuntime・PortfolioSearch・AlnsSearch・RsiSearch・SearchPolish）と採否の一覧 docs/adoption.md・チェッカーの並びの照合のビット化）
