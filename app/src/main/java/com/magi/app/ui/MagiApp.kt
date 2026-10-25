@@ -1336,7 +1336,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
+                            Text(topBarTourLabel(tourCount, ui.breakdown["covU"] ?: 0), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }

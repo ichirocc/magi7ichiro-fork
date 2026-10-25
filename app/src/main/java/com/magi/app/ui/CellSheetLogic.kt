@@ -673,8 +673,10 @@ internal const val TOP_BAR_SAVE_FAILED = "保存できていません"
 internal const val TOP_BAR_NARROW_DP = 396
 
 /** 上部の札の左に出す保存の語。失敗のときだけ（押すと保存の失敗のダイアログ）。 */
-/** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。 */
-internal fun topBarTourLabel(n: Int): String = "必須違反${n}か所を見る"
+/** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。人員不足は巡回に入らない（日の印から）が必須の件数には入るので、
+ *  人数を並べる（か所と人は足さない）。旧: か所だけで、隣の「必須違反 4」と数が合わなかった（2026-10-25 実機）。 */
+internal fun topBarTourLabel(n: Int, covU: Int = 0): String =
+    if (covU > 0) "必須違反${n}か所・人員不足${covU}人を見る" else "必須違反${n}か所を見る"
 
 internal fun topBarSaveWord(s: SaveState): String? = if (s == SaveState.Failed) TOP_BAR_SAVE_FAILED else null
 
