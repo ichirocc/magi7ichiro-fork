@@ -1322,10 +1322,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
-    fun setWorkers(n: Int) { val v = n.coerceIn(1, 16); _ui.update { it.copy(workers = v) }; logOp("I", "設定変更: 並列数 → $v") }
+    fun setWorkers(n: Int) { if (structuralEditBlocked()) return; val v = n.coerceIn(1, 16); _ui.update { it.copy(workers = v) }; logOp("I", "設定変更: 並列数 → $v") }
     // タイムアウト上限は5分(300s)。エンジンは budgetMs を全フェーズで厳守し、超過しない（停滞時はさらに早期終了）。
     /** [ネイティブ加速 Stage4] ユーザートグル。OFF=C++チャンク不使用（番兵ゲートとは独立の意思表示）。 */
     fun setNativeAccel(on: Boolean) {
+        if (structuralEditBlocked()) return
         com.magi.app.v6.NativeGate.userEnabled = on
         _ui.update { it.copy(nativeAccel = on) }
         logOp("I", "設定変更: ネイティブ加速 → ${if (on) "ON" else "OFF"}")
@@ -1379,9 +1380,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   PolishGate 冒頭の記録参照）。
 
 
-    fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
-    fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
-    fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
+    fun setBudget(sec: Int) { if (structuralEditBlocked()) return; val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
+    fun setSoftPolish(b: Boolean) { if (structuralEditBlocked()) return; _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
+    fun setV6Algorithm(a: V6Algorithm) { if (structuralEditBlocked()) return; _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
     fun setAgentAuto(b: Boolean) { _ui.update { it.copy(agentAuto = b) }; logOp("I", "設定変更: 作成のあと代行で仕上げる → ${if (b) "ON" else "OFF"}") }
 
     private var agentJob: Job? = null
@@ -2716,6 +2717,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             families = _ui.value.violationCellFamilies[VioKey.cell(i, j)].orEmpty()) else ""
         state = ns
         autoSave()
+        restartStaleCheck()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
             opNotice = OpNotice(++opNoticeSeq, "${opNm(i)}さん ${DayText.short(st.startDate, j)} を" +
                 (if (!on) "手動固定を外しました" else if (pinHint.isEmpty()) "手動固定しました（自動では変更しません）" else "手動固定しました。$pinHint"),
@@ -2891,7 +2893,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = ns
         _ui.update { it.copy(structureEdited = true, editRev = it.editRev + 1).withShiftColors(ns) }
         autoSave()
+        restartStaleCheck()
     }
+
+    /** 走っている違反チェックは変更前の状態で表示を作り直す（手動固定・表示色が戻る）＝今の状態で調べ直す。 */
+    private fun restartStaleCheck() { if (checkJob?.isActive == true) refreshCheck() }
 
     /**
      * 構造変更(ns)を適用し、再チェック後に独自の完了メッセージを表示（コンポーネント別取込・apt全リセット等で使用）。
