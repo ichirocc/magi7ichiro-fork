@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- T-17 時間制の対比較（2026-10-25、測定のみ）: 39a639e vs 8ea0ba1、実データ 4 件×seed 3×60 秒×workers 4×2 回＝24 対。必須の悪化 0、weighted・total は区別できない（p=0.286）、経過時間は上限内  → `docs/overhaul_detailed_spec.md` T-17
 - 保存の再試行を実ファイルで（2026-10-25、版なし・挙動不変）: 自動保存・即時保存・「もう一度保存する」の書き込み本体を `SaveGate.writeTextIfLatest` へ出し、ViewModel はそれを呼ぶだけに。`SaveRetryFileTest` が一時ディレクトリで失敗→再試行で書き直し→古い世代を捨てる、を確かめる。safety_inventory の機構の穴 2 を解決へ（残る未解決は M-04 のみ）
 - 外部レビューの照合 3 件を直す（2026-10-25、版なし）: ①Worker の設定の取り違え＝PolishGate の書き戻しと `EngineConfig` の写しを `synchronized(PolishGate)` でひとまとめに取り `handleOptimize(config=)` へ渡す（終わりの書き戻しも同じ錠）②月の移動の確認の鮮度＝確定時に `monthMovePlan` を数え直し、件数が変わっていたら移さず確認し直す（`MONTH_MOVE_STALE`）③CSV の保存済みの判定を 32 ビットのハッシュから本文の比較へ。採らない: `StateFingerprint.ofBoard` の行の境目（盤面は長方形で行長が同じ＝衝突しない）、C42FlowPolish（既定 OFF・文書化済み）、freshStaffId・running フラグ・ボタンの連打（既存の所有権・入口の検査で守られている）
 - 監査の残件 3 件を並列で（2026-10-25、版なし・出力不変）: ①機構の穴 1＝`NativeGate.saSeamForTest`（本番は null）で偽のネイティブを差し込み、照合 NG／自己整合 NG でゲートが閉じて Kotlin へ退化し結果が入力に負けない・正直なら開いたまま、を実際の SA の経路で（`NativeGateIntegrationTest`）②M-01＝原子保存をあきらめた書き込みを `NonAtomicWrites` に必ず残し操作ログへ ③U-05＝CLAUDE.md の重みの経緯を business-logic.md §2 へ。残る未解決は M-04（計測待ち）と保存の再試行の実ファイル

@@ -333,6 +333,8 @@ object ConstraintCatalog { val all: List<ConstraintSpec> /* 21 件 */ }
 | T-15 | 結合 | JSON の往復で差分 0、CSV 書き出しのバイト一致 | `CsvRoundTripTest`＋`StateRoundTripTest`（6 fixture の JSON 往復と冪等・CSV 書き出しの決定性と冪等、2026-10-24） | P0 |
 | T-16 | 結合 | 境界 fixture（B-2）で落ちない・番兵を通る | `BoundaryFixtureTest`（1 名・30 名 × 1 日・28〜31 日、2026-10-24） | P0 |
 | T-17 | 統計 | 時間制の対比較（5.1） | `tools/loop/` | 最終 |
+
+> T-17 の実施（2026-10-25）: 基準版 39a639e と 8ea0ba1（P4f）を `HandleOptimizeBench`（既定のまま、実データ 4 件 × seed 1〜3 × 60 秒 × workers 4 × 各 2 回＝24 対）で比べた。必須の悪化 0（hard が違う対も 0）、weighted の差 平均 +62.5（基準−HEAD、正＝HEAD が良い）・95% 区間 [−20.9, +146.0]・符号検定 p=0.286＝**区別できない**、total も同様、経過時間の中央値 37.4→37.0 秒（上限内）。同じ版・同じ seed の揺れ（SD 123〜178）が差と同程度＝workers 4 は壁時計依存でハッシュの出力不変はこの方法では判定できない（出力不変は T-3・T-10 の決定的モードが受け持つ）。8ea0ba1 以降の 7 commit（P4g・SOFT の桁の検査など）は対象外。結果は `tools/loop/results/2026-10-25-overhaul-p10-t17.txt`（gitignore）。
 | T-18 | 実機 | 機能の棚卸し F1〜F15、TalkBack、端末幅 | 利用者の確認 | 最終 |
 | T-19 | C# | Kotlin のテストを 1 対 1 で写し、C# のゴールデンが一致 | `MagiEngine.Tests` | 停止明け |
 
