@@ -185,6 +185,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun optimizeInFlight(): Boolean =
         phases.hasJob || OptimizationRepository.running.value || bgGuard.closed
 
+    /** 背景実行だけ（自分の前景ジョブは数えない）。起動時の復元の読み込みは背景の最中にも走るので、終わりの running はこれで戻す。 */
+    private fun bgInFlight(): Boolean = OptimizationRepository.running.value || bgGuard.closed
+
     /** 背景実行の投入から反映し終えるまで閉じる編集ガード（Worker が running を立てる前後の窓を塞ぐ）。 */
     private val bgGuard = com.magi.app.work.BgEditGuard()
 
@@ -1188,7 +1191,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             it.copy(
                                 messageIsError = false,
                                 loaded = true,
-                                running = false,
+                                running = bgInFlight(),
                                 hasResult = markResult,
                                 relaxedBoard = false, engineRan = markResult, ranBeforeEdit = false, keptPrevious = false,   // [3.475.0] bg結果の復元だけ「計算済み」を引き継ぐ
                                 constraintsEdited = false,
@@ -1246,16 +1249,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         //   内側の `it` は **UiState** を指すので、出ていたのは直前の文言＝「読込失敗: 読込中…」。
                         //   すぐ下の catch は `e.message` で正しく、ここだけ取り違えていた。引数に名前を付けて塞ぐ。
                         logOp("W", "読込失敗: ${err.javaClass.simpleName}: ${err.message}")
-                        _ui.update { it.copy(running = false, message = "読み込めませんでした（${failureWords(err, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
+                        _ui.update { it.copy(running = bgInFlight(), message = "読み込めませんでした（${failureWords(err, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
                     },
                 )
             } catch (e: CancellationException) {
                 rollback?.invoke()
-                _ui.update { it.copy(messageIsError = false, running = false, message = "読み込みを中止しました") }   // [3.404.0] 停止は失敗ではない
+                _ui.update { it.copy(messageIsError = false, running = bgInFlight(), message = "読み込みを中止しました") }   // [3.404.0] 停止は失敗ではない
                 throw e
             } catch (e: Throwable) {
                 rollback?.invoke()
-                _ui.update { it.copy(running = false, message = "読み込めませんでした（${failureWords(e, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
+                _ui.update { it.copy(running = bgInFlight(), message = "読み込めませんでした（${failureWords(e, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
             } finally {
                 endBoardJob(boardToken)
             }
