@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 全面改修 P4f（2026-10-25、版なし・出力不変）: 後処理の段を `PostStep`＋`PostChain.runSteps` に（前段・中段・終段。巡回研磨クラスタの中は残り）。T-10・BoardHash・T-9・T-16 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P10e と P10 の仕様（2026-10-24、版なし・出力不変、外部の仕様レビューを反映）: 共有の小関数を `SearchCommon.kt` へ出し、探索器から入口への import を 0 に（一方向の依存）。§6.8b に挙動不変の範囲（絶対不変・実質不変・差を許す）、残す基準、各ファイルの役割（肯定形）、据え置きの理由、最終構造、設計の完了条件を追記  → `docs/overhaul_design.md` §6.8b
 - 全面改修 P7（2026-10-24、版なし・文書のみ）: architecture.md・sudo_model.md を P3〜P6e・P10 の構造に合わせて正規化（21 族、探索器の分割、EngineConfig/T-7、ConstraintCatalog、PenaltyWeights、Staff.id、weekly の現行式、休の識別、タブ名）  → `docs/overhaul_design.md` §6.8
 - T-15・T-16 と、やり直し・許可リストの対策（2026-10-24、版なし、ユーザー「マルチスレッドでのやり直し対策と許可リスト不足の対策する」）: 並列のエージェントで `StateRoundTripTest`（JSON 往復・CSV 書き出しの冪等）と `BoundaryFixtureTest`（B-2 の境界）を作成（T-9 は先行コミット）。worktree が main から作られ古い版で書かれた・続けて push して CI が中止になった反省から、fork に HEAD を checkout させる・push は 1 回・`tools/prepush_check.sh` を `docs/environment.md` と CLAUDE.md に。weight_lint は断片が別ファイルへ移っても失敗にせず移った先を注意として出す（`test_weight_lint.py` に自己テスト）。`StateParser.DERIVED_KEYS` を internal にしてテストが写しを持たない
