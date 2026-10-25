@@ -150,6 +150,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
+        agentJob?.cancel()  // 代行も同じ（結果は盤面が変わって捨てるだけ＝作成と CPU を取り合っていた。2026-10-25 実機ログ #7）
         // 走っている違反チェックは差し替え前の盤面のもの＝失効させる（完了順によって古い表示が戻らないように、UI-03）。
         ++checkSeq; checkJob?.cancel()
         val jobToken = phases.begin(phase)
@@ -1412,6 +1413,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (u.running || u.agentRunning || optimizeInFlight()) return
         val resume = agentResume; agentResume = false
         if (!u.agentAuto || !(u.engineRan || resume) || !u.hasResult || u.bestHard <= 0L) return
+        if (u.draftStage && !resume) return   // 下書きは作成の出発点＝「作成のあと」ではない（直後に作成が続くことが多い）
         val st = state ?: return
         val sched = currentSchedule ?: return
         val key0 = boardKey(sched)
