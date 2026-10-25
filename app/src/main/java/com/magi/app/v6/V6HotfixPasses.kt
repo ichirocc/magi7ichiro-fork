@@ -865,6 +865,34 @@ object V6HotfixPasses {
 
     private class ClusterOutcome(val c1Plateau: C1PlateauDiagnosis?)
 
+    /** 巡回研磨クラスタの 1 段（全面改修 P4g）: 名前・採用数の鍵・有効条件・同じ盤面の飛ばし（memo）・許容の族・畳んだ後の処理・本体。 */
+    private class ClusterStep(
+        val stage: PostStages.Stage,
+        val adoptKey: String,
+        val memo: Boolean = false,
+        val toleranceFamily: String? = null,
+        val enabled: () -> Boolean = { true },
+        val after: (CyclicSwapResult) -> Unit = {},
+        val body: (Array<IntArray>, () -> Boolean) -> CyclicSwapResult,
+    )
+
+    /** 巡の段を順に走らせる: 有効条件を段の直前に 1 回だけ見て、巡の印つきで計測（memo の段は同じ盤面なら飛ばす）し、畳む。 */
+    private fun runRound(
+        chain: PostChain, tag: String, clusterStop: () -> Boolean,
+        memoTimed: (String, String, String, (Array<IntArray>, () -> Boolean) -> CyclicSwapResult) -> CyclicSwapResult,
+        take: (String, CyclicSwapResult, String?) -> Unit,
+        steps: List<ClusterStep>,
+    ) {
+        for (s in steps) {
+            if (!s.enabled()) continue
+            val label = s.stage.label + tag
+            val r = if (s.memo) memoTimed(label, s.stage.key, s.stage.key, s.body)
+                else chain.timed(label, s.stage.key) { work -> s.body(work, clusterStop) }
+            take(s.adoptKey, r, s.toleranceFamily)
+            s.after(r)
+        }
+    }
+
     /**
      * 巡回研磨クラスタ（循環交換〜fair 玉突き）を「1 巡で 1 手も採用されなくなるまで」最大 maxRounds 巡繰り返す。
      * 各パスは内部で自己収束するが、別パスの変更が他パスの改善を再び開く（例: c3 の組替えで新たな c1 充足余地が出る）。
@@ -907,107 +935,101 @@ object V6HotfixPasses {
                 roundApplied += n
             }
 
-            take("循環", chain.timed(PostStages.CYCLIC.label + tag, PostStages.CYCLIC.key) { work ->
-                CyclicSwapWeeklyPolish.applyCyclicSwapPolish(
-                    state, work, maxPasses = params.cyclicSwapPasses, maxK = params.cyclicSwapMaxK,
-                    kTrialsPerDay = params.cyclicSwapKTrialsPerDay, seed = roundSeed(seed, SeedTag.CYCLIC_N, round),
-                    shouldStop = clusterStop,
-                )
-            })
-
-            // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
-            if (C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work))) {
-                val rC1 = chain.timed(PostStages.C1_SAME_DAY.label + tag, PostStages.C1_SAME_DAY.key) { work ->
-                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
-                }
-                take("c1", rC1)
-                // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
-                rC1.plateau?.let { fresh -> c1Plateau = c1Plateau?.mergedWith(fresh) ?: fresh }
-                take("c1", chain.timed(PostStages.C1_INDEX.label + tag, PostStages.C1_INDEX.key) { work ->
-                    C1RepairOperators.indexChainRepair(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_INDEX, round), wideC3n = params.wideC3nBreakDays)
-                })
-            }
-            // 時系列 DP＋同日ジョイント再割当（3.254.0 の ablation で一本化）。広域ビームより前に置く（逆順は golden で劣化を実測）。
-            take("c1", chain.timed(PostStages.C1_TEMPORAL.label + tag, PostStages.C1_TEMPORAL.key) { work ->
-                C1RepairOperators.temporalFlow(
-                    state, work, maxPasses = params.c1FlowPasses, maxRelocations = params.c1FlowRelocations, trials = params.c1FlowTrials,
-                    shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_FLOW, round),
-                )
-            })
-            take("c1", chain.timed(PostStages.C1_BEAM.label + tag, PostStages.C1_BEAM.key) { work ->
-                C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_BEAM, round), wideC3n = params.wideC3nBreakDays)
-            })
-            // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
-            take("c1", memoTimed(PostStages.C1_EXACT.label + tag, PostStages.C1_EXACT.key) { work, stop ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = stop)
-            })
-
-            val rC3 = memoTimed(PostStages.C3_SEQUENCE.label + tag, PostStages.C3_SEQUENCE.key) { work, stop ->
-                C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = stop)
-            }
-            take("c3", rC3)
-            // 3 者回転は O(候補^3) で通常時の寄与ゼロ（3.300.0 ablation）＝主手が詰まった巡と最終巡だけの脱出手。
-            if (rC3.applied == 0 || round == params.maxRounds - 1) {
-                take("c3回転", memoTimed(PostStages.C3_ROTATE.label + tag, PostStages.C3_ROTATE.key) { work, stop ->
+            // 巡の段（全面改修 P4g）: 段ごとに名前・採用数の鍵・有効条件・同じ盤面の飛ばし（memo）・本体を持ち、計測・巡の印・畳み込みは runRound。
+            //   有効条件は段の直前に 1 回だけ評価する（c1 の 2 段は 1 回の判定を共有、成分修復は判定の中で拒否候補を取り出す）。
+            var c1Actionable = false
+            var rC3: CyclicSwapResult? = null
+            var pool: List<CombinatorialRepair.Candidate> = emptyList()
+            runRound(chain, tag, clusterStop, ::memoTimed, ::take, listOf(
+                ClusterStep(PostStages.CYCLIC, "循環") { work, stop ->
+                    CyclicSwapWeeklyPolish.applyCyclicSwapPolish(
+                        state, work, maxPasses = params.cyclicSwapPasses, maxK = params.cyclicSwapMaxK,
+                        kTrialsPerDay = params.cyclicSwapKTrialsPerDay, seed = roundSeed(seed, SeedTag.CYCLIC_N, round),
+                        shouldStop = stop,
+                    )
+                },
+                // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
+                ClusterStep(PostStages.C1_SAME_DAY, "c1",
+                    enabled = { C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work)).also { c1Actionable = it } },
+                    // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
+                    after = { r -> r.plateau?.let { fresh -> c1Plateau = c1Plateau?.mergedWith(fresh) ?: fresh } }) { work, stop ->
+                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C1_INDEX, "c1", enabled = { c1Actionable }) { work, stop ->
+                    C1RepairOperators.indexChainRepair(state, work, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_INDEX, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 時系列 DP＋同日ジョイント再割当（3.254.0 の ablation で一本化）。広域ビームより前に置く（逆順は golden で劣化を実測）。
+                ClusterStep(PostStages.C1_TEMPORAL, "c1") { work, stop ->
+                    C1RepairOperators.temporalFlow(
+                        state, work, maxPasses = params.c1FlowPasses, maxRelocations = params.c1FlowRelocations, trials = params.c1FlowTrials,
+                        shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_FLOW, round),
+                    )
+                },
+                ClusterStep(PostStages.C1_BEAM, "c1") { work, stop ->
+                    C1RepairOperators.wideBeam(state, work, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_BEAM, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
+                ClusterStep(PostStages.C1_EXACT, "c1", memo = true) { work, stop -> C1RepairOperators.exactWindow(state, work, shouldStop = stop) },
+                ClusterStep(PostStages.C3_SEQUENCE, "c3", memo = true, after = { r -> rC3 = r }) { work, stop ->
+                    C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = stop)
+                },
+                // 3 者回転は O(候補^3) で通常時の寄与ゼロ（3.300.0 ablation）＝主手が詰まった巡と最終巡だけの脱出手。
+                ClusterStep(PostStages.C3_ROTATE, "c3回転", memo = true, enabled = { rC3?.applied == 0 || round == params.maxRounds - 1 }) { work, stop ->
                     C3RotationPolish.applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = params.c3RotatePasses, shouldStop = stop)
-                })
-            }
-            take("c3mn玉突き", chain.timed(PostStages.C3MN.label + tag, PostStages.C3MN.key) { work ->
-                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
-            })
-            take("c3n", chain.timed(PostStages.C3N.label + tag, PostStages.C3N.key) { work ->
-                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
-            })
-            take("range玉突き", chain.timed(PostStages.RANGE.label + tag, PostStages.RANGE.key) { work ->
-                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
-            })
-            take("c3run玉突き", chain.timed(PostStages.C3_RUN.label + tag, PostStages.C3_RUN.key) { work ->
-                C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round), wideC3n = params.wideC3nBreakDays)
-            })
-            take("c3pattern玉突き", chain.timed(PostStages.C3_PATTERN.label + tag, PostStages.C3_PATTERN.key) { work ->
-                C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3PATTERN, round), wideC3n = params.wideC3nBreakDays)
-            })
-            // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
-            take("アンカー窓交換", memoTimed(PostStages.ANCHORED_WINDOW.label + tag, PostStages.ANCHORED_WINDOW.key) { work, stop ->
-                AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
-                    state, work, mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = params.anchorWindowPasses,
-                    maxEvaluations = params.anchorWindowEvaluations, shouldStop = stop,
-                )
-            })
-            // 希望島研磨（3.496.0、ユーザー提示の確定仕様）。
-            take("希望島", memoTimed(PostStages.WISH_ISLAND.label + tag, PostStages.WISH_ISLAND.key) { work, stop ->
-                WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = stop)
-            })
-            take("ブロック交換", memoTimed(PostStages.BLOCK_SWAP.label + tag, PostStages.BLOCK_SWAP.key) { work, stop ->
-                AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
-                    state, work,
-                    AdaptiveBlockSwapPolish.CyclicParams(
-                        maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
-                        maxEvaluations = params.blockSwapEvaluations,
-                    ),
-                    shouldStop = stop,
-                )
-            })
-            if (params.countChainEnabled) {
-                take("回数連鎖", chain.timed(PostStages.COUNT_CHAIN.label + tag, PostStages.COUNT_CHAIN.key) { work ->
+                },
+                ClusterStep(PostStages.C3MN, "c3mn玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3N, "c3n") { work, stop ->
+                    C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.RANGE, "range玉突き") { work, stop ->
+                    RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3_RUN, "c3run玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3RUN, round), wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3_PATTERN, "c3pattern玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3PATTERN, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
+                ClusterStep(PostStages.ANCHORED_WINDOW, "アンカー窓交換", memo = true) { work, stop ->
+                    AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+                        state, work, mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = params.anchorWindowPasses,
+                        maxEvaluations = params.anchorWindowEvaluations, shouldStop = stop,
+                    )
+                },
+                // 希望島研磨（3.496.0、ユーザー提示の確定仕様）。
+                ClusterStep(PostStages.WISH_ISLAND, "希望島", memo = true) { work, stop ->
+                    WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = stop)
+                },
+                ClusterStep(PostStages.BLOCK_SWAP, "ブロック交換", memo = true) { work, stop ->
+                    AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+                        state, work,
+                        AdaptiveBlockSwapPolish.CyclicParams(
+                            maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
+                            maxEvaluations = params.blockSwapEvaluations,
+                        ),
+                        shouldStop = stop,
+                    )
+                },
+                ClusterStep(PostStages.COUNT_CHAIN, "回数連鎖", enabled = { params.countChainEnabled }) { work, stop ->
                     CountChainPolish.applyCountChainPolish(state, work, config = if (params.deterministic) CountChainPolish.Config(maxMillis = 60_000L) else CountChainPolish.Config(),
-                        shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round))
+                        shouldStop = stop, seed = roundSeed(seed, SeedTag.RANGE, round))
                         .also { TuningTelemetry.countChainApplied.addAndGet(it.applied) }
-                })
-            }
-            take("apt玉突き", chain.timed(PostStages.APT.label + tag, PostStages.APT.key) { work ->
-                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
-            }, toleranceFamily = "apt")
-            take("fair玉突き", chain.timed(PostStages.FAIR.label + tag, PostStages.FAIR.key) { work ->
-                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
-            }, toleranceFamily = "fair")
-            // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
-            val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
-            if (pool.size >= 2) {
-                take("成分修復", chain.timed(PostStages.COMPONENT_REPAIR.label + tag, PostStages.COMPONENT_REPAIR.key) { work ->
-                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = clusterStop)
-                })
-            }
+                },
+                ClusterStep(PostStages.APT, "apt玉突き", toleranceFamily = "apt") { work, stop ->
+                    AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.FAIR, "fair玉突き", toleranceFamily = "fair") { work, stop ->
+                    AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
+                },
+                // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
+                ClusterStep(PostStages.COMPONENT_REPAIR, "成分修復",
+                    enabled = { pool = chain.rejectedPool.toList(); chain.rejectedPool.clear(); pool.size >= 2 }) { work, stop ->
+                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = stop)
+                },
+            ))
 
             round++
             if (roundApplied == 0) break   // この巡で 1 手も採用なし＝joint 局所最適に到達
