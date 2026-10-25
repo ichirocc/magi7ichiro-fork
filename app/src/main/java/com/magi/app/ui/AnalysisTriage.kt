@@ -391,3 +391,13 @@ internal fun repeatedEmptyAction(wishOnTarget: Boolean, settingIssueKnown: Boole
     settingIssueKnown -> RepeatedEmptyAction.SETTINGS
     else -> null
 }
+
+/** 俯瞰カードの必須違反。ほかの画面と同じく単位ごとに（件と人を足さない）。旧: 件と人を足した「4」で、上部の札「1か所」と合わなかった（2026-10-25 実機）。 */
+internal fun v6HardStat(breakdown: Map<String, Int>, hard: Int): String =
+    if (breakdown.isEmpty()) hard.toString() else hardText(breakdown, hard.toLong())
+
+/** 俯瞰カードの指標の行。目安の回数・ばらつきはチェッカーの件数（内訳・違反一覧と同じ数）。旧: 別の式（二乗の相対偏差・分散）の小数を同じ名前で出し、
+ *  ほかの画面の件数と合わなかった（2026-10-25 実機「グループ内の回数のばらつき=299.33」、チェッカーは 31）。 */
+internal fun v6MetricLine(breakdown: Map<String, Int>, v6: com.magi.app.v6.V6PortReport): String =
+    (if (breakdown.isEmpty()) "" else "${breakdownLabels["apt"] ?: "apt"}=${breakdown["apt"] ?: 0} / ${breakdownLabels["fair"] ?: "fair"}=${breakdown["fair"] ?: 0} / ") +
+        "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}"

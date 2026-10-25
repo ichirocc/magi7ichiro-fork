@@ -1460,7 +1460,7 @@ internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun V6DashboardCard(v6: V6PortReport?) {
+internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = emptyMap()) {
     if (v6 == null) return
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -1494,7 +1494,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                 // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
                 //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
                 // 必須違反はホーム等と同じ全必須（担当外シフトを含む）＝担当外はその内数として並べる。
-                BigStat("必須違反", (v6.hardCore + v6.hardGuard).toString(), Modifier.weight(1f))
+                BigStat("必須違反", v6HardStat(breakdown, v6.hardCore + v6.hardGuard), Modifier.weight(1f))
                 BigStat("うち" + (breakdownLabels["groupViol"] ?: "groupViol"), v6.hardGuard.toString(), Modifier.weight(1f))
                 BigStat("充足", v6.coveragePct?.let { "$it%" } ?: "-", Modifier.weight(1f))
             }
@@ -1508,9 +1508,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             //   要確認のみトグル＋タップ修復）が上位互換のため撤去（3.195.0 で保留した次点候補の実施）。
             Spacer(Modifier.height(10.dp))
             Text(
-                "${breakdownLabels["apt"] ?: "apt"}=${"%.2f".format(v6.aptPenalty)} / " +
-                    "${breakdownLabels["fair"] ?: "fair"}=${"%.2f".format(v6.equPenalty)} / " +
-                    "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}",
+                v6MetricLine(breakdown, v6),
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2172,3 +2170,4 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bar
         }
     }
 }
+

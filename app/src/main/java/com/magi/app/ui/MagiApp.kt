@@ -1011,7 +1011,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onPrimary = { p -> if (p == AnalysisPrimary.TOUR) goTourItem(0) else if (p == AnalysisPrimary.GUIDED) guidedFix = true },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
-                    if (proMode) V6DashboardCard(ui.v6)
+                    if (proMode) V6DashboardCard(ui.v6, ui.breakdown)
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,
                         onConsult = { vm.addConsult(consultFix(it)) }, onCancelConsult = { vm.cancelConsult(it) })
                 }
