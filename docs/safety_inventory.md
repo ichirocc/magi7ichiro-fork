@@ -83,7 +83,7 @@ CI の対応（以下「CI」列の略号）
 | U-03 weight lint の数値の形 | 解決 | `10_000L`・`1e4` を拾う（`tools/test_weight_lint.py`、V6 Engine Check で実行）。断片の移動も検出（2026-10-24） |
 | U-04 versionCode の重複 | 解決 | `tools/check_version.py`（Design Lint で実行） |
 | 新 S-01 SOFT の桁あふれ | 解決 | 個人の下限 1 億で差分評価が必須を 43 と誤って返した。実行前の検証 `Ws1Ops.countSettingError`（回数の設定 ≤ 1 万）と、差分評価の桁の検査（`SoftOverflowGuardTest`） |
-| 機構の穴 1 NativeGate の退化 | 一部 | `NativeGateFallbackTest` は退化後の経路を固定するが、実際の JNI からの不一致の検出は通らない（`.so` が無い）。native-parity CI が C++ と Kotlin の一致を別に守る |
+| 機構の穴 1 NativeGate の退化 | 解決（JNI そのものは除く） | `NativeGateIntegrationTest`: `NativeGate.saSeamForTest`（試験用の差し替え口、本番は null）に偽の SA チャンクを差し込み、実際の `SaOptimizer` の経路で 2 層目の照合 NG・1 層目の自己整合 NG → ゲートが閉じて Kotlin へ退化し、結果が Kotlin のフル評価と一致・入力より悪くならないことを確かめる。JNI の呼び出し自体は native-parity CI が守る |
 | 機構の穴 2 保存の再試行 | 一部 | `SaveRetryWiringTest` は失敗・再試行・復旧の状態遷移を固定。実ファイルの書き直しまでは見ない（ViewModel はホストで組めない） |
 
-残る未解決: M-04（計測待ち）、U-05（文書の運用）、機構の穴 1・2（一部）。
+残る未解決: M-04（計測待ち）、機構の穴 2（一部＝保存の再試行の実ファイル）。

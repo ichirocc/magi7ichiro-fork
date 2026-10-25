@@ -76,6 +76,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
 
     private val M = SCORE_HARD_UNIT
 
+    /** [NativeGate.saSeamForTest] を使う実行の目印のハンドル（C++ の問題データを作らない・破棄しない）。 */
+    private val SEAM_HANDLE = -1L
+
     suspend fun run(
         params: SaParams = SaParams(),
         onProgress: (SaProgress) -> Unit = {},
@@ -96,8 +99,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         //   問題データで全ワーカー共有（チャンクの可変状態は C++ 側ローカル＝スレッド安全）。
         // [Stage11] PhaseB(LAHC) も C++ チャンク化したため softPolish 有効時もネイティブ経路を使う
         //   （旧: !softPolish 条件で、既定ON の仕上げ最適化トグルにより SA ネイティブが事実上無効だった）。
-        val nativeHandle = if (NativeGate.usable)
-            runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L) else 0L
+        val seam = NativeGate.saSeamForTest
+        val nativeHandle = if (seam != null) (if (NativeGate.enabled && NativeGate.userEnabled) SEAM_HANDLE else 0L)
+            else if (NativeGate.usable) runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L) else 0L
         val jobs = (0 until params.workers).map { w ->
             async(Dispatchers.Default) {
                 // [多様化] params.seed!=0 なら各仮説の固有シードを使用（runMultiWorker が仮説ごとに別シードを渡す）。
@@ -129,7 +133,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             //   NonCancellable 下で行い、外側キャンセル中でも join/破棄自体は必ず完了させる。
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 jobs.forEach { job -> job.cancel(); runCatching { job.join() } }
-                if (nativeHandle != 0L) NativeBridge.nativeDestroyProblem(nativeHandle)
+                if (nativeHandle != 0L && nativeHandle != SEAM_HANDLE) NativeBridge.nativeDestroyProblem(nativeHandle)
             }
         }
 
@@ -173,7 +177,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         while (!timeUp()) {
             coroutineContext.ensureActive()
             val ret = runCatching {
-                NativeBridge.nativeSaChunk(handle, cur, best, bestScore, rng.nextLong(),
+                val seam = NativeGate.saSeamForTest
+                if (handle == SEAM_HANDLE && seam != null) seam.saChunk(cur, best, bestScore, rng.nextLong())
+                else NativeBridge.nativeSaChunk(handle, cur, best, bestScore, rng.nextLong(),
                     params.t0, params.tf, params.alpha, params.chain)
             }.getOrNull()
             if (!NativeGate.chunkConsistent(ret, 6)) {
@@ -204,7 +210,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             if (timeUp()) return true
             // [Stage11] HARD 床到達（hardStallMs 無改善）で PhaseB=LAHC ソフト研磨へ恒久切替
             //   （Kotlin runWorker の phaseB=true と同じ一方向遷移。以後は予算末まで LAHC）。
-            if (params.softPolish && (System.nanoTime() / 1_000_000L) - lastHardImprove > params.hardStallMs) {
+            if (params.softPolish && handle != SEAM_HANDLE && (System.nanoTime() / 1_000_000L) - lastHardImprove > params.hardStallMs) {
                 TuningTelemetry.lahcEntered.incrementAndGet()
                 return runLahcNative(handle, best, bestScore, params, rng, start, flush)
             }
