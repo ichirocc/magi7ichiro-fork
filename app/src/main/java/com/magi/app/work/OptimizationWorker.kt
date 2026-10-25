@@ -57,7 +57,7 @@ class OptimizationWorker(
 
     override suspend fun doWork(): Result =
         try { runWork() } finally {
-            gatesBefore?.let { com.magi.app.v6.PolishGate.restore(it) }
+            gatesBefore?.let { synchronized(com.magi.app.v6.PolishGate) { com.magi.app.v6.PolishGate.restore(it) } }
             OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L))
         }
 
@@ -138,8 +138,13 @@ class OptimizationWorker(
         // 投入時の探索設定を戻す（プロセス終了後の再開では設定画面を経ずに Worker だけが起き、既定値で走っていた）。
         //   実行中は設定画面の変更が無効なので、同じプロセスでも投入時の値と一致する。
         // 終わったら投入前の値へ戻す（プロセス再起動後の再開では画面は既定値のまま＝戻さないと次回以降の実行が画面と食い違う）。
-        gatesBefore = com.magi.app.v6.PolishGate.snapshot()
-        com.magi.app.v6.PolishGate.restore(cfg.gates)
+        //   書き戻しと設定の写し（EngineConfig）はひとまとめに取る＝置き換えで新旧の Worker が重なっても、別の Worker の設定で走らない
+        //   （エンジンは写しだけを読む＝T-7。2026-10-25 の外部レビュー）。
+        val engineConfig = synchronized(com.magi.app.v6.PolishGate) {
+            gatesBefore = com.magi.app.v6.PolishGate.snapshot()
+            com.magi.app.v6.PolishGate.restore(cfg.gates)
+            com.magi.app.v6.EngineConfig.snapshot()
+        }
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         // [3.428.0/#43] 前景化の失敗を**残す**。旧: 握り潰していたため、前景サービスになれないまま
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
@@ -184,6 +189,7 @@ class OptimizationWorker(
                 softPolish = cfg.softPolish,
                 requestedAlgorithm = cfg.algorithm,
                 allowImpossible = true,
+                config = engineConfig,
             ) { phase, report, iters, elapsed ->
                 if (report != null) {
                     // [実機報告「残り時間表示が5分から何度も巡回する」修正] onProgressのelapsedはフェーズ

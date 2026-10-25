@@ -5,22 +5,22 @@ import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.StateFingerprint
 
 /**
- * [3.644.0/UX-05・仕様 5.4] 勤務表 CSV の「保存済み」の印。書き出した**文字列**（のハッシュ）と、その時の state・盤面を持つ。保存の成功は
+ * [3.644.0/UX-05・仕様 5.4] 勤務表 CSV の「保存済み」の印。書き出した**文字列**そのもの（2026-10-25 まではその 32 ビットのハッシュ＝衝突すると違う内容を保存済みと言い得た）と、その時の state・盤面を持つ。保存の成功は
  * 書き出し時の文脈に結ぶ＝書き出しのあと（ピッカーや書き込みの間）に盤面が変わっても、変わった盤面を「保存済み」と言わない。
  * Android に依存しない（host テスト `CsvSavedMarkTest`）。
  */
 class CsvSavedMark(private val buildCsv: (MagiState, Array<IntArray>) -> String = ScheduleCsvBridge::build) {
-    private class Ctx(val st: MagiState, val boardKey: Long, val textHash: Int)
+    private class Ctx(val st: MagiState, val boardKey: Long, val text: String)
     private var exportCtx: Ctx? = null
     private var savedCtx: Ctx? = null
     private var checkKey: Pair<MagiState, Long>? = null
-    private var checkHash = 0
+    private var checkText: String? = null
 
-    fun noteExport(st: MagiState, sched: Array<IntArray>, csv: String) { exportCtx = Ctx(st, StateFingerprint.ofBoard(sched), csv.hashCode()) }
+    fun noteExport(st: MagiState, sched: Array<IntArray>, csv: String) { exportCtx = Ctx(st, StateFingerprint.ofBoard(sched), csv) }
 
     /** 保存の成功。書き出した文字列の文脈に結ぶ。無ければ今の内容（旧経路の互換）。 */
     fun noteSaved(st: MagiState?, sched: Array<IntArray>?) {
-        savedCtx = exportCtx ?: if (st != null && sched != null) Ctx(st, StateFingerprint.ofBoard(sched), buildCsv(st, sched).hashCode()) else null
+        savedCtx = exportCtx ?: if (st != null && sched != null) Ctx(st, StateFingerprint.ofBoard(sched), buildCsv(st, sched)) else null
     }
 
     /** 別のデータや別の月に移ったら、前の CSV の保存は今の内容と関係がない＝印を消す。 */
@@ -35,8 +35,8 @@ class CsvSavedMark(private val buildCsv: (MagiState, Array<IntArray>) -> String 
         if (st == null || sched == null) return false
         val bk = StateFingerprint.ofBoard(sched)
         if (c.st === st && c.boardKey == bk) return true
-        if (checkKey?.first !== st || checkKey?.second != bk) { checkKey = st to bk; checkHash = buildCsv(st, sched).hashCode() }
-        return checkHash == c.textHash
+        if (checkKey?.first !== st || checkKey?.second != bk) { checkKey = st to bk; checkText = buildCsv(st, sched) }
+        return checkText == c.text
     }
 
     /** 保存した内容と今の内容を区別する 1 行（保存の印または時刻が無ければ null）。 */
