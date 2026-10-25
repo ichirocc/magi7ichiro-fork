@@ -267,6 +267,19 @@ class RunFilesTest {
         assertTrue("一時ファイルの残骸を残さない", tmp.root.listFiles()!!.none { it.name.contains(".tmp") })
     }
 
+    /** `onNonAtomic` を渡さない呼び出し（背景の入力・途中経過・完了結果）でも、諦めたことがファイル名で残る（M-01）。 */
+    @Test
+    fun givingUpWithoutACallbackIsStillRecorded() {
+        NonAtomicWrites.drain()
+        val target = File(tmp.root, "bg-in-the-way")
+        assertTrue(target.mkdirs())
+        runCatching { files().writeAtomically(target, "v1") { true } }
+        assertEquals(listOf("bg-in-the-way"), NonAtomicWrites.drain())
+        assertEquals("取り出したら空", emptyList<String>(), NonAtomicWrites.drain())
+        assertTrue(files().writeAtomically(File(tmp.root, "ok2.json"), "v1") { true })
+        assertEquals("rename が成立した書き込みは積まない", emptyList<String>(), NonAtomicWrites.drain())
+    }
+
     /** 「やめる」が背景の停止になるのは Worker が走っているか投入した実行がまだ所有者のときだけ（失敗した Worker は runId ファイルを消す）。 */
     @Test
     fun stopIsABackgroundStopOnlyWhileTheEnqueuedRunStillOwnsTheFiles() {

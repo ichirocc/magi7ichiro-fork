@@ -913,6 +913,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 一度だけ記録したか（1.2秒ごとに走るので毎回は出さない）。main からのみ触る。 */
     private var nonAtomicSaveLogged = false
+    /** 自動保存以外で原子置換を諦めたと記録済みのファイル名（main からのみ触る）。 */
+    private val nonAtomicNamesLogged = HashSet<String>()
 
     /**
      * rename が使えず**原子性を諦めて直接書いた**ことを記録する。書き込みは成功しうるので失敗としては
@@ -920,6 +922,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 入れた動機そのもの）。旧: 黙ってフォールバックしており、後から読める痕跡が無かった。
      */
     private fun reportNonAtomicSave() {
+        // 自動保存以外（背景の入力・途中経過・完了結果など onNonAtomic を渡さない書き込み）の諦めも、ファイルごとに 1 度だけ残す（M-01）。
+        com.magi.app.work.NonAtomicWrites.drain().distinct().filter { nonAtomicNamesLogged.add(it) && it != autosaveFile.name }.takeIf { it.isNotEmpty() }?.let {
+            logOp("W", "原子置換（一時ファイルの差し替え）が使えず直接書き込みました: ${it.joinToString("・")}（書き込み中にアプリが強制終了するとそのファイルが使えなくなる可能性があります）")
+        }
         if (nonAtomicSaveLogged || !nonAtomicSaveSeen) return
         nonAtomicSaveLogged = true
         logOp("W", "自動保存で原子置換（一時ファイルの差し替え）が使えず直接書き込みました" +

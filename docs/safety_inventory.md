@@ -48,7 +48,7 @@ CI の対応（以下「CI」列の略号）
 | L-06 | MUS の証明が手動固定を数える（3.717/3.723） | 検証済み | `ConstraintMusTest.staffMusCountsManualPinsLikeWishes` / `staffMusMixesWishAndManualPin`（`ConstraintMus.kt:34`/`:90`） |
 | L-07 | 重み付き中央値 | 設計どおり | 3.541.0 の案 E。`FairAchievementV2Test.weightedMedianIgnoresTheMemberAtTheEdgeOfHisOwnBand` |
 | L-08 | apt の補正値を保存しない | 設計どおり | 3.508.0 の決定（保存するのは設定値、実効値は評価のたびに計算）。`AptReachClampTest.appliedTargetIsClampedToTheReachableRange` ほか 5 件 |
-| M-01 | 原子保存のコールバックの既定（3.428） | 未解決（一部） | `RunFilesTest.givingUpAtomicReplaceIsReported` / `normalAtomicWriteDoesNotReportFallback` は通知を固定している。ただし `onNonAtomic` の既定は `{}`（`RunFiles.kt:145`）のままで、`MagiViewModel.kt:1226` の `prevBackupFile` 書き込みは省略している。原子性を諦めても記録が残らない。足すべきテスト: 既定を外したうえでの `RunFilesTest.everyCallerHandlesNonAtomicFallback`（または引数を必須にしてコンパイルで保証する） |
+| M-01 | 原子保存のコールバックの既定（3.428） | 解決（2026-10-25） | 置き換えの実体（`commitAndReplace`）が諦めたファイル名を `NonAtomicWrites` へ必ず積む＝`onNonAtomic` を渡さない呼び出し（背景の入力・途中経過・完了結果、`RunFiles.kt`）でも残る。画面は自動保存の記録のときに取り出し、ファイルごとに 1 度だけ操作ログへ出す（`MagiViewModel.reportNonAtomicSave`）。`prevBackupFile` は既に `onNonAtomic` を渡していた。`RunFilesTest.givingUpWithoutACallbackIsStillRecorded` |
 | M-02 | WorkManager の enqueue の失敗 | 記録あり・テスト無し | `MagiViewModel.kt:673-708`（外部レビュー P1-02 で同期の失敗、3.592.0 で非同期の失敗を片付けるようにした）。`BgHandoffTest.theGuardClosesAtEnqueueAndOnlyItsOwnRunOpensIt` はゲートだけを見る。足すべきテスト: 片付けの判定を切り出す `BgEnqueueFailureTest.asyncEnqueueFailureCleansUpOnlyTheCurrentRun` |
 | M-03 | 予算を何か所でも定義している | 未解決（軽微） | 定数は `V6FinalPort.kt:21/23`（`POST_RESERVE_SEC`/`CHAIN_RESERVE_SEC`）。合算は UI が 3 か所で別々に書いている（`CellSheetLogic.kt:1682`、`MagiSetupCards.kt:221`、`PreRunCheckSheet.kt:53`）。ほかに `MagiViewModel.kt:251` は予算+600 秒、`SaOptimizer.kt:29` の既定は 8000ms。`BudgetOverrunTest` が固定しているのは実時間の上限だけ |
 | M-04 | RSI+ の按分が予算を超える | 未解決（計測待ち） | backlog #16（35 秒の暗黙の下限、`BudgetOverrunTest` で見つかった）。3.723.0 は探索動学の扱いとして触っていない |
@@ -86,4 +86,4 @@ CI の対応（以下「CI」列の略号）
 | 機構の穴 1 NativeGate の退化 | 一部 | `NativeGateFallbackTest` は退化後の経路を固定するが、実際の JNI からの不一致の検出は通らない（`.so` が無い）。native-parity CI が C++ と Kotlin の一致を別に守る |
 | 機構の穴 2 保存の再試行 | 一部 | `SaveRetryWiringTest` は失敗・再試行・復旧の状態遷移を固定。実ファイルの書き直しまでは見ない（ViewModel はホストで組めない） |
 
-残る未解決: M-01（一部）、M-04（計測待ち）、U-05（文書の運用）、機構の穴 1・2（一部）。
+残る未解決: M-04（計測待ち）、U-05（文書の運用）、機構の穴 1・2（一部）。
