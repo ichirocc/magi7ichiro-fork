@@ -1513,13 +1513,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         // [3.692.0] 確認（3.679.0）を通ったかをログで読めるようにする。[3.697.0] 行は完了の後＝置き換える前と後の必須を並べる。
         val replacing = confirmed && u.draftConfirm != null
-        if (u.draftConfirm != null) _ui.update { it.copy(draftConfirm = null) }
         // [3.271.0, 実機ログ起因] 実行中ガード。旧: ガード無しのため「勤務表をつくる」の直後に隣接する
         //   本ボタンを連続タップすると、走行中の最適化と初期解生成が併走し、job 参照の上書き
         //   （走行中jobが stop() 不能のゾンビ化）と currentSchedule の同時書き換え（3.161.0 と同じ
         //   別名共有クラス）が起きていた（実機ログ 19:56:41 最適化開始→19:56:48 初期解生成完了 で実証）。
         //   runV6FullOptimize/start/runSoftPolish と同じガードに統一（3.161.0 のセル編集ガードと同方針）。
+        //   確認のあとに別の実行が始まっていたら断るだけで確認は閉じない（確認を消してから断ると選び直せない）。
         if (runBlockedByInFlight("下書きづくり")) return
+        if (u.draftConfirm != null) _ui.update { it.copy(draftConfirm = null) }
         if (!ensureValidForRun(st, sched, "下書きづくり")) return
         val ui0 = _ui.value
         pushUndo("下書き作成")

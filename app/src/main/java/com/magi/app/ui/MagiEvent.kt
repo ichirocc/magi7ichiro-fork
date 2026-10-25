@@ -62,7 +62,10 @@ internal sealed interface MagiEvent {
         data object SetNextMonth : Structure
         /** [3.643.0] 月を移す確認への答え（true＝希望を消して移る）。 */
         data class ConfirmMonthMove(val clearWishes: Boolean) : Structure
-        data object CancelMonthMove : Structure
+        /** 確認を閉じるだけ（何も変えない）＝実行中でも通す。確認のあとに作成が始まっても閉じられるように。 */
+        data object CancelMonthMove : Structure {
+            override val kind: MagiEventKind get() = MagiEventKind.Always
+        }
         data class AddSkillGroup(val name: String, val kigou: String) : Structure
         data class EditSkillGroup(val group: Int, val name: String, val kigou: String) : Structure
         data class RemoveSkillGroup(val group: Int) : Structure
