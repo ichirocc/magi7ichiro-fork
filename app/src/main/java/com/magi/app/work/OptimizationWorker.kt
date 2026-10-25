@@ -128,7 +128,6 @@ class OptimizationWorker(
         }
             .onSuccess { step("入力退避") }
             .onFailure { note("入力の退避に失敗（この実行は途中でプロセスが終了すると復元できません）", it) }
-        OptimizationRepository.setRunning(true)
         // [P2修正/レビュー指摘] 予算秒数・並列数は WorkManager の inputData から復元する。
         //   旧: インメモリの OptimizationRepository のみで、プロセス再起動後は既定の 60秒/4並列 に
         //   化けていた（300秒/8並列で開始したジョブが別条件で再実行される）。inputData は WorkManager が
@@ -182,7 +181,12 @@ class OptimizationWorker(
         // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝間引きの時刻・所有権の旗の読み書きを直列化する。
         val progressLock = Any()
         val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
+        var runningSetByMe = false
         return try {
+            // 実行中は try の中で、まだ所有しているときだけ立てる。旧: try の前（前景化より前）で無条件に立て、
+            //   その間の停止（前景化で CancellationException）が finally を通らず、所有権確認の後の停止は所有者でないので降ろされず、
+            //   どちらも running が残った（2026-10-25）。確認と立てる間の停止は finally の `releaseRunningAtEnd` が拾う。
+            if (ownsFiles()) { OptimizationRepository.setRunning(true); runningSetByMe = true }
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
                 schedule = req.second.copy2D(),
@@ -368,7 +372,7 @@ class OptimizationWorker(
             //   旧実行がここを通ると、まだ動いている新実行の「実行中」を消してしまう。
             // [3.333.0] `releasedByMe` は「自分が正常完了してマーカーを消した」＝実行中を降ろすのが
             //   正しい経路。ここを見ないと完了後に実行中が残り続けた（上のコメント参照）。
-            if (shouldReleaseRunning(releasedByMe, ::ownsFiles)) OptimizationRepository.setRunning(false)
+            if (releaseRunningAtEnd(releasedByMe, runningSetByMe, ::ownsFiles) { files(ctx).activeRunId() }) OptimizationRepository.setRunning(false)
             // [3.387.0] 3.382.0 と同じ保証＝どの経路を通っても終端行が1つは残る。
             //   ここへ落ちたら「想定外の経路」（Error など catch(Exception) が拾わないもの）を疑う。
             terminal("終了: 完了・停止・失敗のいずれも記録されませんでした（想定外の経路。Error(OOM等)や停止処理自体の失敗が疑われます）", "W")
