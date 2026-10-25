@@ -70,3 +70,20 @@ CI の対応（以下「CI」列の略号）
 ### 機構側のテストの穴（Q-02 から）
 1. NativeGate が閉じて Kotlin へ退化する経路は JUnit で一度も通っていない（`.so` が無いため）。足すなら、`SaOptimizer` の照合部分を注入できる形にして `NativeGateFallbackTest.mismatchDisablesGateAndKotlinResultIsUsed`。
 2. `retrySave` と世代の採番は ViewModel の層にあり、テストしていない（`SaveGate` 単体だけ）。
+
+## 2026-10-24 の再照合（ブランチ `claude/merge-wub4fq`、外部レビュー「監査資料と実装のずれ」）
+上の表は 3.723.0 時点の棚卸し。いまのコードとテストで照合し直した状態:
+
+| ID | 状態 | 根拠 |
+|---|---|---|
+| M-03 予算の定義が複数 | 解決（エンジン側） | `TimeBudget`・`BudgetShare`（全面改修 P3、`TimeBudgetTest`）。各段の締切は `PostStageDeadlineTest`（T-9） |
+| M-06 グループ上限 0 | 解決（業務判断済み） | P8（`docs/overhaul_design.md` §6.9） |
+| M-07 職員を名前で照合 | 解決 | P9＝`Staff.id`（`docs/data-models.md`） |
+| U-01 TalkBack の読み上げ順 | 対応（実機確認待ち） | 勤務表に `collectionInfo`・`traversalIndex`・`isTraversalGroup`（R-02、`MagiScheduleViews.kt`）。実機の TalkBack は T-18 |
+| U-03 weight lint の数値の形 | 解決 | `10_000L`・`1e4` を拾う（`tools/test_weight_lint.py`、V6 Engine Check で実行）。断片の移動も検出（2026-10-24） |
+| U-04 versionCode の重複 | 解決 | `tools/check_version.py`（Design Lint で実行） |
+| 新 S-01 SOFT の桁あふれ | 解決 | 個人の下限 1 億で差分評価が必須を 43 と誤って返した。実行前の検証 `Ws1Ops.countSettingError`（回数の設定 ≤ 1 万）と、差分評価の桁の検査（`SoftOverflowGuardTest`） |
+| 機構の穴 1 NativeGate の退化 | 一部 | `NativeGateFallbackTest` は退化後の経路を固定するが、実際の JNI からの不一致の検出は通らない（`.so` が無い）。native-parity CI が C++ と Kotlin の一致を別に守る |
+| 機構の穴 2 保存の再試行 | 一部 | `SaveRetryWiringTest` は失敗・再試行・復旧の状態遷移を固定。実ファイルの書き直しまでは見ない（ViewModel はホストで組めない） |
+
+残る未解決: M-01（一部）、M-04（計測待ち）、U-05（文書の運用）、機構の穴 1・2（一部）。

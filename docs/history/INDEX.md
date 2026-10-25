@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- SOFT の桁あふれを防ぐ・監査資料の再照合（2026-10-25、版なし、外部レビュー P1 の照合）: 個人の下限 1 億で差分評価が必須を 43 と誤って返すことを再現（フル評価は止まる）。実行前の検証 `Ws1Ops.countSettingError`（回数の設定 ≤ 1 万＝30 名×12 シフトが全部下限割れでも SOFT 約 4.3 億）と、`DeltaEvaluator.scoreFrom` の桁の検査（`SoftOverflowGuardTest`）。`safety_inventory.md` に再照合の節（M-03・M-06・M-07・U-01・U-03・U-04 を解決・対応へ、S-01 を追加）
 - 全面改修 P4f（2026-10-25、版なし・出力不変）: 後処理の段を `PostStep`＋`PostChain.runSteps` に（前段・中段・終段。巡回研磨クラスタの中は残り）。T-10・BoardHash・T-9・T-16 一致  → `docs/overhaul_design.md` §6.5
 - 全面改修 P10e と P10 の仕様（2026-10-24、版なし・出力不変、外部の仕様レビューを反映）: 共有の小関数を `SearchCommon.kt` へ出し、探索器から入口への import を 0 に（一方向の依存）。§6.8b に挙動不変の範囲（絶対不変・実質不変・差を許す）、残す基準、各ファイルの役割（肯定形）、据え置きの理由、最終構造、設計の完了条件を追記  → `docs/overhaul_design.md` §6.8b
 - 全面改修 P7（2026-10-24、版なし・文書のみ）: architecture.md・sudo_model.md を P3〜P6e・P10 の構造に合わせて正規化（21 族、探索器の分割、EngineConfig/T-7、ConstraintCatalog、PenaltyWeights、Staff.id、weekly の現行式、休の識別、タブ名）  → `docs/overhaul_design.md` §6.8

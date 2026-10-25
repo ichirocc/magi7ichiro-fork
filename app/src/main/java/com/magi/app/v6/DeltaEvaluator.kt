@@ -175,6 +175,8 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
         val soft = weightedSoft(sc1, sc2, sc41, sc42, sc41s, sc42s, sc3, sc3m, sc3mn, hct, sApt, sFair, sWeekly, scovO)
+        // `Evaluator.fullEval` と同じ契約: soft が桁を超えると HARD へ繰り上がり、必須の数を取り違える（黙って誤った値を返さない）。
+        check(soft in 0 until SCORE_HARD_UNIT) { "soft=$soft が辞書式パックの桁(${SCORE_HARD_UNIT})を超えました。回数の設定か重みを見直してください" }
         return h1 * SCORE_HARD_UNIT + soft
     }
 

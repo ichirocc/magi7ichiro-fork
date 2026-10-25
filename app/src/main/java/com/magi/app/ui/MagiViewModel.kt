@@ -1286,6 +1286,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (st.staffCount == 0) return "staff が空です"
         // [3.488.0] 読めない startDate を受理すると Problem.dow0 が黙って日曜へ落ちる（Ws1Ops.startDateError の KDoc）。
         Ws1Ops.startDateError(st)?.let { return it }
+        Ws1Ops.countSettingError(st)?.let { return it }
         if (st.dayCount == 0) return "schedule が空です"
         if (st.shiftCount == 0) return "shifts が空です"
         if (st.groupCount == 0) return "groups が空です"
