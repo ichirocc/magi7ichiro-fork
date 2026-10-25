@@ -216,6 +216,14 @@ internal object RsiSearch {
         return V6OptimizerResult(best, bestReport.copy(logs = logs + bestReport.logs), V6Algorithm.RSI, logs, iters, nowMs() - started)
     }
 
+    /** RSI++ の 4 フェーズ（Seed/Hypothesis/Refine/Polish）の秒。下限 10/10/10/5 のため 40 秒以下では合計が予算を超えることがある（M-04）。 */
+    internal fun rsiPlusPhaseSecs(budgetSec: Int): IntArray {
+        val seedSec = max(10, (budgetSec * 0.20).toInt())
+        val rsiSec = max(10, (budgetSec * 0.35).toInt())
+        val alnsSec = max(10, (budgetSec * 0.30).toInt())
+        return intArrayOf(seedSec, rsiSec, alnsSec, max(5, budgetSec - seedSec - rsiSec - alnsSec))
+    }
+
     internal suspend fun runRsiPlus(
         state: MagiState,
         initial: Array<IntArray>,
@@ -235,32 +243,36 @@ internal object RsiSearch {
             val rep = UnifiedViolationChecker.check(state, initial)
             return V6OptimizerResult(initial, rep, V6Algorithm.RSI_PLUS, logs, 0L, 0L)
         }
-        val seedSec = max(10, (budgetSec * 0.20).toInt())
-        val rsiSec = max(10, (budgetSec * 0.35).toInt())
-        val alnsSec = max(10, (budgetSec * 0.30).toInt())
-        val polishSec = max(5, budgetSec - seedSec - rsiSec - alnsSec)
+        val (seedSec, rsiSec, alnsSec, polishSec) = rsiPlusPhaseSecs(budgetSec)
+        // [M-04] フェーズ下限の合計が予算を超える（40 秒以下の一部）ときだけ、予算の締切でも止める。按分と手の選び方は変えない。
+        //   41 秒以上は按分の合計＝予算で従来と同じ経路。ポートフォリオのロールは stopRole（締切＝ロール開始＋quantum、
+        //   runRsiPlus の開始より前）が先に真になるので、ここでの締切は判定を変えない。
+        val stop: () -> Boolean = if (seedSec + rsiSec + alnsSec + polishSec > budgetSec) {
+            val end = started + budgetSec * 1000L
+            { shouldStop() || nowMs() >= end }
+        } else shouldStop
         // [2026-09-22/backlog#34] 各フェーズの実測msを予算msと並べてログへ出す。実機で観測された
         //   量子比最大約181倍（W5:MAX_DISTANCE_RSI_PLUS q=45s→実8166s）がSeed/Hypothesis/Refine/Polishの
         //   どこで生じたかは従来ログ（HARD/totalのみ）では特定できなかった。次の実機ログでの切り分け用。
         val seedT0 = nowMs()
-        val seed = runV5(state, initial, options, seedSec, shouldStop, onProgress)
+        val seed = runV5(state, initial, options, seedSec, stop, onProgress)
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase1 Seed: ${scoreOf(seed.report)} 実測${nowMs() - seedT0}ms(予算${seedSec}000ms)"))
         val rsiT0 = nowMs()
-        val rsiSkipped = shouldStop()
-        val rsi = if (rsiSkipped) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
+        val rsiSkipped = stop()
+        val rsi = if (rsiSkipped) seed else runRsi(state, seed.schedule, options, rsiSec, stop, onProgress, sharedHf63)
         // 拡張希望の禁止へ置いた段の結果は採らない（前段を維持）
         val p = cachedProblem(state)
         val base = if (better(rsi.report, seed.report) && p.keepsExtBan(seed.schedule, rsi.schedule)) rsi else seed
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase2 Hypothesis${if (rsiSkipped) "(スキップ)" else ""}: ${scoreOf(base.report)} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
         val alnsT0 = nowMs()
-        val refineSkipped = shouldStop()
-        val refine = if (refineSkipped) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
+        val refineSkipped = stop()
+        val refine = if (refineSkipped) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, stop, onProgress)
         val best = if (better(refine.report, base.report) && p.keepsExtBan(base.schedule, refine.schedule)) refine else base
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase3 Refine${if (refineSkipped) "(スキップ)" else ""}: ${scoreOf(refine.report)} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
         var bestSched = best.schedule
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
         run {
-            val lr = V6LateOperators.improve(state, bestSched, best.report, Random(actualSeed(options.seed) xor 0x528L), started + budgetSec * 1000L, rectEnabled = options.rectSwap, shouldStop = shouldStop)
+            val lr = V6LateOperators.improve(state, bestSched, best.report, Random(actualSeed(options.seed) xor 0x528L), started + budgetSec * 1000L, rectEnabled = options.rectSwap, shouldStop = stop)
             val fired = lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0
             // [監査#1] Chain3/4の受理(gateW)はweighted単層でHARD増を相殺受理し得るため、採用は
             //   runRsiと同じ better(hard→weighted→total) でゲートする（素通しでHARD悪化を最終出力しない）。
@@ -276,11 +288,11 @@ internal object RsiSearch {
             }
         }
         val polishT0 = nowMs()
-        val polishSkipped = shouldStop()
+        val polishSkipped = stop()
         val polish = if (polishSkipped) {
             PolishResult(bestSched, emptyList(), 0L, UnifiedViolationChecker.check(state, bestSched))
         } else {
-            hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop)
+            hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, stop)
         }
         val report = polish.report
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase4 Polish${if (polishSkipped) "(スキップ)" else ""}: ${scoreOf(report)} 実測${nowMs() - polishT0}ms(予算${polishSec}000ms) 全体実測${nowMs() - started}ms(予算${budgetSec}000ms)"))

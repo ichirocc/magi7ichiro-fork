@@ -51,7 +51,7 @@ CI の対応（以下「CI」列の略号）
 | M-01 | 原子保存のコールバックの既定（3.428） | 解決（2026-10-25） | 置き換えの実体（`commitAndReplace`）が諦めたファイル名を `NonAtomicWrites` へ必ず積む＝`onNonAtomic` を渡さない呼び出し（背景の入力・途中経過・完了結果、`RunFiles.kt`）でも残る。画面は自動保存の記録のときに取り出し、ファイルごとに 1 度だけ操作ログへ出す（`MagiViewModel.reportNonAtomicSave`）。`prevBackupFile` は既に `onNonAtomic` を渡していた。`RunFilesTest.givingUpWithoutACallbackIsStillRecorded` |
 | M-02 | WorkManager の enqueue の失敗 | 記録あり・テスト無し | `MagiViewModel.kt:673-708`（外部レビュー P1-02 で同期の失敗、3.592.0 で非同期の失敗を片付けるようにした）。`BgHandoffTest.theGuardClosesAtEnqueueAndOnlyItsOwnRunOpensIt` はゲートだけを見る。足すべきテスト: 片付けの判定を切り出す `BgEnqueueFailureTest.asyncEnqueueFailureCleansUpOnlyTheCurrentRun` |
 | M-03 | 予算を何か所でも定義している | 未解決（軽微） | 定数は `V6FinalPort.kt:21/23`（`POST_RESERVE_SEC`/`CHAIN_RESERVE_SEC`）。合算は UI が 3 か所で別々に書いている（`CellSheetLogic.kt:1682`、`MagiSetupCards.kt:221`、`PreRunCheckSheet.kt:53`）。ほかに `MagiViewModel.kt:251` は予算+600 秒、`SaOptimizer.kt:29` の既定は 8000ms。`BudgetOverrunTest` が固定しているのは実時間の上限だけ |
-| M-04 | RSI+ の按分が予算を超える | 未解決（計測待ち） | backlog #16（35 秒の暗黙の下限、`BudgetOverrunTest` で見つかった）。3.723.0 は探索動学の扱いとして触っていない |
+| M-04 | RSI+ の按分が予算を超える | 解決（2026-10-25） | 実測で RSI_PLUS 単独は予算 1・10・30 秒のどれでも約 36 秒（フェーズ下限 10/10/10/5）。下限の合計が予算を超えるときだけ `runRsiPlus` を予算の締切でも止める（按分と手の選び方は不変）→ 2.3・11.0・31.0 秒。41 秒以上は合計＝予算で従来の経路、ポートフォリオのロール（35 秒）は先に締切が来る `stopRole` が判定を決めるので不変（`RsiPlusPhasePlanTest`、`BudgetOverrunTest` は RSI_PLUS も 1 秒＋3 秒の枠へ） |
 | M-05 | fair の全走査（3.451） | 設計どおり | 3.723.0 の判断: fair の差分評価は該当する群×シフトだけを見る。`WeeklyFairMarginalTest.marginalDeltaMatchesFullCheckerAcrossRandomStates` / `fairMarginalAtIsZeroWhenGroupHasFewerThanTwoMembers`。3.451.0 の OOM 修正そのものに専用のテストは無い |
 | M-06 | グループ上限 0 の候補 | 未解決（業務判断） | 3.507.0 の決定は個人上限 0 だけを扱い、グループの上限 0 はその範囲外 |
 | M-07 | 職員を名前で突き合わせる | 未解決（データ項目の変更が要る） | 安定 ID は `docs/data-models.md` の変更になる（3.723.0）。`EditLandingTest` が同名の職員の扱いを固定している |
@@ -86,4 +86,4 @@ CI の対応（以下「CI」列の略号）
 | 機構の穴 1 NativeGate の退化 | 解決（JNI そのものは除く） | `NativeGateIntegrationTest`: `NativeGate.saSeamForTest`（試験用の差し替え口、本番は null）に偽の SA チャンクを差し込み、実際の `SaOptimizer` の経路で 2 層目の照合 NG・1 層目の自己整合 NG → ゲートが閉じて Kotlin へ退化し、結果が Kotlin のフル評価と一致・入力より悪くならないことを確かめる。JNI の呼び出し自体は native-parity CI が守る |
 | 機構の穴 2 保存の再試行 | 解決（ViewModel の配線は除く） | `SaveRetryWiringTest` は失敗・再試行・復旧の状態遷移を固定。書き込み本体を `SaveGate.writeTextIfLatest` へ出し（ViewModel はそれを呼ぶだけ）、`SaveRetryFileTest` が実ファイルで「書けない間は失敗・元の内容は残る→書ける状態での再試行で最新の本文が入り一時ファイルが残らない→その後に終わる古い世代は捨てる」を確かめる |
 
-残る未解決: M-04（計測待ち）。
+残る未解決: なし（M-04・機構の穴 2 は 2026-10-25 に解決）。
