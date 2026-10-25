@@ -1435,7 +1435,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val softText = { b: Map<String, Int> -> unitTotals(b, com.magi.app.v6.MirrorKeys.soft) ?: "なし" }
                 val rec = AgentRecord(r.steps.map { fixDisplayLabel(it.label) }, r.before.hard, r.after.hard,
                     softText(r.before.breakdown), softText(r.after.breakdown), agentStopWord(r.stop))
-                r.steps.forEach { s -> logOp("I", "代行: ${fixDisplayLabel(s.label)}（必須 ${s.hardBefore}→${s.hardAfter}・合計 ${s.totalBefore}→${s.totalAfter}）") }
+                r.steps.forEach { s -> logOp("I", "代行: ${fixDisplayLabel(s.label)}（必須 ${s.hardBefore}→${s.hardAfter}・合計 ${s.totalBefore}→${s.totalAfter}・重み ${s.weightedBefore}→${s.weightedAfter}）") }
                 logOp("I", "代行: 終了 ${r.steps.size}手（${rec.stop}）必須 ${r.before.hard}→${r.after.hard}")
                 if (r.steps.isEmpty()) { _ui.update { it.copy(agentRecord = rec) }; return@launch }
                 pushUndo("代行（${r.steps.size}手）")

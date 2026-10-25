@@ -9,7 +9,9 @@ import com.magi.app.model.MagiState
  * 入力の盤面は変えない。各手は正式なチェッカーで辞書式に改善し必須違反を新たに生まない＝結果は入力より悪くならない。
  */
 object AgentLoop {
-    data class Step(val label: String, val ops: List<FixCell>, val hardBefore: Int, val hardAfter: Int, val totalBefore: Int, val totalAfter: Int)
+    data class Step(val label: String, val ops: List<FixCell>, val hardBefore: Int, val hardAfter: Int, val totalBefore: Int, val totalAfter: Int,
+                    /** 採否の基準（必須の次）＝合計が増えても重みが下がれば当てる。ログに並べて「悪化に見える」を避ける。 */
+                    val weightedBefore: Long = 0L, val weightedAfter: Long = 0L)
 
     enum class Stop { NO_CANDIDATE, ROUND_LIMIT, TIME_LIMIT, CANCELLED }
 
@@ -51,7 +53,7 @@ object AgentLoop {
             }
             if (hit != null) {
                 val (c, ok) = hit
-                steps += Step(c.label, c.ops, ok.before.hard, ok.after.hard, ok.before.total, ok.after.total)
+                steps += Step(c.label, c.ops, ok.before.hard, ok.after.hard, ok.before.total, ok.after.total, ok.before.weightedScore.toLong(), ok.after.weightedScore.toLong())
                 cur = ok.schedule
                 report = ok.after
                 continue
@@ -65,7 +67,7 @@ object AgentLoop {
             for (i in cur.indices) for (j in cur[i].indices) if (w.getOrNull(i)?.getOrNull(j)?.let { it != cur[i][j] } == true) ops += FixCell(i, j, w[i][j])
             val ok = FixApplyGate.apply(state, cur, ops, p, report) as? FixApplyGate.Outcome.Applied
             if (ok == null) { stop = Stop.NO_CANDIDATE; break }
-            steps += Step("$WIDEN_LABEL（${ops.size}セル）", ops, ok.before.hard, ok.after.hard, ok.before.total, ok.after.total)
+            steps += Step("$WIDEN_LABEL（${ops.size}セル）", ops, ok.before.hard, ok.after.hard, ok.before.total, ok.after.total, ok.before.weightedScore.toLong(), ok.after.weightedScore.toLong())
             cur = ok.schedule
             report = ok.after
         }
