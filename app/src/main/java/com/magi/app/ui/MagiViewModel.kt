@@ -829,7 +829,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
             message = completedText(r.report.hard, r.report.breakdown, "（閉じている間に計算）"),
         ) }
-        logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
+        logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total} 重み=${r.report.weightedScore.toLong()}")
         lastResultHard = r.report.hard.toLong()
         lastTopHardFamily = if (r.report.hard > 0) topHardFamilyJp(r.report.breakdown) else null
         // [C1] 完了で途中状態ファイルを削除。ただし反映した盤面の保存が成功してから（保存前に落ちると結果を失う）。
@@ -2011,7 +2011,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val adoptedReport = if (worseThanInput) baseReport else res.report
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
-                logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
+                logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} 重み=${res.report.weightedScore.toLong()} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
                 noteRunResult(adoptedReport.hard, kept = worseThanInput)
                 if (s5 != null) {
                     cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
