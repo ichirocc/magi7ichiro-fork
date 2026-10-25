@@ -179,6 +179,8 @@ class OptimizationWorker(
         var lastBubbleMs = 0L
         var lastPublishMs = Long.MIN_VALUE / 4   // [3.394.0] 進捗 publish の窓
         var lostOwnership = false                // [3.394.0] 所有権を失ったら以後この実行は何も出さない
+        // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝間引きの時刻・所有権の旗の読み書きを直列化する。
+        val progressLock = Any()
         val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
         return try {
             val res = V6FinalPort.handleOptimize(
@@ -190,7 +192,7 @@ class OptimizationWorker(
                 requestedAlgorithm = cfg.algorithm,
                 allowImpossible = true,
                 config = engineConfig,
-            ) { phase, report, iters, elapsed ->
+            ) { phase, report, iters, elapsed -> synchronized(progressLock) {
                 if (report != null) {
                     // [実機報告「残り時間表示が5分から何度も巡回する」修正] onProgressのelapsedはフェーズ
                     //   境界（V5→ALNS→RSIラウンド等）で巻き戻るローカル時計。UI(progressSummaryの「残り」)と
@@ -244,7 +246,7 @@ class OptimizationWorker(
                         }
                     }
                 }
-            }
+            } }
             // [3.327.0/外部レビュー High3] 置き換えられた実行の結果は**公開も保存もしない**。
             //   旧実装はここに所有権の検査が無く、完了間際に REPLACE された実行が別データの結果を
             //   resultFile へ書き、次回起動でそれが現在のデータとして復元されうる状態だった。

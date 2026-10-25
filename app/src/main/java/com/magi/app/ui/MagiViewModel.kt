@@ -1785,6 +1785,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         var lastPhaseLogMs = -10_000L
         val phaseNameLastLogMs = HashMap<String, Long>()   // [3.283.0] 同名フェーズの再ログ抑制（60s窓・スパム対策）
         var lastHardLogMs = -10_000L
+        // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝上の変数・HashMap・hf63 の読み書きを直列化する。
+        val progressLock = Any()
         val boardToken = beginBoardJob(MagiPhase.Optimizing, engineRun = true)   // [3.328.0/3.404.0]
         // [3.694.0] 開始行は beginBoardJob の後（#N が付く）。期間・人数・入力の指紋と、開始点で読んだ設定を残す（G1・G6・G8）。
         logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
@@ -1825,7 +1827,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     requestedAlgorithm = _ui.value.v6Algorithm,
                     allowImpossible = true,
                     wishFloorMode = com.magi.app.v6.PolishGate.wishConflictFloorMode,
-                ) { phase, report, _, _ ->
+                ) { phase, report, _, _ -> synchronized(progressLock) {
                     val rep = report
                     // [3.93.1と同クラスの補正 / 実機ログ起因] 旧: 累積iter(数千万)を渡すと閾値5000が「約20msの無改善」
                     //   相当になり、違反>0の族がほぼ全て即 infeasible 判定＝9族ノイズ警告になっていた。経過時間ベース
@@ -1924,7 +1926,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         liveHard = rep.hard.toLong()
                     }
-                }
+                } }
                 // [再実行 keep-best] 完了結果が入力より悪化なら、入力解を維持して通知する。
                 //   「再作成」を繰り返したとき、稀に多様化フェーズ等で入力より悪い解が返り、それを採用して
                 //   良い結果(例 HARD=1)を捨てる事象があった(実機ログで確認)。入力以上の結果のみ採用する。
