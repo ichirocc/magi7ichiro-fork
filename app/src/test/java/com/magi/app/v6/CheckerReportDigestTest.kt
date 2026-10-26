@@ -69,6 +69,6 @@ class CheckerReportDigestTest {
     }
 
     private companion object {
-        const val EXPECTED = "c67c6bce5a62708dc7682cb164d37501a84d4c859f4283cf72ec7368b269069e"
+        const val EXPECTED = "44729ba1a567176412fcbc9f95d9d33cc1ee3ce968107c3771b1d5e7f1d73073"   // [2026-10-26] c1 50→90・c3mn 90→50
     }
 }

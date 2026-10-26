@@ -38,12 +38,12 @@
 - この repo に入っているスキルは `.claude/skills/` の 4 つ（`yomiyasu` は外部 nanaism/yomiyasu 8d5abee の写し・MIT、2026-10-03 ユーザー指示）。無いスキル名を前提にしない。
 
 ## 制約ファミリーと重み（実装＝`MirrorKeys.weights` が正）
-- **c1**（窓制約, SOFT, 重み50）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
+- **c1**（窓制約, SOFT, 重み90）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
   **担当不可スタッフは対象外（canDoガード）**。構造上単一シフトのみ（複数種類変種なし）。
 - **c2**（職員別合計, SOFT, 重み4）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
   - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6）— **非forbidden**。
-  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
+  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み50）— **forbidden**。
   - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
@@ -82,7 +82,7 @@
   最適化器は禁止へ置かない（`mayPlaceAt`）。
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
-c3mn(90) > c1(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
+c1(90) > c3mn(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
 weekly(2)。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
 この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・
 `magi_native.cpp` の5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md`・この行を**同じコミットで**揃える

@@ -326,6 +326,8 @@ object ConstraintCatalog { val all: List<ConstraintSpec> /* 21 件 */ }
 | T-8 | 単体 | `TimeBudget` の各取り分が現行の式と同じ値（予算 1・30・31・60・210・211・300 秒、決定的モード） | 新設 | P3 |
 | T-9 | 単体 | 各段が締切を守る（時計を差し替えて境界を作る） | `PostStageDeadlineTest`（締切を過去・直近に置いて境界を作る、2026-10-24） | P3 |
 | T-10 | 結合 | 段の名前の列が基準版と同順 | 新設（記録の段名を比べる） | P4 |
+
+> T-10 の基準の取り直し（2026-10-26）: 重みの入れ替え（c1 50→90・c3mn 90→50、HF77）で研磨の採否が変わるため、`snapshots/post_stage_order.txt` を新しい重みで作り直した。以後の基準はこの版。
 | T-11 | 単体 | `ConstraintCatalog` の 21 件が `MirrorKeys.weights` と一致 | 新設＋weight_lint | P5 |
 | T-12 | 結合 | UI 層の既存テストが全件合格 | 既存 | P6 |
 | T-13 | 結合 | 退化経路で同じ結果 | `NativeGateFallbackTest` | P1 |

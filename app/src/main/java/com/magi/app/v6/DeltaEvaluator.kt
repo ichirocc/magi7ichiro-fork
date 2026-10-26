@@ -184,7 +184,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
         ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * 50 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 90 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
+    ): Long = c1 * 90 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 50 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {

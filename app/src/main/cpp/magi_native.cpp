@@ -357,7 +357,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
     long long hard1 = 0, soft = 0;
     if (bd) for (int i = 0; i < kBreakdownCount; i++) bd[i] = 0;
 
-    // c1（canDo ガード＋#fire×重み50、[3.522.0] 30→50。経緯はdocs/history/3.4xx.md）
+    // c1（canDo ガード＋#fire×重み90、[3.522.0] 30→50、2026-10-26 50→90。経緯はdocs/history/3.4xx.md）
     {
         long long raw = 0;
         for (const auto& c : p.cons1) {
@@ -371,7 +371,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 }
             }
         }
-        soft += raw * 50; if (bd) bd[0] += raw;
+        soft += raw * 90; if (bd) bd[0] += raw;
     }
 
     // c2（canDo ガード）
@@ -446,11 +446,11 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         soft += raw * 10; if (bd) bd[9] += raw;
     }
 
-    // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=90。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
+    // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=50（2026-10-26 90→50）。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
     { long long raw = c3check(p, a, p.cons3, false); soft += raw * 15; if (bd) bd[2] += raw; }
     { long long raw = c3check(p, a, p.cons3n, true); hard1 += raw; if (bd) bd[3] += raw; }
     { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 6; if (bd) bd[4] += raw; }
-    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 90; if (bd) bd[5] += raw; }
+    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 50; if (bd) bd[5] += raw; }
 
     // pref（実現可能な希望のみ）＋ [3.318.0] groupViol（担当できないシフトに就いているセル）。
     //   MirrorKeys.hard は元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に
@@ -645,7 +645,7 @@ struct SaChunk {
     inline double nextDouble() { return (double)(rng() >> 11) * 0x1.0p-53; }
 
     // ---- 影響スライスの寄与（combined: HARD族は ×1e6）----
-    // [3.522.0] c1 重み30→50・c3mn重み30→90。経緯はdocs/history/3.4xx.md。
+    // [3.522.0] c1 重み30→50・c3mn重み30→90、2026-10-26 c1 50→90・c3mn 90→50。経緯はdocs/history/3.4xx.md。
     long long contribC1Row(int i) const {
         long long v = 0;
         if (useBits) {
@@ -654,7 +654,7 @@ struct SaChunk {
                 uint64_t rm = rowMask[(size_t)i * K + c.si];
                 uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
                 for (int j = 0; j <= T - c.d1; j++)
-                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 50;
+                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 90;
             }
             return v;
         }
@@ -664,7 +664,7 @@ struct SaChunk {
             for (int j = 0; j <= T - c.d1; j++) {
                 int z = 0;
                 for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) v += 50;
+                if (z < c.d2) v += 90;
             }
         }
         return v;
@@ -720,7 +720,7 @@ struct SaChunk {
         return contribC3RowFam(i, p.cons3, false, 15)
              + contribC3RowFam(i, p.cons3n, true, (long long)M)
              + contribC3RowFam(i, p.cons3m, false, 6)
-             + contribC3RowFam(i, p.cons3mn, true, 90);
+             + contribC3RowFam(i, p.cons3mn, true, 50);
     }
     // [3.318.0] このセルの HARD 寄与＝pref（実現可能な希望の未充足）＋ groupViol（担当できないシフト）。
     //   どちらもセル単位なので deltaApply の before/after で呼べば差分は自動的に正しい。

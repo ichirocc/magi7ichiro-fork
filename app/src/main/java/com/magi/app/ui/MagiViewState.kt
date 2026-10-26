@@ -37,7 +37,7 @@ internal object VioKey {
 internal fun isHardCellViolation(v: String?): Boolean =
     v != null && familyOfVioClass(v) in MirrorKeys.hard
 
-/** 破線枠にする「重いソフト族」。重み階層（low=120 / c1=50 / c3mn=90 が high=25 を上回る）と表示強度を揃える。 */
+/** 破線枠にする「重いソフト族」。重み階層（low=120 / c1=90 / c3mn=50 が high=25 を上回る）と表示強度を揃える。 */
 internal val heavySoftFamilies = setOf("low", "c1", "c3mn")
 
 internal fun isHeavySoftCellViolation(v: String?): Boolean =
