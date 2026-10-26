@@ -3,6 +3,7 @@ package com.magi.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
@@ -654,7 +655,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
             onHardTour = if (tourItems.isNotEmpty()) openProblemList else null, onPreDist = { preDist = true }, tourCount = tourItems.size,
-            onSaveWord = { vm.showSaveFailDialog() }) },
+            onSaveWord = { vm.showSaveFailDialog() }, compact = navCollapsed) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -1276,24 +1277,25 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
 
 @Composable
 internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null, tourCount: Int = 0,
-                        onSaveWord: () -> Unit = {}) {
+                        onSaveWord: () -> Unit = {}, compact: Boolean = false) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
       BoxWithConstraints {
         // 396dp 未満（3.657.0 と同じ境界）では札の数が切れないよう、自動作成の状態と保存の語を札の下の行へ畳む。
         val wrap = topBarStatusWrapped(maxWidth.value.toInt())
-        val statusLine = if (ui.loaded && !ui.running) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
+        // 下へ送ると薄い帯（iOS の大きな見出しが縮む動き）。MAGI の札と自動作成の状態の行を隠し、画面名・状態の札・保存の語は残す。
+        val statusLine = if (ui.loaded && !ui.running && !compact) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
         val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
         val saveWordView: @Composable () -> Unit = {
             if (saveWord != null) MagiTextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
                 Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
-      Column(Modifier.fillMaxWidth()) {
+      Column(Modifier.fillMaxWidth().animateContentSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
+            if (!compact) Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
                 Text(
                     "MAGI",
                     style = MaterialTheme.typography.titleMedium,
@@ -1302,7 +1304,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
-            Spacer(Modifier.width(10.dp))
+            if (!compact) Spacer(Modifier.width(10.dp))
             Text(sectionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             if (ui.loaded) {
