@@ -68,32 +68,32 @@
 //  L 1821  fn     coverageShortageCostN
 //  L 1829  fn     bestStaffForCoverageN
 //  L 1844  fn     hf67HardRepairN
-//  L 1924  fn     rouletteSelectN
-//  L 1932  fn     thompsonSelectN
-//  L 1946  fn     greatDelugeLevelN
-//  L 1955  struct AlnsState
-//  L 1998  fn     runAlnsChunk
-//  L 2198  struct PolishState
-//  L 2221  fn     polishAcceptN
-//  L 2231  fn     runPolishChunk
-//  L 2346  fn     readIntArray
-//  L 2357  JNI    nativeAbiVersion
-//  L 2364  JNI    nativeAlnsCreate
-//  L 2378  JNI    nativeAlnsDestroy
-//  L 2384  JNI    nativeAlnsChunk
-//  L 2398  JNI    nativeAlnsRead
-//  L 2410  JNI    nativePolishCreate
-//  L 2423  JNI    nativePolishDestroy
-//  L 2429  JNI    nativePolishChunk
-//  L 2442  JNI    nativePolishRead
-//  L 2454  JNI    nativeLahcCreate
-//  L 2467  JNI    nativeLahcDestroy
-//  L 2473  JNI    nativeLahcChunk
-//  L 2486  JNI    nativeLahcRead
-//  L 2500  JNI    nativeSaChunk
-//  L 2530  JNI    nativeCreateProblem
-//  L 2705  JNI    nativeDestroyProblem
-//  L 2711  JNI    nativeFullEval
+//  L 1930  fn     rouletteSelectN
+//  L 1938  fn     thompsonSelectN
+//  L 1952  fn     greatDelugeLevelN
+//  L 1961  struct AlnsState
+//  L 2004  fn     runAlnsChunk
+//  L 2205  struct PolishState
+//  L 2228  fn     polishAcceptN
+//  L 2238  fn     runPolishChunk
+//  L 2353  fn     readIntArray
+//  L 2364  JNI    nativeAbiVersion
+//  L 2371  JNI    nativeAlnsCreate
+//  L 2385  JNI    nativeAlnsDestroy
+//  L 2391  JNI    nativeAlnsChunk
+//  L 2405  JNI    nativeAlnsRead
+//  L 2417  JNI    nativePolishCreate
+//  L 2430  JNI    nativePolishDestroy
+//  L 2436  JNI    nativePolishChunk
+//  L 2449  JNI    nativePolishRead
+//  L 2461  JNI    nativeLahcCreate
+//  L 2474  JNI    nativeLahcDestroy
+//  L 2480  JNI    nativeLahcChunk
+//  L 2493  JNI    nativeLahcRead
+//  L 2507  JNI    nativeSaChunk
+//  L 2537  JNI    nativeCreateProblem
+//  L 2712  JNI    nativeDestroyProblem
+//  L 2718  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
@@ -1814,7 +1814,7 @@ Fix findTargetedFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& r
 }
 
 // ============ [第2期 Stage7] hf67HardRepair 移植 ============
-// hf66DataHardening（範囲外/担当外→先頭担当可）→ 実現可能希望の適用 → 被覆不足の3周充填 →
+// hf66DataHardening（範囲外/担当外/個人上限0→埋めシフト）→ 実現可能希望の適用 → 被覆不足の3周充填 →
 // range下限充填、の合成（V6NativeOptimizer.hf67HardRepair と同順・同式）。in-place 変異。
 
 // coverageShortageCost: セル(j,k) から1人引き抜くと per-cell 実需要(U)の不足が増えるなら 50。
@@ -1844,17 +1844,23 @@ inline int bestStaffForCoverageN(const MagiProblem& p, const int* a, const std::
 int hf67HardRepairN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
     const int S = p.S, T = p.T, K = p.K;
     int changed = 0;
-    // hf66DataHardening: 範囲外・担当外セルを先頭の担当可シフト（無ければ0）へ。
+    // hf66DataHardening: 範囲外・担当外・個人上限 0 のセルを埋めシフトへ（Kotlin HardRepairCore.hf66DataHardening と同規則）。
+    //   埋めシフト＝fillShiftIndex（休が置けるなら休、無ければ先頭の置けるシフト、空なら休）。
+    const int rest = p.restIdx;
     for (int i = 0; i < S; i++) {
         const auto& allowed = p.allowed[i];
-        int fallback = allowed.empty() ? 0 : allowed[0];
+        int fallback = rest;
+        if (rest < 0 || std::find(allowed.begin(), allowed.end(), rest) == allowed.end())
+            fallback = allowed.empty() ? (rest >= 0 ? rest : 0) : allowed[0];
         for (int j = 0; j < T; j++) {
             if (!p.pin.empty() && p.pin[(size_t)i * T + j] >= 0) { a[(size_t)i * T + j] = p.pin[(size_t)i * T + j]; continue; }   // [#41] 手動固定が勝つ
             int k = a[(size_t)i * T + j];
-            if (k < 0 || k >= K || !p.cd(i, k)) {
-                // 拡張希望でその日に先頭が禁止なら、置けるシフトのうち禁止でない先頭（全部禁止なら先頭のまま）。
+            bool capped = k >= 0 && k < K && !p.pl(i, k) && !(wishLockedN(p, i, j) && lockToN(p, i, j) == k);
+            if (k < 0 || k >= K || !p.cd(i, k) || capped) {
+                // 希望固定セルは希望へ戻す。拡張希望でその日に埋めシフトが禁止なら、置けるシフトのうち禁止でない先頭（全部禁止なら埋めシフトのまま）。
                 int fb = fallback;
-                if (p.extBanned(i, j, fb)) for (int ak : allowed) if (!p.extBanned(i, j, ak)) { fb = ak; break; }
+                if (wishLockedN(p, i, j)) fb = lockToN(p, i, j);
+                else if (p.extBanned(i, j, fb)) for (int ak : allowed) if (!p.extBanned(i, j, ak)) { fb = ak; break; }
                 a[(size_t)i * T + j] = fb;
             }
         }
@@ -2108,27 +2114,28 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
             }
             if (s.itersRestart % 7 == 0 && curHard > 0) hf67HardRepairN(p, s.scratch.data(), rng);
             int nDiffs = 0;
-            double moveAug = 0.0;
             bool banHit = false;   // 修復が拡張希望の禁止を置いた候補は丸ごと捨てる（修復器側でも避けている＝多重防御）
             for (int f = 0; f < S * T; f++) {
                 if (st.a[(size_t)f] != s.scratch[(size_t)f]) {
                     s.diffFlat[nDiffs] = f;
                     s.diffOld[nDiffs] = st.a[(size_t)f];
-                    moveAug += s.gls.moveAug(f / T, f % T, st.a[(size_t)f], s.scratch[(size_t)f]);
                     if (p.extBanned(f / T, f % T, s.scratch[(size_t)f])) banHit = true;
                     nDiffs++;
                 }
             }
+            // 捨てた候補は受理も学習（curAug・reward・lamUpdate）もしない（Kotlin の extBad と同じ）。
             if (banHit) nDiffs = 0;
+            double moveAug = 0.0;
             for (int d = 0; d < nDiffs; d++) {
                 int f = s.diffFlat[d];
+                moveAug += s.gls.moveAug(f / T, f % T, s.diffOld[d], s.scratch[(size_t)f]);
                 st.deltaApply(f / T, f % T, s.scratch[(size_t)f]);
             }
             long long ns = st.score;
             bool improvedCur = ns < curScore;
-            bool accepted = improvedCur ||
-                glsAcceptN(ns, curScore, moveAug, s.curAug, s.acceptMode, temp, gdLevel, st.nextDouble());
-            if (s.acceptMode == 2) s.lamUpdate(accepted, frac);
+            bool accepted = !banHit && (improvedCur ||
+                glsAcceptN(ns, curScore, moveAug, s.curAug, s.acceptMode, temp, gdLevel, st.nextDouble()));
+            if (s.acceptMode == 2 && !banHit) s.lamUpdate(accepted, frac);
             if (accepted) {
                 curScore = ns;
                 s.curAug += moveAug;

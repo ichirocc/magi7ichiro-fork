@@ -211,4 +211,21 @@ class C1RepairAnalysisTest {
         )
         assertFalse("候補を cap で切り捨てたら証明を名乗らない", capped.exhaustive)
     }
+
+    /**
+     * 関与職員に未反映の希望（その日の多重集合に希望の値が無い）があると、配置が1つも作れない。
+     * 葉を1つも見ていないのに「証明済み壁」を名乗ってはならない。
+     */
+    @Test
+    fun unrealizedWishOutsideTheMultisetMustNotClaimAWall() {
+        // pinFixture と同じ盤面に、a の 0 日目の希望「休」（その日は誰も休でない）を足す。
+        //   a は 0 日目を今のまま X に保ち、1 日目の X を i0 へ渡せば i0 の 2 窓は両方満たせる＝壁ではない。
+        val s = pinFixture().copy(wishes = mapOf("1,0" to 0))
+        val p = Problem(s); val sched = s.schedule.toIntArray2D()
+        assertTrue("前提: a の 0 日目は希望で縛られる", p.wishLocked(1, 0))
+        val v = C1RepairAnalysis.analyze(p, sched).first { it.staff == 0 }
+        val r = C1RepairAnalysis.solveWindow(p, sched, v)
+        assertFalse("葉の無い探索は証明を名乗らない", r.exhaustive)
+        assertTrue("偽の壁を返さない", C1RepairAnalysis.provenWalls(p, sched).isEmpty())
+    }
 }
