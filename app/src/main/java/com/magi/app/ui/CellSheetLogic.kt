@@ -505,6 +505,24 @@ internal fun problemRows(hardRows: List<HardListRow>, items: List<TourItem>, cel
 internal fun tourHeading(items: List<TourItem>, at: Int): String? =
     items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }
 
+/** 巡回の位置。[at] は今の項目の添字（一覧から消えていれば null）、[next]/[prev] は「次」「前」の行き先（無ければ null）。 */
+internal data class TourCursor(val at: Int?, val next: Int?, val prev: Int?)
+
+/** 巡回の位置を一覧の作り直し（違反の解消・発生）に追従させる。[base] は位置を決めたときの一覧、[baseAt] はその添字。
+ *  今の項目（族・職員・日で照合）が [items] に残っていればその位置。消えていれば、消えた項目が入っていた所の次を next・前を prev にする
+ *  （添字のまま据え置くと、直した直後の「次」が 1 件飛び、前が消えると前・次とも今のセルを指す）。 */
+internal fun tourCursor(base: List<TourItem>, baseAt: Int, items: List<TourItem>): TourCursor {
+    val n = items.size
+    if (n == 0) return TourCursor(null, null, null)
+    val index = HashMap<Triple<String, Int, List<Int>>, Int>()
+    items.forEachIndexed { i, t -> index.putIfAbsent(Triple(t.family, t.staff, t.days), i) }
+    fun find(b: Int) = base.getOrNull(b)?.let { index[Triple(it.family, it.staff, it.days)] }
+    find(baseAt)?.let { at -> return if (n > 1) TourCursor(at, (at + 1) % n, (at - 1 + n) % n) else TourCursor(at, null, null) }
+    val slot = (baseAt - 1 downTo 0).firstNotNullOfOrNull(::find)?.plus(1)
+        ?: (baseAt + 1 until base.size).firstNotNullOfOrNull(::find) ?: 0
+    return TourCursor(null, slot % n, (slot - 1 + n) % n)
+}
+
 /** 巡回に入らない人員不足の件数の 1 行（0 なら null）。 */
 internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}人（日の印から開けます）" else null
 

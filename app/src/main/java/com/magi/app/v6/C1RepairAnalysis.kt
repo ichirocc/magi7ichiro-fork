@@ -381,7 +381,10 @@ object C1RepairAnalysis {
             place(0)
         }
 
+        // 葉が1つも無い探索（関与職員が多重集合に無い希望へ縛られる・今の値を置けない日がある）は何も尽くしていない＝証明にしない。
+        var leaves = 0
         assignDay(0) {
+            leaves++
             // [3.315.0] best/patch の更新だけを acceptableLeaf でゲートする。**minFocusResidual は
             //   従来どおり全葉で測る**＝A4 provenWalls（「coverage入替でどう並べても焦点は解消不能」）の
             //   意味論は完全に不変。ここを制約下の最小に変えると壁判定が増える方向へ動き、3.76.0 の
@@ -401,6 +404,6 @@ object C1RepairAnalysis {
             if (diff.isEmpty()) null else diff
         }
         // exhaustive のとき minFocusResidual は「coverage入替でどう並べても焦点はこれ以上減らせない」証明値。
-        return ExactResult(best, baseline, patch, !budgetHit && !truncated, minFocusResidual)
+        return ExactResult(best, baseline, patch, !budgetHit && !truncated && leaves > 0, minFocusResidual)
     }
 }

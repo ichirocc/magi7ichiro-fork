@@ -243,6 +243,24 @@ internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState 
     wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
 )
 
+/** 表示色（shiftColors 由来）の UI 項目。makeUi と [MagiViewModel.applyDisplayOnly]（検査を回さない）の単一ソース。 */
+internal fun UiState.withShiftColors(st: com.magi.app.model.MagiState): UiState = copy(
+    shiftColorHex = st.shifts.mapIndexed { i, sh -> com.magi.app.v6.ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i) },
+    shiftTextHex = st.shifts.mapIndexed { i, sh -> com.magi.app.v6.ShiftAppearance.pickTextColor(com.magi.app.v6.ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i)) },
+    violationColorHex = st.shiftColors["__vio__"] ?: "",
+    violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
+    violationFamilyColorHex = st.shiftColors.entries
+        .filter { it.key.startsWith("__vioFam_") && it.key.endsWith("__") }
+        .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
+)
+
+/** 検査の結果（[checked] で作った UiState）を反映するとき、検査の間に変わった手動固定・表示色は今の設定 [now] のものを残す。
+ *  この 2 つは採点に効かないので検査を回し直さない（`togglePin`・`applyDisplayOnly`）＝古い検査が画面から巻き戻さないように。
+ *  ほかの差がある変更は検査の世代（checkSeq）で古い結果ごと捨てられるので触らない。 */
+internal fun UiState.keepDisplayOf(checked: com.magi.app.model.MagiState, now: com.magi.app.model.MagiState?): UiState =
+    if (now == null || now === checked || !DisplayOnlyUndo.differsOnlyInPinsOrColors(checked, now)) this
+    else withShiftColors(now).withWishDisplay(now)
+
 /** [3.643.0] 直し方を当てた結果の 1 行（文は FixOutcomeText）。 */
 data class FixOutcome(val line: String)
 

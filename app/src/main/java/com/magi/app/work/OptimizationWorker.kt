@@ -128,7 +128,6 @@ class OptimizationWorker(
         }
             .onSuccess { step("入力退避") }
             .onFailure { note("入力の退避に失敗（この実行は途中でプロセスが終了すると復元できません）", it) }
-        OptimizationRepository.setRunning(true)
         // [P2修正/レビュー指摘] 予算秒数・並列数は WorkManager の inputData から復元する。
         //   旧: インメモリの OptimizationRepository のみで、プロセス再起動後は既定の 60秒/4並列 に
         //   化けていた（300秒/8並列で開始したジョブが別条件で再実行される）。inputData は WorkManager が
@@ -164,17 +163,13 @@ class OptimizationWorker(
                 note("会話バブルは端末の設定で許可されていません（進捗は通知バーに出ます）", "W")
             }
         }
-        // [3.333.0/外部レビュー] 成功パスは所有権マーカー(runIdFile)を**自分で消してから** finally へ入る。
-        //   finally が `ownsFiles()` をファイルから読み直すと「所有者でない」と判定され、
-        //   `setRunning(false)` が飛ばされて **OptimizationRepository.running が永久に true** になっていた
-        //   （＝完了後も optimizeInFlight() が真のままで、編集・Undo/Redo が恒久的にブロックされる）。
-        //   自分で手放したことを覚えておき、finally はそれも所有者扱いにする。
-        var releasedByMe = false
         var lastSnapMs = 0L
         var lastBubbleMs = 0L
         var lastPublishMs = Long.MIN_VALUE / 4   // [3.394.0] 進捗 publish の窓
         var lostOwnership = false                // [3.394.0] 所有権を失ったら以後この実行は何も出さない
         val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
+        // 所有権の確認より後に停止されても、自分の印は finally で必ず下ろせる（C-01）。try の直前＝前景化の停止で取り残さない。
+        val runningToken = OptimizationRepository.holdRunning()
         return try {
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
@@ -265,8 +260,7 @@ class OptimizationWorker(
                 //   ①古い結果を `publishResult` で UI へ流す（入力が同じなら `applyBgResult` の指紋照合も通る）
                 //   ②`runIdFile` を消す＝`owns(mine)` は `mine==0L || activeRunId()==mine` なので、
                 //     以後 `activeRunId()` が 0 になり **新しい所有者は二度と所有者になれない**（保存も公開も不能）
-                //   ③`inputFile`/`snapshotFile` も消えて新しい実行の kill 復旧手段まで失われ、
-                //     `releasedByMe=true` で `setRunning(false)`＝新実行の計算中に編集ガードが開く。
+                //   ③`inputFile`/`snapshotFile` も消えて新しい実行の kill 復旧手段まで失われる。
                 //   3.327.0 が防ごうとした被害そのもの。**所有権を失っていたら以降いっさい触らない**。
                 if (!saved && !ownsFiles()) {
                     terminal("結果の保存直前に所有権を失いました（置き換え＝TOCTOUの窓が発火）。" +
@@ -297,7 +291,6 @@ class OptimizationWorker(
                         if (stuck.isNotEmpty()) note("完了の片付けで削除できないファイルが残りました: ${stuck.joinToString("・")}" +
                             "（次回起動が古い状態を「中断」として掴む可能性があります）", "W")
                         if (saved) step("片付け")
-                        releasedByMe = true
                     }
                     terminal("完了（必須${res.report.hard} 合計${res.report.total}）" +
                         if (saved) "" else "・結果を保存できず（プロセス終了で失われます）")
@@ -315,20 +308,7 @@ class OptimizationWorker(
             // [3.327.0/外部レビュー High3] **所有者のときだけ**片付ける。置き換えで打ち切られた旧実行が
             //   ここを通ると、新実行が既に書いた入力ファイルまで消していた（復元不能の窓を作る）。
             val owned = ownsFiles()
-            // [3.438.0/外部レビュー C1] `reportClear("停止")` は runId マーカーも消す(keepRunId 既定 false)。
-            //   `owned==true` のとき（＝ユーザーが押した「やめる」の通常経路）ここでマーカーが消えると、
-            //   直後に走る finally の `ownsFiles()` は同じファイルを読み直して**必ず false** を返す
-            //   （`activeRunId()` は読めないマーカーを 0L として扱い、`mine!=0L` の新経路では
-            //   `owns(mine)` が false になる）。`releasedByMe` をここで立てないと、finally の
-            //   `if (releasedByMe || ownsFiles())` が両方 false で `setRunning(false)` を一度も呼ばず、
-            //   **`OptimizationRepository.running` が停止後も恒久的に true のまま残る**。
-            //   `MagiViewModel.stop()` は自分の `ui.running`（表示の写し）を false に戻すだけで
-            //   `OptimizationRepository.running` には触れないため、画面は「実行中でない」ように見えながら
-            //   `optimizeInFlight()`（編集・実行の可否を判定する唯一の関数、3.336.0）は true のまま固着し、
-            //   以後の編集・Undo/Redo・新規実行が理由の見えないまま拒否され続ける（プロセス再起動まで）。
-            //   `catch (Throwable)` 側は元から `releasedByMe = true` を立てており、ここだけ非対称だった。
             if (owned) reportClear("停止")
-            releasedByMe = releasedByMe || cancelPathReleases(owned)
             // [3.412.0/B-08] 停止経路だけがバブルを片付けていなかった。完了・失敗は postDone で
             //   進行中(ongoing)を解いて自動消去できる形にするのに、停止すると「計算中…」の
             //   バブルが**画面に残り続ける**（`setOngoing(true)` はユーザーが払えない）。
@@ -350,17 +330,14 @@ class OptimizationWorker(
             //   次回起動が「中断されました・再開できます」と案内する（実際は失敗）。`Result.failure()` は
             //   WorkManager が再実行しない＝入力を残す意味も無い。所有者なら片付けてから返す。
             val owned = ownsFiles()
-            if (owned) { reportClear("失敗"); releasedByMe = true }
+            if (owned) reportClear("失敗")
             terminal("失敗: ${e.javaClass.simpleName}: ${e.message}" + if (owned) "（片付け済み）" else "（所有権なし）", "W")
             notify("勤務表をつくれませんでした", com.magi.app.ui.failureWords(e, com.magi.app.ui.FailureKind.ENGINE))   // 例外名は終端ログだけ（画面は利用者の言葉）
             runCatching { BubbleSupport.postDone(ctx, "勤務表をつくれませんでした", autoExpand = true) }
             Result.failure()
         } finally {
-            // [3.329.0/外部レビュー H-03] **所有者のときだけ**実行中を降ろす。置き換えで打ち切られた
-            //   旧実行がここを通ると、まだ動いている新実行の「実行中」を消してしまう。
-            // [3.333.0] `releasedByMe` は「自分が正常完了してマーカーを消した」＝実行中を降ろすのが
-            //   正しい経路。ここを見ないと完了後に実行中が残り続けた（上のコメント参照）。
-            if (shouldReleaseRunning(releasedByMe, ::ownsFiles)) OptimizationRepository.setRunning(false)
+            // 自分が立てた印だけを下ろす＝所有権の有無に依らない（置き換えた新実行の印は残る。RunningHolds）。
+            OptimizationRepository.releaseRunning(runningToken)
             // [3.387.0] 3.382.0 と同じ保証＝どの経路を通っても終端行が1つは残る。
             //   ここへ落ちたら「想定外の経路」（Error など catch(Exception) が拾わないもの）を疑う。
             terminal("終了: 完了・停止・失敗のいずれも記録されませんでした（想定外の経路。Error(OOM等)や停止処理自体の失敗が疑われます）", "W")

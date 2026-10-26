@@ -66,7 +66,6 @@ import com.magi.app.model.C42Row
 import com.magi.app.model.MagiState
 import com.magi.app.model.MojibakeRepair
 import com.magi.app.model.StateParser
-import com.magi.app.v6.ShiftAppearance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -579,7 +578,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   3.336.0 は「init 時の WorkManager 問い合わせが失敗すると背景で走っているのに写しが false のまま」
         //   としてガード14箇所を optimizeInFlight() へ寄せたが、3.409.12 で足した `enabled = !ui.running` は
         //   写しを読む＝その stale 経路ではボタンが生きたまま「入力し終えてから拒否」が再発する。
-        //   Worker は開始時に必ず OptimizationRepository.setRunning(true) を流すので、その StateFlow を
+        //   Worker は開始時に必ず OptimizationRepository.holdRunning() で true を流すので、その StateFlow を
         //   写しへ反映すればプロセスが生きている限り写しは正になる（問い合わせの成否に依存しない）。
         //   下げる側は **true を見たあとの遷移だけ**＝購読開始時の初期値 false が、init 復元の
         //   「バックグラウンド計算を継続中…」（WorkManager 問い合わせ由来の running=true）を踏み消さないため。
@@ -1770,6 +1769,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val startMs = System.currentTimeMillis()
         // HF63: 探索の改善ストリームを追跡し、構造的に充足困難な制約族を検出（重み系は非改変＝安全）。
         val hf63 = Hf63Infeasibility()
+        // 進捗コールバックは並列ワーカーから同時に来る＝下の var・HashMap・hf63 はこの錠の中でだけ触る。
+        val progressLock = Any()
         // 最適化中ログ強化用のスロットル状態（操作ログへマイルストーンだけを残しスパムを防ぐ）。
         var liveHard = Long.MAX_VALUE
         var livePhase = ""
@@ -1820,7 +1821,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     requestedAlgorithm = _ui.value.v6Algorithm,
                     allowImpossible = true,
                     wishFloorMode = com.magi.app.v6.PolishGate.wishConflictFloorMode,
-                ) { phase, report, _, _ ->
+                ) { phase, report, _, _ -> synchronized(progressLock) {
                     val rep = report
                     // [3.93.1と同クラスの補正 / 実機ログ起因] 旧: 累積iter(数千万)を渡すと閾値5000が「約20msの無改善」
                     //   相当になり、違反>0の族がほぼ全て即 infeasible 判定＝9族ノイズ警告になっていた。経過時間ベース
@@ -1919,7 +1920,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         liveHard = rep.hard.toLong()
                     }
-                }
+                } }
                 // [再実行 keep-best] 完了結果が入力より悪化なら、入力解を維持して通知する。
                 //   「再作成」を繰り返したとき、稀に多様化フェーズ等で入力より悪い解が返り、それを採用して
                 //   良い結果(例 HARD=1)を捨てる事象があった(実機ログで確認)。入力以上の結果のみ採用する。
@@ -2021,9 +2022,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // HF63 検出: 50秒改善のない制約族＝データ上満たせない可能性が高い（業務担当者へ提示）。
                 // [実機ログ起因] 探索中の一時盤面でしか違反が無かった族（最終盤面で0）は「充足できている」ので
                 //   警告から除外する（旧: 破棄された探索トラックの covO/LimMax まで列挙され誤解を招いた）。
-                val staleKeys = hf63.infeasibleBreakdownKeys().filter { (res.report.breakdown[it] ?: 0) > 0 }
+                val stalled = synchronized(progressLock) { hf63.infeasibleBreakdownKeys() }
+                val staleKeys = stalled.filter { (res.report.breakdown[it] ?: 0) > 0 }
                 // [思考誘導S4] 画面の下限判定は採用した盤面で見る（入力維持の分岐では捨てた盤面の族を出さない）。
-                _ui.update { it.copy(stalledHardFamilies = hf63.infeasibleBreakdownKeys()
+                _ui.update { it.copy(stalledHardFamilies = stalled
                     .filter { k -> k in com.magi.app.v6.MirrorKeys.hard && (adoptedReport.breakdown[k] ?: 0) > 0 }) }
                 if (staleKeys.isNotEmpty()) {
                     val names = staleKeys.mapNotNull { k -> Hf63Infeasibility.KEY_TO_INDEX[k]?.let { Hf63Infeasibility.CNAMES[it] } }
@@ -2619,7 +2621,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   押した側でも降ろして窓を閉じる。Worker 側の解除と冪等（両方 false にするだけ）。
             //   置き換えで打ち切られた旧実行はここを通らない（`stop()` はユーザー操作のみ）＝
             //   新しい実行の running を落とす経路にはならない。
-            OptimizationRepository.setRunning(false)
+            OptimizationRepository.clearRunning()
             OptimizationRepository.request = null
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
             clearBgFiles("停止（背景最適化の中断）")
@@ -3335,17 +3337,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val origin = target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }
                 logOp("I", OpLogText.fixSearchStartLine(origin, auto))
                 var tiers: FixTierView? = null
+                fun search(staff: Int?, max: Int) = FixSuggester.suggestResult(st, snap, focusStaff = staff, focusShift = focusShift, maxResults = max, deadlineMs = deadline, ejectionChain = true)
+                    .also { timedOut = it.timedOut }.suggestions
                 val list = withContext(Dispatchers.Default) {
-                    (if (exceptStaff != null && day != null) {
-                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
+                    if (exceptStaff != null && day != null) {
+                        fixesByOthers(search(null, 40), day, exceptStaff).take(8)
                     } else if (target != null) {
                         // 入り口の範囲の中の 1 セルの変更を先に評価し、探索の案と合わせて段に分ける。
                         val entry = entryMoves(st, snap, target, restShiftIndex(st))
-                        val found = rankForTarget(FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true),
-                            snap.map { it.toList() }, target).take(8)
+                        val found = rankForTarget(search(focusStaff, 40), snap.map { it.toList() }, target).take(8)
                         classifyTiers(st, snap, target, entry, found, cv0::needCellLimits).copy(key = focusKey).also { tiers = it }.items.map { it.sug }
-                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true))
-                        .also { timedOut = FixSuggester.lastTimedOut }
+                    } else search(focusStaff, 8)
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
                 // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。
@@ -3894,7 +3896,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         snapResult.exceptionOrNull()?.let { if (it is CancellationException) throw it; logOp("W", "表示の写しを作れませんでした: ${it.javaClass.simpleName}: ${it.message}") }
         val snap = snapResult.getOrNull()
-        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).let { u ->
+        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).keepDisplayOf(st, state).let { u ->
             u.copy(display = snap?.takeIf { d -> d.freshFor(u) }, draftStage = if (runLabel != null) runLabel == "下書きづくり" else base.draftStage) } }
         resolvePendingGuidedFix(st, schedule, report, analysis.coverageDiag)
         deepCovODiagFollowUp(st, schedule, report, runLabel)
@@ -4007,17 +4009,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         ).withShiftColors(st).withWishDisplay(st)
         return built
     }
-
-    /** 表示色（shiftColors 由来）の UI 項目。makeUi と [applyDisplayOnly]（検査を回さない）の単一ソース。 */
-    private fun UiState.withShiftColors(st: MagiState): UiState = copy(
-        shiftColorHex = st.shifts.mapIndexed { i, sh -> ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i) },
-        shiftTextHex = st.shifts.mapIndexed { i, sh -> ShiftAppearance.pickTextColor(ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i)) },
-        violationColorHex = st.shiftColors["__vio__"] ?: "",
-        violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
-        violationFamilyColorHex = st.shiftColors.entries
-            .filter { it.key.startsWith("__vioFam_") && it.key.endsWith("__") }
-            .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
-    )
 
     private data class LoadedProblem(
         val state: MagiState,

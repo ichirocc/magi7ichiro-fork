@@ -145,7 +145,15 @@ object OptimizationRepository {
      */
     fun publishNote(level: String, msg: String) { _notes.tryEmit(level to msg) }
 
-    fun setRunning(v: Boolean) { _running.value = v }
+    private val holds = RunningHolds()
+
+    /** Worker が実行中を立てる。戻り値の印を [releaseRunning] へ渡して下ろす。 */
+    fun holdRunning(): Long = synchronized(holds) { holds.hold().also { _running.value = holds.any } }
+
+    fun releaseRunning(token: Long) = synchronized(holds) { holds.release(token); _running.value = holds.any }
+
+    /** 停止: どの実行の印も下ろす。 */
+    fun clearRunning() = synchronized(holds) { holds.clear(); _running.value = false }
 
     private val _ended = MutableStateFlow(0L)
     /** 最後に `doWork` を抜けた実行の ID。開始前に降りた実行も含む＝画面の編集ガード（BgEditGuard）を結果なしで開ける合図。 */

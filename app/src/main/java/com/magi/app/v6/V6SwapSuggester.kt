@@ -36,8 +36,8 @@ data class FixSuggestion(
  * 高コストな手（複数マス・別日・3人）は違反箇所にターゲットし、締切（deadlineMs）で打ち切る賢い探索。
  */
 object FixSuggester {
-    /** 直近の探索が締切で打ち切られたか（改善案が見つからない理由の「時間不足」を言い分ける。仕様 §7）。 */
-    @Volatile var lastTimedOut: Boolean = false
+    /** 提案と、その探索が締切で打ち切られたか（改善案が見つからない理由の「時間不足」を言い分ける。仕様 §7）。呼出ごとに持つ＝並行する探索の値と混ざらない。 */
+    class Result(val suggestions: List<FixSuggestion>, val timedOut: Boolean)
 
     /** 探索の上限（3.507.4 で集約。値は 2.4x 系からの据え置き）。 */
     internal object Limits {
@@ -59,9 +59,23 @@ object FixSuggester {
         strictNewHard: Boolean = true,
         /** 既定は呼び出し時の設定の写し。 */
         ejection: EjectionFlags = EngineConfig.snapshot().ejection,
-    ): List<FixSuggestion> {
+    ): List<FixSuggestion> =
+        suggestResult(state, schedule, focusStaff, focusShift, maxResults, deadlineMs, ejectionChain, strictNewHard, ejection).suggestions
+
+    /** [suggest] に打ち切りの有無を添えたもの。 */
+    fun suggestResult(
+        state: MagiState,
+        schedule: Array<IntArray>,
+        focusStaff: Int? = null,
+        focusShift: Int? = null,
+        maxResults: Int = 8,
+        deadlineMs: Long = 8000L,
+        ejectionChain: Boolean = false,
+        strictNewHard: Boolean = true,
+        ejection: EjectionFlags = EngineConfig.snapshot().ejection,
+    ): Result {
         val p = Problem(state)
-        if (p.S < 1 || p.T < 1) return emptyList()
+        if (p.S < 1 || p.T < 1) return Result(emptyList(), false)
         return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain, strictNewHard, ejection).run(maxResults)
     }
 
@@ -157,7 +171,7 @@ object FixSuggester {
             if (!exactPinRegression(p, s, after)) record(kind, ops, label, rep)
         }
 
-        fun run(maxResults: Int): List<FixSuggestion> {
+        fun run(maxResults: Int): Result {
             singleChanges()
             sameDaySwaps()
             multiChanges()
@@ -166,8 +180,8 @@ object FixSuggester {
             windows()
             rotations3()
             crossDaySwaps()
-            lastTimedOut = timeUp()
-            return collect(maxResults)
+            val timedOut = timeUp()
+            return Result(collect(maxResults), timedOut)
         }
 
         /** Phase 1: 単一マス変更（広く）。 */
