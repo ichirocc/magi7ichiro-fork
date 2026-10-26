@@ -54,17 +54,17 @@ fun MagiViewModel.findFixSuggestions(focusStaff: Int? = null, focusShift: Int? =
             val origin = target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }
             logOp("I", OpLogText.fixSearchStartLine(origin, auto))
             var tiers: FixTierView? = null
+            fun search(staff: Int?, max: Int) = FixSuggester.suggestResult(st, snap, focusStaff = staff, focusShift = focusShift, maxResults = max, deadlineMs = deadline, ejectionChain = true)
+                .also { timedOut = it.timedOut }.suggestions
             val list = withContext(Dispatchers.Default) {
-                (if (exceptStaff != null && day != null) {
-                    fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
+                if (exceptStaff != null && day != null) {
+                    fixesByOthers(search(null, 40), day, exceptStaff).take(8)
                 } else if (target != null) {
                     // 入り口の範囲の中の 1 セルの変更を先に評価し、探索の案と合わせて段に分ける。
                     val entry = entryMoves(st, snap, target, restShiftIndex(st))
-                    val found = rankForTarget(FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true),
-                        snap.map { it.toList() }, target).take(8)
+                    val found = rankForTarget(search(focusStaff, 40), snap.map { it.toList() }, target).take(8)
                     classifyTiers(st, snap, target, entry, found, cv0::needCellLimits).copy(key = focusKey).also { tiers = it }.items.map { it.sug }
-                } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true))
-                    .also { timedOut = FixSuggester.lastTimedOut }
+                } else search(focusStaff, 8)
             }
             if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
             // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。

@@ -142,4 +142,27 @@ class V6SwapSuggesterTest {
         val on = FixSuggester.suggest(st, sched, maxResults = 50)
         assertTrue(on.map { it.label }.toString(), on.any { it.kind == FixKind.CHANGE && it.ops == listOf(restore) && it.deltaHard < 0 })
     }
+
+    /** 打ち切りの有無は呼出ごとの戻り値に載る（V61-04: 旧は静的変数で、後の探索が前の探索の値を上書きした）。 */
+    @Test
+    fun timedOutBelongsToEachCall() {
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-02",
+            shifts = shifts(), groups = listOf(Group("G0", "G0")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = listOf(listOf(0, 0), listOf(1, 0)),
+            wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range(lo = "1", hi = ""), "1,1" to Range(lo = "", hi = "0")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val cut = FixSuggester.suggestResult(st, sched, deadlineMs = -1L)
+        val full = FixSuggester.suggestResult(st, sched, deadlineMs = 60_000L)
+        assertTrue("締切 -1 は打ち切り", cut.timedOut)
+        assertTrue("後の探索が前の結果を書き換えない", cut.timedOut && !full.timedOut)
+    }
 }

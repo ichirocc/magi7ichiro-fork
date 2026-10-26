@@ -20,6 +20,7 @@ class ScheduleWriteSitesTest {
         "relaxAndApply", "restoreBeforeRelax", "restore",         // 設定の緩和と、その事後確認・保存失敗の復旧（restore＝RelaxRollback の控え）
         "applyFixSuggestion", "commitFixBoard",                   // 改善手（FixApplyGate を通る）。commitFixBoard は applyFixSuggestion だけが呼ぶ（下の検査）
         "maybeRunAgent",                                          // 代行役（AgentLoop の各手が FixApplyGate を通る）
+        "differsOnlyInPinsOrColors",                              // 比較のための写し（盤面は書かない）
     )
     private val write = Regex("""(\bcurrentSchedule\s*=[^=]|[(,\s]schedule\s*=\s*[a-zA-Z]|MagiEvent\.Board\.SetCell\()""")
     private val fn = Regex("""\bfun\s+(?:<[^>]*>\s*)?(?:[A-Za-z0-9_.]+\.)?([A-Za-z0-9_]+)\s*\(""")

@@ -67,7 +67,6 @@ import com.magi.app.model.C42Row
 import com.magi.app.model.MagiState
 import com.magi.app.model.MojibakeRepair
 import com.magi.app.model.StateParser
-import com.magi.app.v6.ShiftAppearance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -584,7 +583,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   3.336.0 は「init 時の WorkManager 問い合わせが失敗すると背景で走っているのに写しが false のまま」
         //   としてガード14箇所を optimizeInFlight() へ寄せたが、3.409.12 で足した `enabled = !ui.running` は
         //   写しを読む＝その stale 経路ではボタンが生きたまま「入力し終えてから拒否」が再発する。
-        //   Worker は開始時に必ず OptimizationRepository.setRunning(true) を流すので、その StateFlow を
+        //   Worker は開始時に必ず OptimizationRepository.holdRunning() で true を流すので、その StateFlow を
         //   写しへ反映すればプロセスが生きている限り写しは正になる（問い合わせの成否に依存しない）。
         //   下げる側は **true を見たあとの遷移だけ**＝購読開始時の初期値 false が、init 復元の
         //   「バックグラウンド計算を継続中…」（WorkManager 問い合わせ由来の running=true）を踏み消さないため。
@@ -1785,6 +1784,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val startMs = System.currentTimeMillis()
         // HF63: 探索の改善ストリームを追跡し、構造的に充足困難な制約族を検出（重み系は非改変＝安全）。
         val hf63 = Hf63Infeasibility()
+        // 進捗コールバックは並列ワーカーから同時に来る＝下の var・HashMap・hf63 はこの錠の中でだけ触る。
+        val progressLock = Any()
         // 最適化中ログ強化用のスロットル状態（操作ログへマイルストーンだけを残しスパムを防ぐ）。
         var liveHard = Long.MAX_VALUE
         var livePhase = ""
@@ -1795,8 +1796,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         var lastPhaseLogMs = -10_000L
         val phaseNameLastLogMs = HashMap<String, Long>()   // [3.283.0] 同名フェーズの再ログ抑制（60s窓・スパム対策）
         var lastHardLogMs = -10_000L
-        // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝上の変数・HashMap・hf63 の読み書きを直列化する。
-        val progressLock = Any()
         val boardToken = beginBoardJob(MagiPhase.Optimizing, engineRun = true)   // [3.328.0/3.404.0]
         // [3.694.0] 開始行は beginBoardJob の後（#N が付く）。期間・人数・入力の指紋と、開始点で読んだ設定を残す（G1・G6・G8）。
         logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
@@ -2043,9 +2042,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // HF63 検出: 50秒改善のない制約族＝データ上満たせない可能性が高い（業務担当者へ提示）。
                 // [実機ログ起因] 探索中の一時盤面でしか違反が無かった族（最終盤面で0）は「充足できている」ので
                 //   警告から除外する（旧: 破棄された探索トラックの covO/LimMax まで列挙され誤解を招いた）。
-                val staleKeys = hf63.infeasibleBreakdownKeys().filter { (res.report.breakdown[it] ?: 0) > 0 }
+                val stalled = synchronized(progressLock) { hf63.infeasibleBreakdownKeys() }
+                val staleKeys = stalled.filter { (res.report.breakdown[it] ?: 0) > 0 }
                 // [思考誘導S4] 画面の下限判定は採用した盤面で見る（入力維持の分岐では捨てた盤面の族を出さない）。
-                _ui.update { it.copy(stalledHardFamilies = hf63.infeasibleBreakdownKeys()
+                _ui.update { it.copy(stalledHardFamilies = stalled
                     .filter { k -> k in com.magi.app.v6.MirrorKeys.hard && (adoptedReport.breakdown[k] ?: 0) > 0 }) }
                 if (staleKeys.isNotEmpty()) {
                     val names = staleKeys.mapNotNull { k -> Hf63Infeasibility.KEY_TO_INDEX[k]?.let { Hf63Infeasibility.CNAMES[it] } }
@@ -2462,7 +2462,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   押した側でも降ろして窓を閉じる。Worker 側の解除と冪等（両方 false にするだけ）。
             //   置き換えで打ち切られた旧実行はここを通らない（`stop()` はユーザー操作のみ）＝
             //   新しい実行の running を落とす経路にはならない。
-            OptimizationRepository.setRunning(false)
+            OptimizationRepository.clearRunning()
             OptimizationRepository.request = null
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
             clearBgFiles("停止（背景最適化の中断）")
@@ -2738,7 +2738,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             families = _ui.value.violationCellFamilies[VioKey.cell(i, j)].orEmpty()) else ""
         state = ns
         autoSave()
-        restartStaleCheck()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
             opNotice = OpNotice(++opNoticeSeq, "${opNm(i)}さん ${DayText.short(st.startDate, j)} を" +
                 (if (!on) "手動固定を外しました" else if (pinHint.isEmpty()) "手動固定しました（自動では変更しません）" else "手動固定しました。$pinHint"),
@@ -2914,11 +2913,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = ns
         _ui.update { it.copy(structureEdited = true, editRev = it.editRev + 1).withShiftColors(ns) }
         autoSave()
-        restartStaleCheck()
     }
-
-    /** 走っている違反チェックは変更前の状態で表示を作り直す（手動固定・表示色が戻る）＝今の状態で調べ直す。 */
-    private fun restartStaleCheck() { if (checkJob?.isActive == true) refreshCheck() }
 
     /**
      * 構造変更(ns)を適用し、再チェック後に独自の完了メッセージを表示（コンポーネント別取込・apt全リセット等で使用）。
@@ -3336,17 +3331,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         ).withShiftColors(st).withWishDisplay(st)
         return built
     }
-
-    /** 表示色（shiftColors 由来）の UI 項目。makeUi と [applyDisplayOnly]（検査を回さない）の単一ソース。 */
-    private fun UiState.withShiftColors(st: MagiState): UiState = copy(
-        shiftColorHex = st.shifts.mapIndexed { i, sh -> ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i) },
-        shiftTextHex = st.shifts.mapIndexed { i, sh -> ShiftAppearance.pickTextColor(ShiftAppearance.resolveShiftColor(st.shiftColors[sh.kigou], i)) },
-        violationColorHex = st.shiftColors["__vio__"] ?: "",
-        violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
-        violationFamilyColorHex = st.shiftColors.entries
-            .filter { it.key.startsWith("__vioFam_") && it.key.endsWith("__") }
-            .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
-    )
 
     private data class LoadedProblem(
         val state: MagiState,

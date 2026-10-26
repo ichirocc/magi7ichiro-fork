@@ -207,21 +207,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val haptic = LocalHapticFeedback.current
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
-    var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）
-    var tourOnItem by remember { mutableStateOf(true) }     // false＝見ていた違反が直って消えた（tourAt は次に見る違反）
+    var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）。[tourBase] での添字
+    var tourBase by remember { mutableStateOf<List<TourItem>>(emptyList()) }   // tourAt を決めたときの一覧（作り直しへの追従は tourCursor）
     val tourItems = remember(ui.violationCellFamilies, ui.schedule, ui.display) {
         val st = vm.state
         ui.display?.takeIf { it.freshFor(ui) }?.tourItems
             ?: if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
     }
-    val tourLast = remember { arrayOf(tourItems) }
-    LaunchedEffect(tourItems) {
-        val old = tourLast[0]; tourLast[0] = tourItems
-        if (tourActive && old != tourItems) tourRetarget(old, TourPos(tourAt, tourOnItem), tourItems).let { tourAt = it.at; tourOnItem = it.onItem }
-    }
-    // 巡回の前後（見ていた違反が消えたあとは tourAt が「次」）。
-    val tourNextAt = if (tourOnItem) tourAt + 1 else tourAt
-    val tourPrevAt = tourAt - 1
+    val tour = remember(tourBase, tourAt, tourItems) { tourCursor(tourBase, tourAt, tourItems) }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
     var gridTopInContent by remember { mutableIntStateOf(-1) }   // 勤務表グリッドの上端（タブ本体のスクロール内容座標 px）
@@ -566,7 +559,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 巡回の 1 件へ移る: 見出しの何件目か・セル・関連セルの強調をまとめて更新する（違反単位）。
     val goTourItem: (Int) -> Unit = { at ->
         tourItems.getOrNull(at)?.let { it ->
-            tab = 1; tourActive = true; tourAt = at; tourOnItem = true; editingCell = it.cell
+            tab = 1; tourActive = true; tourBase = tourItems; tourAt = at; editingCell = it.cell
             focusRange = Triple(it.staff, it.days.first(), it.days.last())
         }
     }
@@ -768,7 +761,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         //   → 不足なし時は分析タブの修復フローへ。
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { openEditLanding(null) },
-                        onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
+                        onLanding = { l -> openEditLandingFrom(l, EditReturn("直し方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
                         onApplyMove = { s -> vm.previewFixSuggestion(s, globalPolish = true) },
                         onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null, auto = true)) },
@@ -1113,19 +1106,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
                     },
                     onMove = { c ->
-                        val n = tourItems.size
-                        when {
-                            tourActive && n > 0 && c == tourItems[tourNextAt.mod(n)].cell -> goTourItem(tourNextAt.mod(n))
-                            tourActive && n > 0 && c == tourItems[tourPrevAt.mod(n)].cell -> goTourItem(tourPrevAt.mod(n))
-                            else -> moveTo(c)
-                        }
+                        val to = if (!tourActive) null else listOfNotNull(tour.next, tour.prev).firstOrNull { tourItems[it].cell == c }
+                        if (to != null) goTourItem(to) else moveTo(c)
                     },
                     onDismiss = closeSheet,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                     fixNav = fixNav,
-                    tourNext = if (tourActive && (tourItems.size > 1 || !tourOnItem && tourItems.isNotEmpty())) tourItems[tourNextAt.mod(tourItems.size)].cell else null,
-                    tourHeading = if (tourActive && tourOnItem) tourHeading(tourItems, tourAt) else null,
-                    tourPos = if (tourActive && tourOnItem) tourAt to tourItems.size else null,
+                    tourNext = if (tourActive) tour.next?.let { to -> { goTourItem(to) } } else null,
+                    tourHeading = if (tourActive) tour.at?.let { tourHeading(tourItems, it) } else null,
+                    tourPos = if (tourActive) tour.at?.let { it to tourItems.size } else null,
                     tourCovULine = if (tourActive) tourCovULine(ui.breakdown["covU"] ?: 0) else null,
                     leftHand = leftHand,
                     relax = vm.relaxTrialFor(),
@@ -1139,7 +1128,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     onMode = { sheetMode = it },
                     expanded = sheetExpanded,
                     onToggleExpand = { sheetExpanded = !sheetExpanded },
-                    tourPrev = if (tourActive && (tourItems.size > 1 || !tourOnItem && tourItems.isNotEmpty())) tourItems[tourPrevAt.mod(tourItems.size)].cell else null,
+                    tourPrev = if (tourActive) tour.prev?.let { to -> { goTourItem(to) } } else null,
                     canUndo = ui.canUndo && !ui.running,
                     onUndo = { vm.undo() },
                     onList = if (ui.hasResult && !ui.running) { { editingCell = null; tourActive = false; focusRange = null; sheetExpanded = false; listFocus = cell; problemList = true } } else null,

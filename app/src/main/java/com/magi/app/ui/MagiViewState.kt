@@ -480,6 +480,10 @@ internal object DisplayOnlyUndo {
     /** 2 つの (設定, 盤面) の差が表示色だけか＝戻しても結果・他の案・直し方はそのまま使える。 */
     fun differsOnlyInColors(a: MagiState, aSched: Array<IntArray>, b: MagiState, bSched: Array<IntArray>): Boolean =
         aSched.contentDeepEquals(bSched) && a.copy(shiftColors = b.shiftColors) == b
+
+    /** 設定の差が手動固定・表示色だけか（盤面 schedule は見ない＝検査の盤面は別に渡る）。[UiState.keepDisplayOf] の判定。 */
+    fun differsOnlyInPinsOrColors(a: MagiState, b: MagiState): Boolean =
+        a.copy(shiftColors = b.shiftColors, manualPins = b.manualPins, schedule = b.schedule) == b
 }
 
 // ===== 表示専用の印 =====

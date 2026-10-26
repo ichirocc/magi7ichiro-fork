@@ -86,7 +86,7 @@ internal fun CellEditSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     fixNav: FixNav = FixNav(),
-    tourNext: Pair<Int, Int>? = null,
+    tourNext: (() -> Unit)? = null,     // 巡回の次・前の項目へ（項目の位置で進む＝同じセルが 2 件の違反に属しても進める）
     tourHeading: String? = null,        // 巡回中の見出し「必須違反 2 / 5 ・ 禁止の並び …」（違反単位）
     tourCovULine: String? = null,       // 巡回に入らない人員不足の件数
     tourPos: Pair<Int, Int>? = null,    // 巡回中の（何件目, 全件）＝札「必須 2/5」
@@ -102,7 +102,7 @@ internal fun CellEditSheet(
     onMode: (Int) -> Unit = {},
     expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「詳しく ▸」のタップと、希望の一覧から開くとき
     onToggleExpand: () -> Unit = {},
-    tourPrev: Pair<Int, Int>? = null,
+    tourPrev: (() -> Unit)? = null,
     canUndo: Boolean = false,           // 勤務表タブの下部バーはシートを開く間は隠れる＝元に戻すをここへ（規則は下部バーと同じ）
     onUndo: () -> Unit = {},
     onList: (() -> Unit)? = null,       // [3.718.0] 「一覧へ」＝同じパネルを問題一覧に戻す（null なら出さない）
@@ -217,8 +217,8 @@ internal fun CellEditSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
-                    if (tourNext != null && tourNext != cell && step == 0) {
-                        MagiTextButton(onClick = { onMove(tourNext) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
+                    if (tourNext != null && step == 0) {
+                        MagiTextButton(onClick = tourNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                     }
                     SheetListButton(onList)
                     SheetUndoButton(canUndo, onUndo)
@@ -538,7 +538,7 @@ private fun ExtWishDayRow(kigou: List<String>, dayShort: String, onWishes: () ->
 private fun PeekBody(
     ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
     onEvent: (MagiEvent) -> Unit, onPick: (Int) -> Unit, onMove: (Pair<Int, Int>) -> Unit, onDismiss: () -> Unit, onToggleExpand: () -> Unit,
-    onShowRelax: () -> Unit, target: String, badge: String?, cause: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
+    onShowRelax: () -> Unit, target: String, badge: String?, cause: String, severity: CellSeverity, tourPrev: (() -> Unit)?, tourNext: (() -> Unit)?,
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
     canUndo: Boolean = false, onUndo: () -> Unit = {},
     onMode: (Int) -> Unit = {}, extKigou: List<String>? = null, onWishes: () -> Unit = {},
@@ -564,8 +564,8 @@ private fun PeekBody(
                 color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (tourPrev != null || tourNext != null) {
-                MagiTextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
-                MagiTextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
+                MagiTextButton(onClick = { tourPrev?.invoke() }, enabled = tourPrev != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
+                MagiTextButton(onClick = { tourNext?.invoke() }, enabled = tourNext != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
         }
         // 押せる行どうしは 8dp 空ける（赤の［希望を外す］とシフトの押し違いを防ぐ）。

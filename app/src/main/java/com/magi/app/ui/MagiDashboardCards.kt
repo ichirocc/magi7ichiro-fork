@@ -1493,9 +1493,9 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
                 //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
-                // 必須違反はホーム等と同じ全必須（担当外シフトを含む）＝担当外はその内数として並べる。
-                BigStat("必須違反", v6HardStat(breakdown, v6.hardCore + v6.hardGuard), Modifier.weight(1f))
-                BigStat("うち" + (breakdownLabels["groupViol"] ?: "groupViol"), v6.hardGuard.toString(), Modifier.weight(1f))
+                // ホームの「必須 残りN件・M人」と同じ数え方＝人員不足は人数で別に並べる（件数と人数を足さない）。
+                BigStat("必須違反", "${v6.hardCore + v6.hardGuard - v6.covU}件", Modifier.weight(1f))
+                BigStat(breakdownLabels["covU"] ?: "covU", "${v6.covU}人", Modifier.weight(1f))
                 BigStat("充足", v6.coveragePct?.let { "$it%" } ?: "-", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))

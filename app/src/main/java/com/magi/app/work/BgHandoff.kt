@@ -39,19 +39,22 @@ internal suspend fun clearAfterSaved(save: suspend () -> Boolean, clear: () -> U
     return true
 }
 
-/** [3.438.0] 停止経路で実行中を降ろす責任を引き受けるか。片付けでマーカーが消えた後の再判定に頼らない（ReviewFixes3442Test 参照）。 */
-internal fun cancelPathReleases(ownedAtCancel: Boolean): Boolean = ownedAtCancel
-
-/** finally で `setRunning(false)` を呼ぶか。`ownsNow` は引き受け済みなら読まない。 */
-internal fun shouldReleaseRunning(releasedByMe: Boolean, ownsNow: () -> Boolean): Boolean = releasedByMe || ownsNow()
-
 /**
- * Worker の終わりに `setRunning(false)` を呼ぶか。[shouldReleaseRunning] に加え、自分が立てた実行中は、停止でマーカーが消えて
- * 誰も所有していない（[activeRunId] が 0）なら降ろす＝所有権を確かめてから立てるまでの間に停止されても残さない。
- * 置き換え（別の実行がマーカーを持つ）なら新しい実行の実行中に触らない。
+ * 背景実行の「実行中」の印。Worker は立てた印だけを下ろし、停止（[clear]）は全部を下ろす。
+ * 1 つの真偽値だと、停止の後に立った旧実行の印を誰も下ろせず、置き換えで並んだ新旧の片方が下ろすともう片方の分まで消える。
  */
-internal fun releaseRunningAtEnd(releasedByMe: Boolean, setByMe: Boolean, ownsNow: () -> Boolean, activeRunId: () -> Long): Boolean =
-    shouldReleaseRunning(releasedByMe, ownsNow) || (setByMe && activeRunId() == 0L)
+internal class RunningHolds {
+    private var next = 0L
+    private val held = HashSet<Long>()
+
+    val any: Boolean get() = held.isNotEmpty()
+
+    fun hold(): Long { val t = ++next; held += t; return t }
+
+    fun release(token: Long) { held -= token }
+
+    fun clear() { held.clear() }
+}
 
 /** [3.592.0] 非同期の enqueue 失敗を片付けるか。置き換え済み（別の runId が進行中）なら新しい実行に触れない。 */
 internal fun asyncEnqueueFailureCleansUp(failed: Boolean, currentRunId: Long, runId: Long): Boolean = failed && currentRunId == runId

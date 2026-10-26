@@ -498,6 +498,76 @@ static int runExtBanTest() {
     return failures;
 }
 
+// 入口修復の埋めシフト（hf67HardRepairN の hf66 段）が Kotlin HardRepairCore.hf66DataHardening と同じ盤面を返すこと。
+//   期待盤面は Kotlin ZeroCapExclusionTest.entryHardeningMatchesNativeFixture と同じ値（同じフィクスチャを両側で固定）。
+//   0=D, 1=N, 2=休（休が先頭でない）。G0={D,N,休}, G1={D,N}（休を担当しない）。s1 は N の上限 0、(1,1) は N を希望。
+static int runHf66FillTest() {
+    MagiProblem p;
+    p.S = 3; p.T = 4; p.K = 3; p.G = 2; p.restIdx = 2; p.dow0 = 0; p.use2 = false;
+    p.sgrp = {0, 0, 1}; p.ssk.assign(p.S, -1);
+    p.bucket = {{0, 1, 2}, {0, 1}};
+    p.canDo.assign((size_t)p.S * p.K, 0);
+    for (int i = 0; i < p.S; i++) for (int k : p.bucket[p.sgrp[i]]) p.canDo[(size_t)i * p.K + k] = 1;
+    p.wish.assign((size_t)p.S * p.T, -1);
+    p.wish[(size_t)1 * p.T + 1] = 1;
+    p.need1.assign((size_t)p.K * p.T, -1); p.need2.assign((size_t)p.K * p.T, -1);
+    p.rangeLo.assign((size_t)p.S * p.K, INT32_MIN); p.rangeHi.assign((size_t)p.S * p.K, INT32_MAX);
+    p.apt.assign((size_t)p.S * p.K, -1);
+    p.rangeLo[(size_t)1 * p.K + 1] = 0; p.rangeHi[(size_t)1 * p.K + 1] = 0;
+    finalizeProblem(p);
+    std::vector<int> a = {-1, 0, 1, 2,   1, 1, 0, 2,   2, 1, -1, 0};
+    const std::vector<int> want = {2, 0, 1, 2,   2, 1, 0, 2,   0, 1, 0, 0};
+    std::mt19937_64 rng(1);
+    hf67HardRepairN(p, a.data(), rng);
+    int failures = a == want ? 0 : 1;
+    if (failures) {
+        printf("HF66-TEST FAIL: got");
+        for (int x : a) printf(" %d", x);
+        printf("\n");
+    }
+    printf("HF66-TEST: %s\n", failures == 0 ? "OK" : "FAILED");
+    return failures;
+}
+
+// ALNS の copy 系が拡張希望の禁止で捨てた候補は、受理も学習（reward・lamUpdate・curAug）もしない（Kotlin の extBad と同じ）。
+//   1 セルだけの盤面に担当外の値を置き、置けるシフトを全部禁止にする＝入口修復は必ず禁止を置き、候補は必ず捨てられる。
+static int runAlnsBanDiscardTest() {
+    MagiProblem p;
+    p.S = 1; p.T = 1; p.K = 3; p.G = 1; p.restIdx = 0; p.dow0 = 0; p.use2 = false;
+    p.sgrp = {0}; p.ssk = {-1};
+    p.bucket = {{0, 1}};
+    p.canDo = {1, 1, 0};
+    p.wish = {-1};
+    p.need1.assign((size_t)p.K * p.T, -1); p.need2.assign((size_t)p.K * p.T, -1);
+    p.rangeLo.assign((size_t)p.S * p.K, INT32_MIN); p.rangeHi.assign((size_t)p.S * p.K, INT32_MAX);
+    p.apt.assign((size_t)p.S * p.K, -1);
+    p.extBan = {1, 1, 0};
+    finalizeProblem(p);
+    const std::vector<int> board = {2};
+    int failures = 0, armed = 0;
+    AlnsState s(p, board.data(), 77, 2, 0, 1.0);
+    for (int k = 3; k < 7; k++) s.opW[k] = 0.0;
+    const double lamAcc0 = s.lamAcc, lamTemp0 = s.lamTemp;
+    for (int t = 0; t < 40; t++) {
+        s.itersRestart = 0;   // 毎回 hf67 を通す
+        long long o6[6];
+        runAlnsChunk(s, 1, 0.5, o6);
+        if (o6[0] != 0) { printf("ALNS-BAN-TEST FAIL: 自己整合 status=%lld\n", o6[0]); failures++; break; }
+    }
+    for (int k = 0; k < 3; k++) {
+        armed += s.opCnt[k];
+        if (std::fabs(s.opScore[k] - 0.2 * s.opCnt[k]) > 1e-9) {
+            printf("ALNS-BAN-TEST FAIL: op%d が捨てた候補に既定外の reward (score=%.2f, cnt=%d)\n", k, s.opScore[k], s.opCnt[k]); failures++;
+        }
+    }
+    if (s.st.a[0] != 2) { printf("ALNS-BAN-TEST FAIL: 捨てた候補が盤面に残った (%d)\n", s.st.a[0]); failures++; }
+    if (s.lamAcc != lamAcc0 || s.lamTemp != lamTemp0) { printf("ALNS-BAN-TEST FAIL: 捨てた候補で lamUpdate した\n"); failures++; }
+    if (s.curAug != 0.0) { printf("ALNS-BAN-TEST FAIL: 捨てた候補で curAug が動いた (%.3f)\n", s.curAug); failures++; }
+    if (armed == 0) { printf("ALNS-BAN-TEST FAIL: copy 系が 1 回も選ばれず空振り\n"); failures++; }
+    printf("ALNS-BAN-TEST: %s (copy=%d)\n", failures == 0 ? "OK" : "FAILED", armed);
+    return failures;
+}
+
 // [3.409.22] ネイティブ修復器が **need2 単独定義の被覆需要** を扱えるかの直接検証。
 //   旧実装は `need1<=0 → continue`（destroyRepairDayAtN）/ `need1<0 → continue`（findCovOFixN）で
 //   need1 未設定のセルを丸ごと素通りしており、**評価器は covU/covO を計上するのに修復器はその枠を
@@ -990,6 +1060,7 @@ int main(int argc, char** argv) {
     double bits   = benchOne(false);
     printf("BENCH deltaApply (10x31 K6): scalar %.2f M moves/s, bit-op %.2f M moves/s, speedup x%.2f\n",
            scalar / 1e6, bits / 1e6, bits / scalar);
-    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest() + runExtBanTest();
+    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest() + runExtBanTest()
+        + runHf66FillTest() + runAlnsBanDiscardTest();
     return (mismatches == 0 && repairFail == 0) ? 0 : 1;
 }

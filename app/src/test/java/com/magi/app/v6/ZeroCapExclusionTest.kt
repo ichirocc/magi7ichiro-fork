@@ -170,4 +170,26 @@ class ZeroCapExclusionTest {
             assertTrue(p.capZeroCells(b).isEmpty())
         }
     }
+
+    /** 入口修復の埋めシフト（休が先頭でない・休を担当しないグループ・上限 0・希望固定）。C++ の
+     *  `tools/native/host_parity_bench.cpp` runHf66FillTest が同じフィクスチャ・同じ期待盤面で hf67HardRepairN を固定する。 */
+    @Test
+    fun entryHardeningMatchesNativeFixture() {
+        val s = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-04",
+            shifts = listOf(Shift("D", "D", "", ""), Shift("N", "N", "", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
+            groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+            staff = listOf(Staff("a", 0), Staff("b", 0), Staff("c", 1)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 0)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+            schedule = listOf(listOf(99, 0, 1, 2), listOf(1, 1, 0, 2), listOf(2, 1, 99, 0)),
+            wishes = mapOf("1,1" to 1), staffRange = mapOf("1,1" to Range("0", "0")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val out = HardRepairCore.hf67HardRepair(s, s.schedule.map { it.toIntArray() }.toTypedArray(), java.util.Random(1)).schedule
+        assertEquals(listOf(listOf(2, 0, 1, 2), listOf(2, 1, 0, 2), listOf(0, 1, 0, 0)), out.map { it.toList() })
+    }
 }

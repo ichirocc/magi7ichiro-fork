@@ -125,7 +125,7 @@ internal suspend fun MagiViewModel.pushReport(
     }
     snapResult.exceptionOrNull()?.let { if (it is CancellationException) throw it; logOp("W", "表示の写しを作れませんでした: ${it.javaClass.simpleName}: ${it.message}") }
     val snap = snapResult.getOrNull()
-    _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).let { u ->
+    _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).keepDisplayOf(st, state).let { u ->
         u.copy(display = snap?.takeIf { d -> d.freshFor(u) }, draftStage = if (runLabel != null) runLabel == "下書きづくり" else base.draftStage) } }
     resolvePendingGuidedFix(st, schedule, report, analysis.coverageDiag)
     deepCovODiagFollowUp(st, schedule, report, runLabel)

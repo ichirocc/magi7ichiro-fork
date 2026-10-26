@@ -1180,7 +1180,6 @@ object V6PortAnalyzer {
 
         val dup = duplicatePatternCount(state)
         if (dup > 0) warns.add("勤務の並びのルールに、同じ並びの重複が ${dup} 件あります。編集タブの『年間マスター』の『⑤ 並び・期間の制約』で整理できます")
-        if (state.cons41.isEmpty()) warns.add("グループのレンジが未設定です。グループごとの1日の人数の範囲を使うなら、編集タブの『年間マスター』の『④ 人数と組み合わせ』で設定できます")
         return warns
     }
 
@@ -1192,6 +1191,8 @@ object V6PortAnalyzer {
 
     private fun sanityNotes(state: MagiState): List<String> {
         val notes = ArrayList<String>()
+        // 使わない設定の案内＝警告（画面の赤）でなく注記（ログだけ）。
+        if (state.cons41.isEmpty()) notes.add("グループのレンジが未設定です。グループごとの1日の人数の範囲を使うなら、編集タブの『年間マスター』の『④ 人数と組み合わせ』で設定できます")
         var aptSet = 0
         for (row in state.groupShiftApt) for (cell in row) if (cell.trim().isNotEmpty()) aptSet++
         notes.add("groupShiftApt 適切回数: ${aptSet} 件設定")
