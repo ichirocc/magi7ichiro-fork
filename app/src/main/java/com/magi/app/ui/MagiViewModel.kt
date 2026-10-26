@@ -1508,9 +1508,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             // 下書きは決まった種で作る（同じ入力なら同じ盤面）＝先に 1 回だけ作り、確認に後の必須を出し、置き換えるときはその結果を使う。
             val before = if (u.hasResult) hardText(u.breakdown, u.bestHard) else null
             val keys = stateKey(st) to boardKey(sched)
+            val seq = ++draftConfirmSeq
             viewModelScope.launch {
                 val res = runCatching { V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true) }
                     .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                // 作っている間に盤面・設定が変わった／別の実行が始まった／もう一度押された＝この確認は古い。出さない。
+                val nowSt = state; val nowSc = currentSchedule
+                if (seq != draftConfirmSeq || nowSt == null || nowSc == null || keys != (stateKey(nowSt) to boardKey(nowSc)) || optimizeInFlight()) return@launch
                 pendingDraft = res?.let { keys to it }
                 _ui.update { it.copy(draftConfirm = draftConfirmText(before, res?.let { r -> hardText(r.report.breakdown, r.report.hard.toLong()) })) }
             }
@@ -1579,6 +1583,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 確認のために先に作った下書き（作ったときの設定と盤面の指紋つき。違えば使わず作り直す）。 */
     private var pendingDraft: Pair<Pair<Long, Long>, V6FinalPort.ActionResult>? = null
+    private var draftConfirmSeq = 0
 
     fun dismissDraftConfirm() {
         pendingDraft = null
@@ -1970,9 +1975,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     else if (s5 == null) KeptResultText.withNote(KeptResultText.screen(res.report.breakdown, baseReport.breakdown), capNote)
                     else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を調整しました（希望は外れています）。必須違反は ${s5.h0}件 → ${hardText(baseReport.breakdown, baseReport.hard.toLong())}（外した分だけ）。再作成しても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
                     else "希望（${s5.label}）を調整しましたが（希望は外れています）、再作成しても必須違反は減りませんでした（必須違反 ${hardText(baseReport.breakdown, baseReport.hard.toLong())}）。元に戻すで希望と勤務表をまとめて戻せます。"
+                    // running は下の finally で endBoardJob の後に下ろす（ここで下ろすと、他の案の検査を待つ間だけ画面は操作できるのに裁定は実行中で断る）。
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
                         messageIsError = false,
-                        running = false,
                         hasResult = true,
                         relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
                         message = keptMsg, keptPrevious = s5 == null,
@@ -2004,7 +2009,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     //   詳細な方式は診断ログ(直下logOp)と設定タブ(3.192.0)で確認可能。
                     pushReport(state ?: st0, res.schedule, res.report, runLabel = "最適化") { it.copy(
                         messageIsError = false,
-                        running = false,
                         hasResult = true,
                         relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                         runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report, baseReport)),
