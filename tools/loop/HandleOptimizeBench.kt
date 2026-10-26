@@ -17,6 +17,7 @@ fun main(args: Array<String>) {
     val seeds = args.getOrNull(2)?.toInt() ?: 5
     val secondsBudget = args.getOrNull(3)?.toInt() ?: 60
     val workers = args.getOrNull(4)?.toInt() ?: 4
+    // [2026-10-25] "tol"＝じっくりの条件で apt/fair の 6% 許容だけ ON/OFF（実機ログで許容の採用が最終盤面に残らなかった件）。
     // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す（off 腕は短縮あり＝3.672.0 までの既定）
     //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
     //   後期演算の試行中の停止確認を切る（lateOpStopPropagation=false、入口の確認は残る）に戻す（docs/stall_escape.md §5.5）。
@@ -65,11 +66,17 @@ fun main(args: Array<String>) {
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
                 PolishGate.normalStallFraction = if (feature == "earlystall" && armOn) onFraction else 0.9
+                // [2026-10-25] "tol"＝じっくりの他 3 つ（粘り強く・禁止連続の崩し範囲・回数連鎖研磨）と仕上げ最適化は両腕 ON、on 腕だけ apt/fair の 6% 許容。
+                if (feature == "tol") {
+                    PolishGate.combineExhaustPairs = true; PolishGate.wideC3nBreakDays = true; PolishGate.countChainPolish = true
+                    PolishGate.aptFairSoftTolerance = armOn
+                }
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(
                         st, st.schedule.map { it.toIntArray() }.toTypedArray(),
                         secondsRaw = if (feature == "budget" && armOn) onSeconds else secondsBudget, workers = workers, allowImpossible = true,
+                        softPolish = feature == "tol",
                         extraRefineRequirePostHardDrop = feature == "" && armOn,
                         wishFloorMode = wfm ?: WishFloorMode.OFF,
                         seed = 1000L + seed,
