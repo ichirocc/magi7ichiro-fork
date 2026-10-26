@@ -361,7 +361,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val csv = withContext(Dispatchers.Default) { vm.exportCsv() }
+                val build = vm.exportCsvDeferred()
+                val csv = build?.let { withContext(Dispatchers.Default) { it() } }
                 if (csv != null) {
                     val r = withContext(Dispatchers.IO) {
                         runCatching {

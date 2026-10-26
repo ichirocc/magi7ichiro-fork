@@ -55,4 +55,31 @@ class CsvSavedMarkTest {
         assertNull(m.line(null, st, redone))
         assertEquals(false, m.savedMatches(null, redone))
     }
+
+    @Test
+    fun editingTheBoardInPlaceAfterExportDoesNotChangeWhatWasSaved() {
+        // セルの編集は盤面の配列をその場で書き換える。書き出しの文脈は写しを持つ＝書き出しのあとの編集が混ざらない。
+        val m = CsvSavedMark()
+        val b = board()
+        val original = Array(b.size) { b[it].copyOf() }
+        val csv = ScheduleCsvBridge.build(st, b)
+        m.noteExport(st, b, csv)
+        b[0][0] = if (b[0][0] == 0) 1 else 0   // 書き込みが終わる前に、同じ配列へ編集
+        m.noteSaved(st, b)
+        assertEquals(false, m.savedMatches(st, b))
+        assertEquals(true, m.savedMatches(st, original))   // 書き出した時の内容とは一致
+    }
+
+    @Test
+    fun boardsWithTheSameFingerprintAreNotSavedMatchesByFingerprint() {
+        // 盤面の指紋（h*31+v）が衝突する 2 盤面: [1,0] と [0,31] はどちらも 31 を足す。指紋だけで「同じ」と言わない。
+        val m = CsvSavedMark { _, s -> s.joinToString(";") { it.joinToString(",") } }
+        val a = arrayOf(intArrayOf(1, 0))
+        val b = arrayOf(intArrayOf(0, 31))
+        assertEquals(com.magi.app.v6.StateFingerprint.ofBoard(a), com.magi.app.v6.StateFingerprint.ofBoard(b))
+        m.noteExport(st, a, "1,0")
+        m.noteSaved(st, a)
+        assertEquals(true, m.savedMatches(st, a))
+        assertEquals(false, m.savedMatches(st, b))
+    }
 }
