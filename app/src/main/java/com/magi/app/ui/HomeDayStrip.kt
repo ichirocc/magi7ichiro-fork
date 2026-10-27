@@ -73,3 +73,14 @@ internal fun RunDeltaHighlight(line: String) {
         }
     }
 }
+
+/** 下書きに置き換える前の勤務表のほうが良いとき（作成の結果が負けた）。押すとその勤務表へ戻す（元に戻すで取り消せる）。 */
+@Composable
+internal fun PreDraftNoticeCard(text: String, onRestore: () -> Unit) {
+    MagiCardOrPlain(false) { pad ->
+        Column(Modifier.padding(pad)) {
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+            MagiTextButton(onClick = onRestore, modifier = Modifier.padding(top = 4.dp).heightIn(min = 48.dp)) { Text(PRE_DRAFT_RESTORE_BUTTON) }
+        }
+    }
+}

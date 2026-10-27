@@ -175,3 +175,22 @@ object OptimizationRepository {
         result.collect { r -> if (r != null) onResult(r) }
     }
 }
+
+/**
+ * 背景実行が探索の設定（PolishGate）を投入時の値へ差し替えている間の貸し出し。置き換え（REPLACE）で Worker が重なると、
+ * 各自が「始めたときの値」を戻す形では、後から始めた Worker が覚えた値＝先の Worker の投入値が最後に残り、画面の設定と食い違った。
+ * 最初に借りた Worker が元の値を覚え、最後に返した Worker だけがそれを戻す。呼出側は PolishGate の錠の中で呼ぶ。
+ */
+internal class GateLease {
+    private var original: Map<String, Any>? = null
+    private var holders = 0
+
+    fun enter(current: Map<String, Any>) { if (holders++ == 0) original = current }
+
+    /** 最後の返却なら戻す値、まだ借りている Worker がいれば null。 */
+    fun exit(): Map<String, Any>? {
+        if (holders == 0) return null
+        holders--
+        return if (holders == 0) original.also { original = null } else null
+    }
+}

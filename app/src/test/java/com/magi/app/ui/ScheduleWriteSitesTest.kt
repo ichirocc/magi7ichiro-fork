@@ -13,6 +13,7 @@ class ScheduleWriteSitesTest {
     private val allowed = setOf(
         "setCell", "setCells", "revealGrid",                      // 手動編集
         "undo", "redo", "rollbackBoardCommit",                    // 元に戻す・やり直す
+        "restorePreDraft",                                        // 下書きに置き換える前の勤務表へ戻す（元に戻すと同じく保存済みの盤面を戻すだけ）
         "loadAsync", "makeUi", "runCsvImport", "commitCsvBoard",  // 読込・CSV 取込（commitCsvBoard は runCsvImport だけが呼ぶ）・UiState の組み立て
         "startFullOptimize", "runSoftPolish", "applyBgResultGuarded", "opDays",   // 最適化の採用
         "generateSmartInitial", "applyAlternative", "applyWishes", // 下書き・別案・希望の反映

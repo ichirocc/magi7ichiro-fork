@@ -34,6 +34,17 @@ class LiveBestPublishTest {
     private fun board(mark: Int, staff: Int = 30, days: Int = 31) =
         Array(staff) { IntArray(days) { mark } }
 
+    /** 置き換えで打ち切られた旧実行の盤面（職員数・日数が違う）は、新しい実行の途中最良として返さない。 */
+    @Test
+    fun shapedLiveBestRejectsAnotherRunsBoard() {
+        OptimizerRuntime.resetLiveBestForTest()
+        OptimizerRuntime.publishLiveBest(rep(1), board(1, staff = 10, days = 31))
+        assertNull(OptimizerRuntime.liveBestShaped(board(0, staff = 11, days = 31)))
+        assertNull(OptimizerRuntime.liveBestShaped(board(0, staff = 10, days = 30)))
+        assertEquals(10, OptimizerRuntime.liveBestShaped(board(0, staff = 10, days = 31))?.size)
+        OptimizerRuntime.resetLiveBestForTest()
+    }
+
     @Test
     fun publishedBoardAlwaysMatchesThePublishedBest() {
         val threads = 8
