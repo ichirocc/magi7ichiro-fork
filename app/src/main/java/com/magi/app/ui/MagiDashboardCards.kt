@@ -2172,7 +2172,10 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bar
                 Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 Text(AGENT_RESUME_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            if (open) rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
+            if (open) {
+                Text(agentSoftDetail(rec), style = MaterialTheme.typography.bodySmall)
+                rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText("当てた手", open) }
                 MagiTextButton(onClick = onUndo, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("代行の分を元に戻す") }

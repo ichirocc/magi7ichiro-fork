@@ -674,7 +674,15 @@ internal const val TOP_BAR_NARROW_DP = 396
 /** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。人員不足は巡回に入らない（日の印から）が必須の件数には入るので、
  *  人数を並べる（か所と人は足さない）。旧: か所だけで、隣の「必須違反 4」と数が合わなかった（2026-10-25 実機）。 */
 internal fun topBarTourLabel(n: Int, covU: Int = 0): String =
-    if (covU > 0) "必須違反${n}か所・人員不足${covU}人を見る" else "必須違反${n}か所を見る"
+    if (covU > 0) "必須${n}か所・不足${covU}人を見る" else "必須違反${n}か所を見る"
+
+/** 下の主ボタンの停止の語。作成が終わったあとに動いているのが代行・案探しだけなら、何を止めるかを言う。 */
+internal fun stopButtonLabel(running: Boolean, fixSearching: Boolean, agentRunning: Boolean): String = when {
+    running -> "やめる"
+    agentRunning -> "代行をやめる"
+    fixSearching -> CANCEL_FIX_SEARCH_BUTTON
+    else -> "やめる"
+}
 
 internal fun topBarSaveWord(s: SaveState): String? = if (s == SaveState.Failed) TOP_BAR_SAVE_FAILED else null
 
@@ -2078,10 +2086,12 @@ internal fun dayStripMarks(ui: UiState): List<DayStripMark> {
     }
 }
 
+internal const val DAY_STRIP_LEGEND = "● 人員不足 ・ 数字 必須違反のか所"
+
 /** 日ごとの印の 1 行（問題の無い日は並べずに数で言う）。 */
 internal fun dayStripSummary(marks: List<DayStripMark>): String {
     val bad = marks.count { !it.ok }
-    return if (bad == 0) "${marks.size}日すべて 問題なし" else "問題なし ${marks.size - bad}日 ・ 見ておく日 ${bad}日（押すとその日へ）"
+    return if (bad == 0) "${marks.size}日すべて 問題なし" else "問題なし ${marks.size - bad}日 ・ 見ておく日 ${bad}日（押すとその日へ）\n${DAY_STRIP_LEGEND}"
 }
 
 /** 読み上げの 1 文（印の色だけに頼らない）。 */

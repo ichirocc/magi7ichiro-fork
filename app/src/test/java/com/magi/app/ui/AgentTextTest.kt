@@ -11,7 +11,20 @@ class AgentTextTest {
     @Test fun headline() {
         assertNull(agentHeadline(rec(0, 3, 3)))
         assertEquals("代行で 2 手を当てました（必須違反 3→1）", agentHeadline(rec(2, 3, 1)))
-        assertEquals("代行で 1 手を当てました（要調整 10件→8件）", agentHeadline(rec(1, 1, 1)))
+        assertEquals("代行で 1 手を当てました（要調整 10→8件）", agentHeadline(rec(1, 1, 1)))
+        assertEquals("代行で 1 手を当てました", agentNotice(rec(1, 1, 1)))
+        assertNull(agentNotice(rec(0, 1, 1)))
+    }
+
+    @Test fun softHeadPicksFirstMovedUnit() {
+        assertEquals("147→140件", softHeadDelta("147件・3人・80回・283pt", "140件・4人・70回・277pt"))
+        assertEquals("80→70回", softHeadDelta("3人・80回", "3人・70回"))
+        assertEquals("3→3人", softHeadDelta("3人", "3人"))
+        assertEquals("5→0件", softHeadDelta("5件", "なし"))
+        assertEquals("なし→2件", softHeadDelta("なし", "2件"))
+        assertEquals("代行をやめる", stopButtonLabel(false, true, true))
+        assertEquals("やめる", stopButtonLabel(true, true, true))
+        assertEquals(CANCEL_FIX_SEARCH_BUTTON, stopButtonLabel(false, true, false))
     }
 
 

@@ -150,6 +150,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
         agentJob?.cancel()  // 代行も同じ（結果は盤面が変わって捨てるだけ＝作成と CPU を取り合っていた。2026-10-25 実機ログ #7）
+        _ui.update { it.copy(agentRecord = null) }   // 当てた手の記録は差し替え前の盤面のもの（「代行の分を元に戻す」も意味を失う）
         // 走っている違反チェックは差し替え前の盤面のもの＝失効させる（完了順によって古い表示が戻らないように、UI-03）。
         ++checkSeq; checkJob?.cancel()
         val jobToken = phases.begin(phase)
@@ -1445,7 +1446,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 autoSave()
                 _ui.update { it.copy(schedule = r.schedule.map { row -> row.toList() }, agentRecord = recU,
                     fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList()) }
-                agentHeadline(recU)?.let { postOpNotice(it) }
+                agentNotice(recU)?.let { postOpNotice(it) }
                 refreshCheck()
             } catch (e: CancellationException) {
                 throw e

@@ -18,11 +18,27 @@ internal const val AGENT_RUNNING_LINE = "代行で仕上げています…（安
 internal const val AGENT_TOGGLE_LABEL = "作成のあと代行で仕上げる"
 internal const val AGENT_TOGGLE_NOTE = "必須違反が残ったら、安全な勤務の変更だけを自動で当てます。希望と設定の変更は承認を待ちます。"
 
-/** カードの見出し。何もしなかった輪は出さない（null）。 */
+/** カードの見出し。何もしなかった輪は出さない（null）。要調整は動いた単位の 1 つだけ（全単位は「当てた手」の中＝[agentSoftDetail]）。 */
 internal fun agentHeadline(r: AgentRecord): String? =
     if (r.steps.isEmpty()) null
     else "代行で ${r.steps.size} 手を当てました（" +
-        (if (r.hardBefore != r.hardAfter) "必須違反 ${r.hardBefore}→${r.hardAfter}" else "要調整 ${r.softBefore}→${r.softAfter}") + "）"
+        (if (r.hardBefore != r.hardAfter) "必須違反 ${r.hardBefore}→${r.hardAfter}" else "要調整 ${softHeadDelta(r.softBefore, r.softAfter)}") + "）"
+
+/** 通知の 1 行（カードと同じ文を 2 か所に出さない＝内訳はカード）。 */
+internal fun agentNotice(r: AgentRecord): String? = if (r.steps.isEmpty()) null else "代行で ${r.steps.size} 手を当てました"
+
+/** 「当てた手」を開いたときの要調整の全単位。 */
+internal fun agentSoftDetail(r: AgentRecord): String = "要調整 ${r.softBefore} → ${r.softAfter}"
+
+/** 「147件・3人・80回」と「140件・4人・70回」から、値が動いた最初の単位を「147→140件」で（消えた単位は 0）。どれも動かなければ先頭の単位。 */
+internal fun softHeadDelta(before: String, after: String): String {
+    val tok = Regex("^(\\d+)(\\D+)$")
+    fun parse(s: String) = s.split("・").mapNotNull { tok.find(it.trim())?.destructured?.let { (n, u) -> u to n } }
+    val b = parse(before); val a = parse(after).toMap()
+    if (b.isEmpty()) return "$before→$after"
+    val (u, n) = b.firstOrNull { (u, n) -> a[u] != n } ?: b.first()
+    return "$n→${a[u] ?: "0"}$u"
+}
 
 /** 判断待ちの内訳（ホームの判断のカード・設定ミスのカードにある承認の数）。空なら判断待ちは無い。 */
 internal fun agentPendingItems(wishes: Int, relaxFound: Boolean, issues: Int): List<String> = listOfNotNull(

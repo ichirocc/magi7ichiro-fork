@@ -20,7 +20,7 @@ class IosPatternsTest {
         assertEquals(listOf(false, true, false), m.map { it.short })
         assertEquals(listOf(0, 0, 1), m.map { it.hardCells })   // c1（要調整）は数えない・人員過剰は不足ではない
         assertEquals("1", m[0].dom); assertEquals("木", m[0].dow)
-        assertEquals("問題なし 1日 ・ 見ておく日 2日（押すとその日へ）", dayStripSummary(m))
+        assertEquals("問題なし 1日 ・ 見ておく日 2日（押すとその日へ）\n$DAY_STRIP_LEGEND", dayStripSummary(m))
         assertEquals("2日 金曜 人員不足", dayMarkSpoken(m[1]))
         assertEquals("3日すべて 問題なし", dayStripSummary(dayStripMarks(UiState(days = 3, startDate = "2026-10-01"))))
     }
