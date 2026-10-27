@@ -2364,14 +2364,17 @@ private fun NoFixBlock(
     // [3.713.0] 見出し「案はありません」と説明の 1 行（続けて空なら 3.711.0 の行）。
     Text(NO_FIX_TITLE, style = MaterialTheme.typography.titleSmall)
     Text(noFixLine(ui.fixEmptyRepeatKey == focus.key, ui.fixTimedOut), style = MaterialTheme.typography.bodySmall)
-    // [3.714.0] 主は「問題一覧」（巡回の先頭へ）、閉じるは文字。セルのシートは自分の ✕ があるので閉じるを出さない。
-    // [3.716.0] シートに塗りの主（足りない側の人探し）が別にあれば文字ボタン（塗りは 1 つ＝INV-09）。
-    if (nav.onTour != null && nav.tourCount > 0) {
-        val toTour = { onApplied(); nav.onTour.invoke() }
-        if (primaryElsewhere) MagiTextButton(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
-        else Button(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+    // [3.714.0] 主は「問題一覧」（巡回の先頭へ）。[3.716.0] シートに塗りの主（足りない側の人探し）が別にあれば文字ボタン（塗りは 1 つ＝INV-09）。
+    // [2026-10-27] 一覧の全面では説明（理由の行）を先に、操作をその後に。閉じるは出さない＝この枠を載せる画面（集計・日・職員のダイアログ）が
+    //   自分の［閉じる］を持つ（旧: 閉じるが 2 つ並び、操作が説明の前に来ていた。実機画面の見直し）。
+    val tourButton: @Composable () -> Unit = {
+        if (nav.onTour != null && nav.tourCount > 0) {
+            val toTour = { onApplied(); nav.onTour.invoke() }
+            if (primaryElsewhere) MagiTextButton(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+            else Button(onClick = toTour, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+        }
     }
-    if (!compact) MagiTextButton(onClick = onApplied, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_CLOSE_BUTTON) }
+    if (compact) tourButton()
     if (ui.fixEmptyRepeatKey == focus.key) {
         // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。
         if (compact) when (repeatedEmptyAction(why.wishRelated, ui.settingIssues.isNotEmpty())) {
@@ -2390,6 +2393,7 @@ private fun NoFixBlock(
         return
     }
     body.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    tourButton()
     if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
     var showCandidates by remember(focus.key) { mutableStateOf(false) }
     if (why.candidates.isNotEmpty() && target?.staff != null)

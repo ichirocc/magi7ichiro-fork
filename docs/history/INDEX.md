@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 実機画面の見直しの残り 4 件の照合（2026-10-27、版なし）: 案なしの枠の［閉じる］が載せるダイアログの閉じると 2 つ並び、操作が説明の前だった→`NoFixBlock` の全面版は自分の閉じるを出さず、理由の行のあとに［問題一覧］。作成中のホームの診断カード（開始時点の数）は現行コードで出る経路が無い（3.696.0 から作成中は診断の束を出さない）。シート上段の途中切れ・名前の先頭の欠けは原因の推定のみ（backlog に記録）
 - 低優先の残件 2 つ（2026-10-27、版なし・出力不変）: ①重みの記述のドリフト＝c1 50→90・c3mn 90→50 のあと現行値として旧値を書いていた `docs/screen_spec.md` の SOFT 表（並びも重み順に）と `docs/sudo_model.md` の階層を直した（版つきの経緯は残す。コード・テストのコメントには現行値の旧値なし）②`PolishGate.snapshot` の照合＝PolishGate 自身のフラグは全部載っていた。外の測定スイッチ `EjectionChainPipeline.shallowOnly`（既定 false・UI なし）だけ載っておらず、背景実行で既定へ戻っていた→snapshot/restore に載せた（既定は不変＝出力不変）。`StallEscapeSpecTest.outsideGateSwitchesRoundTripThroughSnapshot`
 - 厳密窓探索の偽の「証明済みの壁」の照合（2026-10-27、版なし・コード変更なし）: backlog の残件は 3.726.0（main）の `leaves > 0` 条件と再現テスト `unrealizedWishOutsideTheMultisetMustNotClaimAWall` で解消済みだった（取り込み済み・7510662 の V6 Engine Check で合格）。完全配置を作れない日がある成分は葉が 0＝`exhaustive=false`。採否（best/patch）は葉でだけ更新＝探索の動きは不変。backlog の行に取り消し線
 - backlog「C++ の取り残し（hf67 内 hf66 段）」の照合（2026-10-27、版なし・コード不変）: 3.726.0（C-03）で既に Kotlin `hf66DataHardening`／`refill`／`fillShiftIndex` に揃っていた（埋めシフト・上限0セル・手動固定・希望固定・拡張希望の禁止）。backlog の記載だけ解消へ
