@@ -2047,3 +2047,52 @@ internal fun homeDiagnosisCount(ui: UiState): Int = listOf(
     ui.c1Plateau?.let { it.causeUnknown || it.hasEntries } == true,
     ui.observedPinBlockedAttempts > 0,
 ).count { it }
+
+/** [iOS の時計（タイマー）] 作成の進み具合 0..1。全体の枠は予算＋後処理・玉突きの予約＝[progressSummary] の「残り」と同じ枠。 */
+internal fun runProgressFraction(budgetSec: Int, elapsedMs: Long): Float {
+    val total = (budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L
+    return if (total <= 0L) 0f else (elapsedMs.toFloat() / total).coerceIn(0f, 1f)
+}
+
+/** [iOS の天気（時間ごとの帯）] ホームの日ごとの印。[short]＝人員不足の枠がある日、[hardCells]＝必須違反のセルの数。 */
+internal data class DayStripMark(val day: Int, val dom: String, val dow: String, val short: Boolean, val hardCells: Int) {
+    val ok: Boolean get() = !short && hardCells == 0
+}
+
+internal fun dayStripMarks(ui: UiState): List<DayStripMark> {
+    val n = ui.days
+    if (n <= 0) return emptyList()
+    val short = BooleanArray(n)
+    val hard = IntArray(n)
+    for ((k, v) in ui.needViolations) {
+        val j = VioKey.dayOf(k) ?: continue
+        if (j in 0 until n && (ui.needFamilies[k] ?: listOf(v)).any { familyOfVioClass(it) == "covU" }) short[j] = true
+    }
+    for ((k, fams) in ui.violationCellFamilies) {
+        val j = VioKey.dayOf(k) ?: continue
+        if (j in 0 until n && fams.any { familyOfVioClass(it) in com.magi.app.v6.MirrorKeys.hard }) hard[j]++
+    }
+    return (0 until n).map { j ->
+        val f = com.magi.app.v6.formatDay(ui.startDate, j)
+        DayStripMark(j, f.substringBefore('(').substringAfterLast('/'), f.substringAfter('(', "").substringBefore(')'), short[j], hard[j])
+    }
+}
+
+/** 日ごとの印の 1 行（問題の無い日は並べずに数で言う）。 */
+internal fun dayStripSummary(marks: List<DayStripMark>): String {
+    val bad = marks.count { !it.ok }
+    return if (bad == 0) "${marks.size}日すべて 問題なし" else "問題なし ${marks.size - bad}日 ・ 見ておく日 ${bad}日（押すとその日へ）"
+}
+
+/** 読み上げの 1 文（印の色だけに頼らない）。 */
+internal fun dayMarkSpoken(m: DayStripMark): String =
+    "${m.dom}日 ${m.dow}曜 " + when {
+        m.short && m.hardCells > 0 -> "人員不足と必須違反${m.hardCells}か所"
+        m.short -> "人員不足"
+        m.hardCells > 0 -> "必須違反${m.hardCells}か所"
+        else -> "問題なし"
+    }
+
+/** [iOS のリマインダー] 配布前の確認の並び＝要対応を上、未評価を中、済みを下（同じ組の中は元の順）。 */
+internal fun preDistributionOrder(rows: List<PreDistRow>): List<PreDistRow> =
+    rows.sortedBy { when (it.ok) { false -> 0; null -> 1; true -> 2 } }

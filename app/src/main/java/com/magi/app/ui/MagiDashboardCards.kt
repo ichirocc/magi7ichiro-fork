@@ -81,6 +81,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -830,7 +831,8 @@ internal fun OperatorNextActionCard(
                 }
                 HomeSection.PROGRESS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
+                        // iOS の時計（タイマー）の輪: 予算＋後処理の枠に対する経過（「残り M:SS」と同じ枠）。
+                        CircularProgressIndicator(progress = { runProgressFraction(ui.budgetSec, ui.elapsedMs) }, modifier = Modifier.size(40.dp), color = plan.fg)
                         // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
                         Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                     }
@@ -2095,10 +2097,18 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
 @Composable
 private fun PreDistRowView(r: PreDistRow) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.Top) {
-        Text(r.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(72.dp))
-        Text((when (r.ok) { true -> "✓ "; false -> "! "; null -> "" }) + r.value,
-            color = if (r.ok == false) cs.error else cs.onSurface, style = MaterialTheme.typography.bodyMedium)
+    // iOS のリマインダーの丸い印: 済み＝塗った丸に ✓、要対応＝赤い輪、未評価＝灰の輪（色だけに頼らず読み上げの語を付ける）。
+    val (icon, tint, spoken) = when (r.ok) {
+        true -> Triple(Icons.Filled.CheckCircle, cs.tertiary, "済み")
+        false -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.error, "要対応")
+        null -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.onSurfaceVariant, "未確認")
+    }
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(icon, contentDescription = spoken, tint = tint, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text(r.label, style = MaterialTheme.typography.labelLarge)
+            Text(r.value, color = if (r.ok == false) cs.error else cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
@@ -2117,11 +2127,11 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                preDistributionTop(rows).forEach { PreDistRowView(it) }
+                preDistributionOrder(preDistributionTop(rows)).forEach { PreDistRowView(it) }
                 Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, details) }
                 if (details) {
-                    preDistributionDetails(rows).forEach { PreDistRowView(it) }
+                    preDistributionOrder(preDistributionDetails(rows)).forEach { PreDistRowView(it) }
                     Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     Text(PRE_DIST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
