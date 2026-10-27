@@ -185,6 +185,22 @@ class StallEscapeSpecTest {
         } finally { PolishGate.restore(saved) }
     }
 
+    // UI トグルの無い測定スイッチ（PolishGate の外に置かれたもの）も背景実行へ引き継ぐ＝既定以外の値で走らせた計測が Worker で既定へ戻らない。
+    @Test fun outsideGateSwitchesRoundTripThroughSnapshot() {
+        val saved = PolishGate.snapshot()
+        try {
+            EjectionChainPipeline.shallowOnly = true; AptFairPolish.heavySoftGuard = false
+            C1EjectionChainPolish.defaultHoleFocus = false; C1EjectionChainPolish.defaultHoleSoftOnly = false
+            val snap = PolishGate.snapshot()
+            PolishGate.restore(saved)
+            assertFalse(EjectionChainPipeline.shallowOnly)
+            PolishGate.restore(snap)
+            assertTrue("shallowOnly は往復する", EjectionChainPipeline.shallowOnly)
+            assertFalse("heavySoftGuard は往復する", AptFairPolish.heavySoftGuard)
+            assertFalse(C1EjectionChainPolish.defaultHoleFocus); assertFalse(C1EjectionChainPolish.defaultHoleSoftOnly)
+        } finally { PolishGate.restore(saved) }
+    }
+
     // §5.4 判定と発火の間に改善が割り込んだら発火しない（判定後の改善の順序を検査する）
     @Test fun fireIsRefusedWhenAnImprovementInterleavesBetweenDecisionAndFire() {
         val wd = V6FinalPort.WatchdogBest(startMs = 0L)

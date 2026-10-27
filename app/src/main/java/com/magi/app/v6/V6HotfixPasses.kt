@@ -227,6 +227,7 @@ object PolishGate {
         "countChainPolish" to countChainPolish,
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
+        "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -246,6 +247,7 @@ object PolishGate {
         b("countChainPolish") { countChainPolish = it }
         
         b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }
+        b("ejectionPipelineShallowOnly") { EjectionChainPipeline.shallowOnly = it }
     }
 }
 
