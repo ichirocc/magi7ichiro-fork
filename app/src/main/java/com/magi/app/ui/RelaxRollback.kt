@@ -14,7 +14,7 @@ data class RelaxRollback<S, R, A>(
     /** いまの [cur] に、控えた欄だけを戻す（実行中の表示・保存状態など巻き戻しと関係のない欄は今のまま）。 */
     fun restore(cur: UiState): UiState = cur.copy(
         hasResult = ui.hasResult, engineRan = ui.engineRan, ranBeforeEdit = ui.ranBeforeEdit, relaxedBoard = ui.relaxedBoard,
-        structureEdited = ui.structureEdited, runSummary = ui.runSummary, stopSummary = ui.stopSummary, schedule = ui.schedule,
+        structureEdited = ui.structureEdited, runSummary = ui.runSummary, runDelta = ui.runDelta, stopSummary = ui.stopSummary, schedule = ui.schedule,
         canUndo = ui.canUndo, canRedo = ui.canRedo, editRev = ui.editRev, messageIsError = ui.messageIsError,
         fixSuggestions = ui.fixSuggestions, fixTiers = ui.fixTiers, fixSearched = ui.fixSearched, fixDoneKey = ui.fixDoneKey,
         fixFailedKey = ui.fixFailedKey, stalledHardFamilies = ui.stalledHardFamilies, alternatives = ui.alternatives,

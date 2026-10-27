@@ -783,6 +783,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onOpenConsults = { consultOpen = true },
                     )
                     // iOS の天気にならった日ごとの印（作成のあと）。押すとその日の勤務表の列へ。
+                    if (ui.hasResult && !ui.running) ui.runDelta?.let { RunDeltaHighlight(it) }
                     if (ui.hasResult && !ui.running) HomeDayStrip(ui) { j -> dayJump = j }
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     // [3.712.0] 実行中は主カードの状態・相談の 1 行・止めるだけ（一覧と他の案は終わってから）。

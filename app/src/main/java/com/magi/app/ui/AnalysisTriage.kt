@@ -397,3 +397,13 @@ internal fun repeatedEmptyAction(wishOnTarget: Boolean, settingIssueKnown: Boole
 internal fun v6MetricLine(breakdown: Map<String, Int>, v6: com.magi.app.v6.V6PortReport): String =
     (if (breakdown.isEmpty()) "" else "${breakdownLabels["apt"] ?: "apt"}=${breakdown["apt"] ?: 0} / ${breakdownLabels["fair"] ?: "fair"}=${breakdown["fair"] ?: 0} / ") +
         "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}"
+
+/** [iOS のヘルスケア「ハイライト」] この作成の前後（必須違反・要調整を単位ごと）。両方とも変わらなければ null（「同じ結果」の注記が受け持つ）。 */
+internal fun runDeltaText(before: Map<String, Int>, after: Map<String, Int>): String? {
+    val hb = unitTotals(before, MirrorKeys.hard) ?: "0件"; val ha = unitTotals(after, MirrorKeys.hard) ?: "0件"
+    val sb = unitTotals(before, MirrorKeys.soft) ?: "0件"; val sa = unitTotals(after, MirrorKeys.soft) ?: "0件"
+    if (hb == ha && sb == sa) return null
+    return "必須違反 $hb → $ha ・ 要調整 $sb → $sa"
+}
+
+internal const val RUN_DELTA_TITLE = "ハイライト"

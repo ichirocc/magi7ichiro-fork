@@ -62,3 +62,14 @@ internal fun HomeDayStrip(ui: UiState, onDay: (Int) -> Unit) {
         }
     }
 }
+
+/** [iOS のヘルスケア「ハイライト」] この作成の前後を 1 行（作成のあと、変化があったときだけ）。 */
+@Composable
+internal fun RunDeltaHighlight(line: String) {
+    MagiCardOrPlain(false) { pad ->
+        Column(Modifier.padding(pad)) {
+            Text(RUN_DELTA_TITLE, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
+            Text(line, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}

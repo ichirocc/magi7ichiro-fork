@@ -61,6 +61,8 @@ data class UiState(
     /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。
      *  盤面が変わる操作（pushUndo）・元に戻す・読込で消す＝別の盤面の比較を完了カードに残さない。 */
     val runSummary: String? = null,
+    /** [iOS のヘルスケア「ハイライト」] この作成で必須違反・要調整がいくつからいくつになったか（変化なしは null）。runSummary と同じ寿命。 */
+    val runDelta: String? = null,
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
     val breakdown: Map<String, Int> = emptyBreakdown,
