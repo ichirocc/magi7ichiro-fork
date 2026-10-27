@@ -13,7 +13,7 @@ object StateParser {
     private const val ROLE_NONE = "none"
 
     /** 勤務表から導く評価情報＝保存し直すと勤務表と食い違うキー。どの保存経路でも書き戻さない。 */
-    private val DERIVED_KEYS = listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")
+    internal val DERIVED_KEYS = listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")
 
     fun parse(json: String): MagiState {
         val o = JSONObject(json)

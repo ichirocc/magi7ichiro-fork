@@ -22,6 +22,8 @@ import kotlin.math.max
  */
 internal object PersonalBalanceJointLnsPolish {
     data class Config(
+        /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
+        val wideC3nBreakDays: Boolean = false,
         val beamWidth: Int = 16,
         val maxDepth: Int = 4,
         val maxRestarts: Int = 3,
@@ -127,7 +129,7 @@ internal object PersonalBalanceJointLnsPolish {
                     for (goal in goals) {
                         if (haltNow() || capReached()) break
                         val variants = buildCandidates(
-                            p, parent.schedule, goal, config.maxVariantsPerGoal, rng,
+                            p, parent.schedule, goal, config.maxVariantsPerGoal, rng, config.wideC3nBreakDays,
                         )
                         for (candidate in variants) {
                             if (haltNow() || capReached()) break
@@ -428,7 +430,7 @@ internal object PersonalBalanceJointLnsPolish {
         base: Array<IntArray>,
         goal: Goal,
         limit: Int,
-        rng: Random,
+        rng: Random, wideC3n: Boolean,
     ): List<Candidate> {
         val i = goal.staff
         val j = goal.day
@@ -465,7 +467,7 @@ internal object PersonalBalanceJointLnsPolish {
                     //   可能性がある。無検証添字はAIOOBEになりうるためガード。
                     val counts = Array(p.S) { s -> IntArray(p.K).also { a -> for (day in 0 until p.T) { val k = w[s][day]; if (k in 0 until p.K) a[k]++ } } }
                     val chain = findCovUChain(
-                        p, w, old, j, rng, exclude = i,
+                        p, w, old, j, rng, wideC3n, exclude = i,
                         rangeAvoid = { s, fill ->
                             val hi = p.rangeHi[s][fill]
                             (hi != Int.MAX_VALUE && counts[s][fill] >= hi) ||

@@ -147,7 +147,7 @@ internal object RangePolish {
      * 空く/埋まる側の被覆(covUCell)が悪化する場合は`findCovUChain`で玉突き修復する（C1Polish手B/
      * C3mnPolishと同一パターン）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。
      */
-    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, combineExhaustPairs: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -217,7 +217,7 @@ internal object RangePolish {
                 else recordBlock(target, "不採用", after = rep, before = bestRep)
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
+            val chain = findCovUChain(p, work, fromK, j, rng, wideC3n, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; recordBlock(target, "候補なし"); return false }
             val usedAvoided = chain.any { mv -> exceedsOwnRangeHi(p, work, mv[0], mv[2]) }
@@ -283,8 +283,8 @@ internal object RangePolish {
                 val lo = p.rangeLo[i][kk]
                 val hiLim = p.rangeHi[i][kk]
                 // [3.522.0] low 90→120。
-                if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 120L
-                if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * 25L
+                if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * PenaltyWeights.LOW
+                if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * PenaltyWeights.HIGH
                 return out
             }
 
@@ -298,7 +298,7 @@ internal object RangePolish {
                     }
                     out += rangePenalty(i, kk, c)
                     val apt = p.apt[i][kk]
-                    if (apt >= 0) out += (if (c >= apt) c - apt else apt - c).toLong() * 4L  // [3.522.0] apt 1→4
+                    if (apt >= 0) out += (if (c >= apt) c - apt else apt - c).toLong() * PenaltyWeights.APT  // [3.522.0] apt 1→4
                 }
                 // 同品質なら短い循環を優先し、不要な大規模入替えを避ける。
                 if (newK != oldK) out += 2L
@@ -475,10 +475,10 @@ internal object RangePolish {
                     val lo = p.rangeLo[i][kk]
                     val hi = p.rangeHi[i][kk]
                     // [3.522.0] low 90→120, apt 1→4。
-                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 120L
-                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 25L
+                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * PenaltyWeights.LOW
+                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * PenaltyWeights.HIGH
                     val a = p.apt[i][kk]
-                    if (a >= 0) out += kotlin.math.abs(c - a).toLong() * 4L
+                    if (a >= 0) out += kotlin.math.abs(c - a).toLong() * PenaltyWeights.APT
                 }
                 if (newK != oldK) out += 2L
                 return out
@@ -486,7 +486,7 @@ internal object RangePolish {
 
             // [3.522.0] covU 8000→10000, covO 5→10。MirrorKeys の重み階層と整合させた限界費用のため同時に変更。
             fun dayPenalty(k: Int, j: Int, q: Int): Long =
-                p.covUCell(k, j, q).toLong() * 10000L + p.covOCell(k, j, q).toLong() * 10L
+                p.covUCell(k, j, q).toLong() * PenaltyWeights.COVU + p.covOCell(k, j, q).toLong() * PenaltyWeights.COVO
 
             data class FlowPlan(
                 val day: Int,
@@ -527,7 +527,7 @@ internal object RangePolish {
                                     val key = i to newK
                                     val fix = adjacentFix.getOrPut(key) {
                                         // 隣接日の調整手も拡張希望の禁止へは置かない
-                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng)
+                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng, wideC3n)
                                             ?.takeUnless { f -> f.any { p.extBanned(it[0], it[1], it[2]) } } ?: emptyList()
                                     }
                                     if (fix.isEmpty()) continue

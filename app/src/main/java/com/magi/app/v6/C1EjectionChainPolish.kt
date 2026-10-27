@@ -71,7 +71,7 @@ internal object C1EjectionChainPolish {
     /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
     @Volatile internal var entryProbe: ((Array<IntArray>) -> Unit)? = null
 
-    private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish")
+    private val HARD_FAMILIES = ConstraintCatalog.hardKeys
 
     /** 設定タブ「玉突きの範囲」の書き込み先。読むのは [EngineConfig.snapshot] だけ。 */
     @Volatile internal var defaultHoleFocus: Boolean = true

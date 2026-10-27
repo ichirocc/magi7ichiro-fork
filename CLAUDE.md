@@ -17,6 +17,7 @@
   3.552.0 で取り込んだ起動診断・`.so` 整列検査はこの repo 単体の機能として維持する。
 - 2 層番兵（C++ 自己整合＋Kotlin `fullEval` 照合）は正しさの根幹＝削らない。不一致なら `NativeGate` が閉じて Kotlin へ退化する（誤出力でなく速度低下として現れる）。
 - 片手一本指（ドラッグ不可、例外は編集タブのシフト種別/グループ/職員一覧の並び替えのみ＝3.515.6・3.530.0 ユーザー明示指示）・最小デザイン。色/角丸/影は `docs/DESIGN.md` の原則と `tools/design_lint.py`。
+- 並列のエージェント（fork）を使うときは作業ブランチの HEAD を checkout させ、push はまとめて 1 回、ファイルの分割・移動のあとは `bash tools/prepush_check.sh`（`docs/environment.md`）。
 - Serena は名前の分かるシンボルの定義/参照に使い、意味検索・文言・docs は Grep。初期化に失敗したら Grep で進める。
 - リポジトリは `ichirocc/magi7ichiro-fork`（作業用 fork）。環境固有の手順（CI 監視・probe・プラグイン）は `docs/environment.md`。
 
@@ -37,33 +38,31 @@
 - この repo に入っているスキルは `.claude/skills/` の 4 つ（`yomiyasu` は外部 nanaism/yomiyasu 8d5abee の写し・MIT、2026-10-03 ユーザー指示）。無いスキル名を前提にしない。
 
 ## 制約ファミリーと重み（実装＝`MirrorKeys.weights` が正）
-- **c1**（窓制約, SOFT, 重み50）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
+- **c1**（窓制約, SOFT, 重み90）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
   **担当不可スタッフは対象外（canDoガード）**。構造上単一シフトのみ（複数種類変種なし）。
 - **c2**（職員別合計, SOFT, 重み4）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
-  - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6＝3.556.0）— **非forbidden**。
-  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
-  - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格, 3.542.0）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
+  - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6）— **非forbidden**。
+  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み50）— **forbidden**。
+  - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
-- **c41/c42**（群/日 範囲, SOFT, 重み9＝3.556.0）／**c41s/c42s**（スキル群変種, SOFT, 重み10＝3.556.0）。
+- **c41/c42**（群/日 範囲, SOFT, 重み9）／**c41s/c42s**（スキル群変種, SOFT, 重み10）。
 - **covU**（人員不足, HARD, 重み10000）/ **covO**（人員過剰, SOFT, 重み10）。被覆は同日のみ（夜勤繰越なし）。
-  ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）→10（3.522.0、全面見直し＋SOFT中「上限超過(high)>人員過剰(covO)」
-  指示）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
+  最適化器とチェッカーは同じ値（重みの経緯は `docs/business-logic.md` §2）。
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
 - **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み120/25。amount計上）。
   **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 25 のまま、
-  希望固定は優先。3.507.0 ユーザー決定「最適化器だけ除外、表示は今のまま」）。
+  希望固定は優先。ユーザー決定「最適化器だけ除外、表示は今のまま」）。
 - **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み4, L1偏差`|回数-目標|`）。
   担当可シフトのみ有効（`Problem.apt` 構築時に bucket=canDo ガード）。不足=赤(vio-aptLow)/超過=橙(vio-aptHigh)。
-  **個人の下限または上限が入っている (職員,シフト) には群目標を適用しない（決定 D9, 3.509.0。空欄だけのキーは未設定扱い）。**
-  適用される組は「構造的に到達できる範囲」へクランプ（3.508.0: 到達下限 = T − Σ他の置けるシフトの実効上限、到達上限 = T − Σ他シフトの実効下限、
+  **個人の下限または上限が入っている (職員,シフト) には群目標を適用しない（決定 D9。空欄だけのキーは未設定扱い）。**
+  適用される組は「構造的に到達できる範囲」へクランプ（到達下限 = T − Σ他の置けるシフトの実効上限、到達上限 = T − Σ他シフトの実効下限、
   実効値は希望固定込み。例: 休の希望固定 15 日の職員に 休 目標 10 → 15）。評価は実効目標 `Problem.apt`（個人設定あり＝-1）、
   設定ミス診断 6b/6d/6-C は設定値 `Problem.aptRaw` を読む。低/高(staffRange) とは別系統（LimMin/LimMax は別画面 ws5）。
-  上限超過(high)がapt/fairの同時解消を阻む例＝B1のaptHigh（3.522.0、docs/history/3.4xx.md）。
-- **fair**（グループ内公平化, SOFT, 重み5＝3.647.0, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに`Problem.fairDevOfBucket`
-  が偏差を出す。**達成率モード v2**（3.541.0、ユーザー指示「平均に入れる率の課題を深く解決する」＝案E。初版 3.538.0）:
+- **fair**（グループ内公平化, SOFT, 重み5, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに`Problem.fairDevOfBucket`
+  が偏差を出す。**達成率モード v2**:
   母集団＝`mayPlace` または回数>0 のメンバー（担当不可で0回は除外）。基準＝範囲staffRange.lo/hi両方有限→帯 [lo,hi]
   （中心(lo+hi)/2・半幅(hi−lo)/2、**回数は帯へクランプ**＝帯の外は high/low の担当）、無ければ実効apt目標（中心t・幅t）。
   達成率=(回数−中心)/幅、基準達成率＝**幅を重みにした中央値**（Σ幅×|達成率−基準|を最小にする点）、各人の偏差＝
@@ -72,32 +71,28 @@
   C++(`magi_native.cpp`の`fairDevOfBucket`)に統合。UI内訳チップには出さない（常時非ゼロになりやすいため
   weightedScore/total のみ算入）。
 - **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み2, L1偏差）。職員ごと**シフトごと**に、そのシフトが入る日の
-  **曜日別カウント** w_d の `Σ|7×w_d − 回数| ÷ 7`（整数切り捨て＝厳密目標 回数/7 からの偏差、3.526.0）（**休も1シフトとして数える**＝3.345.0。
-  旧「勤務日=非休の二値」ではない）。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7）。
+  **曜日別カウント** w_d の `Σ|7×w_d − 回数| ÷ 7`（整数切り捨て＝厳密目標 回数/7 からの偏差）（**休も1シフトとして数える**。
+  「勤務日=非休の二値」ではない）。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7）。
   「夜勤が毎週おなじ曜日」「休みが毎週おなじ曜日」を同じ式で均す。共通ソース=`weeklyDevOfBucket(wd[7])`。
   数式の正は `docs/business-logic.md`。
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
 - **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
-- **extWish**（拡張希望の違反, HARD, 重み8000＝pref 同格, 3.653.0 HF77明示指示「拡張希望の重みは希望シフトと同じにする」）:
+- **extWish**（拡張希望の違反, HARD, 重み8000＝pref 同格）:
   拡張希望（それらの日はそれらのシフト以外）の禁止シフトが入ったセル 1 件（希望シフト日は対象外）。静的表 `Problem.extBanned` を3者＋C++ が共有。
   最適化器は禁止へ置かない（`mayPlaceAt`）。
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
-c3mn(90) > c1(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
-weekly(2)。（3.653.0 HF77明示指示: extWish 新設 8000＝pref 同格。3.647.0 HF77明示指示: fair 2→5。3.556.0 HF77明示指示: c41s/c42s 6→10・c41/c42 1→9・c3m 10→6。3.522.0で全面見直し＝tools/loop 34ケース×10seedの
-baseline対比ベンチマークで決定。旧: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
-c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。
-covO は 0.5→1.0→5.0→**10**、c1 は 4→5→15→30→**50**、c3mn は 12→15→30→**90**、high は 45→25で不変＝
-いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・
-`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・destroy-repair/polish系4ファイル・`magi_native.cpp` の
-5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md` と**同じコミットで**揃える）
+c1(90) > c3mn(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
+weekly(2)。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
+この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・
+`magi_native.cpp` の5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md`・この行を**同じコミットで**揃える
+（destroy-repair/polish系4ファイルは `PenaltyWeights` 経由で追従＝直さない。詳細は `.claude/rules/weights.md`）。
 
 ## 実行前に確認を取る操作／変えない決定
 - **HF77**: パラメータ・重み・データ値の変更は**業務担当者の明示数値指示＋1 件ずつ**のみ。コメントの主張と実装を grep で照合する。
   「賢く統一/改善する」等の明示指示は、目的関数統一における重み変更の承認とみなす。
 - **決定記録（再提案しない。明示の数値指示・go があった場合のみ）**:
-  D3 apt/weekly/fair の重みは各 1（2026-08-02 再確認、**3.522.0 で apt=4・weekly=2・fair=2 へ改定＝全面見直しのHF77明示指示。
-  3.647.0 で fair=5（2026-10-09 ユーザー明示指示「グループ内の回数のばらつきの重みを5にする」）。再確認しない＝この行が最新**）／ D4 360dp 帯は対象外、ただし OPPO A5 5G は 3.497.0 で対象（名前列 80dp で 7 日が入らない幅＝端末 396dp 未満だけ名前列 56dp、3.657.0）／
+  D3 apt/weekly/fair の重みは apt=4・weekly=2・fair=5（HF77 明示指示で決定、経緯は `docs/business-logic.md` §2。**再確認しない**）／ D4 360dp 帯は対象外、ただし OPPO A5 5G は 3.497.0 で対象（名前列 80dp で 7 日が入らない幅＝端末 396dp 未満だけ名前列 56dp、3.657.0）／
   D5 年度末モード（年間積算 5 項目）は実装不要／ D6 標準値 vs 月別例外の差分表示は実装不要（例外は needDay のみ数える）／
   D7 読取（結果）モードは不要＝勤務表タブは直接編集の 1 本／ D8 外観は UD 固定／ E5 月全体の俯瞰は明示 go まで保留。
   D9 個人の下限/上限がある (職員,シフト) には群目標（apt）を適用しない＝個人設定だけを適用（2026-09-07 ユーザー再指示、3.509.0）。

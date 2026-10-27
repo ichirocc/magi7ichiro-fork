@@ -20,7 +20,7 @@
 
 | # | フラグ | 既定 | どこから設定されるか | 読み手（main / test / bench） | 履歴の判定 | C# | 提案 |
 |---|---|---|---|---|---|---|---|
-| 1 | wideC3nBreakDays | false | **じっくり** | V6SearchOperators, MagiViewModel, MagiUiState, OpLogText / BitPackGuard, PolishRobustness, SearchStrength, TuningTelemetry3694, WideC3nFixture / – | 最終 OFF 確定（3.449.0・3.463.0「再提案しない」） | WideC3nBreakDays | **EngineConfig に残す**（じっくり経由のため削除不可） |
+| 1 | wideC3nBreakDays | false | **じっくり** | V6SearchOperators, MagiViewModel, MagiUiState, OpLogText / BitPackGuard, PolishRobustness, SearchStrength, TuningTelemetry3694, WideC3nFixture / – | 最終 OFF 確定（3.449.0・3.463.0「再提案しない」） | WideC3nBreakDays | **EngineConfig に残す**（じっくり経由のため削除不可）。2026-10-24 移行済み＝`EngineConfig.wideC3nBreakDays` から探索の奥まで引数で渡す |
 | 2 | c1MoveARepair | false | 非表示のイベントのみ（3.628.0 で非表示） | C1WindowPolish, MagiViewModel, MagiUiState / C1MoveARepairTest, SearchStrength / – | 否決相当（2026-10-04: 7勝14敗・採用 4/1956）。3.628.0「確実に悪化」 | C1MoveARepair（Collapsed のトグル） | **削除候補**。main 約 30 行（`moveARepairChain` 22 行と分岐・ログ）、UI 約 12 行、テスト 60 行。C# も同量程度。**要ユーザー判断**（3.628.0 の選択は「非表示」で、削除ではなかった） |
 | 3 | filterC3nIncrease | true | 非表示のイベント（SetBlockSwapC3nFilter） | AdaptiveBlockSwapPolish, V6FinalPort, MagiViewModel / AdaptiveBlockSwapPolishTest, PolishRobustness, TuningTelemetry3694, V6FinalPortTest / – | 既定 ON（3.518.0）、3.649.0 で厳密な正味差分（出力は OFF 以上） | FilterC3nIncrease | **定着→フラグを外す**。OFF 腕は測定用として EngineConfig に残すのも選択肢。UI の残骸（ui.blockSwapC3nFilter、イベント、セッター）は削除。約 15 行 |
 | 4 | rotationDeltaPrescreen | true | コードのみ | C3RotationPolish / PostWasteRemovalTest / WasteRemovalProbe | 出力不変の無駄取り、既定 ON（3.680.0、4 件で盤面一致） | RotationDeltaPrescreen | **定着→フラグを外す**（速度専用。OFF 腕は等価性テストにだけ使われている） |

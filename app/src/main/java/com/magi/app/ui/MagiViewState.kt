@@ -37,7 +37,7 @@ internal object VioKey {
 internal fun isHardCellViolation(v: String?): Boolean =
     v != null && familyOfVioClass(v) in MirrorKeys.hard
 
-/** 破線枠にする「重いソフト族」。重み階層（low=120 / c1=50 / c3mn=90 が high=25 を上回る）と表示強度を揃える。 */
+/** 破線枠にする「重いソフト族」。重み階層（low=120 / c1=90 / c3mn=50 が high=25 を上回る）と表示強度を揃える。 */
 internal val heavySoftFamilies = setOf("low", "c1", "c3mn")
 
 internal fun isHeavySoftCellViolation(v: String?): Boolean =
@@ -684,16 +684,6 @@ internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<
         .map { (d, ks) -> "差 ${d}回 : " + ks.distinct().sorted().joinToString(", ") { sym(it) } }
     return StaffCountSheet(chips, weekly, fair, c1)
 }
-
-/** 日 j の人員の一覧（日ヘッダの印のシート）。limits は (シフト,日) → (必要, 適正)。 */
-internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, limits: ((Int, Int) -> Pair<Int, Int>?)? = null): List<String> =
-    marks.map { m ->
-        val sym = ui.shiftSymbols.getOrNull(m.shift) ?: "${m.shift}"
-        val now = ui.schedule.count { it.getOrNull(j) == m.shift }
-        val lim = limits?.invoke(m.shift, j)
-        if (m.under) "▼ $sym: ${breakdownLabels["covU"]}（現在 ${now}人" + (lim?.let { "・必要 ${it.first}人" } ?: "") + "）"
-        else "▲ $sym: ${breakdownLabels["covO"]}（現在 ${now}人" + (lim?.let { "・適正 ${it.second}人" } ?: "") + "）"
-    }
 
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {

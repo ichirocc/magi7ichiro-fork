@@ -163,7 +163,7 @@ object EjectionChainPipeline {
             return LegOut(work0, rep0, 0, 0L, 0L)
         }
         // 玉突きの取り分（CHAIN_RESERVE_SEC）は締切に足してあるので、残り時間の半分まで使う（旧: 1/4）。
-        val budgetMs = if (cfg.deterministic) 0L else minOf(deepCapMs, timeLeft() / 2)
+        val budgetMs = if (cfg.deterministic) 0L else BudgetShare.half(timeLeft(), deepCapMs)
         val budgetEvaluations = if (cfg.deterministic) deepCapEvaluations else 0L
         if (!shallowOnly && !stop() && (budgetMs > 0L || budgetEvaluations > 0L)) {
             tel.deepRan = true; tel.deepBudgetMs = budgetMs; tel.deepBudgetEvaluations = budgetEvaluations
@@ -196,6 +196,7 @@ object EjectionChainPipeline {
         tel.endReason = when {
             tel.committed > 0 -> "committed"
             stop() -> "stopped"
+            !tel.deepRan -> "probe_only"   // 深い探索の予算が尽きた（前の巡・前の焦点で使い切った）か予察のみの測定
             else -> "deep_done"
         }
         return LegOut(cur, curRep, cells, deepMs, if (cfg.deterministic) deepEvaluations else 0L)

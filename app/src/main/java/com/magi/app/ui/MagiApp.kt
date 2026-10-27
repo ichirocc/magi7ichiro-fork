@@ -3,6 +3,7 @@ package com.magi.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
@@ -361,7 +362,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val csv = withContext(Dispatchers.Default) { vm.exportCsv() }
+                val build = vm.exportCsvDeferred()
+                val csv = build?.let { withContext(Dispatchers.Default) { it() } }
                 if (csv != null) {
                     val r = withContext(Dispatchers.IO) {
                         runCatching {
@@ -653,7 +655,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
             onHardTour = if (tourItems.isNotEmpty()) openProblemList else null, onPreDist = { preDist = true }, tourCount = tourItems.size,
-            onSaveWord = { vm.showSaveFailDialog() }) },
+            onSaveWord = { vm.showSaveFailDialog() }, compact = navCollapsed) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -780,6 +782,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         tourNext = tourNext,
                         onOpenConsults = { consultOpen = true },
                     )
+                    // iOS の天気にならった日ごとの印（作成のあと）。押すとその日の勤務表の列へ。
+                    if (ui.hasResult && !ui.running) ui.runDelta?.let { RunDeltaHighlight(it) }
+                    if (ui.hasResult && !ui.running) HomeDayStrip(ui) { j -> dayJump = j }
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     // [3.712.0] 実行中は主カードの状態・相談の 1 行・止めるだけ（一覧と他の案は終わってから）。
                     if (!ui.running || consultOpen) ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
@@ -1004,7 +1009,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onPrimary = { p -> if (p == AnalysisPrimary.TOUR) goTourItem(0) else if (p == AnalysisPrimary.GUIDED) guidedFix = true },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
-                    if (proMode) V6DashboardCard(ui.v6)
+                    if (proMode) V6DashboardCard(ui.v6, ui.breakdown)
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,
                         onConsult = { vm.addConsult(consultFix(it)) }, onCancelConsult = { vm.cancelConsult(it) })
                 }
@@ -1220,6 +1225,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
             )
         }
+        ui.csvImportPrompt?.let { lines ->
+            ConfirmDialog(CSV_PREVIEW_TITLE, lines, CSV_PREVIEW_CONFIRM, { vm.confirmCsvImport() }, CSV_PREVIEW_CANCEL, { vm.cancelCsvImport() })
+        }
         ui.csvPartialPrompt?.let { prompt ->
             ConfirmDialog("読める部分だけ取り込みますか？", listOf(prompt), com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, { vm.confirmCsvPartialImport() },
                 com.magi.app.v6.CsvPartialImport.CANCEL_LABEL, { vm.cancelCsvPartialImport() })
@@ -1272,24 +1280,25 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
 
 @Composable
 internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null, tourCount: Int = 0,
-                        onSaveWord: () -> Unit = {}) {
+                        onSaveWord: () -> Unit = {}, compact: Boolean = false) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
       BoxWithConstraints {
         // 396dp 未満（3.657.0 と同じ境界）では札の数が切れないよう、自動作成の状態と保存の語を札の下の行へ畳む。
         val wrap = topBarStatusWrapped(maxWidth.value.toInt())
-        val statusLine = if (ui.loaded && !ui.running) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
+        // 下へ送ると薄い帯（iOS の大きな見出しが縮む動き）。MAGI の札と自動作成の状態の行を隠し、画面名・状態の札・保存の語は残す。
+        val statusLine = if (ui.loaded && !ui.running && !compact) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
         val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
         val saveWordView: @Composable () -> Unit = {
             if (saveWord != null) MagiTextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
                 Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
-      Column(Modifier.fillMaxWidth()) {
+      Column(Modifier.fillMaxWidth().animateContentSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
+            if (!compact) Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
                 Text(
                     "MAGI",
                     style = MaterialTheme.typography.titleMedium,
@@ -1298,7 +1307,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
-            Spacer(Modifier.width(10.dp))
+            if (!compact) Spacer(Modifier.width(10.dp))
             Text(sectionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             if (ui.loaded) {
@@ -1322,7 +1331,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(topBarTourLabel(tourCount), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
+                            Text(topBarTourLabel(tourCount, ui.breakdown["covU"] ?: 0), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
@@ -1368,7 +1377,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
         ui.running || ui.fixSearching || ui.agentRunning -> {
             val stopContent: @Composable RowScope.() -> Unit = {
                 if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-                Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                Text(stopButtonLabel(ui.running, ui.fixSearching, ui.agentRunning), style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             }
             val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
             // 作成直後の自動探索（fixSearching）を止めるのはここだけ（ホームのカードに同じボタンを置かない）。塗りは主カードに譲る（INV-09）。

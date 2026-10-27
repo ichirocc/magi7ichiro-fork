@@ -98,7 +98,7 @@ class ManualPinTest {
         val p = Problem(f.st)
         for (seed in 1L..4L) {
             val b = f.board.copy2D()
-            V6NativeOptimizer.personSwapKick(p, b, Random(seed), pairs = 3)
+            PortfolioSearch.personSwapKick(p, b, Random(seed), pairs = 3)
             assertPinsHeld("seed=$seed", f.st, b)
         }
     }

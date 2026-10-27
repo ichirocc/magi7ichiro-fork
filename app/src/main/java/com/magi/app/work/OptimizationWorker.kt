@@ -57,7 +57,7 @@ class OptimizationWorker(
 
     override suspend fun doWork(): Result =
         try { runWork() } finally {
-            gatesBefore?.let { com.magi.app.v6.PolishGate.restore(it) }
+            gatesBefore?.let { synchronized(com.magi.app.v6.PolishGate) { com.magi.app.v6.PolishGate.restore(it) } }
             OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L))
         }
 
@@ -137,8 +137,13 @@ class OptimizationWorker(
         // 投入時の探索設定を戻す（プロセス終了後の再開では設定画面を経ずに Worker だけが起き、既定値で走っていた）。
         //   実行中は設定画面の変更が無効なので、同じプロセスでも投入時の値と一致する。
         // 終わったら投入前の値へ戻す（プロセス再起動後の再開では画面は既定値のまま＝戻さないと次回以降の実行が画面と食い違う）。
-        gatesBefore = com.magi.app.v6.PolishGate.snapshot()
-        com.magi.app.v6.PolishGate.restore(cfg.gates)
+        //   書き戻しと設定の写し（EngineConfig）はひとまとめに取る＝置き換えで新旧の Worker が重なっても、別の Worker の設定で走らない
+        //   （エンジンは写しだけを読む＝T-7。2026-10-25 の外部レビュー）。
+        val engineConfig = synchronized(com.magi.app.v6.PolishGate) {
+            gatesBefore = com.magi.app.v6.PolishGate.snapshot()
+            com.magi.app.v6.PolishGate.restore(cfg.gates)
+            com.magi.app.v6.EngineConfig.snapshot()
+        }
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         // [3.428.0/#43] 前景化の失敗を**残す**。旧: 握り潰していたため、前景サービスになれないまま
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
@@ -167,6 +172,8 @@ class OptimizationWorker(
         var lastBubbleMs = 0L
         var lastPublishMs = Long.MIN_VALUE / 4   // [3.394.0] 進捗 publish の窓
         var lostOwnership = false                // [3.394.0] 所有権を失ったら以後この実行は何も出さない
+        // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝間引きの時刻・所有権の旗の読み書きを直列化する。
+        val progressLock = Any()
         val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
         // 所有権の確認より後に停止されても、自分の印は finally で必ず下ろせる（C-01）。try の直前＝前景化の停止で取り残さない。
         val runningToken = OptimizationRepository.holdRunning()
@@ -179,7 +186,8 @@ class OptimizationWorker(
                 softPolish = cfg.softPolish,
                 requestedAlgorithm = cfg.algorithm,
                 allowImpossible = true,
-            ) { phase, report, iters, elapsed ->
+                config = engineConfig,
+            ) { phase, report, iters, elapsed -> synchronized(progressLock) {
                 if (report != null) {
                     // [実機報告「残り時間表示が5分から何度も巡回する」修正] onProgressのelapsedはフェーズ
                     //   境界（V5→ALNS→RSIラウンド等）で巻き戻るローカル時計。UI(progressSummaryの「残り」)と
@@ -217,7 +225,7 @@ class OptimizationWorker(
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
                     if (wallElapsed - lastSnapMs > 8_000L) {
                         lastSnapMs = wallElapsed
-                        com.magi.app.v6.V6NativeOptimizer.liveBest?.let { live ->
+                        com.magi.app.v6.OptimizerRuntime.liveBest?.let { live ->
                             // [3.327.0] 所有権を失っていたら書かない（8秒間引きの中なので追加I/Oは無視できる）。
                             if (ownsFiles()) {
                                 // [3.410.0/B-03] 非原子な writeText をやめる。8秒ごとに数百KBを書くので
@@ -233,7 +241,7 @@ class OptimizationWorker(
                         }
                     }
                 }
-            }
+            } }
             // [3.327.0/外部レビュー High3] 置き換えられた実行の結果は**公開も保存もしない**。
             //   旧実装はここに所有権の検査が無く、完了間際に REPLACE された実行が別データの結果を
             //   resultFile へ書き、次回起動でそれが現在のデータとして復元されうる状態だった。

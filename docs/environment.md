@@ -47,6 +47,17 @@
   （`workflow_dispatch`）は Release を作らないため従来どおり** `app-release-*`・`retention-days: 14`・
   `cleanup-artifacts.yml` の保護を維持する。
 
+## 並列のエージェント（fork・worktree）と push の手順（2026-10-24）
+やり直しを防ぐための決まり（2026-10-24、T-9/T-15/T-16 を並列で作ったときの反省）:
+- **worktree は既定ブランチ（main）から作られる**＝作業ブランチの最新ではない。fork への指示の先頭に、作業ブランチの HEAD の
+  SHA を書き「最初に `git checkout --detach <SHA>` してから作業する」とさせる。テストだけ・別ファイルだけの作業は
+  `isolation` なしでもよい（同じファイルを 2 つのエージェントに触らせない）。
+- **取り込みは親が行う**: エージェントは commit・push しない。親が最新の上でそのテスト・検査を回し直してから入れる。
+- **push はまとめて 1 回**: 同じブランチへ続けて push すると、前の push の CI は中止（cancelled）になり結果が出ない。
+  CI は最後の head で 4 つ（V6 Engine Check・Native Parity・Design Lint・Android SDK＝画面を触ったときに手動）を全部見る。
+- **ファイルの分割・移動のあと、push の前に `bash tools/prepush_check.sh`**（weight_lint・その自己テスト・design_lint、数秒）。
+  weight_lint の許可（`WEIGHT_LINT_EXEMPT`）は、断片が別のファイルへ移っても失敗にせず「移った先」を注意として出す（パスは直す）。
+
 ## スキル・プラグイン（2026-07-18 ユーザー決定の原文）
 - **タスク着手前にスキル一覧を確認し、該当スキルを Skill ツールで自動起動する**（superpowers流）:
   新機能/設計→brainstorming・計画深掘り→dig・実装/バグ修正→test-driven-development・

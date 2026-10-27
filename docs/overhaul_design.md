@@ -3,7 +3,7 @@
 この文書は、MAGI ShiftOptimizer の全面改修について、**何を・なぜ・どの順で・何をもって合格とするか**を決めた正本です。
 この repo を初めて読む開発者や、他社の AI が、この 1 冊だけで改修に参加できるように、背景・用語・根拠となるコードの場所まで書いています。
 
-- 版: v4（2026-10-22、最終）。v3 に、S1 の対象となる既存機能の棚卸し（§2.5）、意義の反映の自己検査（§2.6）、コミットごとの確認表（§14.1）を足したもの。v3 は v2 を机上検証し（§15）、用語と背景を補って書き直したもの。
+- 版: v5（2026-10-22、最終）。v4 に詳細設計仕様書（`docs/overhaul_detailed_spec.md`）とフラグ棚卸し（`docs/flag_inventory.md`）を添えたもの（#396）。v4 は v3 に、S1 の対象となる既存機能の棚卸し（§2.5）、意義の反映の自己検査（§2.6）、コミットごとの確認表（§14.1）を足したもの。v3 は v2 を机上検証し（§15）、用語と背景を補って書き直したもの。
 - 決定者: リポジトリの所有者（以下「利用者」）。本文の「決定」はすべて利用者の指示で、日付を添えています。
 - 正本の優先順位: 業務ルールは `docs/business-logic.md`、データ項目は `docs/data-models.md`、アプリの振る舞いの不変条件は `docs/invariants.md`、
   重みの値は `MirrorKeys.weights`（`app/src/main/java/com/magi/app/v6/MirrorCore.kt`）が正です。本書はそれらを変えません。
@@ -408,29 +408,80 @@ P2 の後片付け（2026-10-22）: ②d で本番から外れた `C3nWallProof.
 （`C3nWallProof` は残存分析の `diagnoseBoard` だけ）。消したフラグを指していた古いコメント 4 か所を直した。
 P2 の残り: エンジン内で `PolishGate` を直接読むのは `wideC3nBreakDays`（探索の内側 `V6SearchOperators` と「設定の効き」）だけ。探索の奥まで引数を通すので
 P3（TimeBudget で探索の引数を整える段）で `EngineConfig` へ移す。背景 Worker の `PolishGate.restore` はそれまで残す。
+→ **済**（2026-10-24、出力不変）: `EngineConfig.wideC3nBreakDays`（写し）→ `PostOptimizationParams`・`PersonalBalanceJointLnsPolish.Config`・`V6OptimizerOptions.config` から、研磨 9 種・RSI の 5 関数・`findCovUChain`／`tryFixForbiddenRunViaAdjacentDay`／`breakableDaysFor` まで引数で渡す。「設定の効き」の行も写しを読む。実行の外（分析・変更案の探索）は `EngineConfig.currentWideC3nBreakDays()`（いまの設定）。エンジンで `PolishGate` を読むのは `EngineConfig` だけになった。`EngineConfigTest` に写しの固定を追加。
 
 ### 6.4 P3 TimeBudget
 | コミット | 中身 |
 |---|---|
-| P3a | `TimeBudget` 型と、`V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）の移行 |
-| P3b | `SaParams`、共同 LNS、`EjectionChainPipeline`、`CombinatorialRepair` を子予算へ |
+| P3a | `TimeBudget` 型と、`V6FinalPort` の予算（`budgetMs`・`normalStallMs`・締切）の移行 — **済**（2026-10-24。`TimeBudget.start`・`watchdog`・`overBudget`、旧式との一致は `TimeBudgetTest`＝T-8） |
+| P3b | `SaParams`、共同 LNS、`EjectionChainPipeline`、`CombinatorialRepair` を子予算へ — **済（後処理の取り分）**（2026-10-24。HF67・HF66・共同 LNS の確保・c1 共同 LNS の按分・c1 玉突き連鎖・個人共同 LNS・玉突きパイプラインの深い段を `BudgetShare` の 4 つの式へ。`CombinatorialRepair` は時間の予算を持たず評価回数だけ＝対象なし。`SaParams` の時間は探索の締切（`TimeBudget`）から渡る＝式は無い） |
 合格: 決定的モードで G8。時間制は各段の割当 ms のログが前後で同じ。
 
 ### 6.5 P4 PostPipeline
 P4a（`Stage` 型とパイプライン）→ P4b（前段: 入口・hf66／hf67）→ P4c（中段: 各 Polish・共同 LNS）→ P4d（修復: `ViolationComponentRepair`・退避）→
 P4e（終段: 玉突き、最終番兵の前）。各コミットで、段の順序・中身を変えず、`PostStageRecord` の並びが同じこと。
+- **P4b 済**（2026-10-24、出力不変）: 前段（HF80→HF67→HF66）を `runPreStages` に切り出し、`PostChain.timed(stage)` で段の名前を `PostStages` から渡す。T-10 一致。
+- **P4c 済**（2026-10-24、出力不変）: 中段（厳密日割当→巡回研磨→曜日・交互→c1 共同 LNS→従来の玉突き→個人回数の共同 LNS）を `runMidStages` に。T-10 一致。
+- **P4f 済**（2026-10-24、出力不変）: 段の型 `PostStep`（名前・止まっていたら飛ばすか・有効条件・本体・後始末）と実行役 `PostChain.runSteps`（計測・keep-best の畳み込み・記録・停止の確認）。前段・中段（巡回研磨クラスタ以外）・終段をこの型に載せた。段の開始時刻は `stepStartMs`（従来の `val tX = nowMs()` と同じ位置）。残り: 巡回研磨クラスタの中の段。
+- **P4g 済**（2026-10-25、出力不変）: 巡回研磨クラスタの中の 21 段を `ClusterStep`（名前・採用数の鍵・有効条件・memo・許容の族・後処理・本体）と `runRound`（有効条件を段の直前に 1 回だけ評価・巡の印つきの計測・畳み込み）に。memo の飛ばし（`memoTimed`）と巡の打ち切り（採用 0 で抜ける）は従来の関数のまま残す（巡をまたぐ状態のため）。T-10・BoardHash 一致。
+- **P4d・P4e 済**（2026-10-24、出力不変）: 終段（違反起点修復（最終）→玉突きパイプライン→人員過剰の退避）を `runFinalStages` に。`runPostOptimization` は前段・中段・終段の 3 呼び出しと最終検査・ログだけになった。T-10 一致。
 
 ### 6.6 P5 ConstraintCatalog
 族ごとにコミットを分けます。順は HARD 6 族 → 個人回数（low・high）→ c1・c2 → c3 系 → グループ（c41・c42・c41s・c42s）→ covO → 分布（fair・apt・weekly）。
 HARD を先にして、診断と修正提案の食い違いを早く潰します。合格: G1・G3、チェッカーと診断のスナップショット一致。
+- **P5a 済**（2026-10-24）: `ConstraintCatalog`（21 族・必須・位置の空間 CELL/COUNT/NEED/DIST、重みは `MirrorKeys.weights` を読むだけ）と T-11（`ConstraintCatalogTest`＝MirrorKeys・チェッカーの記録先との一致）。画面の「違反の場所一覧」（`breakdownLocations`）の族の場合分けを表の空間から引く形へ。残りの消費者（診断・修復・セルのシート）は族ごとに移す。
+- **P5b 済**（2026-10-24、出力不変）: HARD 族。`ConstraintCatalog.hardKeys`（必須 6 族）・`hardCellKeys`（セルに記録される必須 5 族）を足し、各所が持っていた同じ組の写しを表から引く形へ（`C1EjectionChainPolish.HARD_FAMILIES`・セルのシートの固定の注意 `pinRegisterHint`・確認一覧の「必須」印）。T-11 で旧の組と一致を確認。
+- **P5c 済**（2026-10-24、出力不変）: 回数（low・high・apt・c2）と偏り（fair・weekly）。`countKeys`・`distKeys`・`keysIn` を足し、E7 フィルタの「回数」バケツ・バケツ外の族（`VioBuckets`）と RSI の職員単位の破壊の分岐（`RsiHypothesisOperators`）を表から引く。
 
 ### 6.7 P6 ViewModel の分割
 `MagiViewModel.kt` を、C# の partial と同じ名前・同じ境界で分けます:
 Background・CellSheet・Csv・Diagnostics・Editing・FixSuggestions・Optimize・Persistence・RelaxTrial・Restore・SmartInitial・WishTrial・Ws1。
 `MagiMediator`／`MagiArbiter` はそのままです。合格: G6・G12、ViewModel のテスト。
+- P6a（2026-10-24、出力不変）: FixSuggestions を `MagiViewModelFixSuggestions.kt` へ（`findFixSuggestions`・`applyFixSuggestion`・`cancelFixSearch`・`undoNotice`・`clearOpNotice` を extension 関数に）。指紋と探索ジョブの状態は本体に残し、拡張から触るメンバ（`pushUndo`・`boardKey`・`undoStack` など 17 個）を private から internal へ。ViewModel はホストでコンパイルされないので `android-sdk` で確認。
+- P6b（2026-10-24、出力不変）: RelaxTrial を `MagiViewModelRelaxTrial.kt` へ（試算の開始・取消・照合 6 種・承認フロー 5 種）。試算の状態と、盤面を書き換える確定 `relaxAndApply`・`restoreBeforeRelax` は本体に残す（state/currentSchedule の書き込みは本体だけ）。
+- P6c（2026-10-24、出力不変）: WishTrial を `MagiViewModelWishTrial.kt` へ（試算の開始・取消・行の表示・対照・確定の結果行と `ctxMatches`）。state を書き換える確定 `cancelWishAndRebuild` は本体に残す。
+- P6f（2026-10-24、出力不変）: 診断（重い解析の並列実行 `analyzeParallel`・結果の反映 `pushReport`・ログの圧縮・人員過剰の深追い・上限 0 を外した採点）を `MagiViewModelDiagnostics.kt` へ。診断の全文の退避（`rawDiagLogs`・`lastDiagSerial`・`lastRunDiag*`）は本体の `commitDiag`、`UiState` の組み立ては本体の `makeUi`、解析の束 `Analysis` は本体の入れ子に残す。
+- P6e（2026-10-24、出力不変）: CSV 取込（重ね合わせ・部分取込の確認・反映前の確認）を `MagiViewModelCsv.kt` へ。盤面の差し替えは本体の `commitCsvBoard`（呼べるのは `runCsvImport` だけ＝`ScheduleWriteSitesTest`）、失敗時の巻き戻しは本体の `rollbackBoardCommit`。
+- P6d（2026-10-24、出力不変）: 変更の確認の画面（不足枠の候補・玉突きの手順・案の一覧の 3 経路と `openPreview`・相談の入れ替えの再開）を `MagiViewModelFixSuggestions.kt` へ。
 
 ### 6.8 P7 文書の正規化
 `docs/architecture.md`・`docs/sudo_model.md` を新しい構造に合わせ、取り残し（21 族など）を直します。
+- **P7 済**（2026-10-24、文書のみ）: architecture.md＝レイヤ図と実行の流れを handleOptimize→探索器（P10）→探索直後の研磨→後処理の 3 段へ、21 族・新ファイル（OptimizerRuntime・探索器 3 つ・SearchPolish・EngineConfig/TimeBudget・ConstraintCatalog・PenaltyWeights）の行、タブ名、`Hf63Infeasibility` は使われている、repo 名。sudo_model.md＝`Staff.id`・breakdown のキー 21・`ConstraintCatalog`・weekly の現行式・休の識別（`ShiftRole.Rest`）・重みの写しと `docs/adoption.md`。P6f（Diagnostics）は未反映。
+
+### 6.8b P10 探索器の分割（2026-10-24 追加、ユーザー「推奨で」＝外部の構造レビューの照合から）
+`V6NativeOptimizer.kt`（約 2,300 行）に同居する公開入口・実行状態・ポートフォリオ・ALNS・RSI・探索直後の研磨を、出力を変えずにファイルと境界で分ける。各段で BoardHash・T-10・全ホストテストが一致すること。
+- **P10a 済**（2026-10-24）: 実行状態を `OptimizerRuntime.kt` へ（`RunSlot`・最良盤面の公開・他の案・エリート・充足困難な族・計測の始まり。`beginRun`／`inSlot`／`publishRunOutputs`）。呼び出し側（V6FinalPort・OptimizationWorker・MagiViewModel・テスト）は `OptimizerRuntime.*` を読む。
+- **P10b 済**（2026-10-24）: 探索を `PortfolioSearch.kt`（適応ポートフォリオ・多ワーカー・停止の確認・入口の摂動）・`AlnsSearch.kt`（V5 の SA 多点・ALNS）・`RsiSearch.kt`（RSI・RSI++）へ。`V6NativeOptimizer.kt` は 2,160→585 行（公開入口・方針の選択・探索直後の研磨・共通の小関数）。互いの呼び出しは object メンバーの import でつなぐ＝呼び出しの字面は不変。
+- **P10c 済**（2026-10-24）: 探索直後の研磨（`hf80PostPolish`・ネイティブの研磨チャンク・`PolishResult`）を `SearchPolish.kt` へ。後処理チェーン（`V6HotfixPasses`）とは別物と KDoc に明記。公開入口 `softPolishOnly`（自動で整える）は `V6NativeOptimizer` に残す。
+- **P10d 済**（2026-10-24）: 採否の合成を `docs/adoption.md` の 1 枚の表に（層ごとに比較・固定・回数固定・拡張希望・必須の検査）。照合で漏れは無かった（探索層が回数固定を検査しないのは方針＝研磨と画面の変更案の層が受け持つ）。P10 はこれで完了。
+
+- **P10e 済**（2026-10-24）: 探索器と入口が共有する小関数（`better`・`nowMs`・`actualSeed`・`extBanInDiff`）を `SearchCommon.kt` へ、GLS の定数を `AlnsSearch` へ、
+  入口の摂動（`hypothesisStartFor`・`forceDiverseKick`）を `PortfolioSearch` へ。探索器から `V6NativeOptimizer` への import が 0 になり、依存は一方向（下の図）。
+
+#### P10 の仕様（2026-10-24、外部の仕様レビューを反映）
+P10 の目的は**設計の完成ではなく安全な構造分割**（現物の移設。名前・API の再設計はしない）。
+
+挙動不変の範囲（何をもって「変えていない」とするか）:
+
+| 区分 | 対象 | 確かめ方 |
+|---|---|---|
+| 絶対不変 | 最終の採用盤面・`ViolationReport`・keep-best の意味論（`reportComparator`） | BoardHash（決定的モード）・T-10（段の並びと採用数）・全ホストテスト |
+| 実質不変 | 実行ごとの隔離（`RunSlot`）・他の案・エリート・充足困難な族・最良盤面の公開（CAS） | `LiveBestPublishTest`・`V6NativeOptimizerChoiceTest`・`StopSemanticsTest` |
+| 差を許す（ただし今回は変えていない） | ログの並び・進捗の通知の間隔・競合の計測値 | 字面は移しただけ（文言・呼び出し順は不変） |
+
+各ファイルの役割（肯定形）と、入口に残す基準:
+- `V6NativeOptimizer` = 公開の契約（`optimize`・`softPolishOnly`）と方針の選択（AUTO・アルゴリズムの振り分け）。**公開の契約を作るものだけを残す**。
+- `OptimizerRuntime` = 実行の隔離と最良結果の公開（探索の中身を知らない）。
+- `PortfolioSearch` = 仮説の配分・再配属・停止の確認・集約（ALNS・RSI は入口の関数だけを呼ぶ）。
+- `AlnsSearch`／`RsiSearch` = 探索の実行。`SearchPolish` = 探索器が直接呼ぶ研磨の本体（後処理の枠組みは持たない）。
+- `SearchCommon` = 複数の探索器が共有する小関数（新しい共通の小関数はここ）。
+
+据え置きの理由: `Problem`・`MirrorCore`（チェッカー）は意味論の source of truth なので動かさない。`V6HotfixPasses` は後処理の枠組みで、探索器の分割とは軸が違う（P4 で段の 3 関数化まで）。
+
+最終構造（P10e で達成。中間の段では探索器が `V6NativeOptimizer` の小関数を import する一時的な相互依存があった）:
+`V6NativeOptimizer → PortfolioSearch → RsiSearch → AlnsSearch`、`RsiSearch → SearchPolish`、すべて `→ SearchCommon`／`OptimizerRuntime`（逆向きの import は 0）。
+
+設計の完了条件（2026-10-24 に確認）: ①`OptimizerRuntime` は探索器を import しない ②`PortfolioSearch` は ALNS・RSI の入口だけを呼ぶ ③`V6NativeOptimizer` は公開の契約と振り分け（346→286 行）④探索器から入口への import が 0。
 
 ### 6.9 P8・P9（完了済み）
 - P8 グループ上限 0: グループのレンジ（c41/c41s）の上限 0 は SOFT の目標のまま。全員に「入れない」を付けるときは「グループ単位の回数」で上限 0（個人の上限 0 になり、最適化器は置かない）。`docs/business-logic.md`。

@@ -43,7 +43,8 @@ internal fun PreRunCheckSheet(
 ) {
     val cs = MaterialTheme.colorScheme
     val t = remember(summary, ui.staffNames, ui.shiftSymbols, ui.startDate) { preRunSheetText(summary, ui) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, dragHandle = { MagiSheetGrabber(sheetState) }) {
         // ボタンはシートの下端に固定し、節の一覧だけをスクロールする（3.704.0 R-1）。
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {

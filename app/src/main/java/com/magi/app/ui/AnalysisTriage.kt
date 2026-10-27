@@ -334,7 +334,13 @@ internal fun sameResultVisible(note: SameResultNote?, stateKey: Long, schedule: 
     note != null && note.stateKey == stateKey && note.schedule == schedule
 
 internal fun sameResultNotice(hard: Int): String =
-    if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。"
+    (if (hard > 0) "前回と同じ結果です。条件を変えない限り、この必須違反${hard}件は消えません。" else "前回と同じ結果です。") + SAME_RESULT_NEXT_DRAFT
+
+/** 同じ結果のあとの次の作成は下書きから作り直す（今の盤面からでは同じ谷の底に戻る）。採るのは今より良いときだけ。 */
+internal const val SAME_RESULT_NEXT_DRAFT = "次の作成は下書きから作り直し、今より良くなったときだけ置き換えます。"
+internal const val RERUN_FROM_DRAFT_LOG = "前回と同じ結果のため、下書きから作り直します（今より良いときだけ採る）"
+internal const val RERUN_FROM_DRAFT_KEPT = "下書きから作り直しましたが、今の勤務表の方が良かったので、そのまま残しました。"
+internal const val RERUN_FROM_DRAFT_ADOPTED = "下書きから作り直して、今より良い勤務表になりました"
 
 /** 残る必須違反がすべて「何度つくっても残る」もので、前回から何も変わっていない（[fresh]＝[sameResultVisible]）。再作成しても同じ結果になる。 */
 internal fun rerunDemoted(hard: Int, floor: Int, fresh: Boolean): Boolean = fresh && hard > 0 && hard <= floor
@@ -385,3 +391,19 @@ internal fun repeatedEmptyAction(wishOnTarget: Boolean, settingIssueKnown: Boole
     settingIssueKnown -> RepeatedEmptyAction.SETTINGS
     else -> null
 }
+
+/** 俯瞰カードの指標の行。目安の回数・ばらつきはチェッカーの件数（内訳・違反一覧と同じ数）。旧: 別の式（二乗の相対偏差・分散）の小数を同じ名前で出し、
+ *  ほかの画面の件数と合わなかった（2026-10-25 実機「グループ内の回数のばらつき=299.33」、チェッカーは 31）。 */
+internal fun v6MetricLine(breakdown: Map<String, Int>, v6: com.magi.app.v6.V6PortReport): String =
+    (if (breakdown.isEmpty()) "" else "${breakdownLabels["apt"] ?: "apt"}=${breakdown["apt"] ?: 0} / ${breakdownLabels["fair"] ?: "fair"}=${breakdown["fair"] ?: 0} / ") +
+        "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}"
+
+/** [iOS のヘルスケア「ハイライト」] この作成の前後（必須違反・要調整を単位ごと）。両方とも変わらなければ null（「同じ結果」の注記が受け持つ）。 */
+internal fun runDeltaText(before: Map<String, Int>, after: Map<String, Int>): String? {
+    val hb = unitTotals(before, MirrorKeys.hard) ?: "0件"; val ha = unitTotals(after, MirrorKeys.hard) ?: "0件"
+    val sb = unitTotals(before, MirrorKeys.soft) ?: "0件"; val sa = unitTotals(after, MirrorKeys.soft) ?: "0件"
+    if (hb == ha && sb == sa) return null
+    return "必須違反 $hb → $ha ・ 要調整 $sb → $sa"
+}
+
+internal const val RUN_DELTA_TITLE = "ハイライト"

@@ -18,7 +18,7 @@ import java.util.Random
  * [V6HotfixPasses] に残置される共有返り型のため、ここからは完全修飾で構築する。
  */
 internal object C3FamilyPolish {
-    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL, combineExhaustPairs: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -84,7 +84,7 @@ internal object C3FamilyPolish {
                         continue
                     }
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
-                    val chain = findCovUChain(p, work, curK, j, rng, exclude = i,
+                    val chain = findCovUChain(p, work, curK, j, rng, wideC3n, exclude = i,
                         rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
                     if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
@@ -143,7 +143,7 @@ internal object C3FamilyPolish {
      * 最終採否は checker + isBetter + exactPinRegression が担保する。
      * 崩した先で被覆が悪化するなら `findCovUChain` の玉突き連鎖で埋め直すのは既存パスと同じ。
      */
-    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL, combineExhaustPairs: Boolean = false, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -230,7 +230,7 @@ internal object C3FamilyPolish {
                             continue
                         }
                         // [玉突き連鎖] 崩した側の被覆が欠けるなら埋め直す（盤面不変・巻き戻し可能）。
-                        val chain = findCovUChain(p, work, curK, j2, rng, exclude = i,
+                        val chain = findCovUChain(p, work, curK, j2, rng, wideC3n, exclude = i,
                             rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
                         if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j2] = curK; continue }
                         val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
@@ -293,7 +293,7 @@ internal object C3FamilyPolish {
      * または runEnd+1)を該当シフトへ拡張する。拡張元シフトの被覆が悪化する場合は`findCovUChain`
      * （C1Polish/C3mnPolish/RangePolishと同一パターン）で玉突き修復。採否はisBetter keep-best＝退化不能。
      */
-    fun applyC3RunPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3A2L): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3RunPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3A2L, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -333,7 +333,7 @@ internal object C3FamilyPolish {
                 work[i][extDay] = fromK
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, extDay, rng, exclude = i,
+            val chain = findCovUChain(p, work, fromK, extDay, rng, wideC3n, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
             if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][extDay] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
@@ -413,7 +413,7 @@ internal object C3FamilyPolish {
      * findCovUChain玉突き」パターンをそのまま適用する。採否はisBetter(hard→weighted→total)
      * keep-best＝退化不能。
      */
-    fun applyC3PatternPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3B4L): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3PatternPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3B4L, wideC3n: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -486,7 +486,7 @@ internal object C3FamilyPolish {
                         continue
                     }
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
-                    val chain = findCovUChain(p, work, curK, j, rng, exclude = i,
+                    val chain = findCovUChain(p, work, curK, j, rng, wideC3n, exclude = i,
                         rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
                     if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }

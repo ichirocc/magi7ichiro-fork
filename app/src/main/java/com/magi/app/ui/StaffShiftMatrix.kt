@@ -344,7 +344,7 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onDismiss() }
     if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onDismiss() }, onContinue = { confirmDiscard = false; scope.launch { sheetState.show() } })
 
-    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState, dragHandle = { MagiSheetGrabber(sheetState) }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogHeader("$name ・ ${toHankakuKigou(kigou)}", requestClose)
             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {

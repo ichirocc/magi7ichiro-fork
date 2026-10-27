@@ -246,7 +246,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boo
     // [design-review] このシートは NeedApplyPanel(日別例外)と同じ need1/need2 を編集するのに
     //   下限>上限のガードが無く、確定するとどの日も必ず違反になる設定を保存できていた（3.403.0 対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(p1, p2) != null
-    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState, dragHandle = { MagiSheetGrabber(sheetState) }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogHeader("標準の必要人数（${kigou}）", requestClose)
             Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.medium)) {

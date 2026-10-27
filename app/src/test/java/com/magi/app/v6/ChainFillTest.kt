@@ -71,7 +71,7 @@ class ChainFillTest {
         assertTrue("初期はP不足(covU>0)であること", (before.breakdown["covU"] ?: 0) > 0)
 
         // 連鎖探索（seed 固定で決定的）。P=shift1, j=0。
-        val chain = findCovUChain(p, sched, 1, 0, Random(42))
+        val chain = findCovUChain(p, sched, 1, 0, Random(42), wideC3n = false)
         assertNotNull("勤務→勤務の連鎖が見つかること", chain)
         assertTrue("2手以内の連鎖", chain!!.size in 1..2)
 
@@ -117,7 +117,7 @@ class ChainFillTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
 
-        val chain = findCovUChain(p, sched, 1, 0, Random(11))
+        val chain = findCovUChain(p, sched, 1, 0, Random(11), wideC3n = false)
         assertNotNull("3人連鎖が見つかること", chain)
         assertEquals("深さ3(3手)の連鎖であること", 3, chain!!.size)
         for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
@@ -167,7 +167,7 @@ class ChainFillTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
 
-        val chain = findCovUChain(p, sched, 1, 0, Random(13))
+        val chain = findCovUChain(p, sched, 1, 0, Random(13), wideC3n = false)
         assertNotNull("5人連鎖が見つかること", chain)
         assertEquals("深さ5(5手)の連鎖であること", 5, chain!!.size)
         for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
@@ -230,10 +230,10 @@ class ChainFillTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
 
-        val capped = findCovUChain(p, sched, 1, 0, Random(13), maxDepth = 5)
+        val capped = findCovUChain(p, sched, 1, 0, Random(13), wideC3n = false, maxDepth = 5)
         assertNull("旧既定maxDepth=5では深さ6の連鎖に届かないこと", capped)
 
-        val chain = findCovUChain(p, sched, 1, 0, Random(13))
+        val chain = findCovUChain(p, sched, 1, 0, Random(13), wideC3n = false)
         assertNotNull("新既定((p.K-1)=7)なら深さ6の連鎖が見つかること", chain)
         assertEquals("深さ6(6手)の連鎖であること", 6, chain!!.size)
         for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
@@ -273,7 +273,7 @@ class ChainFillTest {
         val before = UnifiedViolationChecker.check(st, sched)
         // Co(shift1) covU。ただし 休のbが Co を担当可能なので、休→勤務でも解けるが、連鎖は過剰B4からの
         // 1手（深さ1）も踏める。ここでは連鎖が非nullで covU を解消することを確認（どの1手でも可）。
-        val chain = findCovUChain(p, sched, 1, 0, Random(7))
+        val chain = findCovUChain(p, sched, 1, 0, Random(7), wideC3n = false)
         assertNotNull(chain)
         for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
         val after = UnifiedViolationChecker.check(st, sched)
@@ -317,7 +317,7 @@ class ChainFillTest {
         assertTrue("day1 の P不足(covU)が前提", (before.breakdown["covU"] ?: 0) > 0)
         assertEquals(0, before.breakdown["c3n"] ?: 0)
 
-        val chain = findCovUChain(p, sched, 1, 1, Random(3))
+        val chain = findCovUChain(p, sched, 1, 1, Random(3), wideC3n = false)
         assertNotNull("day1 の P不足を埋める連鎖が見つかること", chain)
         for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
 
@@ -362,7 +362,7 @@ class ChainFillTest {
         assertEquals(0, before.breakdown["c3n"] ?: 0)
         assertTrue("bはday1希望固定で直接候補から除外される前提", p.wishLocked(1, 1))
 
-        val chain = findCovUChain(p, sched, 1, 1, Random(5))
+        val chain = findCovUChain(p, sched, 1, 1, Random(5), wideC3n = false)
         assertNotNull("隣接日調整＋玉突きでday1のP不足を埋める連鎖が見つかること", chain)
         for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
 
@@ -496,7 +496,7 @@ class ChainFillTest {
         repeatSched[0][2] = 1
         assertTrue("繰り返し(day2もP)は day2,3=[P,N]で新たな禁止連続に触れる", p.makesForbiddenRun(repeatSched, 0, 2, 1))
 
-        val chain = findCovUChain(p, sched, 1, 1, Random(9))
+        val chain = findCovUChain(p, sched, 1, 1, Random(9), wideC3n = false)
         assertNotNull("altOrder走査で「Dﾃ-Dﾃ」を試した上で別の安全なシフトへ着地すること", chain)
         for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
 
@@ -542,7 +542,7 @@ class ChainFillTest {
         assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
         assertNull("Qはちょうどneed2で充足済み(covU無し)が前提", before.needViolations["2,0"])
 
-        val chain = findCovUChain(p, sched, 1, 0, Random(5))
+        val chain = findCovUChain(p, sched, 1, 0, Random(5), wideC3n = false)
         if (chain != null) {
             // 万一チェーンが見つかった場合でも、適用後に他シフト(Q含む)へ新たな covU を作らないこと
             // （見つからず null が最も一般的だが、候補順序の実装詳細に依存しないよう安全性で担保する）。
@@ -603,14 +603,14 @@ class ChainFillTest {
         var badPickedWithoutAvoid = false
         for (seed in 0..15) {
             val sched = st.schedule.toIntArray2D()
-            val chain = findCovUChain(p, sched, 1, 0, Random(seed.toLong()))
+            val chain = findCovUChain(p, sched, 1, 0, Random(seed.toLong()), wideC3n = false)
             assertNotNull("候補が2人ともいるため必ず連鎖(1手)が見つかること seed=$seed", chain)
             assertEquals(1, chain!!.size)
             if (chain[0][0] == 0) badPickedWithoutAvoid = true
 
             val schedWithAvoid = st.schedule.toIntArray2D()
             val chainWithAvoid = findCovUChain(
-                p, schedWithAvoid, 1, 0, Random(seed.toLong()),
+                p, schedWithAvoid, 1, 0, Random(seed.toLong()), wideC3n = false,
                 rangeAvoid = { staffIdx, fillShift -> exceedsHi(staffIdx, schedWithAvoid, fillShift) },
             )
             assertNotNull("rangeAvoid指定時も連鎖は見つかること seed=$seed", chainWithAvoid)

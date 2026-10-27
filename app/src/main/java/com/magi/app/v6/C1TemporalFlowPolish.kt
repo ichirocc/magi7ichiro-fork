@@ -109,17 +109,17 @@ internal object C1TemporalFlowPolish {
                     }
                     val lo = p.rangeLo[i][kk]; val hi = p.rangeHi[i][kk]
                     // [3.522.0] low 90→120, apt 1→4。
-                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 120L
-                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 25L
+                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * PenaltyWeights.LOW
+                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * PenaltyWeights.HIGH
                     val a = p.apt[i][kk]
-                    if (a >= 0) out += kotlin.math.abs(c - a).toLong() * 4L
+                    if (a >= 0) out += kotlin.math.abs(c - a).toLong() * PenaltyWeights.APT
                 }
                 if (newK != oldK) out += 2L
                 return out
             }
             // [3.522.0] covU 8000→10000, covO 5→10（V6HotfixPasses の同種箇所と同時に変更）。
             fun dayPenalty(k: Int, q: Int): Long =
-                p.covUCell(k, j, q).toLong() * 10000L + p.covOCell(k, j, q).toLong() * 10L
+                p.covUCell(k, j, q).toLong() * PenaltyWeights.COVU + p.covOCell(k, j, q).toLong() * PenaltyWeights.COVO
 
             val staffCost = Array(p.S) { LongArray(p.K) { FlexibleDayFlow.INF } }
             for (i in 0 until p.S) {

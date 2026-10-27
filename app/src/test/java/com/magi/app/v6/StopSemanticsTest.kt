@@ -50,7 +50,7 @@ class StopSemanticsTest {
         val cores = Runtime.getRuntime().availableProcessors()
         val blockers = (1 until cores).map { launch(Dispatchers.Default) { Thread.sleep(1_500) } }
         delay(50)   // blockers が実際にスレッドを占有するまで待つ
-        val result = V6NativeOptimizer.runMultiWorker(
+        val result = PortfolioSearch.runMultiWorker(
             w = w, options = V6OptimizerOptions(workers = w, seed = 1L), onProgress = { _, _, _, _ -> },
         ) { i, _, prog ->
             invoked.add(i)

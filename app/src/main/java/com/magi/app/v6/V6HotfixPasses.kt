@@ -227,6 +227,7 @@ object PolishGate {
         "countChainPolish" to countChainPolish,
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
+        "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -246,6 +247,7 @@ object PolishGate {
         b("countChainPolish") { countChainPolish = it }
         
         b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }
+        b("ejectionPipelineShallowOnly") { EjectionChainPipeline.shallowOnly = it }
     }
 }
 
@@ -352,6 +354,7 @@ object TuningTelemetry {
     fun summary(
         nativeOn: Boolean, parityOn: Boolean, softPolishOn: Boolean,
         combineExhaustPairs: Boolean, aptFairSoftTolerance: Boolean, countChainPolish: Boolean,
+        wideC3nBreakDays: Boolean = false,
     ): String {
         fun eff(on: Boolean, n: Int, unit: String): String =
             if (!on) "OFF" else if (n > 0) "ON($n$unit)" else "ON(この実行では観測なし)"
@@ -359,7 +362,7 @@ object TuningTelemetry {
         val calls = wideC3nCalls.get()
         val differed = wideC3nDiffered.get()
         val wide = when {
-            !PolishGate.wideC3nBreakDays -> "OFF"
+            !wideC3nBreakDays -> "OFF"
             calls == 0 -> "ON(この実行では出番なし)"
             differed == 0 -> "ON(${calls}回呼ばれたが既定(前後1日)と同じ範囲＝OFFと差なし)"
             else -> "ON(${calls}回中${differed}回は既定(前後1日)と違う範囲を探索)"
@@ -462,6 +465,8 @@ object V6HotfixPasses {
         val aptFairSoftTolerance: Boolean = false,
         /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
         val countChainEnabled: Boolean = false,
+        /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
+        val wideC3nBreakDays: Boolean = false,
         /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
         val ejection: EjectionFlags = EjectionFlags(),
     )
@@ -537,6 +542,9 @@ object V6HotfixPasses {
             passMs.merge(key, 0L) { a, b -> a + b }
         }
 
+        /** [stage] の名前で [timed]（巡の印を足さない段）。 */
+        fun <R> timed(stage: PostStages.Stage, block: (Array<IntArray>) -> R): R = timed(stage.label, stage.key, block)
+
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
             onPhase(phase)
             val t = EngineClock.nowMs()
@@ -604,6 +612,28 @@ object V6HotfixPasses {
             record(applied, report)
         }
 
+        /** いま走っている段の開始時刻（[runSteps] が段の計測の直前に置く＝従来の `val tX = nowMs()` と同じ位置）。予算の取り分の起点。 */
+        var stepStartMs = 0L
+            private set
+
+        /**
+         * 段の列を順に走らせる（全面改修 P4f、設計 §2.3）。各段は名前・有効条件・本体だけを持ち、計測（[timed]）・畳み込み
+         * （keep-best の [adopt]／[replaceBoard]）・記録・停止の確認はここが受け持つ。
+         */
+        fun runSteps(steps: List<PostStep>, shouldStop: () -> Boolean) {
+            for (s in steps) {
+                if (s.skipWhenStopped && shouldStop()) continue
+                if (!s.enabled()) continue
+                stepStartMs = EngineClock.nowMs()
+                when (val f = timed(s.stage, s.body)) {
+                    is PostFold.Swap -> adopt(f.result)
+                    is PostFold.Day -> adopt(f.result)
+                    is PostFold.Board -> replaceBoard(f.schedule, f.logs, f.report, f.applied)
+                }
+                s.after()
+            }
+        }
+
         companion object {
             /** 測定・テスト用: 段を畳むたびに (段のキー, 畳んだ後の盤面) を受け取る。本番では null。 */
             @Volatile internal var stageProbe: ((String, Array<IntArray>) -> Unit)? = null
@@ -612,6 +642,148 @@ object V6HotfixPasses {
              *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
             const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
         }
+    }
+
+    /** 後処理の前段（全面改修 P4b）: HF80 → HF67（残予算の半分まで）→ HF66（残予算の半分まで）。 */
+    /** 後処理の 1 段（全面改修 P4f）: 名前・止まっていたら飛ばすか・有効条件・本体・畳んだ後の後始末。 */
+    internal class PostStep(
+        val stage: PostStages.Stage,
+        val skipWhenStopped: Boolean = false,
+        val enabled: () -> Boolean = { true },
+        val after: () -> Unit = {},
+        val body: (Array<IntArray>) -> PostFold,
+    )
+
+    /** 段の結果の畳み方（[PostChain.runSteps] が keep-best で畳む）。 */
+    internal sealed interface PostFold {
+        class Swap(val result: CyclicSwapResult) : PostFold
+        class Day(val result: DayAssignmentPolish.DayAssignResult) : PostFold
+        class Board(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val report: ViolationReport?, val applied: Int = -1) : PostFold
+    }
+
+    /** 後処理の終段（全面改修 P4d・P4e）: 違反起点修復（最終）→ 玉突きパイプライン（有効時。有効なら中段の従来の玉突きは走らない）→ 人員過剰の退避。 */
+    private fun runFinalStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, shouldStop: () -> Boolean, deadlineMs: Long) {
+        val ej = params.ejection
+        val pipelineFocus = ej.pipelineFocus
+        val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
+        fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
+            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
+                deepMaxMillis = ej.maxMillis, hardLeg = ej.pipelineHardLeg,
+                holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
+            previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
+            shouldStop = shouldStop)
+        chain.runSteps(listOf(
+            // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
+            PostStep(PostStages.COMPONENT_REPAIR_FINAL, skipWhenStopped = true, after = { chain.rejectedPool.clear() }) { work ->
+                val remainingFinal = EngineClock.remainingMs(deadlineMs)
+                val base = params.componentRepair
+                val timeWidened = if (params.deterministic || remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
+                val finalStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+                PostFold.Swap(ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop))
+            },
+            PostStep(PostStages.EJECTION_PIPELINE, skipWhenStopped = true, enabled = { pipelineOn }) { work -> PostFold.Swap(runPipeline(work)) },
+            // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
+            PostStep(PostStages.COVO_RELIEF, skipWhenStopped = true) { work ->
+                val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+                val r = CovOReliefPolish.apply(state, work, shouldStop = reliefStop)
+                PostFold.Board(r.newSchedule, r.logs, r.report)
+            },
+        ), shouldStop)
+    }
+
+    private class MidStages(val cluster: ClusterOutcome, val tC1Lns: Long, val tPersonalLns: Long)
+
+    /** 後処理の中段（全面改修 P4c）: 厳密日割当 → 巡回研磨クラスタ → 曜日平準化・交互最適化 → c1 共同 LNS（→ 従来の玉突き）→ 個人回数の共同 LNS。 */
+    private fun runMidStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, seed: Long, shouldStop: () -> Boolean, deadlineMs: Long, t66Done: Long): MidStages {
+        val ej = params.ejection
+        val pipelineOn = ej.pipelineFocus != EjectionChainPipeline.Focus.OFF
+        // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
+        val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE || params.deterministic) 0L
+            else BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66Done), params.jointLnsReserveMaxMs)
+        val clusterDeadline = if (deadlineMs == Long.MAX_VALUE || params.deterministic) Long.MAX_VALUE else deadlineMs - jointLnsReserve
+        val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
+
+        chain.runSteps(listOf(PostStep(PostStages.DAY_ASSIGN) { work ->
+            PostFold.Day(DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop))
+        }), shouldStop)
+
+        // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
+        val preSoftRep = UnifiedViolationChecker.check(state, chain.work)
+        val cluster = runPolishCluster(state, chain, params, seed, clusterStop, preSoftRep)
+
+        var tC1Lns = 0L; var tPersonalLns = 0L
+        val lnsTotal = params.c1LnsMaxMs + params.personalLnsMaxMs
+        chain.runSteps(listOf(
+            // weekly は同日 2 者スワップでは動かない（曜日別の勤務/休が不変）→ 被覆保存の 2 職員×2 日 長方形交換。
+            PostStep(PostStages.WEEKLY_REBALANCE) { work ->
+                PostFold.Swap(CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = params.weeklyRebalancePasses, shouldStop = clusterStop))
+            },
+            // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
+            PostStep(PostStages.ALTERNATING) { work ->
+                PostFold.Day(DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop))
+            },
+            // 最終 LNS 2 本（高コストなので巡回ループでなく最終 1 回）。残予算は既定比 8:6 で按分（3.255.0）。
+            PostStep(PostStages.C1_JOINT_LNS) { work ->
+                tC1Lns = chain.stepStartMs
+                val cap = BudgetShare.proportional(EngineClock.remainingMs(deadlineMs, tC1Lns), params.remainingClampMs, params.c1LnsMaxMs, lnsTotal)
+                val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
+                    else C1JointLnsPolish.Config(maxMillis = cap)
+                // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
+                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
+                val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop)
+                PostFold.Swap(if (r1.applied == 0) r1 else {
+                    val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+                })
+            },
+            PostStep(PostStages.C1_EJECTION, enabled = { !pipelineOn && (ej.c1Chain || ej.allFamilyChain) }) { work ->
+                val tEj = chain.stepStartMs
+                val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = BudgetShare.quarter(EngineClock.remainingMs(deadlineMs, tEj), ej.maxMillis))
+                PostFold.Swap(C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop))
+            },
+            PostStep(PostStages.PERSONAL_LNS) { work ->
+                tPersonalLns = chain.stepStartMs
+                val cap = BudgetShare.upTo(EngineClock.remainingMs(deadlineMs, tPersonalLns), params.personalLnsMaxMs)
+                val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(wideC3nBreakDays = params.wideC3nBreakDays, maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
+                    else PersonalBalanceJointLnsPolish.Config(wideC3nBreakDays = params.wideC3nBreakDays, maxMillis = cap)
+                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
+                val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
+                PostFold.Swap(if (r1.applied == 0) r1 else {
+                    val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+                })
+            },
+        ), shouldStop)
+        return MidStages(cluster, tC1Lns, tPersonalLns)
+    }
+
+    private class PreStages(val r80: HF80Result, val r67: HF67Result, val r66: HF66Result, val t67: Long, val t66: Long)
+
+    private fun runPreStages(state: MagiState, chain: PostChain, params: PostOptimizationParams, seed: Long, shouldStop: () -> Boolean, deadlineMs: Long): PreStages {
+        lateinit var r80: HF80Result; lateinit var r67: HF67Result; lateinit var r66: HF66Result
+        var t67 = 0L; var t66 = 0L
+        chain.runSteps(listOf(
+            PostStep(PostStages.HF80) { work ->
+                r80 = applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
+                PostFold.Board(r80.newSchedule, r80.logs, r80.report)
+            },
+            PostStep(PostStages.HF67) { work ->
+                t67 = chain.stepStartMs
+                val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t67), params.hf67CapMs)
+                r67 = HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap)
+                PostFold.Board(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
+            },
+            PostStep(PostStages.HF66) { work ->
+                // HF66 は手ごとに全候補をフル check する高コストパス＝残予算の半分（後段の研磨群へ残り半分）で打ち切る。
+                t66 = chain.stepStartMs
+                val cap = BudgetShare.half(EngineClock.remainingMs(deadlineMs, t66), params.hf66CapMs)
+                r66 = HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap)
+                PostFold.Board(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+            },
+        ), shouldStop)
+        return PreStages(r80, r67, r66, t67, t66)
     }
 
     /**
@@ -635,126 +807,14 @@ object V6HotfixPasses {
         val report0 = UnifiedViolationChecker.check(state, schedule)
         val chain = PostChain(onPhase, schedule, state, report0,
             aptFairSoftTolerance = params.aptFairSoftTolerance)
-        // 玉突きパイプラインが有効なら、従来の玉突き（どの置き場所も）は走らせない。
-        val ej = params.ejection
-        val pipelineFocus = ej.pipelineFocus
-        val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
-        fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
-            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
-                deepMaxMillis = ej.maxMillis, hardLeg = ej.pipelineHardLeg,
-                holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly),
-            previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
-            shouldStop = shouldStop)
         val t0 = EngineClock.nowMs()
 
-        val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
-            applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
-        }
-        chain.replaceBoard(r80.newSchedule, r80.logs, r80.report)
-
-        val t67 = EngineClock.nowMs()
-        val r67 = chain.timed("後処理 HF67 職員間スワップ", "HF67InterStaffSwap") { work ->
-            val cap = (EngineClock.remainingMs(deadlineMs, t67) / 2).coerceAtMost(params.hf67CapMs)
-            HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap)
-        }
-        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
-
-        val t66 = EngineClock.nowMs()
-        val r66 = chain.timed("後処理 HF66 職員内再配分", "HF66IntraStaffRedistribution") { work ->
-            // HF66 は手ごとに全候補をフル check する高コストパス＝残予算の半分（後段の研磨群へ残り半分）で打ち切る。
-            val cap = (EngineClock.remainingMs(deadlineMs, t66) / 2).coerceAtMost(params.hf66CapMs)
-            HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap)
-        }
-        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+        val pre = runPreStages(state, chain, params, seed, shouldStop, deadlineMs)
         val t66Done = EngineClock.nowMs()
 
-        // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
-        val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE || params.deterministic) 0L
-            else ((deadlineMs - t66Done).coerceAtLeast(0L) / 2).coerceAtMost(params.jointLnsReserveMaxMs)
-        val clusterDeadline = if (deadlineMs == Long.MAX_VALUE || params.deterministic) Long.MAX_VALUE else deadlineMs - jointLnsReserve
-        val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
+        val mid = runMidStages(state, chain, params, seed, shouldStop, deadlineMs, t66Done)
 
-        chain.adopt(chain.timed("後処理 厳密日割当", "DayAssignmentPolish") { work ->
-            DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop)
-        })
-
-        // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
-        val preSoftRep = UnifiedViolationChecker.check(state, chain.work)
-        val cluster = runPolishCluster(state, chain, params, seed, clusterStop, preSoftRep)
-
-        // weekly は同日 2 者スワップでは動かない（曜日別の勤務/休が不変）→ 被覆保存の 2 職員×2 日 長方形交換。
-        chain.adopt(chain.timed("後処理 曜日平準化(長方形交換)", "WeeklyRebalancePolish") { work ->
-            CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = params.weeklyRebalancePasses, shouldStop = clusterStop)
-        })
-        // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
-        chain.adopt(chain.timed("後処理 交互最適化(日ブロック割当)", "AlternatingSoftPolish") { work ->
-            DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop)
-        })
-
-        // 最終 LNS 2 本（高コストなので巡回ループでなく最終 1 回）。残予算は既定比 8:6 で按分（3.255.0）。
-        val tC1Lns = EngineClock.nowMs()
-        val lnsTotal = params.c1LnsMaxMs + params.personalLnsMaxMs
-        chain.adopt(chain.timed("後処理 期間要件(c1)共同LNS", "C1共同LNS") { work ->
-            val remaining = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(params.remainingClampMs)
-            val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
-            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
-                else C1JointLnsPolish.Config(maxMillis = cap)
-            // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
-            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
-            val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop)
-            if (r1.applied == 0) r1
-            else {
-                val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
-                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-            }
-        })
-        if (!pipelineOn && (ej.c1Chain || ej.allFamilyChain)) {
-            val tEj = EngineClock.nowMs()
-            val origin = if (ej.allFamilyChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
-            chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, holeFocus = ej.holeFocus, holeSoftOnly = ej.holeSoftOnly, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, ej.maxMillis))
-                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop)
-            })
-        }
-        val tPersonalLns = EngineClock.nowMs()
-        chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
-            val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
-            val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
-            val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
-            if (r1.applied == 0) r1
-            else {
-                val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
-                r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
-            }
-        })
-
-        if (!shouldStop()) {
-            // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
-            val remainingFinal = EngineClock.remainingMs(deadlineMs)
-            val base = params.componentRepair
-            val timeWidened = if (params.deterministic || remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
-            val finalStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            chain.adopt(chain.timed("後処理 違反起点修復(最終)", "ComponentRepair") { work ->
-                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop)
-            })
-            chain.rejectedPool.clear()
-        }
-
-        if (pipelineOn && !shouldStop()) {
-            chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき・修復の後)", "玉突きパイプライン") { work -> runPipeline(work) })
-        }
-
-        if (!shouldStop()) {
-            // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
-            val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            val r = chain.timed("後処理 人員過剰の退避(最終)", "CovORelief") { work ->
-                CovOReliefPolish.apply(state, work, shouldStop = reliefStop)
-            }
-            chain.replaceBoard(r.newSchedule, r.logs, r.report)
-        }
+        runFinalStages(state, chain, params, shouldStop, deadlineMs)
 
         val tHf = EngineClock.nowMs()
         if (shouldStop()) {
@@ -769,9 +829,9 @@ object V6HotfixPasses {
 
         val tEnd = EngineClock.nowMs()
         chain.logs.add(MirrorLog(level = "I", tag = "POST",
-            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${t67 - t0}ms HF67=${t66 - t67}ms HF66=${t66Done - t66}ms" +
-                " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${tC1Lns - t66Done}ms" +
-                " C1共同LNS+玉突き連鎖=${tPersonalLns - tC1Lns}ms 個人共同LNS=${tHf - tPersonalLns}ms" +
+            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${pre.t67 - t0}ms HF67=${pre.t66 - pre.t67}ms HF66=${t66Done - pre.t66}ms" +
+                " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${mid.tC1Lns - t66Done}ms" +
+                " C1共同LNS+玉突き連鎖=${mid.tPersonalLns - mid.tC1Lns}ms 個人共同LNS=${tHf - mid.tPersonalLns}ms" +
                 " 最終検査+HF70=${tEnd - tHf}ms"))
         // パスごとの内訳（多い順・上位 N）。「時間を食っているのに採用0」のパスが各パス自身の行と突き合わせられる（3.339.0）。
         if (chain.passMs.isNotEmpty()) {
@@ -783,11 +843,11 @@ object V6HotfixPasses {
 
         chain.logs.add(MirrorLog(level = "I", tag = "POST", message = "後処理 収支: " + ChangeSummary.familyLine(ChangeSummary.familyDeltas(report0, report))))
 
-        val plateauOut = finalC1Plateau(state, work, report, cluster.c1Plateau)
+        val plateauOut = finalC1Plateau(state, work, report, mid.cluster.c1Plateau)
         val allLogs = ArrayList<MirrorLog>(chain.logs)
         allLogs.addAll(report.logs)
         return V6PostOptimizationResult(
-            work, report.copy(logs = allLogs), r80, r67, r66, r70, chain.logs, plateauOut,
+            work, report.copy(logs = allLogs), pre.r80, pre.r67, pre.r66, r70, chain.logs, plateauOut,
             chain.pinBlocksAll.attempts, chain.pinBlocksAll, chain.stageRecords.toList(),
         )
     }
@@ -806,6 +866,34 @@ object V6HotfixPasses {
     }
 
     private class ClusterOutcome(val c1Plateau: C1PlateauDiagnosis?)
+
+    /** 巡回研磨クラスタの 1 段（全面改修 P4g）: 名前・採用数の鍵・有効条件・同じ盤面の飛ばし（memo）・許容の族・畳んだ後の処理・本体。 */
+    private class ClusterStep(
+        val stage: PostStages.Stage,
+        val adoptKey: String,
+        val memo: Boolean = false,
+        val toleranceFamily: String? = null,
+        val enabled: () -> Boolean = { true },
+        val after: (CyclicSwapResult) -> Unit = {},
+        val body: (Array<IntArray>, () -> Boolean) -> CyclicSwapResult,
+    )
+
+    /** 巡の段を順に走らせる: 有効条件を段の直前に 1 回だけ見て、巡の印つきで計測（memo の段は同じ盤面なら飛ばす）し、畳む。 */
+    private fun runRound(
+        chain: PostChain, tag: String, clusterStop: () -> Boolean,
+        memoTimed: (String, String, String, (Array<IntArray>, () -> Boolean) -> CyclicSwapResult) -> CyclicSwapResult,
+        take: (String, CyclicSwapResult, String?) -> Unit,
+        steps: List<ClusterStep>,
+    ) {
+        for (s in steps) {
+            if (!s.enabled()) continue
+            val label = s.stage.label + tag
+            val r = if (s.memo) memoTimed(label, s.stage.key, s.stage.key, s.body)
+                else chain.timed(label, s.stage.key) { work -> s.body(work, clusterStop) }
+            take(s.adoptKey, r, s.toleranceFamily)
+            s.after(r)
+        }
+    }
 
     /**
      * 巡回研磨クラスタ（循環交換〜fair 玉突き）を「1 巡で 1 手も採用されなくなるまで」最大 maxRounds 巡繰り返す。
@@ -849,107 +937,101 @@ object V6HotfixPasses {
                 roundApplied += n
             }
 
-            take("循環", chain.timed("後処理 循環交換(k=2,3)$tag", "CyclicSwapPolish") { work ->
-                CyclicSwapWeeklyPolish.applyCyclicSwapPolish(
-                    state, work, maxPasses = params.cyclicSwapPasses, maxK = params.cyclicSwapMaxK,
-                    kTrialsPerDay = params.cyclicSwapKTrialsPerDay, seed = roundSeed(seed, SeedTag.CYCLIC_N, round),
-                    shouldStop = clusterStop,
-                )
-            })
-
-            // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
-            if (C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work))) {
-                val rC1 = chain.timed("後処理 期間要件(c1)研磨$tag", "C1同日交換") { work ->
-                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs)
-                }
-                take("c1", rC1)
-                // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
-                rC1.plateau?.let { fresh -> c1Plateau = c1Plateau?.mergedWith(fresh) ?: fresh }
-                take("c1", chain.timed("後処理 期間要件(c1)index駆動修復$tag", "C1索引修復") { work ->
-                    C1RepairOperators.indexChainRepair(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_INDEX, round))
-                })
-            }
-            // 時系列 DP＋同日ジョイント再割当（3.254.0 の ablation で一本化）。広域ビームより前に置く（逆順は golden で劣化を実測）。
-            take("c1", chain.timed("後処理 期間要件(c1)時系列DP+ジョイント再割当研磨$tag", "C1時系列フロー") { work ->
-                C1RepairOperators.temporalFlow(
-                    state, work, maxPasses = params.c1FlowPasses, maxRelocations = params.c1FlowRelocations, trials = params.c1FlowTrials,
-                    shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_FLOW, round),
-                )
-            })
-            take("c1", chain.timed("後処理 期間要件(c1)広域ビーム研磨$tag", "C1広域ビーム") { work ->
-                C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_BEAM, round))
-            })
-            // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
-            take("c1", memoTimed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓") { work, stop ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = stop)
-            })
-
-            val rC3 = memoTimed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work, stop ->
-                C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = stop)
-            }
-            take("c3", rC3)
-            // 3 者回転は O(候補^3) で通常時の寄与ゼロ（3.300.0 ablation）＝主手が詰まった巡と最終巡だけの脱出手。
-            if (rC3.applied == 0 || round == params.maxRounds - 1) {
-                take("c3回転", memoTimed("後処理 連続規則(c3系)3者回転研磨$tag", "BlockRotationPolish") { work, stop ->
+            // 巡の段（全面改修 P4g）: 段ごとに名前・採用数の鍵・有効条件・同じ盤面の飛ばし（memo）・本体を持ち、計測・巡の印・畳み込みは runRound。
+            //   有効条件は段の直前に 1 回だけ評価する（c1 の 2 段は 1 回の判定を共有、成分修復は判定の中で拒否候補を取り出す）。
+            var c1Actionable = false
+            var rC3: CyclicSwapResult? = null
+            var pool: List<CombinatorialRepair.Candidate> = emptyList()
+            runRound(chain, tag, clusterStop, ::memoTimed, ::take, listOf(
+                ClusterStep(PostStages.CYCLIC, "循環") { work, stop ->
+                    CyclicSwapWeeklyPolish.applyCyclicSwapPolish(
+                        state, work, maxPasses = params.cyclicSwapPasses, maxK = params.cyclicSwapMaxK,
+                        kTrialsPerDay = params.cyclicSwapKTrialsPerDay, seed = roundSeed(seed, SeedTag.CYCLIC_N, round),
+                        shouldStop = stop,
+                    )
+                },
+                // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
+                ClusterStep(PostStages.C1_SAME_DAY, "c1",
+                    enabled = { C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work)).also { c1Actionable = it } },
+                    // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
+                    after = { r -> r.plateau?.let { fresh -> c1Plateau = c1Plateau?.mergedWith(fresh) ?: fresh } }) { work, stop ->
+                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C1_INDEX, "c1", enabled = { c1Actionable }) { work, stop ->
+                    C1RepairOperators.indexChainRepair(state, work, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_INDEX, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 時系列 DP＋同日ジョイント再割当（3.254.0 の ablation で一本化）。広域ビームより前に置く（逆順は golden で劣化を実測）。
+                ClusterStep(PostStages.C1_TEMPORAL, "c1") { work, stop ->
+                    C1RepairOperators.temporalFlow(
+                        state, work, maxPasses = params.c1FlowPasses, maxRelocations = params.c1FlowRelocations, trials = params.c1FlowTrials,
+                        shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_FLOW, round),
+                    )
+                },
+                ClusterStep(PostStages.C1_BEAM, "c1") { work, stop ->
+                    C1RepairOperators.wideBeam(state, work, shouldStop = stop, seed = roundSeed(seed, SeedTag.C1_BEAM, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
+                ClusterStep(PostStages.C1_EXACT, "c1", memo = true) { work, stop -> C1RepairOperators.exactWindow(state, work, shouldStop = stop) },
+                ClusterStep(PostStages.C3_SEQUENCE, "c3", memo = true, after = { r -> rC3 = r }) { work, stop ->
+                    C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = stop)
+                },
+                // 3 者回転は O(候補^3) で通常時の寄与ゼロ（3.300.0 ablation）＝主手が詰まった巡と最終巡だけの脱出手。
+                ClusterStep(PostStages.C3_ROTATE, "c3回転", memo = true, enabled = { rC3?.applied == 0 || round == params.maxRounds - 1 }) { work, stop ->
                     C3RotationPolish.applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = params.c3RotatePasses, shouldStop = stop)
-                })
-            }
-            take("c3mn玉突き", chain.timed("後処理 回避パターン(c3mn)玉突き研磨$tag", "C3mnPolish") { work ->
-                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs)
-            })
-            take("c3n", chain.timed("後処理 禁止連続(c3n)研磨$tag", "C3nPolish") { work ->
-                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs)
-            })
-            take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
-                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs)
-            })
-            take("c3run玉突き", chain.timed("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨$tag", "C3RunPolish") { work ->
-                C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round))
-            })
-            take("c3pattern玉突き", chain.timed("後処理 連続規則(c3/c3m複数シフトパターン)玉突き研磨$tag", "C3PatternPolish") { work ->
-                C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3PATTERN, round))
-            })
-            // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
-            take("アンカー窓交換", memoTimed("後処理 違反アンカー窓交換$tag", "AnchoredWindowSwap") { work, stop ->
-                AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
-                    state, work, mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = params.anchorWindowPasses,
-                    maxEvaluations = params.anchorWindowEvaluations, shouldStop = stop,
-                )
-            })
-            // 希望島研磨（3.496.0、ユーザー提示の確定仕様）。
-            take("希望島", memoTimed("後処理 希望島研磨$tag", "WishIslandPolish") { work, stop ->
-                WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = stop)
-            })
-            take("ブロック交換", memoTimed("後処理 長期ブロック丸ごと交換$tag", "AdaptiveBlockSwapPolish") { work, stop ->
-                AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
-                    state, work,
-                    AdaptiveBlockSwapPolish.CyclicParams(
-                        maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
-                        maxEvaluations = params.blockSwapEvaluations,
-                    ),
-                    shouldStop = stop,
-                )
-            })
-            if (params.countChainEnabled) {
-                take("回数連鎖", chain.timed("後処理 回数連鎖研磨$tag", "CountChainPolish") { work ->
+                },
+                ClusterStep(PostStages.C3MN, "c3mn玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3MN, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3N, "c3n") { work, stop ->
+                    C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3N, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.RANGE, "range玉突き") { work, stop ->
+                    RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.RANGE, round), combineExhaustPairs = params.combineExhaustPairs, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3_RUN, "c3run玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3RUN, round), wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.C3_PATTERN, "c3pattern玉突き") { work, stop ->
+                    C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.C3PATTERN, round), wideC3n = params.wideC3nBreakDays)
+                },
+                // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
+                ClusterStep(PostStages.ANCHORED_WINDOW, "アンカー窓交換", memo = true) { work, stop ->
+                    AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+                        state, work, mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = params.anchorWindowPasses,
+                        maxEvaluations = params.anchorWindowEvaluations, shouldStop = stop,
+                    )
+                },
+                // 希望島研磨（3.496.0、ユーザー提示の確定仕様）。
+                ClusterStep(PostStages.WISH_ISLAND, "希望島", memo = true) { work, stop ->
+                    WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = stop)
+                },
+                ClusterStep(PostStages.BLOCK_SWAP, "ブロック交換", memo = true) { work, stop ->
+                    AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+                        state, work,
+                        AdaptiveBlockSwapPolish.CyclicParams(
+                            maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
+                            maxEvaluations = params.blockSwapEvaluations,
+                        ),
+                        shouldStop = stop,
+                    )
+                },
+                ClusterStep(PostStages.COUNT_CHAIN, "回数連鎖", enabled = { params.countChainEnabled }) { work, stop ->
                     CountChainPolish.applyCountChainPolish(state, work, config = if (params.deterministic) CountChainPolish.Config(maxMillis = 60_000L) else CountChainPolish.Config(),
-                        shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round))
+                        shouldStop = stop, seed = roundSeed(seed, SeedTag.RANGE, round))
                         .also { TuningTelemetry.countChainApplied.addAndGet(it.applied) }
-                })
-            }
-            take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->
-                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
-            }, toleranceFamily = "apt")
-            take("fair玉突き", chain.timed("後処理 グループ内公平化(fair)玉突き研磨$tag", "FairPolish") { work ->
-                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
-            }, toleranceFamily = "fair")
-            // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
-            val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
-            if (pool.size >= 2) {
-                take("成分修復", chain.timed("後処理 違反連結成分修復$tag", "ComponentRepair") { work ->
-                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = clusterStop)
-                })
-            }
+                },
+                ClusterStep(PostStages.APT, "apt玉突き", toleranceFamily = "apt") { work, stop ->
+                    AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.APT, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
+                },
+                ClusterStep(PostStages.FAIR, "fair玉突き", toleranceFamily = "fair") { work, stop ->
+                    AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = stop, seed = roundSeed(seed, SeedTag.FAIR, round), combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, wideC3n = params.wideC3nBreakDays)
+                },
+                // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
+                ClusterStep(PostStages.COMPONENT_REPAIR, "成分修復",
+                    enabled = { pool = chain.rejectedPool.toList(); chain.rejectedPool.clear(); pool.size >= 2 }) { work, stop ->
+                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = stop)
+                },
+            ))
 
             round++
             if (roundApplied == 0) break   // この巡で 1 手も採用なし＝joint 局所最適に到達

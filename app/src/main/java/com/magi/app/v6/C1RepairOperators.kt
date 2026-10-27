@@ -37,9 +37,9 @@ internal object C1RepairOperators {
     fun selfRelocateAndSameDaySwap(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L,
-        combineExhaustPairs: Boolean = false,
+        combineExhaustPairs: Boolean = false, wideC3n: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed, combineExhaustPairs)
+        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed, combineExhaustPairs, wideC3n = wideC3n)
 
     /** Temporal DP + FlexibleDayFlow。 */
     fun temporalFlow(
@@ -51,9 +51,9 @@ internal object C1RepairOperators {
     /** 広域時空間ビーム。 */
     fun wideBeam(
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, wideC3n: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed)
+        C1WindowPolish.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed, wideC3n = wideC3n)
 
     /** 厳密窓修復（coverage保存 permutation の分枝限定探索）。 */
     fun exactWindow(
@@ -65,9 +65,9 @@ internal object C1RepairOperators {
     /** [3.276.0] index駆動の候補生成＋prefilter選別＋玉突き連鎖のC1修復（Index/Prefilterを実駆動する経路）。 */
     fun indexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L, wideC3n: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed)
+        C1WindowPolish.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed, wideC3n = wideC3n)
 
     /** Joint LNS（c1 + covU/range-low を同一 goal pool で）。 */
     fun jointLns(

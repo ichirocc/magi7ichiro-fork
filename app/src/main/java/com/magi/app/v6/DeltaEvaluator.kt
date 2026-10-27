@@ -175,6 +175,8 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
         val soft = weightedSoft(sc1, sc2, sc41, sc42, sc41s, sc42s, sc3, sc3m, sc3mn, hct, sApt, sFair, sWeekly, scovO)
+        // `Evaluator.fullEval` と同じ契約: soft が桁を超えると HARD へ繰り上がり、必須の数を取り違える（黙って誤った値を返さない）。
+        check(soft in 0 until SCORE_HARD_UNIT) { "soft=$soft が辞書式パックの桁(${SCORE_HARD_UNIT})を超えました。回数の設定か重みを見直してください" }
         return h1 * SCORE_HARD_UNIT + soft
     }
 
@@ -182,7 +184,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
         ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * 50 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 90 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
+    ): Long = c1 * 90 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 50 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {
@@ -675,7 +677,7 @@ class DeltaEvaluator(private val p: Problem) {
      *  UnifiedViolationChecker の "fair" と一致。 */
     private fun fairDevAt(g: Int, k: Int, special: Int, delta: Int): Long {
         if (p.groupMembers[g].size < 2) return 0L
-        return p.fairDevOfBucket(g, k) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
+        return p.fairDevOfBucket(g, k, members = false) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
     }
     private fun fairAll(): Long {
         var h = 0L

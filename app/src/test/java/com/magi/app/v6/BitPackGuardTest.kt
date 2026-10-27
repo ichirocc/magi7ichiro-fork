@@ -55,12 +55,10 @@ class BitPackGuardTest {
         assertFalse(C3nBitScan.usable(p))
         val sched = Array(2) { IntArray(70) { 0 } }
         sched[0][5] = 2; sched[0][6] = 1; sched[0][7] = 1   // Y,X,X が成立
-        val prev = PolishGate.wideC3nBreakDays
-        PolishGate.wideC3nBreakDays = true
-        try {
-            val days = breakableDaysFor(p, sched, 0, 7, 1).toSortedSet()
+        run {
+            val days = breakableDaysFor(p, sched, 0, 7, 1, wide = true).toSortedSet()
             assertEquals("パターンがまたぐ全日から当日を除いたもの", setOf(5, 6), days)
-        } finally { PolishGate.wideC3nBreakDays = prev }
+        }
     }
 
     /** 64日以内は従来どおりビット経路。窓口化で結果を変えていないこと。 */
@@ -70,11 +68,9 @@ class BitPackGuardTest {
         assertTrue(C3nBitScan.usable(p))
         val sched = Array(2) { IntArray(10) { 0 } }
         sched[0][5] = 2; sched[0][6] = 1; sched[0][7] = 1
-        val prev = PolishGate.wideC3nBreakDays
-        PolishGate.wideC3nBreakDays = true
-        try {
-            assertEquals(setOf(5, 6), breakableDaysFor(p, sched, 0, 7, 1).toSortedSet())
-        } finally { PolishGate.wideC3nBreakDays = prev }
+        run {
+            assertEquals(setOf(5, 6), breakableDaysFor(p, sched, 0, 7, 1, wide = true).toSortedSet())
+        }
     }
 
     /** 範囲外の日は窓口が空を返す（呼び出し側が `1L shl j` を組み立てない）。 */
@@ -82,11 +78,9 @@ class BitPackGuardTest {
         val st = state(10)
         val p = Problem(st)
         val sched = Array(2) { IntArray(10) { 0 } }
-        val prev = PolishGate.wideC3nBreakDays
-        PolishGate.wideC3nBreakDays = true
-        try {
-            assertEquals(0, breakableDaysFor(p, sched, 0, 64, 1).size)
-            assertEquals(0, breakableDaysFor(p, sched, 0, -1, 1).size)
-        } finally { PolishGate.wideC3nBreakDays = prev }
+        run {
+            assertEquals(0, breakableDaysFor(p, sched, 0, 64, 1, wide = true).size)
+            assertEquals(0, breakableDaysFor(p, sched, 0, -1, 1, wide = true).size)
+        }
     }
 }

@@ -322,17 +322,21 @@ object ConstraintCatalog { val all: List<ConstraintSpec> /* 21 件 */ }
 | T-4 | 単体 | Δ評価＝フル評価（無作為の手で） | 既存の Delta 系テスト | 全段 |
 | T-5 | 結合 | Kotlin＝C++ | native-parity CI | 全段 |
 | T-6 | 単体 | `EngineConfig.build` が現行の本番既定と同じ値を作る（フラグごと） | 新設 | P2 |
-| T-7 | 単体 | `PolishGate` への書き込みが 0 | grep の CI 検査 | P2 |
+| T-7 | 単体 | `PolishGate` への書き込みが 0 | `PolishGateAccessTest`（エンジンで `PolishGate.` を参照するのは `EngineConfig.kt` だけ、2026-10-24） | P2 |
 | T-8 | 単体 | `TimeBudget` の各取り分が現行の式と同じ値（予算 1・30・31・60・210・211・300 秒、決定的モード） | 新設 | P3 |
-| T-9 | 単体 | 各段が締切を守る（時計を差し替えて境界を作る） | 新設 | P3 |
+| T-9 | 単体 | 各段が締切を守る（時計を差し替えて境界を作る） | `PostStageDeadlineTest`（締切を過去・直近に置いて境界を作る、2026-10-24） | P3 |
 | T-10 | 結合 | 段の名前の列が基準版と同順 | 新設（記録の段名を比べる） | P4 |
+
+> T-10 の基準の取り直し（2026-10-26）: 重みの入れ替え（c1 50→90・c3mn 90→50、HF77）で研磨の採否が変わるため、`snapshots/post_stage_order.txt` を新しい重みで作り直した。以後の基準はこの版。
 | T-11 | 単体 | `ConstraintCatalog` の 21 件が `MirrorKeys.weights` と一致 | 新設＋weight_lint | P5 |
 | T-12 | 結合 | UI 層の既存テストが全件合格 | 既存 | P6 |
 | T-13 | 結合 | 退化経路で同じ結果 | `NativeGateFallbackTest` | P1 |
 | T-14 | 結合 | 保存の再試行の配線 | `SaveRetryWiringTest` | P1 |
-| T-15 | 結合 | JSON の往復で差分 0、CSV 書き出しのバイト一致 | 既存＋新設 | P0 |
-| T-16 | 結合 | 境界 fixture（B-2）で落ちない・番兵を通る | 新設 | P0 |
+| T-15 | 結合 | JSON の往復で差分 0、CSV 書き出しのバイト一致 | `CsvRoundTripTest`＋`StateRoundTripTest`（6 fixture の JSON 往復と冪等・CSV 書き出しの決定性と冪等、2026-10-24） | P0 |
+| T-16 | 結合 | 境界 fixture（B-2）で落ちない・番兵を通る | `BoundaryFixtureTest`（1 名・30 名 × 1 日・28〜31 日、2026-10-24） | P0 |
 | T-17 | 統計 | 時間制の対比較（5.1） | `tools/loop/` | 最終 |
+
+> T-17 の実施（2026-10-25）: 基準版 39a639e と 8ea0ba1（P4f）を `HandleOptimizeBench`（既定のまま、実データ 4 件 × seed 1〜3 × 60 秒 × workers 4 × 各 2 回＝24 対）で比べた。必須の悪化 0（hard が違う対も 0）、weighted の差 平均 +62.5（基準−HEAD、正＝HEAD が良い）・95% 区間 [−20.9, +146.0]・符号検定 p=0.286＝**区別できない**、total も同様、経過時間の中央値 37.4→37.0 秒（上限内）。同じ版・同じ seed の揺れ（SD 123〜178）が差と同程度＝workers 4 は壁時計依存でハッシュの出力不変はこの方法では判定できない（出力不変は T-3・T-10 の決定的モードが受け持つ）。8ea0ba1 以降の 7 commit（P4g・SOFT の桁の検査など）は対象外。結果は `tools/loop/results/2026-10-25-overhaul-p10-t17.txt`（gitignore）。
 | T-18 | 実機 | 機能の棚卸し F1〜F15、TalkBack、端末幅 | 利用者の確認 | 最終 |
 | T-19 | C# | Kotlin のテストを 1 対 1 で写し、C# のゴールデンが一致 | `MagiEngine.Tests` | 停止明け |
 

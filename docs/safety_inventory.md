@@ -18,7 +18,7 @@ CI の対応（以下「CI」列の略号）
 | `c3wBan` / `extBanned` の共有表 | 「希望の前日に禁止」と拡張希望の禁止を、チェッカー・Evaluator・Delta・C++・診断が同じ表から読む | `Problem.kt:154`/`:254`（`c3wBan`）、`Problem.kt:74`（`extBan`）、`DeltaEvaluator.kt:644`、`magi_native.cpp:146-147`/`:164`、UI 側は `MagiUiState.kt:144`（`extBanned`） | `C3wConstraintTest.bannedCellCountsOnceInCheckerEvaluatorAndDelta` ほか 6 件、`ExtWishRulesTest` 8 件、`ExtWishOptimizeTest` 3 件、`NativeParityFixtureTest`（fixture の値で C++ と照合） | V6, REL, NP |
 | `reportComparator` keep-best | 採否の辞書式（hard → weightedScore → total）の唯一の実装 | `MirrorCore.kt:86`（`betterReport` :94） | `AdaptiveEliteArchiveTest`（アーカイブの並びが `betterReport` と一致）、`SessionRegressionTest.checkResultWorse_lexicographic`、`AptFairPolishToleranceTest`（OFF のとき `betterReport` と同じ判定） | V6, REL |
 | 保存の世代と所有権（3.485〜3.487） | 古い自動保存が新しい保存を上書きしない（世代ゲート）。古い実行は新しい実行のファイルを書かない（所有権の確認と、rename 失敗時に直接書く前の再確認） | `work/SaveGate.kt:12`（`writeIfLatest` :19）、`MagiViewModel.kt:197-199`/`:854`/`:886`、`work/RunFiles.kt:142`（`writeFileAtomically`、`commitGuard` を :164 と :172 で 2 回評価） | `SaveGateTest.staleGenerationIsDropped` / `failedWriteDoesNotAdvanceGeneration`、`RunFilesTest.theGuardIsReEvaluatedBeforeTheNonAtomicFallbackWrites` / `anOldRunCannotOverwriteTheNewRunsFileBetweenItsOwnershipCheckAndRename` / `releaseIfOwnerDoesNotDeleteFilesOfANewerRun` / `aFailedCommitGuardLeavesTheTargetUntouched` ほか（計 20 件）、`BgHandoffTest` 4 件 | V6, REL |
-| 保存失敗の再試行 | 自動保存の失敗を状態（`SaveState.Failed`）として出し、初回だけダイアログを開き、再試行ボタンを出す | `MagiViewModel.kt:899-960`（`SaveFailNotifier`、`reportAutoSave` :929、`retrySave` :939）、`CellSheetLogic.kt:674`（`SaveFailNotifier`） | `Review3701Test.dialogShownOnceWhenSaveTurnsFailed` / `saveFailedLineInHomeStatusRegardlessOfStage` / `topBarSaveWordOnlyWhenFailed`、`BgHandoffTest.recoveryFilesSurviveWhenSavingTheAppliedStateFails`、`CountShortageTextTest.timeoutAndSaveFailureAreSaidSeparately`。`retrySave` が実際に書き直すことは ViewModel の層なので未テスト | V6, REL |
+| 保存失敗の再試行 | 自動保存の失敗を状態（`SaveState.Failed`）として出し、初回だけダイアログを開き、再試行ボタンを出す | `MagiViewModel.kt:899-960`（`SaveFailNotifier`、`reportAutoSave` :929、`retrySave` :939）、`CellSheetLogic.kt:674`（`SaveFailNotifier`） | `Review3701Test.dialogShownOnceWhenSaveTurnsFailed` / `saveFailedLineInHomeStatusRegardlessOfStage` / `topBarSaveWordOnlyWhenFailed`、`BgHandoffTest.recoveryFilesSurviveWhenSavingTheAppliedStateFails`、`CountShortageTextTest.timeoutAndSaveFailureAreSaidSeparately`。書き込み本体は `SaveGate.writeTextIfLatest`（自動保存・即時保存・`retrySave` が共通に呼ぶ）で、実ファイルの失敗→書き直し→古い世代を捨てるを `SaveRetryFileTest` が確かめる | V6, REL |
 | JNI の境界検査（3.442） | 制約の index（cons1/cons2/c41/c42/cons3w）を JNI の入口で検査し、範囲外なら handle を作らない（0 を返して Kotlin へ退化） | `magi_native.cpp:227`（`consIndicesValidN`）、`:2651` | `host_parity_bench.cpp:820-850`（CONS-GUARD: 正当な値を通すことと、範囲外 10 種類を拒むことを確かめる）。JUnit は無い（ホスト JVM は `.so` を読めない） | NP |
 | 2 層のネイティブ番兵 / NativeGate | 1 層目は C++ のチャンク末尾の自己整合（差分スコア == フル再計算）。2 層目は Kotlin `fullEval` による照合。どちらかが不一致なら `NativeGate.disable` で Kotlin へ退化する | `magi_native.cpp:595`/`:1015`/`:1039`、`NativeBridge.kt:98`（`NativeGate`、`disable` は +17 行）、`SaOptimizer.kt:180`/`:194`/`:255`/`:263`/`:277`、`V6FinalPort.kt:1134`、`NativeEval.kt:78`（`parityCheck`） | C++ 側は NP の harness（Δ==フル、scalar==bit）。Kotlin 側の「閉じて退化する」経路を直接たたくテストは無い（`SaWishLockTest` のコメントが、`.so` が無いので検証できないと明記）。`PolishRobustnessTest` はカウンタだけ | NP（C++ 層のみ） |
 | Δ=フルのパリティ | 差分評価がフル評価と常に一致する | `DeltaEvaluator.kt`、`Evaluator.kt:56`/`:71` | `DeltaEvaluatorTest`（`deltaMatchesFullEval_*` 4 件、`previewMoveReturnEqualsScoreAfterCommit`）、`ObjectiveParityTest` ×2、`WeeklyFairMarginalTest.marginalDeltaMatchesFullCheckerAcrossRandomStates`、`QuantitativeRangeEvalTest.deltaMatchesFullEvalUnderQuantitativeMode`、`C1JointLnsDeltaEvalTest` | V6, REL（C++ の Δ==フルは NP） |
@@ -48,10 +48,10 @@ CI の対応（以下「CI」列の略号）
 | L-06 | MUS の証明が手動固定を数える（3.717/3.723） | 検証済み | `ConstraintMusTest.staffMusCountsManualPinsLikeWishes` / `staffMusMixesWishAndManualPin`（`ConstraintMus.kt:34`/`:90`） |
 | L-07 | 重み付き中央値 | 設計どおり | 3.541.0 の案 E。`FairAchievementV2Test.weightedMedianIgnoresTheMemberAtTheEdgeOfHisOwnBand` |
 | L-08 | apt の補正値を保存しない | 設計どおり | 3.508.0 の決定（保存するのは設定値、実効値は評価のたびに計算）。`AptReachClampTest.appliedTargetIsClampedToTheReachableRange` ほか 5 件 |
-| M-01 | 原子保存のコールバックの既定（3.428） | 未解決（一部） | `RunFilesTest.givingUpAtomicReplaceIsReported` / `normalAtomicWriteDoesNotReportFallback` は通知を固定している。ただし `onNonAtomic` の既定は `{}`（`RunFiles.kt:145`）のままで、`MagiViewModel.kt:1226` の `prevBackupFile` 書き込みは省略している。原子性を諦めても記録が残らない。足すべきテスト: 既定を外したうえでの `RunFilesTest.everyCallerHandlesNonAtomicFallback`（または引数を必須にしてコンパイルで保証する） |
+| M-01 | 原子保存のコールバックの既定（3.428） | 解決（2026-10-25） | 置き換えの実体（`commitAndReplace`）が諦めたファイル名を `NonAtomicWrites` へ必ず積む＝`onNonAtomic` を渡さない呼び出し（背景の入力・途中経過・完了結果、`RunFiles.kt`）でも残る。画面は自動保存の記録のときに取り出し、ファイルごとに 1 度だけ操作ログへ出す（`MagiViewModel.reportNonAtomicSave`）。`prevBackupFile` は既に `onNonAtomic` を渡していた。`RunFilesTest.givingUpWithoutACallbackIsStillRecorded` |
 | M-02 | WorkManager の enqueue の失敗 | 記録あり・テスト無し | `MagiViewModel.kt:673-708`（外部レビュー P1-02 で同期の失敗、3.592.0 で非同期の失敗を片付けるようにした）。`BgHandoffTest.theGuardClosesAtEnqueueAndOnlyItsOwnRunOpensIt` はゲートだけを見る。足すべきテスト: 片付けの判定を切り出す `BgEnqueueFailureTest.asyncEnqueueFailureCleansUpOnlyTheCurrentRun` |
 | M-03 | 予算を何か所でも定義している | 未解決（軽微） | 定数は `V6FinalPort.kt:21/23`（`POST_RESERVE_SEC`/`CHAIN_RESERVE_SEC`）。合算は UI が 3 か所で別々に書いている（`CellSheetLogic.kt:1682`、`MagiSetupCards.kt:221`、`PreRunCheckSheet.kt:53`）。ほかに `MagiViewModel.kt:251` は予算+600 秒、`SaOptimizer.kt:29` の既定は 8000ms。`BudgetOverrunTest` が固定しているのは実時間の上限だけ |
-| M-04 | RSI+ の按分が予算を超える | 未解決（計測待ち） | backlog #16（35 秒の暗黙の下限、`BudgetOverrunTest` で見つかった）。3.723.0 は探索動学の扱いとして触っていない |
+| M-04 | RSI+ の按分が予算を超える | 解決（2026-10-25） | 実測で RSI_PLUS 単独は予算 1・10・30 秒のどれでも約 36 秒（フェーズ下限 10/10/10/5）。下限の合計が予算を超えるときだけ `runRsiPlus` を予算の締切でも止める（按分と手の選び方は不変）→ 2.3・11.0・31.0 秒。41 秒以上は合計＝予算で従来の経路、ポートフォリオのロール（35 秒）は先に締切が来る `stopRole` が判定を決めるので不変（`RsiPlusPhasePlanTest`、`BudgetOverrunTest` は RSI_PLUS も 1 秒＋3 秒の枠へ） |
 | M-05 | fair の全走査（3.451） | 設計どおり | 3.723.0 の判断: fair の差分評価は該当する群×シフトだけを見る。`WeeklyFairMarginalTest.marginalDeltaMatchesFullCheckerAcrossRandomStates` / `fairMarginalAtIsZeroWhenGroupHasFewerThanTwoMembers`。3.451.0 の OOM 修正そのものに専用のテストは無い |
 | M-06 | グループ上限 0 の候補 | 未解決（業務判断） | 3.507.0 の決定は個人上限 0 だけを扱い、グループの上限 0 はその範囲外 |
 | M-07 | 職員を名前で突き合わせる | 未解決（データ項目の変更が要る） | 安定 ID は `docs/data-models.md` の変更になる（3.723.0）。`EditLandingTest` が同名の職員の扱いを固定している |
@@ -59,7 +59,7 @@ CI の対応（以下「CI」列の略号）
 | U-02 | 使われていないフラグと設定の食い違い | 設計どおり | 3.723.0 の判断: 既定 OFF のフラグ 8 個は定義ファイル内の後処理とテストで使われている |
 | U-03 | weight lint が拾う数値の形（3.516） | 未解決（一部） | `tools/weight_lint.py:207-209` の正規表現 `\d+(?:\.\d+)?(L)?` は `10_000L` や `1e4` を拾わない（実行して確認）。`= 25`（整数の代入）も意図して対象外。現在の main にこの形の重みの複製は無い。lint 自体のテストも無い。足すべきテスト: `tools/test_weight_lint.py`（`_` 区切りと指数表記の検出） |
 | U-04 | versionCode の重複（PR #393 で検査を追加） | 未解決 | main には検査が無い（`.github` と `tools` に `versionCode` の参照が 0 件）。PR #393 は未マージ。読める範囲（shallow）の履歴 47 版では、別の versionName が同じ code を持つ例は見つからなかった |
-| U-05 | CLAUDE.md に履歴が混ざる | 未解決（文書の運用） | CLAUDE.md（113 行）の重みの段落に版ごとの経緯が入っている。検査は無い |
+| U-05 | CLAUDE.md に履歴が混ざる | 解決（2026-10-25） | 重みの節・D3 の版ごとの経緯（旧階層・旧値の列・指示の文言）を `docs/business-logic.md` §2「重みの経緯」へ移した。CLAUDE.md は現行値と変えない決定だけ。検査は無い（運用） |
 
 ### 集計
 - 検証済み 11: B-01, B-02, B-04, B-05, B-06, B-08（C++）, L-01, L-04, L-06、および設計どおりかつテストのある B-07, L-05
@@ -70,3 +70,20 @@ CI の対応（以下「CI」列の略号）
 ### 機構側のテストの穴（Q-02 から）
 1. NativeGate が閉じて Kotlin へ退化する経路は JUnit で一度も通っていない（`.so` が無いため）。足すなら、`SaOptimizer` の照合部分を注入できる形にして `NativeGateFallbackTest.mismatchDisablesGateAndKotlinResultIsUsed`。
 2. `retrySave` と世代の採番は ViewModel の層にあり、テストしていない（`SaveGate` 単体だけ）。
+
+## 2026-10-24 の再照合（ブランチ `claude/merge-wub4fq`、外部レビュー「監査資料と実装のずれ」）
+上の表は 3.723.0 時点の棚卸し。いまのコードとテストで照合し直した状態:
+
+| ID | 状態 | 根拠 |
+|---|---|---|
+| M-03 予算の定義が複数 | 解決（エンジン側） | `TimeBudget`・`BudgetShare`（全面改修 P3、`TimeBudgetTest`）。各段の締切は `PostStageDeadlineTest`（T-9） |
+| M-06 グループ上限 0 | 解決（業務判断済み） | P8（`docs/overhaul_design.md` §6.9） |
+| M-07 職員を名前で照合 | 解決 | P9＝`Staff.id`（`docs/data-models.md`） |
+| U-01 TalkBack の読み上げ順 | 対応（実機確認待ち） | 勤務表に `collectionInfo`・`traversalIndex`・`isTraversalGroup`（R-02、`MagiScheduleViews.kt`）。実機の TalkBack は T-18 |
+| U-03 weight lint の数値の形 | 解決 | `10_000L`・`1e4` を拾う（`tools/test_weight_lint.py`、V6 Engine Check で実行）。断片の移動も検出（2026-10-24） |
+| U-04 versionCode の重複 | 解決 | `tools/check_version.py`（Design Lint で実行） |
+| 新 S-01 SOFT の桁あふれ | 解決 | 個人の下限 1 億で差分評価が必須を 43 と誤って返した。実行前の検証 `Ws1Ops.countSettingError`（回数の設定 ≤ 1 万）と、差分評価の桁の検査（`SoftOverflowGuardTest`） |
+| 機構の穴 1 NativeGate の退化 | 解決（JNI そのものは除く） | `NativeGateIntegrationTest`: `NativeGate.saSeamForTest`（試験用の差し替え口、本番は null）に偽の SA チャンクを差し込み、実際の `SaOptimizer` の経路で 2 層目の照合 NG・1 層目の自己整合 NG → ゲートが閉じて Kotlin へ退化し、結果が Kotlin のフル評価と一致・入力より悪くならないことを確かめる。JNI の呼び出し自体は native-parity CI が守る |
+| 機構の穴 2 保存の再試行 | 解決（ViewModel の配線は除く） | `SaveRetryWiringTest` は失敗・再試行・復旧の状態遷移を固定。書き込み本体を `SaveGate.writeTextIfLatest` へ出し（ViewModel はそれを呼ぶだけ）、`SaveRetryFileTest` が実ファイルで「書けない間は失敗・元の内容は残る→書ける状態での再試行で最新の本文が入り一時ファイルが残らない→その後に終わる古い世代は捨てる」を確かめる |
+
+残る未解決: なし（M-04・機構の穴 2 は 2026-10-25 に解決）。

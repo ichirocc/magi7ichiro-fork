@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -12,12 +13,12 @@ class ScheduleWriteSitesTest {
     private val allowed = setOf(
         "setCell", "setCells", "revealGrid",                      // 手動編集
         "undo", "redo", "rollbackBoardCommit",                    // 元に戻す・やり直す
-        "loadAsync", "makeUi", "runCsvImport",                    // 読込・CSV 取込・UiState の組み立て
+        "loadAsync", "makeUi", "runCsvImport", "commitCsvBoard",  // 読込・CSV 取込（commitCsvBoard は runCsvImport だけが呼ぶ）・UiState の組み立て
         "startFullOptimize", "runSoftPolish", "applyBgResultGuarded", "opDays",   // 最適化の採用
         "generateSmartInitial", "applyAlternative", "applyWishes", // 下書き・別案・希望の反映
         "applyStructure", "applyStructureWithMessage",            // 編集タブ
         "relaxAndApply", "restoreBeforeRelax", "restore",         // 設定の緩和と、その事後確認・保存失敗の復旧（restore＝RelaxRollback の控え）
-        "applyFixSuggestion",                                     // 改善手（FixApplyGate を通る）
+        "applyFixSuggestion", "commitFixBoard",                   // 改善手（FixApplyGate を通る）。commitFixBoard は applyFixSuggestion だけが呼ぶ（下の検査）
         "maybeRunAgent",                                          // 代行役（AgentLoop の各手が FixApplyGate を通る）
         "differsOnlyInPinsOrColors",                              // 比較のための写し（盤面は書かない）
     )
@@ -39,5 +40,17 @@ class ScheduleWriteSitesTest {
         }
         assertTrue("書き込みの場所が見つかりません（検索の式が古い）", sites > 10)
         assertTrue("勤務表を書き換える新しい場所があります: $bad。案内からの修正は previewFixSuggestion → applyFixSuggestion（FixApplyGate）を通してください", bad.isEmpty())
+        // 本体の書き込み口（extension 用、全面改修 P6a・P6e）は決まった関数からだけ呼ぶ。
+        for ((writer, caller) in listOf("commitFixBoard" to "applyFixSuggestion", "commitCsvBoard" to "runCsvImport")) {
+            val callers = mutableListOf<String>()
+            dir.listFiles { f -> f.extension == "kt" }!!.forEach { f ->
+                var cur = "?"
+                f.readLines().forEach { line ->
+                    fn.find(line)?.let { cur = it.groupValues[1] }
+                    if (Regex("""\b$writer\(""").containsMatchIn(line) && !line.contains("fun $writer")) callers += cur
+                }
+            }
+            assertEquals(writer, listOf(caller), callers)
+        }
     }
 }

@@ -51,6 +51,19 @@ class MagiMediatorTest {
     }
 
     @Test
+    fun confirmDialogCanBeClosedEvenAfterARunStarted() {
+        // 月を移す確認を出したあとに作成が始まった: 「移す」は断り、「移らない」は通す（閉じられなくならない）。
+        val rejects = mutableListOf<Arbitration.Reject>()
+        val seen = mutableListOf<MagiEvent>()
+        val m = mediator(listOf(MagiEventHandler { seen.add(it); true }), rejects)
+        machine.begin(MagiPhase.Optimizing)
+        m.dispatch(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false))
+        m.dispatch(MagiEvent.Structure.CancelMonthMove)
+        assertEquals(1, rejects.size)
+        assertEquals(listOf<MagiEvent>(MagiEvent.Structure.CancelMonthMove), seen)
+    }
+
+    @Test
     fun rejectMessagesMatchLegacyWording() {
         val rejects = mutableListOf<Arbitration.Reject>()
         val m = mediator(rejects = rejects)

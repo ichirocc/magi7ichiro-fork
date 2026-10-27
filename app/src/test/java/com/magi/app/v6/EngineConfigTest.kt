@@ -13,14 +13,16 @@ class EngineConfigTest {
         assertEquals(false, d.combineExhaustPairs)
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
+        assertEquals(false, d.wideC3nBreakDays)
         assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
             pipelineHardLeg = false, maxMillis = 10_000L, holeFocus = true, holeSoftOnly = true), d.ejection)
         assertEquals(d, EngineConfig.snapshot())
     }
 
     @Test fun postParamsCarryTheSnapshottedPostFlags() {
-        val p = EngineConfig(combineExhaustPairs = true, aptFairSoftTolerance = true, countChainPolish = true)
+        val p = EngineConfig(combineExhaustPairs = true, aptFairSoftTolerance = true, countChainPolish = true, wideC3nBreakDays = true)
             .postParams()
+        assertEquals(true, p.wideC3nBreakDays)
         assertEquals(true, p.combineExhaustPairs)
         assertEquals(true, p.aptFairSoftTolerance)
         assertEquals(true, p.countChainEnabled)
@@ -36,6 +38,20 @@ class EngineConfigTest {
             assertEquals(true, c.c3nWallDeepCheck)
         } finally {
             PolishGate.c3nWallDeepCheck = saved
+        }
+    }
+
+    /** 禁止連続の崩し範囲（探索の奥まで引数で渡す）も写しに入り、後の変更を受けない。 */
+    @Test fun wideC3nBreakDaysIsSnapshotted() {
+        val saved = PolishGate.wideC3nBreakDays
+        try {
+            PolishGate.wideC3nBreakDays = true
+            val c = EngineConfig.snapshot()
+            PolishGate.wideC3nBreakDays = false
+            assertEquals(true, c.wideC3nBreakDays)
+            assertEquals(true, c.postParams().wideC3nBreakDays)
+        } finally {
+            PolishGate.wideC3nBreakDays = saved
         }
     }
 }

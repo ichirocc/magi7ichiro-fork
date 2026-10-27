@@ -81,6 +81,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -830,7 +831,8 @@ internal fun OperatorNextActionCard(
                 }
                 HomeSection.PROGRESS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
+                        // iOS の時計（タイマー）の輪: 予算＋後処理の枠に対する経過（「残り M:SS」と同じ枠）。
+                        CircularProgressIndicator(progress = { runProgressFraction(ui.budgetSec, ui.elapsedMs) }, modifier = Modifier.size(40.dp), color = plan.fg)
                         // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
                         Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                     }
@@ -1460,7 +1462,7 @@ internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun V6DashboardCard(v6: V6PortReport?) {
+internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = emptyMap()) {
     if (v6 == null) return
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -1508,9 +1510,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             //   要確認のみトグル＋タップ修復）が上位互換のため撤去（3.195.0 で保留した次点候補の実施）。
             Spacer(Modifier.height(10.dp))
             Text(
-                "${breakdownLabels["apt"] ?: "apt"}=${"%.2f".format(v6.aptPenalty)} / " +
-                    "${breakdownLabels["fair"] ?: "fair"}=${"%.2f".format(v6.equPenalty)} / " +
-                    "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}",
+                v6MetricLine(breakdown, v6),
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1593,28 +1593,29 @@ internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, 
     fun needHits(target: String): List<String> =
         if (ui.needFamilies.isNotEmpty()) ui.needFamilies.entries.filter { target in it.value }.map { it.key }
         else ui.needViolations.entries.filter { it.value == target }.map { it.key }
-    return when (famKey) {
-        "low", "high", "c2" -> countHits(want).mapNotNull {
+    // 位置の空間は族の表（ConstraintCatalog、全面改修 P5）から引く。apt だけは不足/超過の 2 クラスで記録される。
+    val space = com.magi.app.v6.ConstraintCatalog.space(famKey)
+    return when {
+        famKey == "apt" -> (countHits("vio-aptLow") + countHits("vio-aptHigh")).distinct().mapNotNull {
             val p = it.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
-        // 適切回数(apt) は不足=vio-aptLow / 超過=vio-aptHigh の2クラスで countViolations(i,k) に入る。
-        "apt" -> (countHits("vio-aptLow") + countHits("vio-aptHigh")).distinct().mapNotNull {
+        space == com.magi.app.v6.KeySpace.COUNT -> countHits(want).mapNotNull {
             val p = it.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
-        "covU", "covO", "c41", "c41s" -> needHits(want).mapNotNull {
+        space == com.magi.app.v6.KeySpace.NEED -> needHits(want).mapNotNull {
             val p = it.split(","); val k = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
             if (k == null || j == null) null else ("${dayMD(ui.startDate, j)} 「${sym(k)}」" to null)
         }
         // [場所表示] fair/weekly はセル単位でなく職員×シフト単位の偏り。distLocations から整形。
         // [3.345.0] weekly も職員×シフト（旧: 職員のみ）。休も1シフトとして出る。
-        "weekly" -> (ui.distLocations["weekly"] ?: emptyList()).mapNotNull { e ->
+        famKey == "weekly" -> (ui.distLocations["weekly"] ?: emptyList()).mapNotNull { e ->
             val i = e.getOrNull(0) ?: return@mapNotNull null; val k = e.getOrNull(1) ?: return@mapNotNull null
             val dev = e.getOrNull(2) ?: 0
             "${nm(i)} 「${sym(k)}」（曜日の偏り ${dev}）" to i
         }
-        "fair" -> (ui.distLocations["fair"] ?: emptyList()).mapNotNull { e ->
+        famKey == "fair" -> (ui.distLocations["fair"] ?: emptyList()).mapNotNull { e ->
             val i = e.getOrNull(0) ?: return@mapNotNull null; val k = e.getOrNull(1) ?: return@mapNotNull null; val dev = e.getOrNull(2) ?: 0
             "${nm(i)} 「${sym(k)}」（偏り ${dev}）" to i
         }
@@ -1695,7 +1696,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val cellSym = if (cell >= 0) sym(cell) else "—"
         val (mark, kind) = when (fam) {
             "c1" -> "期間" to 2   // 族名「期間の制約」の短縮（46dp の枠に収める）
-            "pref", "groupViol", "c3n", "c3w", "extWish" -> "必須" to 0
+            in com.magi.app.v6.ConstraintCatalog.hardCellKeys -> "必須" to 0
             else -> "要調整" to 1
         }
         // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。
@@ -2096,10 +2097,18 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
 @Composable
 private fun PreDistRowView(r: PreDistRow) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.Top) {
-        Text(r.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(72.dp))
-        Text((when (r.ok) { true -> "✓ "; false -> "! "; null -> "" }) + r.value,
-            color = if (r.ok == false) cs.error else cs.onSurface, style = MaterialTheme.typography.bodyMedium)
+    // iOS のリマインダーの丸い印: 済み＝塗った丸に ✓、要対応＝赤い輪、未評価＝灰の輪（色だけに頼らず読み上げの語を付ける）。
+    val (icon, tint, spoken) = when (r.ok) {
+        true -> Triple(Icons.Filled.CheckCircle, cs.tertiary, "済み")
+        false -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.error, "要対応")
+        null -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.onSurfaceVariant, "未確認")
+    }
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(icon, contentDescription = spoken, tint = tint, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text(r.label, style = MaterialTheme.typography.labelLarge)
+            Text(r.value, color = if (r.ok == false) cs.error else cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
@@ -2118,11 +2127,11 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, o
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                preDistributionTop(rows).forEach { PreDistRowView(it) }
+                preDistributionOrder(preDistributionTop(rows)).forEach { PreDistRowView(it) }
                 Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 MagiTextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, details) }
                 if (details) {
-                    preDistributionDetails(rows).forEach { PreDistRowView(it) }
+                    preDistributionOrder(preDistributionDetails(rows)).forEach { PreDistRowView(it) }
                     Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     Text(PRE_DIST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
@@ -2163,7 +2172,10 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bar
                 Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 Text(AGENT_RESUME_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            if (open) rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
+            if (open) {
+                Text(agentSoftDetail(rec), style = MaterialTheme.typography.bodySmall)
+                rec.steps.forEachIndexed { k, s -> Text("${k + 1}. $s", style = MaterialTheme.typography.bodySmall) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText("当てた手", open) }
                 MagiTextButton(onClick = onUndo, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("代行の分を元に戻す") }
@@ -2171,3 +2183,4 @@ internal fun AgentCard(ui: UiState, relaxFound: Boolean, onUndo: () -> Unit, bar
         }
     }
 }
+

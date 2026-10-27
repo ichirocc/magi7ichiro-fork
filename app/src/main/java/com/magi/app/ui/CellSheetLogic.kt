@@ -623,13 +623,12 @@ internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): 
 /** 手動固定を付けたセルが担当外／必須違反を抱えているときの一文（付けない＝空）。固定の挙動は変えない＝知らせるだけ。 */
 internal fun pinRegisterHint(canDo: Boolean, families: List<String>): String = when {
     !canDo -> PIN_NOT_CANDO_HINT
-    families.any { familyOfVioClass(it) in PIN_HARD_CELL_FAMILIES } -> PIN_HARD_HINT
+    families.any { familyOfVioClass(it) in com.magi.app.v6.ConstraintCatalog.hardCellKeys } -> PIN_HARD_HINT
     else -> ""
 }
 // 手動固定の通知「…を手動固定しました（自動では変更しません）」の後ろに付く＝同じことを繰り返さない。
 internal const val PIN_HARD_HINT = "このセルには必須違反があります。"
 internal const val PIN_NOT_CANDO_HINT = "担当外のシフトなので、必須違反が残ります。"
-private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol", "extWish")
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "${name}さんの ${DayText.full(startDate, day)} を ${symbol} に変更しました"
@@ -672,8 +671,18 @@ internal const val TOP_BAR_SAVE_FAILED = "保存できていません"
 internal const val TOP_BAR_NARROW_DP = 396
 
 /** 上部の札の左に出す保存の語。失敗のときだけ（押すと保存の失敗のダイアログ）。 */
-/** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。 */
-internal fun topBarTourLabel(n: Int): String = "必須違反${n}か所を見る"
+/** 上部の巡回の入口。省略されても数が残るよう、数を前に置く。人員不足は巡回に入らない（日の印から）が必須の件数には入るので、
+ *  人数を並べる（か所と人は足さない）。旧: か所だけで、隣の「必須違反 4」と数が合わなかった（2026-10-25 実機）。 */
+internal fun topBarTourLabel(n: Int, covU: Int = 0): String =
+    if (covU > 0) "必須${n}か所・不足${covU}人を見る" else "必須違反${n}か所を見る"
+
+/** 下の主ボタンの停止の語。作成が終わったあとに動いているのが代行・案探しだけなら、何を止めるかを言う。 */
+internal fun stopButtonLabel(running: Boolean, fixSearching: Boolean, agentRunning: Boolean): String = when {
+    running -> "やめる"
+    agentRunning -> "代行をやめる"
+    fixSearching -> CANCEL_FIX_SEARCH_BUTTON
+    else -> "やめる"
+}
 
 internal fun topBarSaveWord(s: SaveState): String? = if (s == SaveState.Failed) TOP_BAR_SAVE_FAILED else null
 
@@ -1082,13 +1091,6 @@ internal fun restOverIntro(allZero: Boolean): List<String> = listOfNotNull(
 /** 休みの人数の行: 「11/13(金)　休み 2人／適正 0人」（値が無ければ「未設定」）。 */
 internal fun restOverRow(ui: UiState, k: Int, j: Int, need: Pair<Int, Int>?): String =
     "${DayText.full(ui.startDate, j)}　休み ${ui.schedule.count { it.getOrNull(j) == k }}人／適正 " + (need?.let { "${it.second}人" } ?: "未設定")
-
-/** 日の人員のシートで、過不足のある勤務が 2 つ以上のときの問い。 */
-internal fun dayPickHeading(marks: List<CoverageMark>): String = when {
-    marks.all { it.under } -> "どの勤務の不足を確認しますか？"
-    marks.none { it.under } -> "どの勤務の過剰を確認しますか？"
-    else -> "どの勤務の過不足を確認しますか？"
-}
 
 /** 選ぶ行: 「Aア　配置 0人／必要 1人　1人不足」。 */
 internal fun dayPickRow(ui: UiState, j: Int, m: CoverageMark, need: Pair<Int, Int>?): String {
@@ -2053,3 +2055,54 @@ internal fun homeDiagnosisCount(ui: UiState): Int = listOf(
     ui.c1Plateau?.let { it.causeUnknown || it.hasEntries } == true,
     ui.observedPinBlockedAttempts > 0,
 ).count { it }
+
+/** [iOS の時計（タイマー）] 作成の進み具合 0..1。全体の枠は予算＋後処理・玉突きの予約＝[progressSummary] の「残り」と同じ枠。 */
+internal fun runProgressFraction(budgetSec: Int, elapsedMs: Long): Float {
+    val total = (budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L
+    return if (total <= 0L) 0f else (elapsedMs.toFloat() / total).coerceIn(0f, 1f)
+}
+
+/** [iOS の天気（時間ごとの帯）] ホームの日ごとの印。[short]＝人員不足の枠がある日、[hardCells]＝必須違反のセルの数。 */
+internal data class DayStripMark(val day: Int, val dom: String, val dow: String, val short: Boolean, val hardCells: Int) {
+    val ok: Boolean get() = !short && hardCells == 0
+}
+
+internal fun dayStripMarks(ui: UiState): List<DayStripMark> {
+    val n = ui.days
+    if (n <= 0) return emptyList()
+    val short = BooleanArray(n)
+    val hard = IntArray(n)
+    for ((k, v) in ui.needViolations) {
+        val j = VioKey.dayOf(k) ?: continue
+        if (j in 0 until n && (ui.needFamilies[k] ?: listOf(v)).any { familyOfVioClass(it) == "covU" }) short[j] = true
+    }
+    for ((k, fams) in ui.violationCellFamilies) {
+        val j = VioKey.dayOf(k) ?: continue
+        if (j in 0 until n && fams.any { familyOfVioClass(it) in com.magi.app.v6.MirrorKeys.hard }) hard[j]++
+    }
+    return (0 until n).map { j ->
+        val f = com.magi.app.v6.formatDay(ui.startDate, j)
+        DayStripMark(j, f.substringBefore('(').substringAfterLast('/'), f.substringAfter('(', "").substringBefore(')'), short[j], hard[j])
+    }
+}
+
+internal const val DAY_STRIP_LEGEND = "● 人員不足 ・ 数字 必須違反のか所"
+
+/** 日ごとの印の 1 行（問題の無い日は並べずに数で言う）。 */
+internal fun dayStripSummary(marks: List<DayStripMark>): String {
+    val bad = marks.count { !it.ok }
+    return if (bad == 0) "${marks.size}日すべて 問題なし" else "問題なし ${marks.size - bad}日 ・ 見ておく日 ${bad}日（押すとその日へ）\n${DAY_STRIP_LEGEND}"
+}
+
+/** 読み上げの 1 文（印の色だけに頼らない）。 */
+internal fun dayMarkSpoken(m: DayStripMark): String =
+    "${m.dom}日 ${m.dow}曜 " + when {
+        m.short && m.hardCells > 0 -> "人員不足と必須違反${m.hardCells}か所"
+        m.short -> "人員不足"
+        m.hardCells > 0 -> "必須違反${m.hardCells}か所"
+        else -> "問題なし"
+    }
+
+/** [iOS のリマインダー] 配布前の確認の並び＝要対応を上、未評価を中、済みを下（同じ組の中は元の順）。 */
+internal fun preDistributionOrder(rows: List<PreDistRow>): List<PreDistRow> =
+    rows.sortedBy { when (it.ok) { false -> 0; null -> 1; true -> 2 } }

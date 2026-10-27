@@ -85,7 +85,7 @@ class StallEscapeSpecTest {
 
     // §5.5 停止確認の窓
     @Test fun stopConfirmWindowIsFiveSeconds() {
-        assertEquals(5_000L, V6NativeOptimizer.STOP_CONFIRM_MS)
+        assertEquals(5_000L, PortfolioSearch.STOP_CONFIRM_MS)
     }
 
     // §7.1 HF63 が追跡する 13 族と effortIters の式
@@ -182,6 +182,22 @@ class StallEscapeSpecTest {
             PolishGate.c3nWallDeepCheck = false
             PolishGate.restore(snap)
             assertTrue("c3nWallDeepCheck は往復する", PolishGate.c3nWallDeepCheck)
+        } finally { PolishGate.restore(saved) }
+    }
+
+    // UI トグルの無い測定スイッチ（PolishGate の外に置かれたもの）も背景実行へ引き継ぐ＝既定以外の値で走らせた計測が Worker で既定へ戻らない。
+    @Test fun outsideGateSwitchesRoundTripThroughSnapshot() {
+        val saved = PolishGate.snapshot()
+        try {
+            EjectionChainPipeline.shallowOnly = true; AptFairPolish.heavySoftGuard = false
+            C1EjectionChainPolish.defaultHoleFocus = false; C1EjectionChainPolish.defaultHoleSoftOnly = false
+            val snap = PolishGate.snapshot()
+            PolishGate.restore(saved)
+            assertFalse(EjectionChainPipeline.shallowOnly)
+            PolishGate.restore(snap)
+            assertTrue("shallowOnly は往復する", EjectionChainPipeline.shallowOnly)
+            assertFalse("heavySoftGuard は往復する", AptFairPolish.heavySoftGuard)
+            assertFalse(C1EjectionChainPolish.defaultHoleFocus); assertFalse(C1EjectionChainPolish.defaultHoleSoftOnly)
         } finally { PolishGate.restore(saved) }
     }
 

@@ -71,9 +71,10 @@ object ShiftAppearance {
 
     fun severityFromVioKey(key: String): String = when (key.removePrefix("vio-")) {
         "groupViol", "covU", "pref", "c3n", "c3w", "extWish" -> "CRITICAL"                 // HARD
-        "low", "c3mn" -> "HIGH"                                                            // 重い soft(90/30)
+        "low" -> "HIGH"                                                                    // 最も重い soft(120)
+        // [2026-10-26] c1 50→90・c3mn 90→50(HF77)。c1 は件数最多で飽和回避のため WARN のまま＝c3mn を c1 より強く塗らないよう WARN へ。
         // [2026-09-10] high は HF77 明示指示で 45→25 に変更され c1/c3mn(30) を下回ったため、WARN 側へ降格。
-        "c1", "high", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt", "covO" -> "WARN"     // c1 は最多件数で飽和回避(3.367.0)・他は軽い SOFT 族/過剰配置。下流(V6RemainingScreens)はHIGH/WARNを同一表示に畳む
+        "c1", "c3mn", "high", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt", "covO" -> "WARN"     // c1 は最多件数で飽和回避(3.367.0)・他は軽い SOFT 族/過剰配置。下流(V6RemainingScreens)はHIGH/WARNを同一表示に畳む
         "fair", "weekly" -> "INFO"                                                         // 整え(常時非ゼロ)
         else -> "INFO"
     }

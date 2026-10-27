@@ -67,33 +67,7 @@ WEIGHT_LINT_EXEMPT = {
         (("covU",), "重みではない。fmtIter の「万」の桁の閾値が covU(10000) と同値なだけ"),
     ("app/src/main/java/com/magi/app/v6/V6FinalPort.kt", "format(n / 10_000)"):
         (("covU",), "重みではない。fmtIter の「万」への換算"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 120L"):
-        (("low",), "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "abs(n - t).toLong() * 4L"):
-        (("apt",), "apt(4) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - count).toLong() * 120L"):
-        (("low",), "low(120) の複製。weights.md 明記の既知重複"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(count - hiLim).toLong() * 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - c).toLong() * 120L"):
-        (("low",), "low(120) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(c - hi).toLong() * 25L"):
-        (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", "fun rangePen(x: Int) = "):
-        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複", 2),
-    # [dayPenalty] covU(10000)/covO(10) の候補見積り。C1TemporalFlowPolish.kt・DayAssignmentPolish.kt
-    #   と同じ「ホットパスで MirrorKeys.weightOf を避ける」設計だが、weights.md の destroy-repair/polish
-    #   系チェックリストには covU/covO の組までは列挙されていない（low/high の組だけが明記）。
-    #   4ファイルで完全に同一の1行関数（[3.522.0] タグ＝covO の重み改定と同時に更新済み＝ドリフトなし）
-    #   ＝新規に紛れ込んだ複製ではなく既存の一貫した実装。weights.md のチェックリストへの追記は別途検討。
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "(lo - c).toLong() * 120L"):
-        (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数のhigh(25)・apt(4)と同型）"),
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
+    # [3.726 前・2026-10-24] destroy-repair/polish 系の重みの写しは PenaltyWeights（MirrorKeys.weights を初期化時に 1 回読む）へ移した＝ここに許可は要らない。
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
     ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", "50 + deficit, GoalKind.RANGE_LOW"):
         ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
@@ -107,9 +81,9 @@ WEIGHT_LINT_EXEMPT = {
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
         "KDoc参照）。MirrorKeys由来ではない（200がhigh=25と一致しないことがその証拠）。120がlow(120)と"
         "偶然一致しているだけ"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 50L == 0L"):
+    ("app/src/main/java/com/magi/app/v6/AlnsSearch.kt", "iter % 50L == 0L"):
         ((), "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 120L == 0L"):
+    ("app/src/main/java/com/magi/app/v6/AlnsSearch.kt", "iter % 120L == 0L"):
         ((), "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致"),
 }
 
@@ -289,13 +263,15 @@ def engine_files():
 
 
 def scan(by_value):
-    """戻り値: (findings, used_exempt, ambiguous_lines)。used_exempt は WEIGHT_LINT_EXEMPT のキー ->
+    """戻り値: (findings, used_exempt, ambiguous_lines, moved_exempt)。moved_exempt は宣言したファイルでなく
+    別の v6 ファイルで一致した抑止のキー -> 一致したファイル（関数の移動・ファイル分割で断片ごと移った＝失敗にせず場所の更新を促す）。used_exempt は WEIGHT_LINT_EXEMPT のキー ->
     一致した検出行の [(行番号, その行でマッチした数値の集合)]（`main()` が一致行数と宣言族名の
     “現在の”重みを突き合わせる）。ambiguous_lines は複数の抑止の断片に一致した行。
     """
     findings = []
     used_exempt = {}
     ambiguous_lines = []
+    moved_exempt = {}
     by_file = {}
     for (rel, snip) in WEIGHT_LINT_EXEMPT:
         by_file.setdefault(rel, []).append(snip)
@@ -315,6 +291,11 @@ def scan(by_value):
             if not hits:
                 continue
             keys = [(rel, sn) for sn in snips if sn in raw[i]]
+            if not keys:
+                # 宣言したファイルに無い断片が別のファイルで一致した＝移動。数え方・値の照合はそのまま続ける。
+                keys = [(r, sn) for (r, sn) in WEIGHT_LINT_EXEMPT if r != rel and sn in raw[i]]
+                for key in keys:
+                    moved_exempt[key] = rel
             if len(keys) > 1:
                 ambiguous_lines.append((rel, n, [k[1] for k in keys]))
             if keys:
@@ -328,7 +309,7 @@ def scan(by_value):
                         continue
                     fams = [hit_fam]
                 findings.append((rel, n, text, fams, raw[i].strip()))
-    return findings, used_exempt, ambiguous_lines
+    return findings, used_exempt, ambiguous_lines, moved_exempt
 
 
 def main():
@@ -337,7 +318,7 @@ def main():
     a = ap.parse_args()
 
     by_family, by_value = parse_weights()
-    findings, used_exempt, ambiguous_lines = scan(by_value)
+    findings, used_exempt, ambiguous_lines, moved_exempt = scan(by_value)
 
     # 空振り（断片が検出行に一致しない）・一致行数の不一致（断片が曖昧）・値ミスマッチ（宣言した族の
     #   “現在の”重みがその行の値の中に無い＝正本だけ変更し複製を更新し忘れた可能性）を分けて検出する。
@@ -371,6 +352,11 @@ def main():
             print(f"    {rel}:{n}  {text} が重み {fam_label}({by_family[fams[0]]:g}) と一致: {src}")
     print(f"\n合計 {len(findings)} 件")
     blockers = bool(findings)
+    if moved_exempt:
+        # 失敗にしない（関数の移動・ファイル分割のたびに CI を落とさない）。断片と値の照合は移った先で済んでいる。
+        print(f"\n注意: 抑止の断片が別のファイルへ移っています（{len(moved_exempt)} 件、失敗にはしない）。WEIGHT_LINT_EXEMPT のパスを直してください:")
+        for (rel, sn), new in sorted(moved_exempt.items()):
+            print(f"    {rel} -> {new}: {sn!r}")
     if findings:
         print(
             "MirrorKeys.weightOf(family) / MirrorKeys.weights[...] 経由に直すか、"

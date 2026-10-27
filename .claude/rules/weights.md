@@ -31,6 +31,8 @@ paths:
   2026-09-10 は `WeeklyFairMarginalTest.kt`・`DeltaEvaluatorTest.kt`・`V6NativeOptimizerChoiceTest.kt`・
   `WideC3nFixtureTest.kt`（golden weightedScore）にも見つかった）・
   `docs/business-logic.md`・CLAUDE.md の重み階層行。C#（-MAGI_PC）は同日に同期。
+- 2026-10-24 以降、destroy-repair/polish 系 4 ファイル（`DestroyRepairMarginalCost`・`RangePolish`・`C1TemporalFlowPolish`・`DayAssignmentPolish`）の重みは
+  `PenaltyWeights`（`MirrorKeys.weights` を初期化時に 1 回読む）を掛ける＝この 4 ファイルは重みの変更で直さなくてよい（式の形は従来どおり各所）。
 - **重み階層に依存する表示分類**も対象（数値だけでなくロジック）: `ShiftAppearance.severityFromVioKey`
   （Kotlin/C# 両方）と `MagiScheduleViews.kt` の `heavySoftFamilies` は「表示強度＝重み階層」という
   設計原則を明記しているため、重みの大小関係が変われば分類も追従が必要（2026-09-10、high 45→25 で

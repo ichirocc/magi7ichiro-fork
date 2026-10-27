@@ -47,8 +47,9 @@ class CheckKeepsDisplayTest {
 
     @Test fun pushReportAppliesItWithTheCurrentState() {
         val dir = listOf("app/src/main/java/com/magi/app/ui", "src/main/java/com/magi/app/ui").map(::File).first { it.isDirectory }
-        val vm = File(dir, "MagiViewModel.kt").readText()
-        val body = vm.substringAfter("private suspend fun pushReport(").substringBefore("\n    }\n")
+        // pushReport は全面改修 P6f で `MagiViewModelDiagnostics.kt` の拡張関数へ移った（本体の外）。
+        val vm = File(dir, "MagiViewModelDiagnostics.kt").readText()
+        val body = vm.substringAfter("internal suspend fun MagiViewModel.pushReport(").substringBefore("\n}\n")
         assertTrue("検査の結果を反映する CAS が今の state で手動固定・表示色を残す", body.contains(".keepDisplayOf(st, state)"))
     }
 }

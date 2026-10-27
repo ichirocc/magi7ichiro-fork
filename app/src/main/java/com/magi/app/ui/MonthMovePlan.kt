@@ -5,6 +5,9 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /** 対象の月を移すときに「引き継ぐもの」と「消えるもの」（3.643.0、`Ws1Ops.resizeDays` と同じ規則で先に数える）。 */
+/** 確認を出したあとにデータが変わり、引き継ぐ・消える件数がずれたときの一言（移さずに確認し直す）。 */
+internal const val MONTH_MOVE_STALE = "確認のあとでデータが変わったため、件数を数え直しました。もう一度確かめてください"
+
 data class MonthMovePlan(
     val year: Int, val month: Int, val days: Int,
     val carriedWishes: Int, val carriedNeedExceptions: Int, val carriedPins: Int,

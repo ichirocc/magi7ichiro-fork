@@ -95,6 +95,9 @@ object NativeBridge {
  * 一度でも発火したら以後このプロセスでは Kotlin のみで走る（クラッシュでなく退化）。
  * 理由は診断ログ（V6FinalPort の NativeBridge 行）に出す。
  */
+/** [NativeGate.saSeamForTest] の中身＝`NativeBridge.nativeSaChunk` と同じ入出力（handle と温度の引数は持たない）。 */
+internal class NativeSaSeam(val saChunk: (cur: IntArray, best: IntArray, bestScore: Long, seed: Long) -> LongArray?)
+
 object NativeGate {
     /** ユーザーの設定トグル（設定タブ「ネイティブ加速」）。番兵ゲート enabled とは独立。 */
     @Volatile var userEnabled: Boolean = true
@@ -112,6 +115,10 @@ object NativeGate {
 
     /** 試験用。ゲートを開け直す（プロセス内で共有の状態を、閉じたテストの後へ持ち越さない）。 */
     internal fun resetForTest() { enabled = true; reason = null }
+
+    /** 試験用の差し替え口（`docs/safety_inventory.md` 機構の穴 1）: 設定すると `.so` の無いホストでも [SaOptimizer] がネイティブ経路を
+     *  通り、C++ の SA チャンクの代わりにこれを呼ぶ（番兵・退化はそのまま）。本番は null＝今の JNI 呼び出し。 */
+    @Volatile internal var saSeamForTest: NativeSaSeam? = null
 
     /** 1 層目の番兵（C++ チャンクの自己整合）。戻り値が無い・[minSize] 未満・status!=0 は NG。 */
     fun chunkConsistent(ret: LongArray?, minSize: Int): Boolean = ret != null && ret.size >= minSize && ret[0] == 0L

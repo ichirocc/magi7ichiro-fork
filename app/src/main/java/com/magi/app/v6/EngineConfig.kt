@@ -14,16 +14,22 @@ data class EngineConfig(
     val combineExhaustPairs: Boolean = false,
     val aptFairSoftTolerance: Boolean = false,
     val countChainPolish: Boolean = false,
+    /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
+    val wideC3nBreakDays: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
 ) {
     fun postParams() = V6HotfixPasses.PostOptimizationParams(
         combineExhaustPairs = combineExhaustPairs,
         aptFairSoftTolerance = aptFairSoftTolerance,
         countChainEnabled = countChainPolish,
+        wideC3nBreakDays = wideC3nBreakDays,
         ejection = ejection,
     )
 
     companion object {
+        /** 実行の外（分析・変更案の探索）が読む、いまの「禁止連続の崩し範囲」。実行の中は [wideC3nBreakDays]（写し）を渡す。 */
+        fun currentWideC3nBreakDays(): Boolean = PolishGate.wideC3nBreakDays
+
         /** 設定画面・背景 Worker の復元が書いた [PolishGate] を写す。エンジンの入口でだけ呼ぶ。 */
         fun snapshot(): EngineConfig = EngineConfig(
             normalStallFraction = PolishGate.normalStallFraction,
@@ -32,6 +38,7 @@ data class EngineConfig(
             combineExhaustPairs = PolishGate.combineExhaustPairs,
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainPolish = PolishGate.countChainPolish,
+            wideC3nBreakDays = PolishGate.wideC3nBreakDays,
             ejection = EjectionFlags(
                 c1Chain = PolishGate.c1EjectionChain,
                 allFamilyChain = PolishGate.allFamilyEjectionChain,

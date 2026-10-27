@@ -216,6 +216,9 @@ fun MagiViewModel.setMonth(year: Int, month1to12: Int, clearWishes: Boolean? = n
 /** [3.643.0] 月を移す確認の答え。確認が閉じていれば何もしない。 */
 fun MagiViewModel.confirmMonthMove(clearWishes: Boolean) {
     val p = ui.value.monthMovePrompt ?: return
+    // 確認を出したあとにデータが変わっていたら（件数がずれる）、移さずに今の内容で確認し直す。
+    val now = state?.let { monthMovePlan(it, p.year, p.month) }
+    if (now != null && now != p) { setMonthMovePrompt(now); notify(MONTH_MOVE_STALE, "W"); return }
     setMonth(p.year, p.month, clearWishes)
 }
 

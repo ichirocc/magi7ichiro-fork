@@ -15,7 +15,9 @@ class ShiftAppearanceTest {
         // HARD 4族は CRITICAL、重いソフト(low90/c3mn30)は HIGH、整え(fair/weekly)は INFO。
         // [2026-09-10] high は 45→25(HF77) で c1/c3mn(30) を下回り HIGH→WARN へ降格。
         for (k in listOf("groupViol", "covU", "pref", "c3n")) assertEquals(k, "CRITICAL", ShiftAppearance.severityFromVioKey(k))
-        for (k in listOf("low", "c3mn")) assertEquals(k, "HIGH", ShiftAppearance.severityFromVioKey(k))
+        assertEquals("HIGH", ShiftAppearance.severityFromVioKey("low"))
+        // [2026-10-26] c3mn は 90→50 で c1(90) を下回る＝c1 と同じ WARN。
+        assertEquals("WARN", ShiftAppearance.severityFromVioKey("c3mn"))
         for (k in listOf("fair", "weekly")) assertEquals(k, "INFO", ShiftAppearance.severityFromVioKey(k))
         assertEquals("WARN", ShiftAppearance.severityFromVioKey("c1"))
         assertEquals("WARN", ShiftAppearance.severityFromVioKey("high"))

@@ -89,7 +89,7 @@ class Evaluator(private val p: Problem) {
                     }
                 }
             }
-            soft += raw * 50L; record("c1", raw)
+            soft += raw * 90L; record("c1", raw)
         }
 
         // c2: per-staff total of a shift must reach count [3.522.0] 重み1→4。
@@ -168,7 +168,7 @@ class Evaluator(private val p: Problem) {
         run { val raw = c3check(a, p.cons3, false); soft += raw * 15L; record("c3", raw) }
         run { val raw = c3check(a, p.cons3n, true); hard1 += raw; record("c3n", raw) }    // forbidden -> display HARD (count)
         run { val raw = c3check(a, p.cons3m, false); soft += raw * 6L; record("c3m", raw) }
-        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 90L; record("c3mn", raw) }
+        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 50L; record("c3mn", raw) }
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         run {
@@ -229,7 +229,7 @@ class Evaluator(private val p: Problem) {
             for (g in 0 until p.G) {
                 val mem = p.groupMembers[g]
                 if (mem.size < 2) continue
-                for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k) { x -> ssn[x][k] }.total.toLong()
+                for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k, members = false) { x -> ssn[x][k] }.total.toLong()
             }
             soft += raw * 5L; record("fair", raw)
         }

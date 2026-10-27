@@ -170,9 +170,28 @@ private fun commitAndReplace(
         //   から直接書きまでの間に所有権が移っていても古い writer が target を書けた（rename 失敗と所有権の
         //   移動が重なる稀な経路）。確認と置き換えは所有権の錠の中で行う。
         if (!commitGuard()) return false
+        NonAtomicWrites.record(target.name)
         onNonAtomic(); target.writeText(text)
     }
     return true
 }
 
 private val atomicWriteSeq = java.util.concurrent.atomic.AtomicLong(0)
+
+/**
+ * 原子置換を諦めて直接書いたファイル名（プロセス内、M-01）。`onNonAtomic` を渡さない呼び出し（背景の入力・途中経過・完了結果など）
+ * でも諦めたことが残るように、置き換えの実体がここへ必ず積む。画面は自動保存の記録のときに取り出して操作ログへ出す。
+ */
+internal object NonAtomicWrites {
+    private const val MAX = 64
+    private val names = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    fun record(name: String) { if (names.size < MAX) names.add(name) }
+
+    /** 積まれた名前を取り出して空にする。 */
+    fun drain(): List<String> {
+        val out = ArrayList<String>()
+        while (true) out += names.poll() ?: break
+        return out
+    }
+}

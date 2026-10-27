@@ -61,6 +61,8 @@ data class UiState(
     /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。
      *  盤面が変わる操作（pushUndo）・元に戻す・読込で消す＝別の盤面の比較を完了カードに残さない。 */
     val runSummary: String? = null,
+    /** [iOS のヘルスケア「ハイライト」] この作成で必須違反・要調整がいくつからいくつになったか（変化なしは null）。runSummary と同じ寿命。 */
+    val runDelta: String? = null,
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
     val breakdown: Map<String, Int> = emptyBreakdown,
@@ -182,6 +184,7 @@ data class UiState(
     val copilotHint: String? = null,
     val preRunCheck: com.magi.app.v6.PreRunCheck.Summary? = null,   // [つくる前の確認] 非 null の間シートを出す
     val preRunRepeatHint: String? = null,   // 同じ設定で再作成するときの一言（シートの中に出す）
+    val csvImportPrompt: List<String>? = null,   // 勤務表CSV（重ね合わせ）を反映する前の確認の行（csvImportPreviewLines）。非 null＝確認待ち
     val csvPartialPrompt: String? = null,   // 引用符が閉じていない勤務表CSVの「読めた部分だけ取り込むか」確認。非 null の間ダイアログを出す（保存しない）
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),

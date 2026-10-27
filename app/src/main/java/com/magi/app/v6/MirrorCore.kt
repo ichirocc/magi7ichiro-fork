@@ -144,7 +144,7 @@ object MirrorKeys {
         "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "c3w" to 9000.0, "pref" to 8000.0,
         // [3.653.0/HF77 明示指示「拡張希望の重みは希望シフトと同じにする」] 拡張希望の違反＝必須・希望と同じ重み。
         "extWish" to 8000.0,
-        "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
+        "low" to 120.0, "c1" to 90.0, "c3mn" to 50.0, "high" to 25.0, "covO" to 10.0,
         "c3" to 15.0, "c3m" to 6.0,
         "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
         "c2" to 4.0, "apt" to 4.0, "fair" to 5.0, "weekly" to 2.0,
@@ -381,10 +381,12 @@ object UnifiedViolationChecker {
             }
         }
 
-        checkC3Family(p, s, p.cons3, "c3", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3n, "c3n", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3m, "c3m", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
-        checkC3Family(p, s, p.cons3mn, "c3mn", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
+        // 並びの窓の照合に使う職員×シフトの勤務日ビット（4 族で共有、T≤64 で盤面が揃っているときだけ）。
+        val c3Masks = if (!forceScalarC3 && (p.cons3n.isNotEmpty() || p.cons3mn.isNotEmpty() || p.cons3.isNotEmpty() || p.cons3m.isNotEmpty()) && C3nBitScan.usable(p) && s.size >= p.S && (0 until p.S).all { s[it].size >= p.T }) c3RowMasks(p, s) else null
+        checkC3Family(p, s, c3Masks, p.cons3, "c3", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3n, "c3n", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3m, "c3m", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
+        checkC3Family(p, s, c3Masks, p.cons3mn, "c3mn", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
 
         // [3.542.0] 希望の前日に禁止(c3w, HARD)。前日側のセル（動かせる側）を違反箇所にする。
         if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T) {
@@ -561,9 +563,23 @@ object UnifiedViolationChecker {
         }
     }
 
+    /** 職員 i・シフト k の勤務日ビットを [i * K + k] に並べた 1 本の配列（範囲外のセルはどこにも立てない）。 */
+    private fun c3RowMasks(p: Problem, s: Array<IntArray>): LongArray {
+        val out = LongArray(p.S * p.K)
+        for (i in 0 until p.S) {
+            val row = s[i]; val base = i * p.K
+            for (j in 0 until p.T) { val k = row[j]; if (k in 0 until p.K) out[base + k] = out[base + k] or (1L shl j) }
+        }
+        return out
+    }
+
+    /** テスト専用: 並びの窓の照合をスカラーの走査に固定する（ビット経路との一致の検査に使う）。 */
+    @Volatile internal var forceScalarC3: Boolean = false
+
     private fun checkC3Family(
         p: Problem,
         schedule: Array<IntArray>,
+        masks: LongArray?,
         list: List<C3>,
         key: String,
         forbidden: Boolean,
@@ -600,6 +616,27 @@ object UnifiedViolationChecker {
                             r = 0; runStart = -1
                         }
                         j++
+                    }
+                }
+                continue
+            }
+            // 窓の照合は職員×シフトの勤務日ビットの AND と popcount で（T≤64・シフトが範囲内のとき）。窓の開始日の昇順に
+            //   inc/mark を呼ぶので、数も印の順もスカラーの走査と同じ。`C3FamilyBitTest` が両者の一致を固定する。
+            if (masks != null && seq.all { it in 0 until p.K }) {
+                val kk = p.K
+                val n = p.T - d + 1
+                val starts = if (n >= 64) -1L else (1L shl n) - 1
+                for (i in 0 until p.S) {
+                    val base = i * kk
+                    var rest = -1L
+                    for (l in 1 until d) rest = rest and (masks[base + seq[l]] ushr l)
+                    val first = masks[base + seq[0]] and starts
+                    var fires = if (forbidden) first and rest else first and rest.inv()
+                    while (fires != 0L) {
+                        val j = java.lang.Long.numberOfTrailingZeros(fires)
+                        fires = fires and (fires - 1)
+                        inc(key, 1)
+                        if (forbidden) { for (l in 0 until d) mark(i, j + l, key) } else mark(i, j, key)
                     }
                 }
                 continue
@@ -814,15 +851,16 @@ class FairDevResult(val total: Int, val perMember: List<Pair<Int, Int>>)
  * 偏差＝round(|達成率−基準|×自分の幅)。基準が 1 人でも無ければ同じ母集団で生回数 round(平均) の L1 へ。式の根拠と実データの
  * 数値は docs/business-logic.md / docs/history 3.541.0。**C++ `magi_native.cpp` の `fairDevOfBucket` と同じコミットで揃える。**
  */
-fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult {
+fun Problem.fairDevOfBucket(g: Int, k: Int, members: Boolean = true, count: (Int) -> Int): FairDevResult {
     val all = groupMembers[g]
-    val mem = IntArray(all.size); var n = 0
-    for (x in all) if (mayPlace(x, k) || count(x) > 0) mem[n++] = x
+    // 回数は 1 人 1 回だけ数える（[count] は呼び出し側の表引き）。[members]＝偏差>0 の内訳を作るか（合計だけの呼び出しは作らない）。
+    val mem = IntArray(all.size); val cnt = IntArray(all.size); var n = 0
+    for (x in all) { val c = count(x); if (mayPlace(x, k) || c > 0) { mem[n] = x; cnt[n] = c; n++ } }
     if (n < 2) return FairDevResult(0, emptyList())
     val ach = DoubleArray(n); val scale = DoubleArray(n)
     for (idx in 0 until n) {
         val x = mem[idx]
-        val lo = rangeLo[x][k]; val hi = rangeHi[x][k]; val c = count(x)
+        val lo = rangeLo[x][k]; val hi = rangeHi[x][k]; val c = cnt[idx]
         if (lo != Int.MIN_VALUE && hi != Int.MAX_VALUE) {
             // lo>hi（設定ミス）は幅 0 扱い。coerceIn は lo>hi で例外を投げるので手でクランプする（C++ と同じ式）。
             val e = if (c < lo) lo else if (c > hi) hi else c
@@ -831,7 +869,7 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult 
         } else if (apt[x][k] >= 0) {
             val t = apt[x][k]
             scale[idx] = t.toDouble(); ach[idx] = if (t > 0) (c - t).toDouble() / t else 0.0
-        } else return legacyFairDevOfBucket(mem, n, count)
+        } else return legacyFairDevOfBucket(mem, cnt, n, members)
     }
     var w = 0.0
     for (idx in 0 until n) w += scale[idx]
@@ -844,28 +882,28 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult 
     var acc = 0.0; var tgt = ach[order[n - 1]]
     for (idx in order) { acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
     var total = 0
-    val perMember = ArrayList<Pair<Int, Int>>()
+    val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
         val dx = Math.round(kotlin.math.abs(ach[idx] - tgt) * scale[idx]).toInt()
         total += dx
-        if (dx > 0) perMember.add(mem[idx] to dx)
+        if (dx > 0) perMember?.add(mem[idx] to dx)
     }
-    return FairDevResult(total, perMember)
+    return FairDevResult(total, perMember ?: emptyList())
 }
 
 /** `fairDevOfBucket` のフォールバック先＝生回数の round(平均) からの L1 偏差（母集団 mem[0 until n]）。 */
-private fun legacyFairDevOfBucket(mem: IntArray, n: Int, count: (Int) -> Int): FairDevResult {
+private fun legacyFairDevOfBucket(mem: IntArray, cnt: IntArray, n: Int, members: Boolean): FairDevResult {
     var sum = 0
-    for (idx in 0 until n) sum += count(mem[idx])
+    for (idx in 0 until n) sum += cnt[idx]
     val tgt = Math.round(sum.toDouble() / n).toInt()
     var total = 0
-    val perMember = ArrayList<Pair<Int, Int>>()
+    val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
-        val dx = kotlin.math.abs(count(mem[idx]) - tgt)
+        val dx = kotlin.math.abs(cnt[idx] - tgt)
         total += dx
-        if (dx > 0) perMember.add(mem[idx] to dx)
+        if (dx > 0) perMember?.add(mem[idx] to dx)
     }
-    return FairDevResult(total, perMember)
+    return FairDevResult(total, perMember ?: emptyList())
 }
 
 fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {

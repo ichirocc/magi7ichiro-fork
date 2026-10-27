@@ -37,12 +37,12 @@ fun MagiViewModel.exportJsonDeferred(): (() -> String)? {
     return { StateParser.exportCurrent(orig, st, sched, ui.structureEdited, ui.constraintsEdited)!! }
 }
 
-fun MagiViewModel.exportCsv(): String? {
+/** 勤務表 CSV。入力の固定は main で（セルの編集は盤面の配列をその場で書き換える＝別スレッドで読むと作っている途中の編集が混ざる）、
+ *  文字列化は任意のスレッドで。保存済みの印は「この文字列」とその写しの盤面に結ぶ（notifySave が使う）。 */
+fun MagiViewModel.exportCsvDeferred(): (() -> String)? {
     val st = state ?: return null
-    val sched = currentSchedule ?: return null
-    val csv = ScheduleCsvBridge.build(st, sched)
-    noteCsvExport(st, sched, csv)   // [3.644.0] 保存済みの印は「この文字列」に結ぶ（notifySave が使う）
-    return csv
+    val sched = currentSchedule?.copy2D() ?: return null
+    return { ScheduleCsvBridge.build(st, sched).also { noteCsvExport(st, sched, it) } }
 }
 
 /** コンポーネント別エクスポート（取込種別と対。出力→編集→取込で往復可）。 */

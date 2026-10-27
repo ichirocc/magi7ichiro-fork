@@ -26,8 +26,8 @@ class Review3711Test {
     }
 
     @Test fun sameResultNoticeAndVisibility() {
-        assertEquals("前回と同じ結果です。条件を変えない限り、この必須違反3件は消えません。", sameResultNotice(3))
-        assertEquals("前回と同じ結果です。", sameResultNotice(0))
+        assertEquals("前回と同じ結果です。条件を変えない限り、この必須違反3件は消えません。$SAME_RESULT_NEXT_DRAFT", sameResultNotice(3))
+        assertEquals("前回と同じ結果です。$SAME_RESULT_NEXT_DRAFT", sameResultNotice(0))
         assertFalse(isSameRunResult(null, 1L to 2L))
         assertTrue(isSameRunResult(1L to 2L, 1L to 2L))
         assertFalse(isSameRunResult(1L to 2L, 1L to 3L))

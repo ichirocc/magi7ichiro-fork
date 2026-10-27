@@ -2,7 +2,8 @@
 
 本書は **MAGI ネイティブ（Android / Kotlin / Jetpack Compose / Material3 / MVVM）** の主要モジュール・サービスと、その依存・呼び出し関係を **entities / relations / observations** 形式でまとめたもの。各 entity の役割は短い observation として併記する。関係は実コード（import / 参照）で裏取りしている。画面の挙動は `screen_spec.md`、デザイン基盤は `magi_design_system.md` を参照。
 
-- リポジトリ: `ichirocc/magi7ichiro` ／ パッケージ: `com.magi.app`
+- リポジトリ: `ichirocc/magi7ichiro-fork`（作業用 fork）／ パッケージ: `com.magi.app`
+- 最終更新: 2026-10-24（全面改修 P7＝P3〜P6e・P10 の新しい構造に合わせて正規化）
 - ソース: `app/src/main/java/com/magi/app/`（パッケージ: `model/` `v6/` `ui/` `work/` ＋ `MainActivity`）
 
 ---
@@ -21,16 +22,21 @@ MagiViewModel  ── produces ─▶ UiState ──▶ UI 画面群（勤務表
         │ ▶ MagiState（ドメイン＝JSONスキーマ）      ▼
         │ calls                              Affordance / MagiComponents（共有部品）
         ▼
-V6NativeOptimizer（最適化エンジン核）
+V6FinalPort.handleOptimize（実行の組み立て。EngineConfig を 1 回写し、TimeBudget を作る）
+        │ calls
+        ▼
+V6NativeOptimizer（公開入口・方針の選択）── 実行状態 ─▶ OptimizerRuntime
+   ├ runs ─▶ PortfolioSearch / AlnsSearch / RsiSearch（探索器）── 最後に ─▶ SearchPolish（探索直後の研磨）
    ├ uses ─▶ SaOptimizer / V6 operators / V6 seeders / V6 web-parity
-   ├ scores-with ─▶ Evaluator / DeltaEvaluator ── use ─▶ MirrorCore（18違反種・重み）
+   ├ scores-with ─▶ Evaluator / DeltaEvaluator ── use ─▶ MirrorCore（21族・重み）／ ConstraintCatalog（位置の空間）
    └ depends-on ─▶ Problem ◀── built-from ── MagiState
+V6HotfixPasses.runPostOptimization（後処理チェーン: 前段→中段→終段、段の名前は PostStages）
 
 OptimizationWorker（WorkManager 前景サービス）── runs ─▶ V6NativeOptimizer
 StateParser（JSON I/O） / ScheduleCsvBridge（CSV I/O）── map ─▶ MagiState
 ```
 
-役割の分担：**UI** は表示と操作のみ、**ViewModel** が唯一のハブ（状態・操作・最適化起動・I/O）、**v6 エンジン**が探索本体、**model** がデータ、**work** が中断耐性のある背景実行。
+役割の分担：**UI** は表示と操作のみ、**ViewModel** が唯一のハブ（状態・操作・最適化起動・I/O。責務ごとに extension 関数のファイルへ分割＝state と盤面の書き込みは本体だけ）、**v6 エンジン**が探索・研磨・評価、**model** がデータ、**work** が中断耐性のある背景実行。盤面を採る経路ごとの検査は `docs/adoption.md`。
 
 ### UI 層の再構成（3.558.0〜3.565.0、Stage A〜D 完了）
 
@@ -79,7 +85,7 @@ MagiRoot（唯一の合成ルート）
 |---|---|---|
 | `MainActivity` | Activity | アプリの入口。テーマ/Shapes を設定し `MagiApp` をホストする |
 | `MagiApp` | UI-Shell | 画面骨格。5タブ（ホーム/勤務表/編集/分析/設定）＋ TopBar（状態チップ）＋ BottomCommandBar |
-| `MagiViewModel` | ViewModel-Hub | **中央ハブ**。状態保持・全操作・最適化起動・I/O・`UiState` 生成（最大級・約124KB） |
+| `MagiViewModel` | ViewModel-Hub | **中央ハブ**。状態保持・全操作・最適化起動・I/O・`UiState` 生成（最大級・約250KB。責務の一部は `MagiViewModel*.kt` の extension 関数へ分割、下の「主要ファイルと役割」） |
 | `UiState` | UI-State | UI 表示用の派生状態（違反/breakdown/schedule/色/満足度 等） |
 
 ### ドメイン・データ（model）
@@ -92,10 +98,16 @@ MagiRoot（唯一の合成ルート）
 | Entity | type | 役割 |
 |---|---|---|
 | `Problem` | Engine-Model | `MagiState` から構築する最適化問題（次元・制約・重み）。盤面へ書く経路の縛り＝`wishLocked`/`lockTo`（手動固定＞実現可能な希望、backlog #41）、希望の意味＝`wishFixed` |
-| `V6NativeOptimizer` | Engine-Core | **主最適化器**。SA + ALNS + GLS + Tabu + Path Relinking を統括、最良解を研磨（約70KB） |
+| `V6NativeOptimizer` | Engine-Core | **公開入口**（`optimize`・`softPolishOnly`）と方針（アルゴリズム）の選択（全面改修 P10 で約 20KB に） |
+| `PortfolioSearch` / `AlnsSearch` / `RsiSearch` | Engine-Search | 探索器: 適応ポートフォリオ・多ワーカー・停止の確認／V5 の SA 多点・ALNS（GLS・Tabu を含む）／RSI・RSI++（P10b） |
+| `SearchPolish` | Engine-Polish | 探索直後の研磨 `hf80PostPolish`（後処理チェーンとは別、P10c） |
+| `OptimizerRuntime` | Engine-Runtime | 実行状態（`RunSlot`・最良盤面のライブ公開・他の案・エリート・充足困難な族・計測の始まり、P10a） |
+| `EngineConfig` / `TimeBudget` | Engine-Config | 実行の開始時に 1 回だけ作る設定の写し（`PolishGate` を読むのはここだけ＝T-7 `PolishGateAccessTest`）／時間予算と取り分（`BudgetShare`、P3） |
 | `SaOptimizer` | Engine-SA | 焼きなまし（Metropolis 基準）本体 |
 | `Evaluator` / `DeltaEvaluator` | Engine-Scoring | 違反スコアの計算 / 差分評価（高速化） |
-| `MirrorCore`（`MirrorKeys`） | Constraint-Defs | **18 違反種と重み**＝`weightedScore` の唯一の真実 |
+| `MirrorCore`（`MirrorKeys`） | Constraint-Defs | **21 族と重み**＝`weightedScore` の唯一の真実 |
+| `ConstraintCatalog` | Constraint-Defs | 21 族の表（必須か・位置の空間 CELL/COUNT/NEED/DIST）。重みは `MirrorKeys` を読むだけ（P5、T-11） |
+| `PenaltyWeights` | Constraint-Defs | 修復の候補選び・研磨の見積りが掛ける重み（`MirrorKeys.weights` を初期化時に 1 回読む写し） |
 | `mapParallel`（`MirrorCore.kt`） | Util | 純関数を並列に適用し**入力順**で返す。後処理の共同 LNS 2 本が候補の評価だけをこれへ配る（生成・採否は逐次＝決定論モードの結果は不変、3.569.0） |
 | `V6SearchOperators` / `V6LateOperators` / `V6SwapSuggester` | Engine-Operators | 近傍・交換・修復などの探索手 |
 | `SmartInitialScheduler` / `GreedyMirrorScheduler` | Engine-Seed | 初期解の生成（後者はテスト専用の旧生成器） |
@@ -118,7 +130,7 @@ MagiRoot（唯一の合成ルート）
 | `DisplaySnapshot` | UI-logic（Compose 非依存） | 印と一文の写し（必須件数の言い方・セルの印と状態の 1 行・巡回）を検査結果の反映で 1 回作る（ホストテスト） |
 | `CellSheetLogic` | UI-logic（Compose 非依存） | セル編集シートの固定配置・1 行の状態・シフトの印・巡回・回数の 1 行（ホストテスト） |
 | `C1Display` | UI-logic（Compose 非依存） | 期間の制約の表示専用の不足区間（印＝変えられる日・帯・満たせない判定・シートの文。ホストテスト） |
-| `MagiDashboardCards` ＋ `V6RemainingScreens` | UI-Analysis | 分析カード（違反の内訳18 / 俯瞰 / チェック概要 / ボトルネック / 改善提案） |
+| `MagiDashboardCards` ＋ `V6RemainingScreens` | UI-Analysis | 分析カード（違反の内訳 / 俯瞰 / チェック概要 / ボトルネック / 改善提案） |
 | `Ws1Editor` / `StaffRangeEditor` / `ConstraintEditor` / `WishEditor` / `NeedDayEditor` / `SkillGroupEditor` / `CountSettingsScreen` / `ShiftColorEditor` | UI-Editors | 「基本マスター」の各エディタ |
 | `MagiSetupCards` | UI-Setup | 初期設定・外観・データ操作などのカード群 |
 | `Affordance` ＋ `MagiComponents` | UI-Components | 共有部品（`DialogHeader`・3ダイアログボタン・`MagiSegmentedControl` 等） |
@@ -142,10 +154,11 @@ ViewModel ハブ
 - `MagiViewModel` **uses** `StateParser`（JSON）, `ScheduleCsvBridge`（CSV）
 
 エンジン（v6）
-- `OptimizationWorker` **runs** `V6NativeOptimizer` ／ **uses** `StateParser`
-- `V6NativeOptimizer` **depends-on** `Problem`
-- `V6NativeOptimizer` **uses** `SaOptimizer`, `V6SearchOperators`/`V6LateOperators`/`V6SwapSuggester`, `SmartInitialScheduler`/`GreedyMirrorScheduler`, `V6SanityPort`/`V6FinalPort`/`V6PortAnalyzer`
-- `V6NativeOptimizer` **scores-with** `Evaluator` / `DeltaEvaluator`
+- `OptimizationWorker` **runs** `V6FinalPort.handleOptimize` → `V6NativeOptimizer` ／ **uses** `StateParser`
+- `V6FinalPort` **snapshots** `EngineConfig`（1 回）／ **builds** `TimeBudget` ／ **runs** `V6HotfixPasses.runPostOptimization`
+- `V6NativeOptimizer` **runs** `PortfolioSearch` / `AlnsSearch` / `RsiSearch` ／ **publishes-via** `OptimizerRuntime`
+- 探索器 **use** `SaOptimizer`, `V6SearchOperators`/`V6LateOperators`, `SmartInitialScheduler`/`GreedyMirrorScheduler` ／ **finish-with** `SearchPolish`
+- `V6NativeOptimizer`・探索器 **depend-on** `Problem` ／ **score-with** `Evaluator` / `DeltaEvaluator`
 - `DeltaEvaluator` **builds-on** `Evaluator`
 - `Evaluator` **depends-on** `Problem`
 - `Problem` **built-from** `MagiState`
@@ -160,7 +173,7 @@ ViewModel ハブ
 ## 主要フロー（呼び出し連鎖）
 
 1. **起動**: `MainActivity` → `MagiApp`（タブ・状態を `MagiViewModel` から取得）。
-2. **最適化（前景）**: ユーザ操作 → `MagiViewModel.optimize()` → `OptimizationWorker`（前景サービス）→ `V6NativeOptimizer`（seed → SA/ALNS/operators、`Evaluator`/`DeltaEvaluator` で採点、`MirrorCore` の重みで `weightedScore`）→ 結果を `MagiViewModel` → `UiState` → UI 反映（中断時はスナップショットから復帰）。
+2. **最適化（前景）**: ユーザ操作 → `MagiViewModel.optimize()` → `OptimizationWorker`（前景サービス）→ `V6FinalPort.handleOptimize`（`EngineConfig` を写す・`TimeBudget`）→ `V6NativeOptimizer`（`PortfolioSearch`/`AlnsSearch`/`RsiSearch` → `SearchPolish`）→ `V6HotfixPasses.runPostOptimization`（前段・中段・終段）→ 最終番兵（seed → SA/ALNS/operators、`Evaluator`/`DeltaEvaluator` で採点、`MirrorCore` の重みで `weightedScore`）→ 結果を `MagiViewModel` → `UiState` → UI 反映（中断時はスナップショットから復帰）。
 3. **編集 → 再最適化**: UI 編集 → `MagiViewModel` が `MagiState` 更新（自動保存 JSON）→ `Problem` 再構築 → 再最適化。
 4. **保存/読込/取込**: JSON は `StateParser`、CSV は `ScheduleCsvBridge` を介して `MagiState` と相互変換。
 
@@ -168,7 +181,7 @@ ViewModel ハブ
 
 ## 補足
 - 本書は「主要モジュール」を対象とした要約であり、全ファイルの網羅ではない（`v6/` には Hotfix/解析系の補助ファイルも存在する）。
-- `Hf63Infeasibility` は呼び手が自己テストのみで実質死蔵（Web 側と同様）。
+- `Hf63Infeasibility`（構造的に充足困難な族の学習）は `HypothesisPlanning` と `MagiViewModel` から使われる。
 - 関係は import / 参照に基づくが、実行時の動的呼び出しの一部は含まれない場合がある。
 - 関連ドキュメント: 画面挙動＝`screen_spec.md`、デザイン基盤＝`magi_design_system.md`、エンジン移植＝`v6_engine_native_port.md`。
 
@@ -184,9 +197,12 @@ ViewModel ハブ
   Delta は差分評価。`SaOptimizer` が Delta×Full の整合チェック（安全網）を行うため**両者は常に一致させる**。
 - `C3Run.kt` — `isSingleShiftSeq(seq)`, `rowDeficit(a,i,k,L)`（単一シフト連の不足評価）。
 - `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
-- `EngineConfig.kt` — 1 回の実行で使うエンジン設定。`handleOptimize` の入口で `PolishGate` から 1 回だけ写す（全面改修 P2、項目は段階的に移す）。
   最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
-- `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
+- `EngineConfig.kt` — 1 回の実行で使うエンジン設定。`handleOptimize` の入口で `PolishGate` から 1 回だけ写す（全面改修 P2・P3、`wideC3nBreakDays` を含めて移行済み）。
+  エンジンで `PolishGate` を参照するのはこのファイルだけ（T-7 `PolishGateAccessTest`）。
+- `V6NativeOptimizer.kt` — 公開入口（`optimize`・`softPolishOnly`）と方針の選択。探索器は下の `PortfolioSearch.kt` ほか（P10）。
+- `V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 後処理チェーン（`runPostOptimization`）と各オペレータ。
+- `PenaltyWeights.kt` — 修復の候補選び・研磨の見積りの重み（`MirrorKeys.weights` の写し、2026-10-24）。
 - `RestZeroWindowLns.kt` — **休0日の窓LNS**（3.555.0、既定 OFF＝`PostOptimizationParams.restZeroWindowLnsEnabled`）。休の必要人数を明示した日に
   休が余るとき、前後の窓を職員ごとの窓内並べ替えで組み直す。外側で夜勤型シフト（翌日が自分か休に限られる＝2 長の禁止連続から判定）の
   担当列を列挙（対象日の強制休が少ない順）、窓の外の同日交換で夜勤を人から人へ移す候補（1〜3 日）も試し、内側で日ごとのビーム
@@ -203,13 +219,23 @@ ViewModel ハブ
   単セル covU 修正が LNS の余地を先に使い実データで HARD 退行）。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
   10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
+- `ConstraintCatalog.kt` — 違反の族 21 個の表（必須か・位置の空間 セル/回数/人数/偏り）。重みは `MirrorKeys.weights` を読むだけ（全面改修 P5）。
+- `PortfolioSearch.kt`／`AlnsSearch.kt`／`RsiSearch.kt` — 探索器（適応ポートフォリオ・多ワーカー／V5 の SA 多点・ALNS／RSI・RSI++、全面改修 P10b で `V6NativeOptimizer` から分けた）。`V6NativeOptimizer` は公開入口と方針の選択。
+- `SearchPolish.kt` — 探索直後の研磨（`hf80PostPolish`、全面改修 P10c）。各探索の最後と「自動で整える」から呼ぶ。後処理チェーン（`V6HotfixPasses`）とは別。
+- `SearchCommon.kt` — 探索器と公開入口が共有する小関数（`better`・`nowMs`・`actualSeed`・`extBanInDiff`、全面改修 P10e）。依存は入口 → 探索器 → ここの一方向。
+- `OptimizerRuntime.kt` — 最適化の実行基盤（実行ごとの成果物入れ `RunSlot`・最良盤面のライブ公開・他の案・エリート・充足困難な族・計測の始まり、全面改修 P10a）。探索の意味論は持たない。
+- `PostStages.kt` — 後処理の段の名前（進捗の語と記録の key）の定義（全面改修 P4）。実行の順は `V6HotfixPasses.runPostOptimization` が前段 `runPreStages`（HF80・HF67・HF66）→ 中段 `runMidStages`（厳密日割当・巡回研磨・曜日/交互・共同 LNS）→ 終段 `runFinalStages`（最終の修復・玉突きパイプライン・人員過剰の退避）の 3 呼び出しで決める。
+- `TimeBudget.kt` — 1 回の作成の時間予算（開始時刻・制限時間・後処理と玉突きの取り分・全体の締切・停滞の見張り）。予算の定義はここだけ（全面改修 P3）。
 - `AgentLoop.kt` — 代行役（AX）の輪。`FixSuggester` の案を `FixApplyGate` に通し、合格した先頭を当てて探し直す（勤務の変更だけ・入力不変）。画面側は `MagiViewModel.maybeRunAgent`・`AgentCard`・`AgentText.kt`。
 - `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。
 
 UI は `app/src/main/java/com/magi/app/ui/`:
-- `MagiApp.kt` — タブ: 0=ようす(ダッシュボード), 1=勤務表(編集+集計), 2=設定, 3=詳細, else=外観/データ。
+- `MagiApp.kt` — タブ: 0=ホーム, 1=勤務表（直接編集＋集計）, 2=編集, 3=分析, 4=設定（`OpLogText.TAB_NAMES` と同順）。下部タブは浮く形でスクロール中に縮む（3.724.0）。
 - `MagiViewModel.kt` — 状態管理。`findFixSuggestions`/`applyFixSuggestion`、`refreshCheck`(currentSchedule検査)。
   ジョブ: `job`/`checkJob`/`fixJob`（連続タップ競合回避）。
+  extension 関数の分割先（state/currentSchedule の書き込みは本体だけ、拡張は読むか本体の入口を呼ぶ）:
+  `MagiViewModelFixSuggestions.kt`（変更案の探索・確認の画面・適用、全面改修 P6a・P6d）／ `MagiViewModelRelaxTrial.kt`（設定を緩める試算と承認フロー、P6b）／
+  `MagiViewModelWishTrial.kt`（希望を取り消したらの試算、P6c）／ `MagiViewModelCsv.kt`（CSV 取込、P6e）／ `MagiViewModelConditions.kt`・`MagiViewModelConstraints.kt`・`MagiViewModelWs1.kt`・`MagiViewModelIo.kt`（既存）。
 - `MagiUiState.kt` — `schedule`, `staffNames`, `staffGroupSymbols`, `shiftSymbols`, `countViolations("i,k")`,
   `needViolations("k,j")`, `needFamilies("k,j")`, `breakdown` 等。
   （`resultSchedule` は `MagiViewModel` のメンバで `UiState` には無い。UiState 側の結果スナップショットは
