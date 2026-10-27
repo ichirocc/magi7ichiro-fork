@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.magi.app.model.MagiState
+import kotlinx.coroutines.launch
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.formatDay
@@ -213,7 +215,9 @@ internal fun CellEditSheet(
                 else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val sheetScope = rememberCoroutineScope()
+            val upperScroll = rememberScrollState()
+            Column(Modifier.weight(1f, fill = false).verticalScroll(upperScroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
@@ -415,6 +419,11 @@ internal fun CellEditSheet(
                     }
                 }
             }
+            // 上段が画面に入りきらないとき、送れることを見せる（行の途中で切れて下が空く＝続きがあると分からなかった、2026-10-27 実機）。
+            if (upperScroll.canScrollForward) MagiTextButton(
+                onClick = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } },
+                modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterHorizontally),
+            ) { Text(CELL_SHEET_MORE_BELOW) }
             if (mode == 1) {
                 // 希望の画面: ［割当に戻る］と希望の中身。
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

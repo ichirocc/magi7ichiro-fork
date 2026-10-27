@@ -2086,6 +2086,8 @@ internal fun dayStripMarks(ui: UiState): List<DayStripMark> {
     }
 }
 
+internal const val CELL_SHEET_MORE_BELOW = "続きを読む ▼"
+
 internal const val DAY_STRIP_LEGEND = "● 人員不足 ・ 数字 必須違反のか所"
 
 /** 日ごとの印の 1 行（問題の無い日は並べずに数で言う）。 */

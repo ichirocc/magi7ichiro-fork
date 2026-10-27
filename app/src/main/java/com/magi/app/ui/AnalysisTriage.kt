@@ -326,6 +326,8 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     return AnalysisSummary(sentence, points, primary, label)
 }
 
+internal const val ANALYSIS_BUILDING_NOTE = "作成が終わると、問題の一覧を今の勤務表で調べ直します。"
+
 /** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */
 internal fun isSameRunResult(prev: Pair<Long, Long>?, now: Pair<Long, Long>): Boolean = prev != null && prev == now
 
