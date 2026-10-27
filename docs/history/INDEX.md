@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 厳密窓探索の偽の「証明済みの壁」の照合（2026-10-27、版なし・コード変更なし）: backlog の残件は 3.726.0（main）の `leaves > 0` 条件と再現テスト `unrealizedWishOutsideTheMultisetMustNotClaimAWall` で解消済みだった（取り込み済み・7510662 の V6 Engine Check で合格）。完全配置を作れない日がある成分は葉が 0＝`exhaustive=false`。採否（best/patch）は葉でだけ更新＝探索の動きは不変。backlog の行に取り消し線
 - backlog「C++ の取り残し（hf67 内 hf66 段）」の照合（2026-10-27、版なし・コード不変）: 3.726.0（C-03）で既に Kotlin `hf66DataHardening`／`refill`／`fillShiftIndex` に揃っていた（埋めシフト・上限0セル・手動固定・希望固定・拡張希望の禁止）。backlog の記載だけ解消へ
 - main 取り込み後の V6 Engine Check の失敗を直す（2026-10-27、版なし）: main から入った `CheckKeepsDisplayTest.pushReportAppliesItWithTheCurrentState` は `MagiViewModel.kt` の本文で `pushReport` を探すが、作業ブランチでは P6f で `MagiViewModelDiagnostics.kt` の拡張関数へ移っていた＝探す先を直した（実装の `.keepDisplayOf(st, state)` は取り込み時に移植済み）。ホスト全 1582 件のうち失敗はこの 1 件だけ
 - 重みの入れ替え（c1 50→90・c3mn 90→50）の効果の記録（2026-10-27、測定のみ・製品コード不変）: 旧重み b2cfa8d と新重み d830377 を同じ `WeightSwapProbe`（handleOptimize・仕上げ最適化 ON・実データ 4 件×seed 1〜3×60 秒×workers 1、族の件数で比較）。新−旧の平均: c1 −16.6 [−28.8, −5.8]（11/12 で減、sept2026 75.7→25.3）、low +3.8 [+1.0, +6.8]、high +4.6 [+0.8, +8.8]、c3m +2.1・c3mn +0.4・fair −1.4・c42 −0.8（区間 0 をまたぐか境界）、total −5.8 [−13.5, +2.7]、必須の差 0（12/12）。期間の制約が大きく減り、その代わりに個人の下限・上限の超過が少し増えた＝重みの順（low 120 > c1 90 > c3mn 50 > high 25）どおりの交換。結果は `tools/loop/results/2026-10-27-weight-swap/`（gitignore）、`tools/loop/run_weight_swap_probe.sh`・`weight_swap_stats.py`
