@@ -86,14 +86,15 @@ class OptimizationWorker(
          * 捨てていた。消し残ると次回起動が入力・途中最良・マーカーを掴んで
          * **停止や失敗を「中断されました・再開できます」と誤案内**するのに、痕跡が残らない。
          */
-        fun reportClear(where: String) {
-            val stuck = runCatching { clearFiles(ctx) }.getOrElse {
-                note("$where の片付けに失敗しました: ${it.javaClass.simpleName}", "W"); return
-            }
+        fun reportClear(where: String): Boolean {
+            val stuck = runCatching { files(ctx).clearIfOwner(inputData.getLong(KEY_RUN_ID, 0L)) }.getOrElse {
+                note("$where の片付けに失敗しました: ${it.javaClass.simpleName}", "W"); return true
+            } ?: return false
             if (stuck.isNotEmpty()) {
                 note("$where の片付けで削除できないファイルが残りました: ${stuck.joinToString("・")}" +
                     "（次回起動が古い状態を「中断」として掴む可能性があります）", "W")
             }
+            return true
         }
 
         // 置き換え済み／停止済みの実行はここで降りる（共有ファイルへ触らない）。
@@ -170,8 +171,7 @@ class OptimizationWorker(
         }
         var lastSnapMs = 0L
         var lastBubbleMs = 0L
-        var lastPublishMs = Long.MIN_VALUE / 4   // [3.394.0] 進捗 publish の窓
-        var lostOwnership = false                // [3.394.0] 所有権を失ったら以後この実行は何も出さない
+        val progressGate = ProgressGate(OptimizationRepository.PROGRESS_PUSH_MS) { ownsFiles() }   // [3.394.0] 窓と所有権の喪失（単調）
         // 進捗は並列のワーカーのスレッドから同時に届く（V6FinalPort はロックの外で呼ぶ）＝間引きの時刻・所有権の旗の読み書きを直列化する。
         val progressLock = Any()
         val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
@@ -198,7 +198,6 @@ class OptimizationWorker(
                     // [3.329.0/外部レビュー H-03] 置き換えられた旧実行は何も出さない。所有権の喪失は
                     //   **単調**（3.385.0＝`beginRun` を書くのは新しい実行だけ・`clear` はマーカーを消すだけ）
                     //   なので、一度失ったら以後この実行は進捗もバブルも出さずに抜ける。
-                    if (lostOwnership) { droppedProgress++; return@handleOptimize }
                     // [3.394.0/外部レビュー] 前景と同じ窓で間引く。旧: 進捗コールバックごとに publish して
                     //   おり、ViewModel の collector が UiState を丸ごと差し替える＝前景で消したちらつきが
                     //   背景実行では残っていた（実測 PORTFOLIO 並列8 で 1,174.7回/秒）。
@@ -206,12 +205,12 @@ class OptimizationWorker(
                     //   所有権確認のファイル読取も同じ回数だけ減る（publish する回は従来どおり必ず確認する）。
                     //   検知は最大 200ms 遅れるが、その間に走るのはバブル1回と、自前で所有権を見る
                     //   スナップショット書き込みだけ。
-                    if (wallElapsed - lastPublishMs >= OptimizationRepository.PROGRESS_PUSH_MS) {
-                        lastPublishMs = wallElapsed
-                        if (!ownsFiles()) { lostOwnership = true; droppedProgress++; return@handleOptimize }
-                        OptimizationRepository.publishProgress(
+                    when (progressGate.next(wallElapsed)) {
+                        ProgressGate.Step.DROP -> { droppedProgress = progressGate.dropped; return@handleOptimize }
+                        ProgressGate.Step.PUBLISH -> OptimizationRepository.publishProgress(
                             OptimizationRepository.BgProgress(phase, report.hard, report.soft, report.total, iters, wallElapsed),
                         )
+                        ProgressGate.Step.QUIET -> Unit
                     }
                     // [Android 17 バブル] 進捗を会話バブルへ反映（連続更新は onlyAlertOnce で静音・~1.5秒間引き）。
                     if (wallElapsed - lastBubbleMs > 1_500L) {
@@ -315,8 +314,7 @@ class OptimizationWorker(
             //   読んでしまう事故を防ぐ）。
             // [3.327.0/外部レビュー High3] **所有者のときだけ**片付ける。置き換えで打ち切られた旧実行が
             //   ここを通ると、新実行が既に書いた入力ファイルまで消していた（復元不能の窓を作る）。
-            val owned = ownsFiles()
-            if (owned) reportClear("停止")
+            val owned = reportClear("停止")
             // [3.412.0/B-08] 停止経路だけがバブルを片付けていなかった。完了・失敗は postDone で
             //   進行中(ongoing)を解いて自動消去できる形にするのに、停止すると「計算中…」の
             //   バブルが**画面に残り続ける**（`setOngoing(true)` はユーザーが払えない）。
@@ -337,8 +335,7 @@ class OptimizationWorker(
             // [3.336.0/外部レビュー P0残] 失敗だけが所有権を閉じない出口だった。マーカーと入力が残るので、
             //   次回起動が「中断されました・再開できます」と案内する（実際は失敗）。`Result.failure()` は
             //   WorkManager が再実行しない＝入力を残す意味も無い。所有者なら片付けてから返す。
-            val owned = ownsFiles()
-            if (owned) reportClear("失敗")
+            val owned = reportClear("失敗")
             terminal("失敗: ${e.javaClass.simpleName}: ${e.message}" + if (owned) "（片付け済み）" else "（所有権なし）", "W")
             notify("勤務表をつくれませんでした", com.magi.app.ui.failureWords(e, com.magi.app.ui.FailureKind.ENGINE))   // 例外名は終端ログだけ（画面は利用者の言葉）
             runCatching { BubbleSupport.postDone(ctx, "勤務表をつくれませんでした", autoExpand = true) }
