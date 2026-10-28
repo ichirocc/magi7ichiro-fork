@@ -60,7 +60,7 @@ class Review3716Test {
         assertFalse(HomeSection.BADGES in homeCardSections(plan, UiState(loaded = true, hasResult = true, engineRan = true, checkRev = 0)))
         assertTrue(HomeSection.BADGES in homeCardSections(plan, UiState(loaded = true, hasResult = true, engineRan = true, checkRev = 1)))
         val made = UiState(loaded = true, hasResult = true, engineRan = true, checkRev = 1, bestHard = 0L, bestSoft = 5L, breakdown = mapOf("c1" to 5))
-        assertEquals("必須0件 · 要調整5件", analysisSummary(made, 0, null).sentence)
+        assertEquals("必須0件 · 要調整5件", analysisSummary(made, null).sentence)
     }
 
     @Test fun sameResultKeyedByStateFingerprint() {

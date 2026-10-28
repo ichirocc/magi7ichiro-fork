@@ -1794,7 +1794,6 @@ internal fun AnalysisTriageCard(
     onFixWish: (Int, Int?) -> Unit,   // 職員と、行の日（希望の登録をその日を選んだ状態で開く）
     onFixNeed: (Int, Int?) -> Unit,   // シフトと、行の日
     summary: AnalysisSummary,
-    onPrimary: (AnalysisPrimary) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
@@ -1807,9 +1806,6 @@ internal fun AnalysisTriageCard(
             // 状態の段: 一文・3 点まで・主ボタン 1 つ（[analysisSummary]）。
             Text(summary.sentence, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             summary.points.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
-            summary.primaryLabel?.let { label ->
-                Button(onClick = { onPrimary(summary.primary) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(label) }
-            }
 
             if (!t.hasAnything && ui.schedule.isNotEmpty() && !ui.running) {
                 Text("確認事項はありません（すべての条件を満たしています）。",

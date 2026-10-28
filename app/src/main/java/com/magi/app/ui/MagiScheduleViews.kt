@@ -275,11 +275,19 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
             label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
     }
     Spacer(Modifier.height(4.dp))
+    var moreOpen by rememberSaveable { mutableStateOf(false) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        vioBuckets.forEach { b -> BucketChip(b.key, b.label, counts[b.key] ?: 0, b.key in enabled, onToggle) }
+        visibleVioBuckets(moreOpen, enabled).forEach { b -> BucketChip(b.key, b.label, counts[b.key] ?: 0, b.key in enabled, onToggle) }
+        MoreBucketsChip(moreOpen) { moreOpen = !moreOpen }
     }
     // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
     // [冗長性見直し] 操作説明はチップのトグル自体が示すため削除。
+}
+
+/** [UI-S2] 「その他 ▸／▾」＝並び・グループルール・期間の制約の札を開閉する。 */
+@Composable
+private fun MoreBucketsChip(open: Boolean, onToggle: () -> Unit) {
+    MagiTextButton(onClick = onToggle, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(VIO_BUCKETS_MORE, open, style = MaterialTheme.typography.titleSmall) }
 }
 
 /** [E7] 種別フィルタのチップ 1 つ。0 件（存在しない種別＝トリアージ上ノイズ）は文字の濃さを保ち、塗り・枠・字の太さで沈める。トグル自体は可能。 */
@@ -305,7 +313,7 @@ private fun BucketChip(key: String, label: String, n: Int, on: Boolean, onToggle
 @Composable
 internal fun ScheduleToolsCard(
     ui: UiState, bucketCounts: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int,
-    focusMode: Boolean, onFocusMode: (Boolean) -> Unit, vioDayNavOn: Boolean, onVioDayNav: () -> Unit,
+    focusMode: Boolean, onFocusMode: (Boolean) -> Unit,
     query: String, onQuery: (String) -> Unit, hardChip: (@Composable () -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -333,14 +341,13 @@ internal fun ScheduleToolsCard(
                 }
             }
             if (anyViol) {
+                var moreOpen by rememberSaveable { mutableStateOf(false) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    vioBuckets.forEach { b -> BucketChip(b.key, b.label, bucketCounts[b.key] ?: 0, b.key in enabled, onToggle) }
+                    visibleVioBuckets(moreOpen, enabled).forEach { b -> BucketChip(b.key, b.label, bucketCounts[b.key] ?: 0, b.key in enabled, onToggle) }
+                    MoreBucketsChip(moreOpen) { moreOpen = !moreOpen }
                     // [集中モード] 違反・未反映希望のセルだけを浮かせ、他を淡色に沈める（表示のみ）。
                     FilterChip(selected = focusMode, onClick = { onFocusMode(!focusMode) },
                         label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
-                    // 下部バーの週送り↔違反の日ナビの切替（旧: 48dp のボタン「違反の日を下のボタンで順に見る」）。
-                    FilterChip(selected = vioDayNavOn, onClick = onVioDayNav,
-                        label = { Text("違反の日を順に見る", style = MaterialTheme.typography.titleSmall) })
                 }
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -470,16 +477,8 @@ internal fun ScheduleGrid(
             // [3.444.0 サムゾーン→3.481.0] 週送り/違反ジャンプのボタン列は 3.444.0 でグリッドの「下」へ並べ替え
             //   （Scaffold 側への state 引き上げは高リスクとして保留）。3.481.0 でその保留分を実施し、ボタン列は
             //   Scaffold 下部の ScheduleNavBar（現 ScheduleCommandBar）へ、状態は ScheduleNavState（MagiApp が remember）へ移した。
-            //   ここでは違反日リストを計算して共有状態へ書き、navFlash を focusCell の代替として読むだけ。
-            // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
-            //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
-            val vioDays = vs.violationDays
-            // [3.481.0 勤務表タブ再設計②] 違反日リストは共有状態へ（変わったときだけ書き、巡回位置を先頭へ戻す）。
-            //   前週/次週・＜前の違反/次の違反＞ のボタン列は ScheduleNavBar（現 ScheduleCommandBar。Scaffold 下部＝スクロール位置に
-            //   関係なく親指で押せる真の下部固定）へ移動。3.444.0 が高リスクとして保留した引き上げの実施。
-            SideEffect {
-                if (nav.vioDays != vioDays) { nav.vioDays = vioDays; nav.navIdx = -1 }
-            }
+            //   ここでは navFlash（日へ飛んだ先の日ヘッダの注目、(-1,j) の番兵で約 2.5 秒）を focusCell の代替として読むだけ。
+            //   違反の日の前後ボタンは撤去（UI-S4、2026-10-28）＝問題は「必須 N ▼」の一覧から。
             val navFlash = nav.navFlash
             LaunchedEffect(navFlash) {
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
@@ -503,12 +502,8 @@ internal fun ScheduleGrid(
 internal class ScheduleNavState(val hScroll: ScrollState) {
     var cellWpx by mutableIntStateOf(0)
     var weeks by mutableStateOf<List<List<Int>>>(emptyList())
-    var vioDays by mutableStateOf<List<Int>>(emptyList())
-    /** 違反ナビのジャンプ先（(-1, 日)＝日ヘッダのみ注目の番兵）。ScheduleGrid が focusCell の代替として読む。 */
+    /** 日へ飛んだ先（(-1, 日)＝日ヘッダのみ注目の番兵）。ScheduleGrid が focusCell の代替として読む。 */
     var navFlash by mutableStateOf<Pair<Int, Int>?>(null)
-    var navIdx by mutableIntStateOf(-1)
-    /** 違反の日の巡回モード（下部バーが週送りの代わりに違反ナビを出す）。勤務表タブを離れると戻る。 */
-    var vioMode by mutableStateOf(false)
     /** 期間の日数（グリッドが書く）。見えている日の範囲の上限。 */
     var days by mutableIntStateOf(0)
 
@@ -551,25 +546,15 @@ internal fun rememberScheduleNavState(): ScheduleNavState {
 
 /**
  * [勤務表の縦寸法] 勤務表タブの下部バー（旧 ScheduleNavBar 60dp＋BottomCommandBar 80dp を 64dp の 1 本へ）。
- * 左＝週送り（巡回モードのときは ◀違反 k/N・違反▶）、中＝元に戻す/やり直し（アイコン 48dp）、右＝主ボタン 60dp。
+ * 左＝週送り、中＝元に戻す/やり直し（アイコン 48dp）、右＝主ボタン 60dp。
  */
 @Composable
-internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, violation: Boolean, onRevealGrid: () -> Unit = {}, onShowList: () -> Unit = {}) {
+internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, onRevealGrid: () -> Unit = {}, onShowList: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val weeks = nav.weeks
-    val vioDays = nav.vioDays
     val scope = rememberCoroutineScope()
     val curWeek by rememberCurrentWeek(nav)
-    val navIdx = nav.navIdx
-    // [3.648.0] 週送り・違反の日ナビはグリッドの操作＝グリッドが画面の外なら、押したときにグリッドへ戻してから動かす。
-    fun jumpTo(n: Int) {
-        val d = vioDays.getOrNull(n) ?: return
-        onRevealGrid()
-        nav.navIdx = n
-        nav.navFlash = -1 to d
-        scope.launch { nav.hScroll.animateScrollTo((d * nav.cellWpx).coerceAtLeast(0)) }
-    }
-    val showVio = violation && vioDays.isNotEmpty()
+    // [3.648.0] 週送りはグリッドの操作＝グリッドが画面の外なら、押したときにグリッドへ戻してから動かす。
     val small = Modifier.defaultMinSize(minWidth = ScheduleLayoutMetrics.ICON_BUTTON_DP.dp, minHeight = ScheduleLayoutMetrics.ICON_BUTTON_DP.dp)
     val tight = PaddingValues(horizontal = 8.dp)
     Surface(color = cs.surfaceContainer, tonalElevation = 2.dp, shadowElevation = 2.dp) {
@@ -577,14 +562,7 @@ internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNav
             Modifier.fillMaxWidth().height(ScheduleLayoutMetrics.MERGED_BAR_DP.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (showVio) {
-                OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
-                    modifier = small.semantics { contentDescription = "前の違反の日へ" }, contentPadding = tight) {
-                    Text("◀違反 ${if (navIdx < 0) "–" else navIdx + 1}/${vioDays.size}", maxLines = 1)
-                }
-                OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
-                    modifier = small.semantics { contentDescription = "次の違反の日へ" }, contentPadding = tight) { Text("違反▶", maxLines = 1) }
-            } else if (weeks.size > 1) {
+            if (weeks.size > 1) {
                 OutlinedButton(
                     onClick = { onRevealGrid(); val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
                     enabled = curWeek > 0, modifier = small.semantics { contentDescription = "前の週へ" }, contentPadding = tight,

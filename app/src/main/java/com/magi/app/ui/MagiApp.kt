@@ -637,7 +637,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     // [勤務表の縦寸法] 下部バーの種別（勤務表タブは週送り＋元に戻す＋つくるを 1 本に、シートを開いている間は隠す）。
-    val analysis = analysisSummary(ui, tourItems.size, analysisFixResolved(ui))
+    val analysis = analysisSummary(ui, analysisFixResolved(ui))
     val editWish = remember(ui.wishes, ui.extBanned, ui.staffNames.size) { wishEntryCounts(ui.staffNames.size, ui.wishes.keys, ui.extBanned.keys) }
     val editHasConflicts = remember(ui) { !wishTrialCandidates(ui).isEmpty }
     val editPeriodNow = editPeriod(ui.startDate, ui.days)
@@ -650,7 +650,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         shortShifts = remember(ui, conditionsView) { shortShiftCount(ui, conditionsView) }),
         panelOpen = resolvePick(wishPick, ui.staffNames, editPeriodNow).days.isNotEmpty() || resolvePick(needPick, ui.shiftSymbols, editPeriodNow).days.isNotEmpty(),
         ranBeforeEdit = ui.hasResult && (ui.ranBeforeEdit || condEdited), running = ui.running)
-    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching || ui.agentRunning, tourActive || schedNav.vioMode)
+    val barMode = bottomBarMode(ui.loaded, tab == 1, panelOpen, ui.running || ui.fixSearching || ui.agentRunning)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
@@ -660,10 +660,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 3 && analysis.primary != AnalysisPrimary.NONE) || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList,
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0 || tab == 4 || (tab == 2 && editBarSecondary(editPlan)), onShowList = openProblemList,
                         hideMake = tab == 0 && homeCardShowsMake(ui.running, ui.fixSearching, ui.hasResult, ui.draftStage && ui.engineRan, ui.coverageDiag?.allInfeasible == true))
-                    BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
-                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
+                    BottomBarMode.MERGED_WEEK ->
+                        ScheduleCommandBar(ui, vm, schedNav, onRevealGrid = { revealGrid() }, onShowList = openProblemList)
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
                 }
                 MagiBottomNav(tab, collapsed = navCollapsed, onExpand = { navCollapsed = false }) { tab = it; navCollapsed = false }
@@ -866,7 +866,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleStateRow(stateLine, onTour = { goTourItem(0) })
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
                         focusMode = focusMode, onFocusMode = { focusMode = it },
-                        vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode },
                         query = searchQuery, onQuery = { searchQuery = it }, hardChip = hardChip)
                     Box(Modifier.onGloballyPositioned {
                         if (viewportTopPx >= 0f) gridTopInContent = (it.positionInRoot().y - viewportTopPx + tabScrolls[1].value).toInt()
@@ -1008,7 +1007,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onFixWish = { s, d -> openEditLandingFrom(EditLanding(0, null, wishStaff = s, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
                         onFixNeed = { k, d -> openEditLandingFrom(EditLanding(0, null, needShift = k, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
                         summary = analysis,
-                        onPrimary = { p -> if (p == AnalysisPrimary.TOUR) goTourItem(0) else if (p == AnalysisPrimary.GUIDED) guidedFix = true },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6, ui.breakdown)
@@ -1061,7 +1059,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             Spacer(Modifier.height(if (panelOpen && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
         }
         }
-        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false; problemList = false; listFocus = null; schedNav.vioMode = false } }
+        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false; problemList = false; listFocus = null } }
         // [勤務表の縦寸法] 勤務表タブを開いたときだけ、縦スクロールをグリッドの上端へ（フィルタ・検索は上へスクロールで届く）。
         //   シートを開いて入る（巡回）・要確認一覧からの注目セルは各自の位置決めがあるので動かさない。
         LaunchedEffect(tab) {

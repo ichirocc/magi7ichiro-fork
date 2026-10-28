@@ -53,6 +53,15 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 
+/** [UI-S2] いつも並べる 3 つ（人員・希望・回数）。ほかは「その他 ▸」の中。 */
+internal val commonVioBucketKeys: Set<String> = setOf("need", "pref", "count")
+
+/** 並べる札。「その他」を開いていれば全部、閉じていれば 3 つ＋外している札（絞り込みの状態を隠さない）。 */
+internal fun visibleVioBuckets(moreOpen: Boolean, enabled: Set<String>): List<VioBucket> =
+    vioBuckets.filter { moreOpen || it.key in commonVioBucketKeys || it.key !in enabled }
+
+internal const val VIO_BUCKETS_MORE = "その他"
+
 // [UX監査#4] 設定の見直し（ホーム・分析タブ）の誘導を年間マスターの節（CollapsibleSectionのstateKey）まで
 //   着地させるための対応表。希望は月次条件にあるので null（呼出側が月次条件を開く）。
 internal fun yearSectionForIssueKind(kind: IssueKind?): String? = when (kind) {
