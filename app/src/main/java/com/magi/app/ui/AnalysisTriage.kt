@@ -326,6 +326,9 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     return AnalysisSummary(sentence, points, primary, label)
 }
 
+/** 勤務表を組んでいる最中か（下書き・作成・仕上げの前景のジョブ＝画面を点けたままにする段、または閉じている間の作成）。短い違反チェックの running は含めない。 */
+internal fun engineBuilding(ui: UiState): Boolean = ui.running && (ui.keepScreenOn || ui.bgRunning)
+
 internal const val ANALYSIS_BUILDING_NOTE = "作成が終わると、問題の一覧を今の勤務表で調べ直します。"
 
 /** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */

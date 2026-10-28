@@ -207,6 +207,7 @@ data class UiState(
     val pinTargets: List<PinTargetView> = emptyList(),
     val settingIssues: List<com.magi.app.v6.SettingIssue> = emptyList(), // 制約/希望の設定ミスと直し方の誘導
     val startDate: String = "",                   // 期間開始日（カレンダー表示の曜日整列に使用）
+    val bgRunning: Boolean = false,               // 閉じている間の作成（Worker）が走っている
     val interruptedRun: Boolean = false,          // 前回の計算がプロセスkill等で中断された
     val interruptedInfo: String? = null,
     val saveState: SaveState = SaveState.Saved,   // [3.529.0] 自動保存の状態（設定タブ表示用）

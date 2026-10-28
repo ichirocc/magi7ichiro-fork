@@ -1817,7 +1817,7 @@ internal fun AnalysisTriageCard(
             }
 
             // 作成中の診断・場所は作成前の盤面のもの＝並べると今の数と食い違う（2026-10-27 実機画面）。終われば調べ直す。
-            if (ui.running && ui.keepScreenOn) {
+            if (engineBuilding(ui)) {
                 Text(ANALYSIS_BUILDING_NOTE, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 return@Column
             }
