@@ -122,7 +122,7 @@ internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit, bare: Bo
         runCatching { val d = LocalDate.parse(ui.startDate); "${d.year}年 ${d.monthValue}月" }.getOrNull()
     }
     MagiCardOrPlain(bare) { pad ->
-        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
@@ -183,8 +183,8 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text(BUDGET_CHANGE_BUTTON) }
             else Button(onClick = { picking = true }, enabled = !ui.running, modifier = m) { Text(BUDGET_CHANGE_BUTTON) }
             if (picking) BudgetPickerSheet(ui.budgetSec, onPick = { onEvent(MagiEvent.Settings.SetBudget(it)); picking = false }, onDismiss = { picking = false })
-            Spacer(Modifier.height(10.dp))
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
             //   バックグラウンド実行だけをここ（実行条件＝予算の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
@@ -251,7 +251,7 @@ private fun AlgorithmChoiceSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
             Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             V6Algorithm.values().forEach { alg ->
                 val selected = ui.v6Algorithm == alg
                 if (selected) {
@@ -269,7 +269,7 @@ private fun AlgorithmChoiceSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("同時に計算する数: ${ui.workers}", style = MaterialTheme.typography.bodyMedium)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers - 1).coerceAtLeast(1))) },
@@ -343,7 +343,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("探す強さ", style = MaterialTheme.typography.titleSmall)
             Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SearchStrength.values().forEach { s ->
                     val label = searchStrengthLabel(s)
                     if (ui.searchStrength == s) {
@@ -365,7 +365,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("玉突きで直す（月全体）", style = MaterialTheme.typography.titleSmall)
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す（行の間も 8dp 空ける＝押し間違いを防ぐ）。
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EjectionChainMode.values().forEach { m ->
                     val label = ejectionChainLabel(m)
                     if (ui.ejectionChain == m) {
@@ -385,7 +385,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = null, enabled = pipelineOn)
             }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
                     val label = ejectionChainScopeLabel(sc)
@@ -397,7 +397,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 }
             }
             Text("1回あたりの上限時間（残り時間の半分を超えません）", style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 EJECTION_CHAIN_SECONDS.forEach { sec ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
                     if (ui.ejectionChainSeconds == sec) {
@@ -567,7 +567,7 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean 
     }
     if (rows.isEmpty()) return
     MagiCardOrPlain(bare) { pad ->
-        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
             Text("足りないシフトは①で担当を増やすか、必要人数を見直します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -602,7 +602,7 @@ internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.reviewMemos.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
             Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -691,7 +691,7 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
             } else {
                 Box(
                     Modifier.fillMaxWidth().heightIn(max = 220.dp)
-                        .background(cs.surfaceVariant, MaterialTheme.shapes.small).padding(10.dp),
+                        .background(cs.surfaceVariant, MaterialTheme.shapes.small).padding(8.dp),
                 ) {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         ui.opLog.take(60).forEach { line ->
@@ -771,7 +771,7 @@ internal fun AppearanceCard(
     leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {}, inner: (@Composable () -> Unit)? = null) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     MagiGroup("外観") {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = oneHand, role = Role.Switch, onValueChange = onOneHand).semantics(mergeDescendants = true) {}) {

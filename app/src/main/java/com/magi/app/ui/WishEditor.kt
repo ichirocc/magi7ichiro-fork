@@ -112,7 +112,7 @@ internal fun WishCard(
 
     Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
         .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("希望シフト登録", style = MaterialTheme.typography.titleMedium)
             // [1行に統合] 職員▼のみ常時表示。「全職員を見る」は小さな文字リンクで副次的に残す。
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -146,7 +146,7 @@ internal fun WishCard(
             )
             if (myExt.isNotEmpty()) {
                 Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.titleSmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     myExt.forEach { e ->
                         InputChip(
                             selected = false,
@@ -172,7 +172,7 @@ internal fun WishCard(
                 Text("登録済み希望（全職員）", style = MaterialTheme.typography.titleSmall)
                 rows.groupBy { it.i }.forEach { (_, list) ->
                     Text(list.first().staffName, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         list.forEach { r ->
                             InputChip(
                                 selected = false,

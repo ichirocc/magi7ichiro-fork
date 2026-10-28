@@ -130,7 +130,7 @@ private fun SkillGroupDialog(title: String, name0: String, kigou0: String, onOk:
         dismissButton = { DialogDismissButton(onClick = requestClose) },
         title = { DialogHeader(title, requestClose) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = kigou, onValueChange = { if (it.length <= 4) kigou = it }, label = { Text("記号（例: N）") }, singleLine = true)
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名前（例: 看護）") }, singleLine = true)
             }

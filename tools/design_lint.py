@@ -604,6 +604,30 @@ def find_p13():
             i = j + 1
     return out
 
+# [2026-10-28] P14: 4dp 刻みから外れた余白（spacedBy・padding・Spacer の寸法、ラチェット）。ユーザー「画面の統一感を揃える」→
+#   6・10dp を 8dp へ、14dp を 12dp へ寄せた。残りは部品の内側の寸法（削除アイコン 32dp の内側 7dp・札の内側・勤務表のセル・
+#   日の見出し・集計の表・上部の帯の高さ）＝意図して残す。2dp 以下（細線・印の余白）は数えない。
+P14_BASELINE = 20
+RE_P14_CALL = re.compile(r'(spacedBy|padding|height|width|size)\(([^)]*?)\)')
+RE_P14_NUM = re.compile(r'(?<![\d.])(\d+(?:\.\d+)?)\.dp')
+
+
+def find_p14():
+    hits = []
+    for f in ui_files():
+        for i, line in enumerate(open(f, encoding="utf-8").read().split("\n"), 1):
+            if line.strip().startswith("//"):
+                continue
+            for m in RE_P14_CALL.finditer(line):
+                if m.group(1) in ("height", "width", "size") and "Spacer" not in line:
+                    continue
+                for n in RE_P14_NUM.finditer(m.group(2)):
+                    v = float(n.group(1))
+                    if v > 2 and (v != int(v) or int(v) % 4):
+                        hits.append(f"{os.path.basename(f)}:{i}: {m.group(0)}")
+    return hits
+
+
 def main():
     strict = "--strict" in sys.argv
     findings = scan()
@@ -616,6 +640,7 @@ def main():
     findings["P11"] = find_p11()
     findings["P12"] = find_p12()
     findings["P13"] = find_p13()
+    findings["P14"] = find_p14()
     labels = {
         "P1": "純黒本文/背景 (Color.Black / 0xFF000000)",
         "P2": "生 hex 直書き (Color(0x……)) ※MagiTokens.kt 除く=baseline監視",
@@ -630,10 +655,11 @@ def main():
         "P11": "fontSize 直書き（MaterialTheme.typography.* に寄せる）※baseline監視",
         "P12": "色パレットのCUD距離不足（P型/D型二色覚シミュレーション後 ΔE<3.0、既知の1ペアは除外）",
         "P13": "公開宣言が internal 型を露出（Kotlin のコンパイルエラー。ホストでは ui/ を組めず気づけない）",
+        "P14": "4dp 刻みから外れた余白（spacedBy・padding・Spacer）※baseline監視",
     }
     total = sum(len(v) for v in findings.values())
     print("=== MAGI design lint (docs/DESIGN.md P1-P4) ===")
-    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"):
+    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14"):
         hits = findings[key]
         print(f"\n[{key}] {labels[key]}: {len(hits)} 件")
         for h in hits[:40]:
@@ -658,8 +684,9 @@ def main():
         "P4": "角丸は MagiTheme の Shapes(small/medium/large) ",
         "P10": "勤務シフトの意味は外部データ（担当可否・必要人数・個人レンジ・希望・制約）から決めて ",
         "P11": "文字サイズは MaterialTheme.typography.*（displaySmall〜labelSmall）へ寄せて ",
+        "P14": "余白は 4dp 刻み（MagiSpacing の xs4/sm8/md12/lg16/xl20）へ寄せて ",
     }
-    for key, base in (("P2", P2_BASELINE), ("P4", P4_BASELINE), ("P10", P10_BASELINE), ("P11", P11_BASELINE)):
+    for key, base in (("P2", P2_BASELINE), ("P4", P4_BASELINE), ("P10", P10_BASELINE), ("P11", P11_BASELINE), ("P14", P14_BASELINE)):
         n = len(findings[key])
         if n > base:
             blockers.append(

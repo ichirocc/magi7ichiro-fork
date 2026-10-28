@@ -66,7 +66,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         // [3.483.0 C-1] 基準色2チップを先頭に常時表示し、19種の族別チップは既定で折りたたむ
         //   （設定タブの大半を1節が占めていた実機所見。個別設定の入口は開閉行で残す）。
         Text("未設定の種別に使う基準色", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ColorChip(hex = baseHard, label = "必須", custom = ui.violationColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__hard__" }
             ColorChip(hex = baseSoft, label = "要調整", custom = ui.violationSoftColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__soft__" }

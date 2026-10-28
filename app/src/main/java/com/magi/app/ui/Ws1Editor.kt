@@ -83,7 +83,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             // --- period ---
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             // [3.483.0 E-5] 旧「期間／対象月」＝対象の月は月次条件の「対象の月」で選ぶため、ここは日数だけ。
             SectionHeader("期間の日数（月単位以外の特殊な期間用）")
             Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.bodySmall,
@@ -464,7 +464,7 @@ private fun W1Shell(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) { content() }
         },
     )
