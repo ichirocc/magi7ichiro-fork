@@ -84,11 +84,14 @@ data class ViolationReport(
  * 写さずにこれを使う。
  */
 val reportComparator: Comparator<ViolationReport> = Comparator { a, b ->
-    when {
-        a.hard != b.hard -> a.hard.compareTo(b.hard)
-        a.weightedScore != b.weightedScore -> a.weightedScore.compareTo(b.weightedScore)
-        else -> a.total.compareTo(b.total)
-    }
+    compareReportKeys(a.hard.toLong(), a.weightedScore, a.total, b.hard.toLong(), b.weightedScore, b.total)
+}
+
+/** [reportComparator] の中身（必須→重み→合計）。盤面の報告を持たず数だけを覚えている側（置き換え前の勤務表）も同じ順で比べる。 */
+fun compareReportKeys(aHard: Long, aWeighted: Double, aTotal: Int, bHard: Long, bWeighted: Double, bTotal: Int): Int = when {
+    aHard != bHard -> aHard.compareTo(bHard)
+    aWeighted != bWeighted -> aWeighted.compareTo(bWeighted)
+    else -> aTotal.compareTo(bTotal)
 }
 
 fun betterReport(a: ViolationReport, b: ViolationReport): Boolean = reportComparator.compare(a, b) < 0
