@@ -582,7 +582,7 @@ internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNav
                     Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null)
                 }
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f), showIcon = !showVio, compact = true, onShowList = onShowList)
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f), compact = true, onShowList = onShowList)
         }
     }
 }
