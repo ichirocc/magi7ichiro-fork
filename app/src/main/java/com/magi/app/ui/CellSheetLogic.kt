@@ -2011,6 +2011,14 @@ internal fun problemPickedIndex(rows: List<ProblemRow>, pickedIdx: Int?, cell: P
     return rows.indexOfFirst { it.cell == cell }.takeIf { it >= 0 }
 }
 
+/**
+ * 問題一覧へ戻ったときに選ぶ行。見ていた行（[problemPickedIndex]）が残っていればそれ、直して消えていれば同じ位置に繰り上がった行
+ * ＝次の問題（一覧の末尾を越えたら最後の行）。何も見ていなければ null（外部レビュー UI①「直したあと元の位置へ戻る」）。
+ */
+internal fun listResumeIndex(rows: List<ProblemRow>, pickedIdx: Int?, cell: Pair<Int, Int>?, pickedFamily: String? = null): Int? =
+    problemPickedIndex(rows, pickedIdx, cell, pickedFamily)
+        ?: pickedIdx?.takeIf { cell != null && rows.isNotEmpty() }?.coerceIn(0, rows.lastIndex)
+
 /** [3.707.0 3a-3] 下部バーの作成ボタンを外枠にするか（編集タブでは見出しの主が RERUN のときだけ塗り）。 */
 internal fun editBarSecondary(plan: EditHeaderPlan): Boolean = plan.primary != null && plan.primary != EditHeaderPrimary.RERUN
 

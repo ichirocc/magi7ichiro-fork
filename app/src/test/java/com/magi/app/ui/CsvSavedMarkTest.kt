@@ -72,11 +72,10 @@ class CsvSavedMarkTest {
 
     @Test
     fun boardsWithTheSameFingerprintAreNotSavedMatchesByFingerprint() {
-        // 盤面の指紋（h*31+v）が衝突する 2 盤面: [1,0] と [0,31] はどちらも 31 を足す。指紋だけで「同じ」と言わない。
+        // 旧い盤面の指紋（h*31+v）で衝突した 2 盤面 [1,0] と [0,31]。指紋に頼らず中身で比べるので、指紋の式に依らず区別する。
         val m = CsvSavedMark { _, s -> s.joinToString(";") { it.joinToString(",") } }
         val a = arrayOf(intArrayOf(1, 0))
         val b = arrayOf(intArrayOf(0, 31))
-        assertEquals(com.magi.app.v6.StateFingerprint.ofBoard(a), com.magi.app.v6.StateFingerprint.ofBoard(b))
         m.noteExport(st, a, "1,0")
         m.noteSaved(st, a)
         assertEquals(true, m.savedMatches(st, a))
