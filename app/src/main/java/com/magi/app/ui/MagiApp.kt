@@ -130,6 +130,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -1080,9 +1081,18 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             val rows = remember(tourItems, ui.staffNames, selfKeys, ui.violationCellFamilies, ui.schedule) {
                 problemRows(hardViolationRows(tourItems, ui.staffNames, selfKeys), tourItems, ui.violationCellFamilies, ui.staffNames, ui.shiftSymbols, ui.schedule, ui.startDate)
             }
+            val picked = listResumeIndex(rows, listPick, listFocus, listPickFamily)
+            // 見ていた問題を直して戻ったら、繰り上がった次の問題を選び、表もそのセルへ送る。
+            LaunchedEffect(picked, rows) {
+                val r = picked?.let { rows.getOrNull(it) } ?: return@LaunchedEffect
+                if (r.cell != listFocus || r.family != listPickFamily) {
+                    listPick = picked; listPickFamily = r.family; listFocus = r.cell; focusCell = r.cell
+                    focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null
+                }
+            }
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 ProblemListPanel(
-                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = problemPickedIndex(rows, listPick, listFocus, listPickFamily),
+                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = picked,
                     covULine = hardListCovULine(rows.none { it.hard }, ui.breakdown["covU"] ?: 0),
                     onStart = { rows.firstOrNull { it.hard }?.tourAt?.let(goTourItem) },
                     onRow = { idx, r -> listPick = idx; listPickFamily = r.family; listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
@@ -1612,7 +1622,9 @@ internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Int
             }
             if (rows.any { it.hard }) Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(HARD_LIST_START_BUTTON) }
             val softCount = rows.count { !it.hard }
-            LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val listState = rememberLazyListState()
+            LaunchedEffect(picked) { picked?.let { listState.animateScrollToItem(it) } }   // 戻ったら見ていた行（または次の問題）まで送る
+            LazyColumn(Modifier.weight(1f, fill = false), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(rows) { idx, r ->
                     if (!r.hard && (idx == 0 || rows[idx - 1].hard)) softRowsHeading(softCount)?.let {
                         Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
