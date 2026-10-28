@@ -87,7 +87,26 @@ class StateFingerprintTest {
         "スキル群ペア禁止" to b.copy(cons42s = listOf(C42Row("S", "S", "休", "A"))),
         "希望の前日に禁止" to b.copy(cons3w = listOf(C3wRow("休", "A"))),
         "手動固定" to b.copy(manualPins = listOf(com.magi.app.model.ManualPin(0, 0, 0))),
+        "拡張希望" to b.copy(extWishes = listOf(com.magi.app.model.ExtWish(0, listOf("0"), listOf("A")))),
     )
+
+    /**
+     * 勤務表の設定（`MagiState`）の欄が増えたら、ここで落ちる（外部レビュー No.8「指紋の対象の更新漏れ」）。増えた欄が計算に効くなら
+     * `StateFingerprint.of` と上の `variants` に足し、効かないなら [notInFingerprint] に理由つきで足す。
+     */
+    @Test fun everyStateFieldIsCoveredOrDeliberatelyExcluded() {
+        val notInFingerprint = setOf(
+            "schedule",      // 盤面は ofBoard が別に見る（scheduleIsDeliberatelyExcluded）
+            "shiftColors",   // 表示の色だけ（計算に効かない）
+            "extras",        // 未対応の欄をそのまま持つだけ（計算に効かない）
+        )
+        val covered = setOf("startDate", "endDate", "shifts", "groups", "staff", "use2Patterns", "groupShift", "groupShiftApt", "wishes",
+            "staffRange", "needDay1", "needDay2", "cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons41", "cons42", "skillGroups",
+            "cons41s", "cons42s", "cons3w", "manualPins", "extWishes")
+        val fields = com.magi.app.model.MagiState::class.java.declaredFields
+            .filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) }.map { it.name }.toSet()
+        assertEquals(emptySet<String>(), fields - covered - notInFingerprint)
+    }
 
     @Test fun everyInputFamilyChangesTheFingerprint() {
         val b = base()
@@ -155,11 +174,19 @@ class StateFingerprintTest {
         assertEquals(StateFingerprint.of(base()), StateFingerprint.of(base()))
     }
 
-    /** [3.694.0] 盤面指紋は `MagiViewModel.boardKey` の式を移したもの。固定の 2×3 盤面の値（Kotlin で採取、C# `StateFingerprintTest` と同じ定数）。 */
-    @Test fun ofBoardGoldenIsTheOldBoardKeyFormula() {
-        assertEquals(-1367968410775403481L, StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 2))))
-        assertEquals(1125899906842597L, StateFingerprint.ofBoard(emptyArray()))
+    /** 盤面指紋の固定値（Kotlin で採取、C# `StateFingerprintTest` と同じ定数）。 */
+    @Test fun ofBoardGolden() {
+        assertEquals(-5169525488255970811L, StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 2))))
+        assertEquals(7535779455838661510L, StateFingerprint.ofBoard(emptyArray()))
         assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 2))), StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 3))))
+    }
+
+    /** 旧式 `h*31+v` が作りの上で衝突した組（外部レビュー No.1）。値の繰り上がり・行の区切り・大きさの違いを混ぜる。 */
+    @Test fun ofBoardSeparatesTheOldStructuralCollisions() {
+        assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(1, 0))), StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 31))))
+        assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(1), intArrayOf(0))), StateFingerprint.ofBoard(arrayOf(intArrayOf(1, 0))))
+        assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 0))), StateFingerprint.ofBoard(arrayOf(intArrayOf(0), intArrayOf(0))))
+        assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(-1, 0))), StateFingerprint.ofBoard(arrayOf(intArrayOf(0, -31))))
     }
 
     @Test fun swappingStaffIdsChangesTheFingerprint() {

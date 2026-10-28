@@ -127,7 +127,7 @@ class OptimizationWorker(
             // [3.592.0] 所有権確認から本書き込みまでの間の置き換わりを防ぐ（結果・途中保存と同じガード）。
             files(ctx).writeAtomically(inputFile(ctx), StateParser.serialize(req.first, req.second)) { ownsFiles() }
         }
-            .onSuccess { step("入力退避") }
+            .onSuccess { ok -> if (ok) step("入力退避") else note("入力を退避できませんでした（置き換えで所有権を失ったか、書き込みの直前に確認が外れた）＝この実行は途中でプロセスが終了すると復元できません", "W") }
             .onFailure { note("入力の退避に失敗（この実行は途中でプロセスが終了すると復元できません）", it) }
         // [P2修正/レビュー指摘] 予算秒数・並列数は WorkManager の inputData から復元する。
         //   旧: インメモリの OptimizationRepository のみで、プロセス再起動後は既定の 60秒/4並列 に
