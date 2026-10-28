@@ -150,13 +150,13 @@ internal fun NeedCalendarCard(
     val baseLabel = needBaseLabel(shift.need1, shift.need2, v.use2)
     Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
         .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // [1行に統合] タイトル＋「シフト▼ ・ 標準 N人」。説明文/設定済・未設定の凡例は撤去。
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box {
                     Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.heightIn(min = 48.dp).clickable { shiftMenu = true }) {
-                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(shift.kigou, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         }

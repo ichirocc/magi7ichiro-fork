@@ -595,9 +595,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             OptimizationRepository.running.collect { bg ->
                 if (bg) {
                     sawBgRunning = true
-                    _ui.update { it.copy(running = true) }
+                    _ui.update { it.copy(running = true, bgRunning = true) }
                 } else if (sawBgRunning) {
                     sawBgRunning = false
+                    _ui.update { it.copy(bgRunning = false) }
                     if (!phases.hasJob && checkJob?.isActive != true) {
                         _ui.update { it.copy(running = false) }
                     }

@@ -69,7 +69,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("グループ $gk", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             if (skills.isNotEmpty()) {
-                                Spacer(Modifier.width(10.dp))
+                                Spacer(Modifier.width(8.dp))
                                 Text("スキル", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                 Spacer(Modifier.width(4.dp))
                                 var open by remember { mutableStateOf(false) }

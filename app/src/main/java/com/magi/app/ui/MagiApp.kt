@@ -1308,7 +1308,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
-            if (!compact) Spacer(Modifier.width(10.dp))
+            if (!compact) Spacer(Modifier.width(8.dp))
             Text(sectionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             if (ui.loaded) {
@@ -1436,7 +1436,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
                     modifier = Modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp).semantics { contentDescription = "直前の操作を元に戻す" },
                     contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) else Text("元に戻す") }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
             }
             // [Web反映] やり直し（手動修正ループ）。元に戻した直後だけ出す。
             if (ui.canRedo && !ui.running) {
@@ -1445,7 +1445,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean
                     modifier = Modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
                     contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
             }
             if (hideMake) Spacer(Modifier.weight(1f)) else PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary, onShowList = onShowList)
         }
@@ -1502,12 +1502,12 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     if (!ui.interruptedRun || ui.running) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(INTERRUPTED_TITLE, style = MaterialTheme.typography.titleMedium)
             Text(ui.interruptedInfo ?: "入力は自動保存済みです。再作成できます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             // 帯のボタンは外枠＝塗りの主ボタンは主カードの 1 つだけ（INV-09）。
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onRerun, enabled = ui.loaded,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("再作成") }
                 MagiTextButton(onClick = onDismiss,
@@ -1523,11 +1523,11 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
 @Composable
 internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, onDismiss: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("取込が完了しました（職員 ${staff}名・${days}日）", style = MaterialTheme.typography.titleMedium)
             Text("担当はすべて可、必要人数と制約は未設定で取り込みました。年間マスターで決めてください。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("年間マスターを開く") }
                 MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
@@ -1603,7 +1603,7 @@ internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Int
     val cs = MaterialTheme.colorScheme
     val topCorner = MaterialTheme.shapes.extraLarge
     Surface(modifier = modifier, color = cs.surfaceContainerLow, shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)), tonalElevation = 2.dp) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val pickedRow = picked?.let { rows.getOrNull(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis,

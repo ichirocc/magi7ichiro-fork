@@ -378,7 +378,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         onDismissRequest = onDismiss,
         title = { Text(PREVIEW_TITLE) },
         text = {
-            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
                 // [3.713.0] 最初は「Nか所変わります」と変わるセルの行だけ。目的・回数・判断材料・注記は「詳しく」の中。
                 Text(previewCountLine(p.suggestion.ops.size), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -449,7 +449,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val heldN = ui.consults.count { it.held }
             Text("相談中（${ui.consults.size - heldN}件）" + (if (heldN > 0) "・保留（${heldN}件）" else ""), style = MaterialTheme.typography.titleMedium)
             Text("関係者に確かめてから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます）。",
@@ -800,7 +800,7 @@ internal fun OperatorNextActionCard(
     val body = MaterialTheme.typography.bodyMedium
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             inner?.invoke()
             for (sec in sections) when (sec) {
                 // [3.719.0 読み上げ] 作成の終わり（CREATION_DONE_TITLE）・探索中の状態の行・進捗は liveRegion＝画面を触らなくても読み上げる。
@@ -809,7 +809,7 @@ internal fun OperatorNextActionCard(
                 }
                 HomeSection.HEADLINE -> Text(homeHeadline(kind), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
                 // 札は見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。件と人は足さない（INV-07）。
-                HomeSection.BADGES -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                HomeSection.BADGES -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (b in listOf(homeHardPill(ui.bestHard, hardNow))) {
                         Box(Modifier.background(MagiAccent.orange, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
                             // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
@@ -856,7 +856,7 @@ internal fun OperatorNextActionCard(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER, color = plan.fg, maxLines = a11yMaxLines(fontScale), overflow = TextOverflow.Ellipsis) }
                 HomeSection.OTHERS -> if (creation != null) MagiTextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
-                HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     plan.body?.let { Text(it, style = body, color = plan.fg) }
                     plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
                     if (outcomeLine != null) Text(outcomeLine, style = body, color = plan.fg)
@@ -877,7 +877,7 @@ internal fun OperatorNextActionCard(
                 }
                 // [3.480.0 ホームAIリデザイン] 文言（正直さ）は変えず「でき具合：N%（残りM件）」＋バー。注記は既定折りたたみ（ⓘ）。
                 // [3.483.0 H-2] 必須0のときは残りの単位を調整件数へ。
-                HomeSection.SATISFACTION -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                HomeSection.SATISFACTION -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown, ui.hardWishConflict)
                     Text("でき具合：${ui.satisfaction}%（${remainingLabel}）", style = body, color = plan.fg, fontWeight = FontWeight.Bold)
                     LinearProgressIndicator(
@@ -962,11 +962,11 @@ internal fun CopilotCard(
     val show = ui.copilotHint != null || (ui.polishExhausted && !ui.running)
     if (!show) return
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // ガチャ操作の助言＋修正導線（NextActionBar相当）
             ui.copilotHint?.let {
                 Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("💡 $it", color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodyMedium)
                         OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("編集タブで見直す") }
                     }
@@ -999,7 +999,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
     var allSurpluses by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (diag.hasShortage) {
                 Text("人員不足", style = MaterialTheme.typography.titleMedium)
                 Text(shortageCardLine(diag.shortfalls.map { it.dayIndex }.distinct().size, diag.shortfalls.any { it.verdict != CoverageVerdict.INFEASIBLE && !it.blockedNow }),
@@ -1108,7 +1108,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     var confirmRule by remember { mutableStateOf<Pair<String, Int>?>(null) }   // 並びと、その崩せない件数
     var details by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("禁止の並びがなぜ崩せないか", style = MaterialTheme.typography.titleMedium)
             val headline = if (diag.allBlocked) {
                 "残り ${diag.totalRuns} 件は全て塞がっています。今の希望・担当のままでは崩せません。"
@@ -1233,7 +1233,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
     var detailOpen by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("期間の制約がなぜ直せなかったか", style = MaterialTheme.typography.titleMedium)
             // [3.480.0 ホームAIリデザイン] 旧: この注記は常時表示だった。grilling決定#1どおり
             // 文言は変えず、既定折りたたみへ移す（内容は下の DiagDetailToggle 展開時のみ表示）。
@@ -1396,7 +1396,7 @@ internal fun SettingIssuesCard(
     // 分析タブの同じ項目と同じ要調整の色（赤は必須違反だけ）。
     val (warnBg, warnFg) = magiWarnColors()
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
             DiagDetailToggle(
                 detailOpen, onToggle = { detailOpen = !detailOpen },
@@ -1472,7 +1472,7 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
             // §5.4 上部: 充足率(coverage%)を大数値ゲージで（必要人数のうち満たせた割合）
             v6.coveragePct?.let { pct ->
                 val tint = if (pct >= 100) MaterialTheme.colorScheme.tertiary else if (pct >= 90) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
@@ -1490,9 +1490,9 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(12.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
                 //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
                 // ホームの「必須 残りN件・M人」と同じ数え方＝人員不足は人数で別に並べる（件数と人数を足さない）。
@@ -1508,7 +1508,7 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
             )
             // [3.286.0 冗長性C] 日別リスクチップ列（dayRisks）は AttentionCardsSection（日別リスト＝全件＋
             //   要確認のみトグル＋タップ修復）が上位互換のため撤去（3.195.0 で保留した次点候補の実施）。
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 v6MetricLine(breakdown, v6),
                 fontFamily = FontFamily.Monospace,
@@ -1734,7 +1734,7 @@ private fun ConfirmRow(
     val ns = item.needShift
     Column(Modifier.fillMaxWidth()) {
     Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
                 Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
                     // 3 字（要調整）は 1 段小さい字で 46dp の枠に収める。
@@ -1817,7 +1817,7 @@ internal fun AnalysisTriageCard(
             }
 
             // 作成中の診断・場所は作成前の盤面のもの＝並べると今の数と食い違う（2026-10-27 実機画面）。終われば調べ直す。
-            if (ui.running && ui.keepScreenOn) {
+            if (engineBuilding(ui)) {
                 Text(ANALYSIS_BUILDING_NOTE, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 return@Column
             }
@@ -1840,7 +1840,7 @@ internal fun AnalysisTriageCard(
                 }
                 t.issues.forEach { row ->
                     Surface(color = warnBg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(10.dp)) {
+                        Column(Modifier.padding(8.dp)) {
                             Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                             if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             MagiTextButton(onClick = { onGoEdit(row.kind) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(issueSettingsLabel(row.kind)) }
@@ -1855,7 +1855,7 @@ internal fun AnalysisTriageCard(
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         t.searching.forEach { row ->
                             Row {
                                 Text("・${row.label}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
@@ -1892,7 +1892,7 @@ internal fun AnalysisTriageCard(
 @Composable
 private fun TriageRowLine(row: TriageRow, bg: Color, fg: Color) {
     Surface(color = bg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("${row.label} ${row.count}${row.unit}",
                 style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
             if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = fg)
@@ -1905,7 +1905,7 @@ private fun TriageRowLine(row: TriageRow, bg: Color, fg: Color) {
 
 @Composable
 internal fun BreakdownGroup(title: String, keys: List<String>, severity: Int, ui: UiState, labels: Map<String, String>, expanded: String?, onTap: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         keys.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1987,7 +1987,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
             ui.fixSuggestions.isEmpty() && !ui.fixSearched && ui.fixFocusName.isBlank()) onSearch()
     }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val title = "改善の提案" + if (ui.fixFocusName.isNotBlank()) "：${ui.fixFocusName} 関連" else ""
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -2109,7 +2109,7 @@ private fun PreDistRowView(r: PreDistRow) {
         false -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.error, "要対応")
         null -> Triple(Icons.Outlined.RadioButtonUnchecked, cs.onSurfaceVariant, "未確認")
     }
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Icon(icon, contentDescription = spoken, tint = tint, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f)) {
             Text(r.label, style = MaterialTheme.typography.labelLarge)

@@ -156,7 +156,7 @@ internal fun LiveScheduleCard(ui: UiState) {
     var show by rememberSaveable { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // [冗長性見直し] progressSummary(ui) は直上の OperatorNextActionCard の実行中表示（進捗行）に
             //   既出のため、ここでの再表示は削除（同一文字列が直列2回並んでいた）。
             val cur = ui.liveSchedule
@@ -275,7 +275,7 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
             label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
     }
     Spacer(Modifier.height(4.dp))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         vioBuckets.forEach { b -> BucketChip(b.key, b.label, counts[b.key] ?: 0, b.key in enabled, onToggle) }
     }
     // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
@@ -333,7 +333,7 @@ internal fun ScheduleToolsCard(
                 }
             }
             if (anyViol) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     vioBuckets.forEach { b -> BucketChip(b.key, b.label, bucketCounts[b.key] ?: 0, b.key in enabled, onToggle) }
                     // [集中モード] 違反・未反映希望のセルだけを浮かせ、他を淡色に沈める（表示のみ）。
                     FilterChip(selected = focusMode, onClick = { onFocusMode(!focusMode) },
@@ -575,7 +575,7 @@ internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNav
     Surface(color = cs.surfaceContainer, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().height(ScheduleLayoutMetrics.MERGED_BAR_DP.dp).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (showVio) {
                 OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
@@ -687,27 +687,27 @@ internal fun CompactMarkLegend(vioColor: Color, vioSoftColor: Color) {
 internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.orange) {
     val cs = MaterialTheme.colorScheme
     // [実機指摘] 固定 Row では幅不足時に3項目目が縦1文字に潰れた→ FlowRow で項目単位に折り返す。
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SolidFrameSwatch(vioColor)
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
             //   実線/破線の形状＋左の色見本が真の手がかり（色覚配慮＝形状符号化）。
             // 語は凡例も「必須／要調整」（利用者決定 2026-09-27。旧「絶対NG／できれば直す」）。3段階の強度区分(実線/破線/角マーク)は3.99.0のまま。
             Text("実線の枠＝必須", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DashedFrameSwatch(vioSoftColor)
             Text("破線の枠＝要調整（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CornerSwatch(vioSoftColor)
             Text("右上の角＝要調整（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(8.dp).background(vioSoftColor, CircleShape))
             Text("左上の点＝ほかの種類も重なっている", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface, modifier = Modifier.size(MagiMarks.pinLock))
             Text("右下の錠＝手動固定（自動では変更しません。周囲のセルを変えて解消できる場合はあります）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
@@ -717,16 +717,16 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         Text(legendShapeFamilies(), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         // [凡例の抜け] 希望シフトの桃バッジ/緑リングは勤務表グリッドの常時キャプションにしかなく、この
         //   折りたたみ凡例には無かった＝重複解消でキャプションを短縮する前提として、ここへ移す。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WishPendingSwatch()
             Text("桃バッジ＝希望が未反映", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WishMetSwatch()
             Text("緑リング＝希望が反映済み", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         // [3.651.0/凡例の抜け] 拡張希望の×はセルにだけあり、どの凡例にも無かった。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ExtCrossSwatch()
             Text("上端の×＝拡張希望（この日はこのシフト以外）。禁止のシフトが入ると違反の色になります。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
@@ -748,7 +748,7 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
         Spacer(Modifier.height(8.dp))
         Text("シフトの色", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items.forEach { i -> ShiftColorChip(symbols[i], colorHex.getOrNull(i), textHex.getOrNull(i)) }
         }
     }
@@ -854,7 +854,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
     val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
     // [3.718.0] 下 1/3 のモードレスのパネル（`SchedulePanel`。旧: ModalBottomSheet）。
     SchedulePanel("希望シフトの一括操作", onDismiss) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
@@ -868,7 +868,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                 }
             }
             if (scope == 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
@@ -1002,7 +1002,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
     val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
     // [3.718.0] 下 1/3 のモードレスのパネル（`SchedulePanel`。旧: ModalBottomSheet）。
     SchedulePanel("割当の一括操作", onDismiss) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
@@ -1016,7 +1016,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 }
             }
             if (scope == 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
@@ -1453,13 +1453,13 @@ private fun TallyLegend(shortBg: Color, overBg: Color) {
     //   タブ名（職員別/日別）が不足/超過の意味を文脈で示すため、旧・長文ラベル
     //   （回数が下限/目標未満 等）は撤去。詳細はセルのタップで出す。色見本＋▼▲＝色覚二重符号化。
     val cs = MaterialTheme.colorScheme
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(13.dp).background(shortBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
         Spacer(Modifier.width(2.dp))
         Box(Modifier.size(13.dp).background(overBg, RoundedCornerShape(3.dp)))
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         Text(TALLY_LEGEND_TEXT, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
     }
 }
@@ -2098,7 +2098,7 @@ internal fun FixSearchPanel(
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) findAs(true) }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
     val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key, ui.fixCancelledKey)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!compact) Text("勤務変更案", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         when (panel) {
             FixPanelState.WAIT_CHECK -> Text("計算・チェックが終わると探します。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2147,7 +2147,7 @@ internal fun FixSearchPanel(
                 @Composable fun card(n: Int, s: com.magi.app.v6.FixSuggestion, ex: FixExplanation? = null, purposeOverride: String? = null) {
                     val e = effects?.get(s)
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             // 先頭＝いま見ている問題がどう変わるか。変更する勤務、ほかの問題への影響、操作の順。
                             val after = remember(s, ui.schedule) { boardAfter(ui.schedule, s.ops) }
                             // 日の人員の対象は、同じ勤務の期間全体の過不足も前後で言う（見ている日だけ直って別の日へ移る案を、解消と読ませない）。
@@ -2243,7 +2243,7 @@ internal fun FixSearchPanel(
                                 onEvent(MagiEvent.Board.PreviewFix(s, purpose, previewEffectLines(label, e, target.basis), focus.key, target))
                             }
                             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium) {
-                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(cc.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                     Text(cc.a.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                     cc.a.reason?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
@@ -2324,7 +2324,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
     val sameRemains = nextSym != null && appliedRemaining(ui, a, target, label, lim).isNotEmpty()
     val nextLabel = appliedNextButton(sameRemains, nextSym, a.hardAfter, if (onTour != null) tourCount else 0)
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
-        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)
             appliedLines(ui, a, target, label, cv?.let { c -> c::needCellLimits }).forEach {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
@@ -2444,7 +2444,7 @@ private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate
         onDismissRequest = onDismiss,
         title = { Text("「${ui.shiftSymbols.getOrNull(shift) ?: "?"}」を追加する候補日") },
         text = {
-            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 list.sortedBy { if (it.reason != null) 0 else 1 }.forEach { c ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(addCandidateHead(c, ui, shift), style = MaterialTheme.typography.titleSmall)

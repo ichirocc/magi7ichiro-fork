@@ -95,7 +95,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                         Text(groupName, style = MaterialTheme.typography.titleSmall)
                         DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "すべて解除する")
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rows.forEach { gr ->
                             val rangeLab = when {
                                 gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
@@ -172,7 +172,7 @@ internal fun GroupRangeDialog(
         dismissButton = { DialogDismissButton(onClick = requestClose) },
         title = { DialogHeader("グループ単位の回数", requestClose) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(onClick = { openG = true }, modifier = Modifier.heightIn(min = 48.dp)) {

@@ -256,7 +256,7 @@ internal fun ColorPickerDialog(
         // 題の形は 3.550.0 のモック（「休」の色）。違反の種別名は長く「「要調整（基準色）」の / 色」と折り返したので、長い名前は一段小さい字にする。
         title = { DialogHeader("「$kigou」の色", onClose, compact = kigou.length > 4) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Swatch(effectiveHex, 28.dp)
                     Text(if (currentHex.isBlank()) "  現在の色（既定）" else "  現在の色",

@@ -315,12 +315,18 @@ internal object C3RotationPolish {
         val c3C = c3FamCount(p, sched, i, p.cons3, false)
         val c3mC = c3FamCount(p, sched, i, p.cons3m, false)
         val c3mnC = c3FamCount(p, sched, i, p.cons3mn, true)
-        total += c3nC + c3C + c3mC + c3mnC
-        weighted += c3nC.toDouble() * MirrorKeys.weightOf("c3n") +
+        var c3wC = 0; var extC = 0                                // c3w・extWish（HARD、セル単位の静的表＝チェッカーと同じ）
+        if (p.c3wBan != null || p.hasExtBan) for (j in 0 until p.T) {
+            if (p.c3wBanned(i, j, sched[i][j])) c3wC++
+            if (p.hasExtBan && p.extBanned(i, j, sched[i][j])) extC++
+        }
+        total += c3nC + c3C + c3mC + c3mnC + c3wC + extC
+        weighted += c3wC.toDouble() * MirrorKeys.weightOf("c3w") + extC.toDouble() * MirrorKeys.weightOf("extWish") +
+            c3nC.toDouble() * MirrorKeys.weightOf("c3n") +
             c3C.toDouble() * MirrorKeys.weightOf("c3") +
             c3mC.toDouble() * MirrorKeys.weightOf("c3m") +
             c3mnC.toDouble() * MirrorKeys.weightOf("c3mn")
-        return StaffObjective(c3nC, weighted, total)
+        return StaffObjective(c3nC + c3wC + extC, weighted, total)
     }
 
 

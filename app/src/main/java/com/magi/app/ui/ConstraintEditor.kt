@@ -73,7 +73,7 @@ internal fun ConstraintsCard(
             if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.titleMedium)
             ConstraintHelpExpander(families)
             families.forEachIndexed { fi, fam ->
-                if (fi > 0) Spacer(Modifier.height(6.dp))
+                if (fi > 0) Spacer(Modifier.height(8.dp))
                 Spacer(Modifier.height(8.dp))
                 Text(fam.title, style = MaterialTheme.typography.titleSmall)
                 if (fam.rows.isEmpty()) {
@@ -142,7 +142,7 @@ private fun SeqFamilyGrouped(
             Text("それぞれ別に数えます（どれか1つでよい、ではありません）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         if (pairIdxs.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (idx in pairIdxs) {
                     val next = pats[idx][1]
                     InputChip(
@@ -267,7 +267,7 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
             } else {
                 ConstraintHelpExpander(families)
                 families.forEachIndexed { fi, fam ->
-                    if (fi > 0) Spacer(Modifier.height(6.dp))
+                    if (fi > 0) Spacer(Modifier.height(8.dp))
                     Spacer(Modifier.height(8.dp))
                     Text(fam.title, style = MaterialTheme.typography.titleSmall)
                     if (fam.rows.isEmpty()) {
@@ -478,7 +478,7 @@ private fun Shell(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) { content() }
         },
     )

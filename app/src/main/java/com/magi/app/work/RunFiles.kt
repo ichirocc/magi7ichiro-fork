@@ -85,6 +85,14 @@ internal class RunFiles(private val dir: File) {
      * @param deleteInputs 入力と途中最良も消す（結果を保存できたとき）。false なら所有権マーカーだけ消す。
      * @return 所有していなかったら null（何も消さない）。所有していたら消し残った名前。
      */
+    /**
+     * 所有者のときだけ [clear] する（確認と削除を錠の中で一続きに）。null＝所有していなかった（何も消していない）。
+     * Worker の停止・失敗の出口用＝錠の外で `owns` を見てから `clear` すると、その間に始まった新しい実行の入力と印まで消せた。
+     */
+    fun clearIfOwner(mine: Long): List<String>? = synchronized(OWNERSHIP_LOCK) {
+        if (!owns(mine)) null else clear()
+    }
+
     fun releaseIfOwner(mine: Long, deleteInputs: Boolean): List<String>? = synchronized(OWNERSHIP_LOCK) {
         if (!owns(mine)) return@synchronized null
         val stuck = ArrayList<String>()
@@ -193,5 +201,27 @@ internal object NonAtomicWrites {
         val out = ArrayList<String>()
         while (true) out += names.poll() ?: break
         return out
+    }
+}
+
+/**
+ * 背景実行の進捗を出すかどうか（Worker の進捗コールバックから呼ぶ、呼出側で直列化する）。[windowMs] ごとに 1 回だけ出し、
+ * そのたびに [owns] を確かめる。一度所有権を失ったら以後はずっと捨てる（喪失は単調＝新しい実行が印を書いた後の遅れた進捗）。
+ */
+internal class ProgressGate(private val windowMs: Long, private val owns: () -> Boolean) {
+    enum class Step { DROP, QUIET, PUBLISH }
+
+    private var lastMs = Long.MIN_VALUE / 4
+    var lost = false
+        private set
+    var dropped = 0
+        private set
+
+    fun next(nowMs: Long): Step {
+        if (lost) { dropped++; return Step.DROP }
+        if (nowMs - lastMs < windowMs) return Step.QUIET
+        lastMs = nowMs
+        if (!owns()) { lost = true; dropped++; return Step.DROP }
+        return Step.PUBLISH
     }
 }

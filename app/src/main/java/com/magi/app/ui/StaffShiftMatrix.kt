@@ -123,7 +123,7 @@ internal fun StaffShiftMatrixCard(
                             (if (overloaded.size > 1) "。ほかに${overloaded.size - 1}列あります" else "") +
                             "\nタップでその列へ移ります。その列の目標を見直しましょう",
                         style = MaterialTheme.typography.bodySmall, color = cs.onErrorContainer,
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(8.dp),
                     )
                 }
             }

@@ -196,7 +196,7 @@ internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues)
 @Composable
 internal fun MagiGroup(title: String?, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title != null) Text(title, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp).semantics { heading() })
         Surface(color = cs.surfaceContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) { Column(content = content) }

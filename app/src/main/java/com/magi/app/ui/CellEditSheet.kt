@@ -217,7 +217,7 @@ internal fun CellEditSheet(
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
             val upperScroll = rememberScrollState()
-            Column(Modifier.weight(1f, fill = false).verticalScroll(upperScroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(upperScroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
@@ -402,7 +402,7 @@ internal fun CellEditSheet(
                             OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Board.TogglePin(i, j)) },
                                 modifier = Modifier.heightIn(min = 48.dp)) {
                                 Icon(if (pinned) Icons.Outlined.LockOpen else Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.size(6.dp))
+                                Spacer(Modifier.size(8.dp))
                                 Text(if (pinned) "手動固定を外す" else "手動固定する", maxLines = 1)
                             }
                         }
@@ -413,7 +413,7 @@ internal fun CellEditSheet(
                             onEvent(MagiEvent.Session.AddReviewMemo("$name ${DayText.full(ui.startDate, j)} ${sym(current)}：${famsJp.ifEmpty { status.cause }}"))
                         }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Icon(Icons.Outlined.Flag, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(6.dp))
+                            Spacer(Modifier.size(8.dp))
                             Text("ルールの見直し候補に入れる")
                         }
                     }
@@ -426,7 +426,7 @@ internal fun CellEditSheet(
             ) { Text(CELL_SHEET_MORE_BELOW) }
             if (mode == 1) {
                 // 希望の画面: ［割当に戻る］と希望の中身。
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     MagiTextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
                     val wishText = wishTabLine(wish, current, ui.extBanned[VioKey.cell(i, j)], { k -> sym(k) }, pinned)
                     Text(wishText, style = MaterialTheme.typography.bodySmall,
@@ -435,7 +435,7 @@ internal fun CellEditSheet(
             }
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
-                if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 6.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
+                if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
                 // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。前後の日は外枠（文字だけではボタンに見えなかった）。
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                     val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
@@ -586,7 +586,7 @@ private fun PeekBody(
             }
             // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
             val showRemove = wish != null && mode == 1
-            if (showRemove || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (showRemove || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (showRemove) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                     modifier = Modifier.heightIn(min = 48.dp)) { Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1) }
                 if (recommend != null) OutlinedButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -598,7 +598,7 @@ private fun PeekBody(
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         for (k in if (leftHand) shownPicks.reversed() else shownPicks) {
                             val sel = if (mode == 0) k == current else k == wish
                             SlotButton(
@@ -630,7 +630,7 @@ private fun PeekBody(
 private fun StatusRow(status: CellStatus, wishLine: String?) {
     val (bg, icon, fg) = magiSeverityColors(status.severity)
     Surface(color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(if (status.severity == CellSeverity.NONE) Icons.Filled.CheckCircle else Icons.Filled.Warning,
                 contentDescription = null, tint = icon, modifier = Modifier.size(20.dp))

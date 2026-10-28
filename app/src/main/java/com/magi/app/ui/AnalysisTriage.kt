@@ -326,6 +326,9 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     return AnalysisSummary(sentence, points, primary, label)
 }
 
+/** 勤務表を組んでいる最中か（下書き・作成・仕上げの前景のジョブ＝画面を点けたままにする段、または閉じている間の作成）。短い違反チェックの running は含めない。 */
+internal fun engineBuilding(ui: UiState): Boolean = ui.running && (ui.keepScreenOn || ui.bgRunning)
+
 internal const val ANALYSIS_BUILDING_NOTE = "作成が終わると、問題の一覧を今の勤務表で調べ直します。"
 
 /** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */
@@ -345,12 +348,9 @@ internal const val RERUN_FROM_DRAFT_KEPT = "下書きから作り直しました
 /** 下書きに置き換える前の勤務表（同じ設定の指紋のときだけ比べる）。 */
 internal class PreDraftBoard(val board: Array<IntArray>, val stateKey: Long, val hard: Long, val weighted: Double, val total: Int, val hardWord: String)
 
-/** [b] が [a] より良いか（必須→重み→合計の辞書式＝`reportComparator` と同じ順）。 */
-internal fun preDraftBetter(aHard: Long, aWeighted: Double, aTotal: Int, bHard: Long, bWeighted: Double, bTotal: Int): Boolean = when {
-    bHard != aHard -> bHard < aHard
-    kotlin.math.abs(bWeighted - aWeighted) > 1e-9 -> bWeighted < aWeighted
-    else -> bTotal < aTotal
-}
+/** [b] が [a] より良いか（採否と同じ `reportComparator` の順）。 */
+internal fun preDraftBetter(aHard: Long, aWeighted: Double, aTotal: Int, bHard: Long, bWeighted: Double, bTotal: Int): Boolean =
+    com.magi.app.v6.compareReportKeys(bHard, bWeighted, bTotal, aHard, aWeighted, aTotal) < 0
 
 internal fun preDraftNoticeText(hardWord: String, weighted: Double): String =
     "下書きに置き換える前の勤務表のほうが良い結果です（必須 $hardWord・重み ${weighted.toLong()}）。"

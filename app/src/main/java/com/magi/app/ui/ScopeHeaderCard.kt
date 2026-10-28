@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 internal fun ScopeHeaderCard(plan: EditHeaderPlan, onPrimary: (() -> Unit)? = null, inner: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
             Text(plan.subtitle, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             plan.points.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }

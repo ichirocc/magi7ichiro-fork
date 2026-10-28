@@ -36,7 +36,7 @@ internal fun SchedulePanel(title: String, onDismiss: () -> Unit, content: @Compo
         Surface(modifier = Modifier.fillMaxWidth().heightIn(max = maxH), color = cs.surfaceContainerLow,
             shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)), tonalElevation = 2.dp) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 12.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogHeader(title, onClose = onDismiss)
                 content()
             }
