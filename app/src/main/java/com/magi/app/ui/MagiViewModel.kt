@@ -150,6 +150,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
         agentJob?.cancel()  // 代行も同じ（結果は盤面が変わって捨てるだけ＝作成と CPU を取り合っていた。2026-10-25 実機ログ #7）
+        if (phase == MagiPhase.Loading || phase == MagiPhase.Importing) preDraft = null   // 別のデータ＝置き換え前の盤面は比べられない
         _ui.update { it.copy(agentRecord = null) }   // 当てた手の記録は差し替え前の盤面のもの（「代行の分を元に戻す」も意味を失う）
         // 走っている違反チェックは差し替え前の盤面のもの＝失効させる（完了順によって古い表示が戻らないように、UI-03）。
         ++checkSeq; checkJob?.cancel()
@@ -995,7 +996,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
         alternativeScheds = emptyList()
         // 完了カードの前後比較（runSummary）も直前の実行の盤面の話＝同じ理由で外す。
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null, runDelta = null, stopSummary = null) }
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null) }
         return true
     }
 
@@ -1023,7 +1024,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null,
+            relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
@@ -1051,7 +1052,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null,
+            relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }   // [3.592.0] undo()と同じ理由
@@ -1562,6 +1563,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 done = true
                 logOp("I", OpLogText.withBoard("初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}", boardKey(res.schedule)))
                 if (replacing) logOp("I", OpLogText.draftReplaceLine(u.bestHard, res.report.hard))
+                // 置き換えた勤務表を覚える（あとの作成がこれに負けたら知らせて戻せるように）。覚えている方が良ければそのまま。
+                if (replacing && u.checkRev > 0) {
+                    val prev = preDraft?.takeIf { it.stateKey == stateKey(st) }
+                    if (prev == null || preDraftBetter(prev.hard, prev.weighted, prev.total, u.bestHard, u.weightedScore, u.totalViolations))
+                        preDraft = PreDraftBoard(sched.copy2D(), stateKey(st), u.bestHard, u.weightedScore, u.totalViolations, hardText(u.breakdown, u.bestHard))
+                }
             } catch (e: CancellationException) {
                 // [3.404.0] 停止・ジョブ上書きを「失敗」と呼ばない（兄弟の refreshCheck 等は分離済みで
                 //   ここだけ取り残されていた＝停止するたび「初期解生成失敗」という誤った文言が出ていた）。
@@ -1579,6 +1586,28 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 endBoardJob(boardToken)
             }
         }
+    }
+
+    /** 下書きで置き換える前の勤務表（[preDraftBetter] で作成の結果と比べる）。設定が変われば使わない。 */
+    private var preDraft: PreDraftBoard? = null
+
+    /** 置き換え前の勤務表へ戻す（元に戻すで取り消せる）。 */
+    fun restorePreDraft() {
+        val p = preDraft ?: return
+        val st = state ?: return
+        if (runBlockedByInFlight("置き換え前に戻す")) return
+        if (p.stateKey != stateKey(st)) { preDraft = null; _ui.update { it.copy(preDraftNotice = null) }; return }
+        pushUndo("置き換え前に戻す")
+        val board = p.board.copy2D()
+        currentSchedule = board
+        state = st.withSchedule(board)
+        resultSchedule = null
+        preDraft = null
+        _ui.update { it.copy(schedule = board.map { r -> r.toList() }, preDraftNotice = null, editRev = it.editRev + 1) }
+        postOpNotice("置き換え前の勤務表に戻しました")
+        logOp("I", OpLogText.withBoard("置き換え前の勤務表に戻す 必須=${p.hard} 重み=${p.weighted.toLong()}", boardKey(board)))
+        autoSave()
+        refreshCheck()
     }
 
     /** 確認のために先に作った下書き（作ったときの設定と盤面の指紋つき。違えば使わず作り直す）。 */
@@ -1881,7 +1910,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             //   壁時計(startMs基準)に統一する。
                             elapsedMs = System.currentTimeMillis() - startMs,
                             // [DefragLiveView] 計算中の最良盤面をライブ表示用に反映（節目で更新される）。
-                            liveSchedule = OptimizerRuntime.liveBest ?: it.liveSchedule,
+                            liveSchedule = OptimizerRuntime.liveBestShaped(sched0) ?: it.liveSchedule,
                             // [3.400.0] 旧: `message = "V6 $phase 実行中…"`。3.399.0 で message が Snackbar に
                             //   なったため、フェーズが変わるたびに（実行中ずっと）Snackbar が出続ける副作用に
                             //   なっていた。これは**イベントでなく状態**で、実行中であることは上部バッジと
@@ -2027,6 +2056,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
                 logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} 重み=${res.report.weightedScore.toLong()} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
                 noteRunResult(adoptedReport.hard, kept = worseThanInput)
+                preDraft?.let { p ->
+                    val curKey = state?.let { stateKey(it) }
+                    if (p.stateKey != curKey || preDraftBetter(p.hard, p.weighted, p.total, adoptedReport.hard.toLong(), adoptedReport.weightedScore, adoptedReport.total)) preDraft = null
+                    else if (preDraftBetter(adoptedReport.hard.toLong(), adoptedReport.weightedScore, adoptedReport.total, p.hard, p.weighted, p.total)) {
+                        _ui.update { it.copy(preDraftNotice = preDraftNoticeText(p.hardWord, p.weighted)) }
+                        logOp("I", "置き換え前の勤務表のほうが良い: 必須 ${p.hard}・重み ${p.weighted.toLong()}（今の結果 必須 ${adoptedReport.hard}・重み ${adoptedReport.weightedScore.toLong()}）")
+                    }
+                }
                 if (s5 != null) {
                     cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
                     logOp("I", "S5 結果: ${s5.h0}/${s5.hx}/${s5.rk}/${s5.rr}/${s5.pCancel} → ${adoptedReport.hard}")

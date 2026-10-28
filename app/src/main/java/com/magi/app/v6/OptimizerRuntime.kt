@@ -73,6 +73,14 @@ object OptimizerRuntime {
     val liveBest: List<List<Int>>? get() = liveBestRef.get()?.board
 
     /**
+     * [like] と同じ形（職員×日）のときだけ途中最良を返す。`liveBest` は実行をまたぐ 1 つの置き場で、置き換え（REPLACE）で
+     * 打ち切られた旧実行が止まるまでの間に publish すると、新しい実行の途中最良として別データの盤面が見える
+     * （kill 復旧用の退避に新しい状態と組で書かれ、職員数が違えば復元できない）。
+     */
+    fun liveBestShaped(like: Array<IntArray>): List<List<Int>>? =
+        liveBest?.takeIf { b -> b.size == like.size && b.indices.all { b[it].size == like[it].size } }
+
+    /**
      * [3.385.0] 評価と盤面を**1つの不変オブジェクト**にして1回の CAS で publish する。
      *
      * 旧実装は「report を CAS → 成功したら liveBest へ代入」の2段だった。CAS は report を単調にするが、

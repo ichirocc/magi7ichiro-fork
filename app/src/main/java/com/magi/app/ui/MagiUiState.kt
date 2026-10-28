@@ -63,6 +63,7 @@ data class UiState(
     val runSummary: String? = null,
     /** [iOS のヘルスケア「ハイライト」] この作成で必須違反・要調整がいくつからいくつになったか（変化なしは null）。runSummary と同じ寿命。 */
     val runDelta: String? = null,
+    val preDraftNotice: String? = null,   // 下書きに置き換える前の勤務表のほうが良い（作成の結果がそれに負けたとき）。盤面が動けば消す
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
     val breakdown: Map<String, Int> = emptyBreakdown,

@@ -326,6 +326,8 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     return AnalysisSummary(sentence, points, primary, label)
 }
 
+internal const val ANALYSIS_BUILDING_NOTE = "作成が終わると、問題の一覧を今の勤務表で調べ直します。"
+
 /** 前回の作成と同じ設定（状態指紋）から同じ盤面（盤面指紋）が出たか。初回は false。 */
 internal fun isSameRunResult(prev: Pair<Long, Long>?, now: Pair<Long, Long>): Boolean = prev != null && prev == now
 
@@ -340,6 +342,20 @@ internal fun sameResultNotice(hard: Int): String =
 internal const val SAME_RESULT_NEXT_DRAFT = "次の作成は下書きから作り直し、今より良くなったときだけ置き換えます。"
 internal const val RERUN_FROM_DRAFT_LOG = "前回と同じ結果のため、下書きから作り直します（今より良いときだけ採る）"
 internal const val RERUN_FROM_DRAFT_KEPT = "下書きから作り直しましたが、今の勤務表の方が良かったので、そのまま残しました。"
+/** 下書きに置き換える前の勤務表（同じ設定の指紋のときだけ比べる）。 */
+internal class PreDraftBoard(val board: Array<IntArray>, val stateKey: Long, val hard: Long, val weighted: Double, val total: Int, val hardWord: String)
+
+/** [b] が [a] より良いか（必須→重み→合計の辞書式＝`reportComparator` と同じ順）。 */
+internal fun preDraftBetter(aHard: Long, aWeighted: Double, aTotal: Int, bHard: Long, bWeighted: Double, bTotal: Int): Boolean = when {
+    bHard != aHard -> bHard < aHard
+    kotlin.math.abs(bWeighted - aWeighted) > 1e-9 -> bWeighted < aWeighted
+    else -> bTotal < aTotal
+}
+
+internal fun preDraftNoticeText(hardWord: String, weighted: Double): String =
+    "下書きに置き換える前の勤務表のほうが良い結果です（必須 $hardWord・重み ${weighted.toLong()}）。"
+internal const val PRE_DRAFT_RESTORE_BUTTON = "置き換え前の勤務表に戻す"
+
 internal const val RERUN_FROM_DRAFT_ADOPTED = "下書きから作り直して、今より良い勤務表になりました"
 
 /** 残る必須違反がすべて「何度つくっても残る」もので、前回から何も変わっていない（[fresh]＝[sameResultVisible]）。再作成しても同じ結果になる。 */

@@ -53,11 +53,11 @@ class OptimizationWorker(
         runCatching { OptimizationRepository.publishNote(level, "バックグラウンド最適化: $msg") }
     }
 
-    private var gatesBefore: Map<String, Any>? = null
+    private var leased = false
 
     override suspend fun doWork(): Result =
         try { runWork() } finally {
-            gatesBefore?.let { synchronized(com.magi.app.v6.PolishGate) { com.magi.app.v6.PolishGate.restore(it) } }
+            if (leased) synchronized(com.magi.app.v6.PolishGate) { GATE_LEASE.exit()?.let { com.magi.app.v6.PolishGate.restore(it) } }
             OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L))
         }
 
@@ -140,7 +140,7 @@ class OptimizationWorker(
         //   書き戻しと設定の写し（EngineConfig）はひとまとめに取る＝置き換えで新旧の Worker が重なっても、別の Worker の設定で走らない
         //   （エンジンは写しだけを読む＝T-7。2026-10-25 の外部レビュー）。
         val engineConfig = synchronized(com.magi.app.v6.PolishGate) {
-            gatesBefore = com.magi.app.v6.PolishGate.snapshot()
+            GATE_LEASE.enter(com.magi.app.v6.PolishGate.snapshot()); leased = true
             com.magi.app.v6.PolishGate.restore(cfg.gates)
             com.magi.app.v6.EngineConfig.snapshot()
         }
@@ -225,7 +225,7 @@ class OptimizationWorker(
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
                     if (wallElapsed - lastSnapMs > 8_000L) {
                         lastSnapMs = wallElapsed
-                        com.magi.app.v6.OptimizerRuntime.liveBest?.let { live ->
+                        com.magi.app.v6.OptimizerRuntime.liveBestShaped(req.second)?.let { live ->
                             // [3.327.0] 所有権を失っていたら書かない（8秒間引きの中なので追加I/Oは無視できる）。
                             if (ownsFiles()) {
                                 // [3.410.0/B-03] 非原子な writeText をやめる。8秒ごとに数百KBを書くので
@@ -395,6 +395,7 @@ class OptimizationWorker(
 
     companion object {
         const val UNIQUE = "magi_bg_optimize"
+        private val GATE_LEASE = GateLease()
         private const val CHANNEL = "magi_optimize"
         private const val NID_PROGRESS = 4101
         private const val NID_DONE = 4102
