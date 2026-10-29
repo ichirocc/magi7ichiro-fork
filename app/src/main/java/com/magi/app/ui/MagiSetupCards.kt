@@ -209,7 +209,7 @@ private fun BudgetPickerSheet(currentSec: Int, onPick: (Int) -> Unit, onDismiss:
                 for (sec in budgetPresets(currentSec)) {
                     val sel = sec == chosen
                     val label = if (sec == currentSec && sec !in BUDGET_TILE_SECS) "いまの値 ${sec}秒" else budgetText(sec)
-                    Surface(onClick = { chosen = sec }, shape = MaterialTheme.shapes.small,
+                    Surface(onClick = { chosen = sec }, shape = MagiCorners.capsule,
                         color = if (sel) cs.primaryContainer else cs.surfaceVariant,
                         border = if (sel) BorderStroke(2.dp, cs.primary) else null,
                         modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = label + if (sel) "（選択中）" else "" }) {

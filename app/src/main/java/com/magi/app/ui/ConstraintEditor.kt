@@ -145,7 +145,7 @@ private fun SeqFamilyGrouped(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (idx in pairIdxs) {
                     val next = pats[idx][1]
-                    InputChip(
+                    InputChip(shape = MagiCorners.capsule,
                         selected = false, enabled = enabled,
                         onClick = { onEdit(idx) },
                         label = { Text(next) },

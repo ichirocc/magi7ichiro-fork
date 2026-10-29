@@ -155,7 +155,7 @@ internal fun NeedCalendarCard(
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box {
-                    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.heightIn(min = 48.dp).clickable { shiftMenu = true }) {
+                    Surface(color = cs.surfaceVariant, shape = MagiCorners.capsule, modifier = Modifier.heightIn(min = 48.dp).clickable { shiftMenu = true }) {
                         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(shift.kigou, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -212,7 +212,7 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
             CountPill("${days.size}日選択中")
             Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
         }
-        Column(Modifier.border(1.dp, if (invalid) cs.error else Color.Transparent, MaterialTheme.shapes.medium)) {
+        Column(Modifier.border(1.dp, if (invalid) cs.error else Color.Transparent, MaterialTheme.shapes.small)) {
             NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "標準")
             NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "標準")
         }
@@ -249,7 +249,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boo
     ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState, dragHandle = { MagiSheetGrabber(sheetState) }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogHeader("標準の必要人数（${kigou}）", requestClose)
-            Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.medium)) {
+            Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.small)) {
                 NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "未設定")
                 NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "未設定")
             }

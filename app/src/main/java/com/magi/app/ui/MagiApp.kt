@@ -1307,7 +1307,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!compact) Surface(color = MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.small) {
+            if (!compact) Surface(color = MaterialTheme.colorScheme.primary, shape = MagiCorners.capsule) {
                 Text(
                     "MAGI",
                     style = MaterialTheme.typography.titleMedium,
@@ -1337,7 +1337,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                 // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。
                 val tourable = !ui.running && ui.hasResult && ui.bestHard > 0L && onHardTour != null
                 if (tourable) {
-                    Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
+                    Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MagiCorners.capsule,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(topBarTourLabel(tourCount, ui.breakdown["covU"] ?: 0), color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
@@ -1346,13 +1346,13 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     }
                 } else if (ok && !ui.running && onPreDist != null) {
                     // 必須 0 でも要調整が残る＝「配布可」と言い切らず、配布前の確認へ案内する（2026-10-14 利用者レビュー）。
-                    Surface(onClick = onPreDist, color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Surface(onClick = onPreDist, color = bg, shape = MagiCorners.capsule, modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
-                } else Surface(color = bg, shape = MaterialTheme.shapes.small) {
+                } else Surface(color = bg, shape = MagiCorners.capsule) {
                     Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2),
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
@@ -1545,7 +1545,7 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
 
 @Composable
 internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () -> Unit, loading: Boolean = false) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
         Column(
             Modifier.fillMaxWidth().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -1592,7 +1592,7 @@ internal fun hardListCovULine(noRows: Boolean, covU: Int): String? =
 @Composable
 internal fun HardListChip(hard: String, onOpen: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(onClick = onOpen, color = cs.errorContainer, shape = MaterialTheme.shapes.small,
+    Surface(onClick = onOpen, color = cs.errorContainer, shape = MagiCorners.capsule,
         modifier = Modifier.heightIn(min = 48.dp)) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
             Text("必須 $hard ▼", color = cs.onErrorContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,

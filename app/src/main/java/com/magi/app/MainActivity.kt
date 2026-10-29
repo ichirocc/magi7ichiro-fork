@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import com.magi.app.ui.MagiApp
+import com.magi.app.ui.MagiCorners
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -190,14 +191,14 @@ internal fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
         // labelSmall はチップ/凡例/補足/違反内訳の下限。11sp(Material既定)→13→14sp へ継続底上げ。
         labelSmall = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
     )
-    // [MAGI "Ward" 角丸] 精密な道具らしい引き締めた幾何（旧: 柔らかいプランナー調 12–28dp）。
-    //   chip/入力=10dp、カード=14dp、タイル/シート=18dp、大面=24dp。melta-ui: 角丸は tier で一貫（任意値禁止）。
+    // [MAGI 角丸] 同心の角（MagiCorners）: 入力・カードの中の面=10dp、カード・一覧の入れ物=26dp（=10+余白16）、シート=28dp。
+    //   melta-ui: 角丸は tier で一貫（任意値禁止）。
     val shapes = Shapes(
-        extraSmall = RoundedCornerShape(10.dp),
-        small = RoundedCornerShape(12.dp),
-        medium = RoundedCornerShape(14.dp),
+        extraSmall = RoundedCornerShape(MagiCorners.INNER_DP.dp),
+        small = RoundedCornerShape(MagiCorners.INNER_DP.dp),
+        medium = RoundedCornerShape(MagiCorners.CARD_DP.dp),
         large = RoundedCornerShape(18.dp),
-        extraLarge = RoundedCornerShape(24.dp),
+        extraLarge = RoundedCornerShape(MagiCorners.SHEET_DP.dp),
     )
     MaterialTheme(colorScheme = colors, typography = t, shapes = shapes, content = content)
 }

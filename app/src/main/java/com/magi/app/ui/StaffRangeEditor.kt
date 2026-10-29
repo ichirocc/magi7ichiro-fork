@@ -103,7 +103,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                                 gr.lo.isNotBlank() -> "≥${gr.lo}"
                                 else -> ""
                             }
-                            InputChip(
+                            InputChip(shape = MagiCorners.capsule,
                                 selected = false,
                                 enabled = !ui.running,
                                 onClick = { dialogInit = gr; dialog = true },
@@ -195,7 +195,7 @@ internal fun GroupRangeDialog(
                         }
                     }
                 }
-                Column(if (bad) Modifier.border(1.dp, MaterialTheme.colorScheme.error, MaterialTheme.shapes.medium) else Modifier) {
+                Column(if (bad) Modifier.border(1.dp, MaterialTheme.colorScheme.error, MaterialTheme.shapes.small) else Modifier) {
                     NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
                     NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
                 }
