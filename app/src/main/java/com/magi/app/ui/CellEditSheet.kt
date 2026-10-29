@@ -38,6 +38,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -198,6 +199,10 @@ internal fun CellEditSheet(
         val target = cellSheetTarget(name, formatDay(ui.startDate, j), current.takeIf { it >= 0 }?.let(::sym))
         val badge = cellSheetBadge(status.severity, tourPos?.first?.takeIf { tourHeading != null }, tourPos?.second ?: 0)
         val peekRecommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet }
+        val partners = remember(rev, cell) {
+            if (status.severity == CellSeverity.NONE) emptyList()
+            else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
+        }
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, { k -> choose(k) }, onMove, onDismiss, onToggleExpand, onShowRelax,
             canUndo = canUndo, onUndo = onUndo, onMode = onMode, extKigou = extKigou, onWishes = { fixNav.onWishes(i, j) }, onList = onList,
@@ -206,13 +211,13 @@ internal fun CellEditSheet(
             recommend = peekRecommend,
             searchLabel = peekSearchAction(mode, status.severity),
             onSearch = { searchOnOpen = true; onToggleExpand() },
+            fixMove = marks.best?.takeIf { mode == 0 && status.severity != CellSeverity.NONE && it != current && it in canDoSet },
+            onApplyFix = { k -> onPick(k) },
+            relatedDays = (partners + j).distinct().sorted().takeIf { it.size >= 2 }.orEmpty(),
+            pinned = pinned,
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
             MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
                 DisclosureText("小さく表示", open = true)
-            }
-            val partners = remember(rev, cell) {
-                if (status.severity == CellSeverity.NONE) emptyList()
-                else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
@@ -543,6 +548,7 @@ private fun ExtWishDayRow(kigou: List<String>, dayShort: String, onWishes: () ->
 
 /** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を外す・緩める候補の行）＋シフトと詳しく ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PeekBody(
     ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
@@ -552,12 +558,13 @@ private fun PeekBody(
     canUndo: Boolean = false, onUndo: () -> Unit = {},
     onMode: (Int) -> Unit = {}, extKigou: List<String>? = null, onWishes: () -> Unit = {},
     searchLabel: String? = null, onSearch: () -> Unit = {}, onList: (() -> Unit)? = null,
+    fixMove: Int? = null, onApplyFix: (Int) -> Unit = {}, relatedDays: List<Int> = emptyList(), pinned: Boolean = false,
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: k.toString()
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // 1 行目＝対象、2 行目＝札＋原因（S-2）。
         Row(verticalAlignment = Alignment.CenterVertically) {
             // 見出しの残り幅は約 180dp＝名前と日付で 1 行に入らないことが多い（2026-10-23 机上検証）。2 行まで。
@@ -576,6 +583,25 @@ private fun PeekBody(
                 MagiTextButton(onClick = { tourPrev?.invoke() }, enabled = tourPrev != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
                 MagiTextButton(onClick = { tourNext?.invoke() }, enabled = tourNext != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
+        }
+        // 関係する日の札（並びの全日・前日と翌日）。押すとその日のセルへ移る（2026-10-29 画面案）。
+        if (mode == 0 && relatedDays.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            relatedDays.forEach { d ->
+                FilterChip(shape = MagiCorners.capsule, selected = d == j, onClick = { if (d != j) onMove(i to d) },
+                    label = { Text(DayText.short(ui.startDate, d)) }, modifier = Modifier.heightIn(min = 48.dp))
+            }
+        }
+        // 直す手（2026-10-29 画面案）: このセルだけを変えて必須が減り、どの必須も増えない最善の 1 手。押すとすぐ当てる（元に戻せる）。
+        if (fixMove != null) {
+            Text(FIX_MOVE_HEADING, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
+            Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = cs.tertiary, modifier = Modifier.size(20.dp))
+                    Text(fixMoveLine(DayText.short(ui.startDate, j), sym(fixMove)), style = MaterialTheme.typography.bodyLarge, color = cs.onTertiaryContainer)
+                }
+            }
+            Button(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onApplyFix(fixMove) }, enabled = !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(FIX_MOVE_APPLY, maxLines = 1) }
         }
         // 押せる行どうしは 8dp 空ける（赤の［希望を外す］とシフトの押し違いを防ぐ）。
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -619,8 +645,20 @@ private fun PeekBody(
                     }
                 }
             }
-            // 主ボタンはシフト行の下に全幅で 1 つ（S-3・INV-09）。押すとこのセルの変更案の一覧を開いた状態で広げる（INV-01）。
-            if (searchLabel != null) Button(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(searchLabel, maxLines = 1) }
+            // 主ボタンはシフト行の下に全幅で 1 つ（S-3・INV-09）。押すとこのセルの変更案の一覧を開いた状態で広げる（INV-01）。直す手があれば主はそちら。
+            if (searchLabel != null) {
+                if (fixMove != null) OutlinedButton(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(searchLabel, maxLines = 1) }
+                else Button(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(searchLabel, maxLines = 1) }
+            }
+            // 希望・手動固定は一覧の行（iOS の一覧の形）。
+            if (mode == 0) Surface(color = cs.surfaceContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    MagiGroupRow(PEEK_WISH_ROW, color = cs.onSurface) { onMode(1) }
+                    MagiGroupRow(if (pinned) PEEK_UNPIN_ROW else PEEK_PIN_ROW, divider = false, color = cs.onSurface) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Board.TogglePin(i, j))
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
     }

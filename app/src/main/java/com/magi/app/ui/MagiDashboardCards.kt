@@ -655,6 +655,31 @@ internal class OpNextPlan(
     val bigColors: Pair<Color, Color>? = null,   // 主ボタンの地と文字。null＝primary（段の地色と 3:1 に届かない段だけ渡す）
 )
 
+/** ホームの「次にやること」（2026-10-29 画面案）: 番号つきの必須違反の行と「問題をすべて見る」。カードの中の面＝shapes.small。 */
+@Composable
+private fun HomeNextList(items: List<HomeNextItem>, total: Int, fg: Color, onOpen: (Int) -> Unit, onOpenAll: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(HOME_NEXT_HEADING, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = fg, modifier = Modifier.semantics { heading() })
+            Text("${items.size}件", style = MaterialTheme.typography.bodyMedium, color = fg)
+        }
+        Surface(color = cs.surface, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+            Column {
+                items.forEach { it ->
+                    val tagColor = when (it.tag) { NEXT_TAG_FIXABLE -> cs.primary; WISH_ONLY_TAG -> MagiAccent.orange; else -> cs.onSurfaceVariant }
+                    ProblemItemRow(it.name, it.reason, it.tag, tagColor, lead = {
+                        Box(Modifier.size(32.dp).background(cs.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
+                            Text("${it.rank}", style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                        }
+                    }) { onOpen(it.tourAt) }
+                }
+                if (total > 0) MagiGroupRow(HOME_NEXT_ALL, divider = false, onClick = onOpenAll)
+            }
+        }
+    }
+}
+
 /**
  * [operator_ux §3] 思考誘導ホームの「次にやること」カード。
  * IT中学生レベルのオペレーター向け：専門用語ゼロ・大ボタン1つ・色で意味（緑=できた/黄=もう少し/赤=気をつけて）。
@@ -695,6 +720,10 @@ internal fun OperatorNextActionCard(
     onRetrySave: () -> Unit = {},    // 保存の失敗の行の「もう一度保存する」
     onOpenConsults: () -> Unit = {}, // 作成中の相談の行の「開く」（相談の一覧を出す）
     inner: (@Composable () -> Unit)? = null,   // カードの先頭に差し込む中身（代行の記録）
+    nextItems: List<HomeNextItem> = emptyList(),   // 次にやること（必須の上位 3 件、`homeNextItems`）
+    nextTotal: Int = 0,                            // 必須違反の件数（見出しの「N件」と「問題をすべて見る」の有無）
+    onOpenNext: (Int) -> Unit = {},                // 行を押す＝その必須違反のセルのシートを開く（巡回の何件目）
+    onOpenAll: () -> Unit = {},                    // 問題をすべて見る（勤務表タブの問題一覧）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -829,6 +858,7 @@ internal fun OperatorNextActionCard(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg), border = BorderStroke(1.dp, plan.fg)) { Text(SAVE_RETRY_BUTTON) }
                     // 探索を止めるのは下部バーの［やめる］だけ（カードに同じボタンを重ねない）。
                 }
+                HomeSection.NEXT_ITEMS -> if (nextItems.isNotEmpty()) HomeNextList(nextItems, nextTotal, plan.fg, onOpenNext, onOpenAll)
                 HomeSection.PROGRESS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         // iOS の時計（タイマー）の輪: 予算＋後処理の枠に対する経過（「残り M:SS」と同じ枠）。

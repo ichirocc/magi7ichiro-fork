@@ -170,7 +170,18 @@ internal fun partnerCellLabel(startDate: String, day: Int, single: Boolean): Str
     if (single) "同じ違反のもう一方のセル（${DayText.full(startDate, day)}）を見る" else "同じ違反のほかのセル（${DayText.full(startDate, day)}）を見る"
 
 /** シフトボタンの印。[recommended]＝緑の点、[hardRisk]＝置くと必須の族が増える（警告の印）。 */
-internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet())
+/** [best]＝おすすめのうち必須→重み付きの合計が最も小さくなる 1 つ（セルのシートの「直す手」）。 */
+internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet(), val best: Int? = null)
+
+/** セルのシートの「直す手」（2026-10-29 ユーザー提示の画面案）。 */
+internal const val FIX_MOVE_HEADING = "直す手"
+internal const val FIX_MOVE_APPLY = "この手を使う（元に戻せます）"
+
+internal fun fixMoveLine(dayShort: String, sym: String): String = "$dayShort → $sym"
+
+internal const val PEEK_WISH_ROW = "希望を登録する"
+internal const val PEEK_PIN_ROW = "手動固定する"
+internal const val PEEK_UNPIN_ROW = "手動固定を外す"
 
 internal const val SINGLE_CELL_NOTE = "1 マスでは直りません。前後の日の組み合わせが必要です。"
 
@@ -246,6 +257,9 @@ internal fun evaluateShiftMarks(
     val base = UnifiedViolationChecker.check(state, s)
     val rec = LinkedHashSet<Int>()
     val risk = LinkedHashSet<Int>()
+    var best: Int? = null
+    var bestHard = Int.MAX_VALUE
+    var bestWeighted = Double.MAX_VALUE
     val trial = Array(s.size) { s[it].copyOf() }
     for (k in candidates) {
         if (!stillWanted()) return ShiftMarks()
@@ -259,9 +273,12 @@ internal fun evaluateShiftMarks(
             CellSeverity.SOFT -> r.weightedScore < base.weightedScore
             CellSeverity.NONE -> false
         }
-        if (better) rec.add(k)
+        if (better) {
+            rec.add(k)
+            if (r.hard < bestHard || r.hard == bestHard && r.weightedScore < bestWeighted) { best = k; bestHard = r.hard; bestWeighted = r.weightedScore }
+        }
     }
-    return ShiftMarks(rec, risk)
+    return ShiftMarks(rec, risk, best)
 }
 
 /**
@@ -475,6 +492,48 @@ internal data class ProblemRow(val family: String, val staff: Int, val days: Lis
                                val tourAt: Int? = null, val wishOnly: Boolean = false) {
     val cell: Pair<Int, Int> get() = staff to days.first()
 }
+
+/** 問題一覧の行の 2 段（2026-10-29 画面案）: 1 段目＝名前（人員不足など名前の無い行は null）、2 段目＝理由（名前を除いた残り）。 */
+internal fun problemRowParts(line: String, name: String?): Pair<String?, String> {
+    if (name.isNullOrEmpty() || !line.startsWith(name)) return null to line
+    return name to line.removePrefix(name).trim().removePrefix("…").trim()
+}
+
+internal const val PROBLEM_LIST_TITLE = "問題"
+internal const val PROBLEM_OPEN_BUTTON = "開く"
+
+/** 問題一覧の大きな題「問題」の横の件数「必須 3件」（[hardText]＝`displayHardText`）。 */
+internal fun problemListCount(hardText: String): String = "必須 $hardText"
+
+/** 要調整を畳んだ行「要調整 (N)」。 */
+internal fun softFoldLabel(n: Int): String = "要調整 ($n)"
+
+/** ホームの「次にやること」の行の札（2026-10-29 画面案）。 */
+internal const val NEXT_TAG_FIXABLE = "直せる見込み"
+internal const val NEXT_TAG_CHECK = "確認が必要"
+internal const val HOME_NEXT_HEADING = "次にやること"
+internal const val HOME_NEXT_ALL = "問題をすべて見る"
+
+/** ホームの「次にやること」の 1 行。[tourAt]＝巡回の何件目（押すとそのセルのシートを開く）。 */
+internal data class HomeNextItem(val rank: Int, val name: String, val reason: String, val tag: String?, val tourAt: Int, val cell: Pair<Int, Int>)
+
+/**
+ * 必須違反の上位 [max] 件（[hardViolationRows] の順＝希望のままは後ろ）。札は 希望のまま／直せる見込み（変更案で直せる鍵 [fixable] に入る）／
+ * 確認が必要（変更案を探して入らなかった）。[fixable] が null（未探索・古い）なら直せるかは言わない。
+ */
+internal fun homeNextItems(rows: List<HardListRow>, items: List<TourItem>, fixable: Set<com.magi.app.v6.ViolationKey>?, max: Int = 3): List<HomeNextItem> =
+    rows.take(max).mapIndexedNotNull { n, r ->
+        val it = items.getOrNull(r.tourAt) ?: return@mapIndexedNotNull null
+        val fix = fixable?.any { k -> k.family == it.family && k.space == com.magi.app.v6.ViolationKey.Space.CELL && k.a == it.staff && k.b in it.days }
+        val tag = when {
+            r.wishOnly -> WISH_ONLY_TAG
+            fix == true -> NEXT_TAG_FIXABLE
+            fix == false -> NEXT_TAG_CHECK
+            else -> null
+        }
+        val (_, reason) = problemRowParts(r.line, r.name)
+        HomeNextItem(n + 1, r.name, reason, tag, r.tourAt, it.cell)
+    }
 
 /** 要調整の見出し「要調整 N件」（0 なら出さない）。 */
 internal fun softRowsHeading(n: Int): String? = if (n > 0) "要調整 ${n}件" else null
@@ -1775,13 +1834,13 @@ internal fun homePlan(
 }
 
 /** ホームの主カードの区画。並びの順は `homeCardSections` が決め、`OperatorNextActionCard` はその順に描くだけ（C# `HomeCardSectionsOf` と 1 対 1）。 */
-internal enum class HomeSection { CREATION, HEADLINE, BADGES, STATUS, PROGRESS, PRIMARY, HELPER, OTHERS, DETAIL, SATISFACTION, INFO, DRAFT_LINK }
+internal enum class HomeSection { CREATION, HEADLINE, BADGES, STATUS, NEXT_ITEMS, PROGRESS, PRIMARY, HELPER, OTHERS, DETAIL, SATISFACTION, INFO, DRAFT_LINK }
 
 /** 主ボタンが分析タブへ行く段（「ほかの問題を見る」と行き先が同じ）。 */
 private val homeActionsToAnalysis = setOf(HomeAction.SHOW_MOVE, HomeAction.SHOW_LIST)
 
 /**
- * ホームの主カードの並び（純関数）: 作成の 2 行 → 見出し → 札 → 状態（2 行まで）→ 主ボタン 1 つ → 補助 →「ほかの問題を見る」→
+ * ホームの主カードの並び（純関数）: 作成の 2 行 → 見出し → 札 → 状態（2 行まで）→ 次にやること（必須の上位 3 件）→ 主ボタン 1 つ → 補助 →「ほかの問題を見る」→
  * 詳細 → でき具合 → ⓘ → 下書きのリンク。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。札は検査済み（checkRev>0）のときだけ。
  */
 internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = buildList {
@@ -1791,6 +1850,7 @@ internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = 
     add(HomeSection.HEADLINE)
     if (ui.hasResult && ui.checkRev > 0) add(HomeSection.BADGES)   // [3.716.0] 札は検査済みのときだけ（検査前に「満たしています」と言わない）
     add(HomeSection.STATUS)
+    if (ui.hasResult && ui.checkRev > 0 && ui.bestHard > 0L && plan.kind != HomePlanKind.DRAFT) add(HomeSection.NEXT_ITEMS)
     if (plan.primaryEnabled) add(HomeSection.PRIMARY)
     if (plan.helper != null || ui.hasResult) add(HomeSection.HELPER)
     if (creation && plan.primary !in homeActionsToAnalysis) add(HomeSection.OTHERS)

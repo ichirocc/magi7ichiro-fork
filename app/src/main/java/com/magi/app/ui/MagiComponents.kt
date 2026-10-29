@@ -47,6 +47,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
 
 /**
  * MAGI 共通コンポーネント（docs/magi_design_system.md §4）。
@@ -218,6 +220,43 @@ internal fun MagiGroupRow(label: String, enabled: Boolean = true, trailing: Stri
             Text(trailing, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })   // 印は読み上げない
         }
         if (divider) HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
+    }
+}
+
+/**
+ * 問題の 1 行（2026-10-29 画面案）: 先頭の印 [lead]、太字の名前 [title]（null なら [sub] だけ）、その下に理由 [sub]、右に札 [tag] と [trailing]。
+ * 行全体を押せる。読み上げは名前・理由・札をまとめて 1 つ（印と › は読まない）。
+ */
+@Composable
+internal fun ProblemItemRow(title: String?, sub: String, tag: String? = null, tagColor: Color = Color.Unspecified, divider: Boolean = true,
+                            selected: Boolean = false, lead: @Composable () -> Unit = {}, trailing: @Composable () -> Unit = {
+                                Text("›", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
+                            }, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val spoken = listOfNotNull(title, sub.takeIf { it.isNotBlank() }, tag).joinToString("、")
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (selected) cs.primaryContainer else Color.Transparent)
+            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.clearAndSetSemantics { }) { lead() }
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = spoken }) {
+                if (title != null) Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (sub.isNotBlank()) Text(sub, style = if (title != null) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                    color = if (title != null) cs.onSurfaceVariant else cs.onSurface, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis)
+            }
+            if (tag != null) Text(tag, style = MaterialTheme.typography.labelMedium, color = if (tagColor.isSpecified) tagColor else cs.onSurfaceVariant,
+                modifier = Modifier.clearAndSetSemantics { })
+            trailing()
+        }
+        if (divider) HorizontalDivider(Modifier.padding(start = 12.dp), color = cs.outlineVariant)
+    }
+}
+
+/** 問題の印（丸に「!」。必須は赤、要調整は [color] に橙を渡す）。 */
+@Composable
+internal fun HardMark(color: Color = MaterialTheme.colorScheme.error) {
+    Box(Modifier.size(24.dp).background(color, CircleShape), contentAlignment = Alignment.Center) {
+        Text("!", style = MaterialTheme.typography.labelLarge, color = ensureReadable(color, Color.White), fontWeight = FontWeight.Bold)
     }
 }
 

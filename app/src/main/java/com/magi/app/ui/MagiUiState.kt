@@ -342,6 +342,14 @@ internal fun analysisFixResolved(ui: UiState): Int? {
     return ui.fixResolvedUnion?.takeIf { it.matches(opsList, ui.schedule) }?.keys?.size
 }
 
+/** 変更案で直せる必須違反の鍵（[analysisFixResolved] と同じ鮮度）。未探索・古いときは null、案が無ければ空。 */
+internal fun fixableHardKeys(ui: UiState): Set<com.magi.app.v6.ViolationKey>? {
+    if (!ui.fixSearched) return null
+    val opsList = ui.fixSuggestions.filter { it.deltaHard < 0 }.map { it.ops }
+    if (opsList.isEmpty()) return emptySet()
+    return ui.fixResolvedUnion?.takeIf { it.matches(opsList, ui.schedule) }?.keys
+}
+
 /** ホームの見出しが読む解消の行（鮮度が合わなければ空＝件数だけの見出し）。 */
 internal fun topFixResolvedLabels(ui: UiState): List<String> {
     val top = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 } ?: return emptyList()
