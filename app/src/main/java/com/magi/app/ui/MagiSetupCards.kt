@@ -770,7 +770,7 @@ internal fun AppearanceCard(
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
     leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {}, inner: (@Composable () -> Unit)? = null) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
-    MagiGroup("外観") {
+    MagiGroup(SETTINGS_DISPLAY_HEADING) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -79,6 +79,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
@@ -819,8 +823,10 @@ internal fun OperatorNextActionCard(
         HomePlanKind.WISHES ->
             OpNextPlan(amber, onAmber, "希望とルールがぶつかっています",
                 wishLabel, onShowWishes, true, null, onSetup)
-        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, nextTarget ?: "",
-            HOME_LIST_BUTTON, onShowList, true, null, onSetup)
+        // [UI-S1] 次にやることの先頭があれば主は「1を開く（名前の種類）」＝そのセルのシート。一覧は「問題をすべて見る」。
+        HomePlanKind.LIST -> nextItems.firstOrNull()?.let { first ->
+            OpNextPlan(amber, onAmber, nextTarget ?: "", homeOpenFirstLabel(first, fontScale), { onOpenNext(first.tourAt) }, true, null, onSetup)
+        } ?: OpNextPlan(amber, onAmber, nextTarget ?: "", HOME_LIST_BUTTON, onShowList, true, null, onSetup)
     }
     // 並びは純関数 `homeCardSections` が決める＝ここは区画ごとの中身を描くだけ（C# と 1 対 1）。
     val sections = homeCardSections(hp, ui)
@@ -917,19 +923,18 @@ internal fun OperatorNextActionCard(
                     )
                     if (ui.bestHard > 0L) Text(HOME_SOFT_NOTE, style = MaterialTheme.typography.bodySmall, color = plan.fg)
                 }
+                // [UI-S1] まれな操作（でき具合の意味・下書きから作り直す）は「…」の中。説明の文は 1 文字も変えない（判断設計監査 #1/#2）。
                 HomeSection.INFO -> {
+                    var menuOpen by remember { mutableStateOf(false) }
                     var detailOpen by remember { mutableStateOf(false) }
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { detailOpen = !detailOpen },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            if (detailOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null, tint = plan.fg, modifier = Modifier.size(16.dp),
-                        )
-                        DisclosureText("ⓘ でき具合の意味", detailOpen, style = MaterialTheme.typography.bodySmall, color = plan.fg)
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = HOME_MORE_MENU, tint = plan.fg) }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(text = { Text(HOME_SCORE_MEANING) }, onClick = { menuOpen = false; detailOpen = !detailOpen }, modifier = Modifier.heightIn(min = 48.dp))
+                            // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る＝結果と戻し方を語に含める。
+                            DropdownMenuItem(text = { Text(HOME_REDRAFT_ITEM) }, onClick = { menuOpen = false; onSmartInitial() }, modifier = Modifier.heightIn(min = 48.dp))
+                        }
                     }
-                    // [判断設計監査 #1/#2] 数字の根拠（できあがり度の意味）と結果採用の意味（反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
                     if (detailOpen) {
                         Text(
                             "※でき具合＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
@@ -937,13 +942,6 @@ internal fun OperatorNextActionCard(
                             style = MaterialTheme.typography.bodySmall, color = plan.fg,
                         )
                     }
-                }
-                // [3.261.0] 初期解生成へ常に戻れる小さな常設リンク（元に戻すで取消可能・破壊的でない）。
-                // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る操作なので、その結果と戻し方を文言に含める。
-                HomeSection.DRAFT_LINK -> Column(Modifier.fillMaxWidth()) {
-                    MagiTextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) { Text("下書きから作り直す") }
-                    Text("今の結果は「元に戻す」で戻せます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp))
                 }
             }
         }

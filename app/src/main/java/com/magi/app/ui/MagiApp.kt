@@ -921,6 +921,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             EditHeaderCard(ui, editPlan, editWish.noInput, onOpenWish = { wishScrollKey++ }, onOpenNeed = { needScrollKey++ },
                                 onWishConflicts = { wishConflicts = true },
                                 inner = { MonthPickerCard(ui, onEvent, bare = true) })
+                            // [UI-S5] よく使う 3 つ目の「回数の目標」は入口だけ（中身は年間マスター③＝制度の設定。月次と混ぜない）。
+                            MagiGroup(null, footer = EDIT_COUNT_FOOTER) { MagiGroupRow(EDIT_COUNT_ROW, divider = false) { openEditLanding(EditLanding(2, "yr_count")) } }
                             val period = editPeriodNow
                             val wishNow = resolvePick(wishPick, ui.staffNames, period)
                             val needNow = resolvePick(needPick, ui.shiftSymbols, period)
@@ -1029,12 +1031,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },
-                        leftHand = leftHand, onLeftHand = { leftHand = it },
-                        inner = { ShiftColorCard(ui, vm.shiftColorList(), onEvent, bare = true) })
-                    // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
-                    //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
-                    //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。
-                    ColorSettingsView(ui, onEvent)
+                        leftHand = leftHand, onLeftHand = { leftHand = it })
+                    // [UI-S7] 色（シフトの表示色・違反種別の色）は表示の下で畳む＝めったに触らない設定。違反の色は ColorSettingsView に一本化（3.132系）。
+                    CollapsibleSection(SETTINGS_COLORS_HEADING, "settings_colors") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ShiftColorCard(ui, vm.shiftColorList(), onEvent)
+                            ColorSettingsView(ui, onEvent)
+                        }
+                    }
                     DataActionsCard(
                         ui = ui,
                         onOpenJson = openJson,

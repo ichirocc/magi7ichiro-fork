@@ -515,7 +515,17 @@ internal const val HOME_NEXT_HEADING = "次にやること"
 internal const val HOME_NEXT_ALL = "問題をすべて見る"
 
 /** ホームの「次にやること」の 1 行。[tourAt]＝巡回の何件目（押すとそのセルのシートを開く）。 */
-internal data class HomeNextItem(val rank: Int, val name: String, val reason: String, val tag: String?, val tourAt: Int, val cell: Pair<Int, Int>)
+internal data class HomeNextItem(val rank: Int, val name: String, val reason: String, val tag: String?, val tourAt: Int, val cell: Pair<Int, Int>, val family: String = "")
+
+/** 主ボタン「1を開く（アリフの並び）」（UI-S1・画面案）。名前と種類の短い語が入らなければ「1を開く」。 */
+internal fun homeOpenFirstLabel(item: HomeNextItem, fontScale: Float = 1f): String {
+    val kind = when (item.family) {
+        "c3n" -> "並び"; "c3w" -> "希望の前日"; "pref" -> "希望"; "extWish" -> "拡張希望"; "groupViol" -> "担当外"
+        else -> breakdownLabels[item.family] ?: "問題"
+    }
+    val full = "${item.rank}を開く（${item.name}の$kind）"
+    return if (full.length <= (HOME_BUTTON_MAX_CHARS / fontScale).toInt()) full else "${item.rank}を開く"
+}
 
 /**
  * 必須違反の上位 [max] 件（[hardViolationRows] の順＝希望のままは後ろ）。札は 希望のまま／直せる見込み（変更案で直せる鍵 [fixable] に入る）／
@@ -532,7 +542,7 @@ internal fun homeNextItems(rows: List<HardListRow>, items: List<TourItem>, fixab
             else -> null
         }
         val (_, reason) = problemRowParts(r.line, r.name)
-        HomeNextItem(n + 1, r.name, reason, tag, r.tourAt, it.cell)
+        HomeNextItem(n + 1, r.name, reason, tag, r.tourAt, it.cell, it.family)
     }
 
 /** 要調整の見出し「要調整 N件」（0 なら出さない）。 */
@@ -1736,7 +1746,13 @@ internal fun forbiddenRunTag(escapable: Boolean): String = if (escapable) "崩�
 internal fun forbiddenRunCellsLine(cells: List<Pair<String, String>>): String = cells.joinToString(" · ") { "${it.first} ${it.second}" }
 
 /** [3.714.0] 設定タブの見出しと組む時間の 1 行（仕上げの秒数と注記は「詳しく」の中）。 */
-internal const val SETTINGS_HEADING = "設定"
+internal const val SETTINGS_HEADING = "計算"
+/** [UI-S7] 設定タブの区分: 計算・表示・色（畳む）・データ・詳細設定（畳む）。 */
+internal const val SETTINGS_DISPLAY_HEADING = "表示"
+/** [UI-S5] 月次条件から年間マスター③（回数）への入口。 */
+internal const val EDIT_COUNT_ROW = "回数の目標"
+internal const val EDIT_COUNT_FOOTER = "年間マスターの③で設定します（制度の設定。毎月は変えません）。"
+internal const val SETTINGS_COLORS_HEADING = "色"
 internal const val BUDGET_CHANGE_BUTTON = "組む時間を変える"
 internal fun budgetShortLine(sec: Int): String = "組む時間 ${budgetText(sec)}"
 /** [3.714.0] 編集タブの見出しと 1 行。 */
@@ -1834,14 +1850,14 @@ internal fun homePlan(
 }
 
 /** ホームの主カードの区画。並びの順は `homeCardSections` が決め、`OperatorNextActionCard` はその順に描くだけ（C# `HomeCardSectionsOf` と 1 対 1）。 */
-internal enum class HomeSection { CREATION, HEADLINE, BADGES, STATUS, NEXT_ITEMS, PROGRESS, PRIMARY, HELPER, OTHERS, DETAIL, SATISFACTION, INFO, DRAFT_LINK }
+internal enum class HomeSection { CREATION, HEADLINE, BADGES, STATUS, NEXT_ITEMS, PROGRESS, PRIMARY, HELPER, OTHERS, DETAIL, SATISFACTION, INFO }
 
 /** 主ボタンが分析タブへ行く段（「ほかの問題を見る」と行き先が同じ）。 */
 private val homeActionsToAnalysis = setOf(HomeAction.SHOW_MOVE, HomeAction.SHOW_LIST)
 
 /**
  * ホームの主カードの並び（純関数）: 作成の 2 行 → 見出し → 札 → 状態（2 行まで）→ 次にやること（必須の上位 3 件）→ 主ボタン 1 つ → 補助 →「ほかの問題を見る」→
- * 詳細 → でき具合 → ⓘ → 下書きのリンク。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。札は検査済み（checkRev>0）のときだけ。
+ * 詳細 → でき具合 → 「…」（でき具合の意味・下書きから作り直す。UI-S1 のまれな操作）。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。札は検査済み（checkRev>0）のときだけ。
  */
 internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = buildList {
     if (ui.running) { add(HomeSection.PROGRESS); return@buildList }
@@ -1855,7 +1871,7 @@ internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = 
     if (plan.helper != null || ui.hasResult) add(HomeSection.HELPER)
     if (creation && plan.primary !in homeActionsToAnalysis) add(HomeSection.OTHERS)
     add(HomeSection.DETAIL)
-    if (ui.hasResult) { add(HomeSection.SATISFACTION); add(HomeSection.INFO); add(HomeSection.DRAFT_LINK) }
+    if (ui.hasResult) { add(HomeSection.SATISFACTION); add(HomeSection.INFO) }
 }
 
 /** 下書きの段の状態の 1 文（次は仕上げの作成）。 */
@@ -1867,6 +1883,9 @@ internal const val HOME_HARD0_HEADLINE = "必須は満たしています"
 internal const val HOME_MONTH_HEADLINE = "今月の判断"
 internal const val HOME_SCHEDULE_HELPER = "表で全体を見る"
 internal const val HOME_LIST_BUTTON = "必須を見る"
+internal const val HOME_MORE_MENU = "その他の操作"
+internal const val HOME_SCORE_MEANING = "でき具合の意味"
+internal const val HOME_REDRAFT_ITEM = "下書きから作り直す（元に戻せます）"
 internal const val HOME_PRE_DIST_BUTTON = "配布前の確認"
 internal const val PRE_DIST_TITLE = "配布前の確認"
 internal const val HOME_SOFT_NOTE = "要調整は分析で確認"
