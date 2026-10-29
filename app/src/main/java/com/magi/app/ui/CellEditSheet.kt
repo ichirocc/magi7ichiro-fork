@@ -53,8 +53,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -112,7 +110,7 @@ internal fun CellEditSheet(
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberMagiHaptics()
     val canDoSet = sheetCanDo(cv.allowedByStaff, i, ui.shiftSymbols.size)
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
@@ -404,7 +402,7 @@ internal fun CellEditSheet(
                         if (current >= 0) {
                             Text(PIN_TITLE, style = MaterialTheme.typography.titleSmall)
                             Text(PIN_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                            OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Board.TogglePin(i, j)) },
+                            OutlinedButton(onClick = { haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Board.TogglePin(i, j)) },
                                 modifier = Modifier.heightIn(min = 48.dp)) {
                                 Icon(if (pinned) Icons.Outlined.LockOpen else Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.size(8.dp))
@@ -480,7 +478,7 @@ internal fun CellEditSheet(
                                 modifier = Modifier.weight(1f),
                             ) {
                                 if (mode == 0) choose(k)
-                                else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                                else { haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                             }
                         }
                     }
@@ -503,7 +501,7 @@ internal fun CellEditSheet(
                 MagiTextButton(onClick = { step = 0; pickTo = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(KEEP_UNCHANGED_BUTTON) }
             }
             if (mode == 1 && wish != null) Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                OutlinedButton(onClick = { haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1)
                 }
@@ -562,7 +560,7 @@ private fun PeekBody(
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberMagiHaptics()
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: k.toString()
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // 1 行目＝対象、2 行目＝札＋原因（S-2）。
@@ -600,7 +598,7 @@ private fun PeekBody(
                     Text(fixMoveLine(DayText.short(ui.startDate, j), sym(fixMove)), style = MaterialTheme.typography.bodyLarge, color = cs.onTertiaryContainer)
                 }
             }
-            Button(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onApplyFix(fixMove) }, enabled = !ui.running,
+            Button(onClick = { haptic(MagiHaptic.CONFIRM); onApplyFix(fixMove) }, enabled = !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(FIX_MOVE_APPLY, maxLines = 1) }
         }
         // 押せる行どうしは 8dp 空ける（赤の［希望を外す］とシフトの押し違いを防ぐ）。
@@ -613,7 +611,7 @@ private fun PeekBody(
             // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
             val showRemove = wish != null && mode == 1
             if (showRemove || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (showRemove) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                if (showRemove) OutlinedButton(onClick = { haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                     modifier = Modifier.heightIn(min = 48.dp)) { Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1) }
                 if (recommend != null) OutlinedButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
@@ -634,7 +632,7 @@ private fun PeekBody(
                                 modifier = Modifier.weight(1f),
                             ) {
                                 if (mode == 0) { if (k != current) onPick(k) }
-                                else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                                else { haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                             }
                         }
                         MagiTextButton(onClick = onToggleExpand, modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
@@ -655,7 +653,7 @@ private fun PeekBody(
                 Column {
                     MagiGroupRow(PEEK_WISH_ROW, color = cs.onSurface) { onMode(1) }
                     MagiGroupRow(if (pinned) PEEK_UNPIN_ROW else PEEK_PIN_ROW, divider = false, color = cs.onSurface) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Board.TogglePin(i, j))
+                        haptic(MagiHaptic.CONFIRM); onEvent(MagiEvent.Board.TogglePin(i, j))
                     }
                 }
             }
