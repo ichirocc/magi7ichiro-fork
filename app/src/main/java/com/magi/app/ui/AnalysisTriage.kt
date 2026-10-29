@@ -276,11 +276,11 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     )
 }
 
-/** 分析タブの主ボタン（1 つだけ）。巡回できるなら巡回、人員不足だけならなおし方、それ以外は出さない。 */
-internal enum class AnalysisPrimary { TOUR, GUIDED, NONE }
-
-/** 分析タブの状態の段: 一文・3 点まで・主ボタン（[analysisSummary]）。 */
-internal data class AnalysisSummary(val sentence: String, val points: List<String>, val primary: AnalysisPrimary, val primaryLabel: String?)
+/**
+ * 分析タブの状態の段: 一文・点（[analysisSummary]）。主ボタンは持たない（UI-S6、2026-10-28）＝「次の問題へ」はホームの主、
+ * 分析の主はすぐ下の変更案のカード（いちばん効く案＋適用、元に戻せる）。旧: 巡回・なおし方の主ボタンがホームと同じ形で二重にあった。
+ */
+internal data class AnalysisSummary(val sentence: String, val points: List<String>)
 
 /** 設定の見直しの行の全幅ボタン（節の名を言う）。 */
 internal fun issueSettingsLabel(kind: IssueKind?): String = when (kind) {
@@ -292,12 +292,12 @@ internal fun issueSettingsLabel(kind: IssueKind?): String = when (kind) {
 
 /**
  * 分析タブの状態の段。一文は上部の札（[boardStatusLines]）と同じ区別で決める。
- * [tourCount]＝巡回できる必須違反の数、[fixResolved]＝変更案で直せる必須違反の数（null＝未探索・古い＝出さない）。
+ * [fixResolved]＝変更案で直せる必須違反の数（null＝未探索・古い＝出さない）。
  */
 /** 分析タブの一文（「必須3件 · 要調整12件」）。 */
 internal fun analysisCountLine(hardLabel: String, softLabel: String): String = "必須$hardLabel · 要調整$softLabel"
 
-internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): AnalysisSummary {
+internal fun analysisSummary(ui: UiState, fixResolved: Int?): AnalysisSummary {
     val hard = ui.bestHard
     val evaluated = ui.checkRev > 0 && !ui.running
     val sentence = when {
@@ -311,19 +311,7 @@ internal fun analysisSummary(ui: UiState, tourCount: Int, fixResolved: Int?): An
     val points = if (!ui.hasResult && !ui.running) emptyList() else buildList {
         if (evaluated && hard > 0 && fixResolved != null) add("変更案で直せる必須違反 ${fixResolved}か所")
     }
-    val shortDays = ui.coverageDiag?.shortfalls?.filter { it.miss > 0 }?.map { it.dayIndex }?.distinct()?.size ?: 0
-    val active = hard > 0 && !ui.running && ui.hasResult
-    val primary = when {
-        active && tourCount > 0 -> AnalysisPrimary.TOUR
-        active && shortDays > 0 -> AnalysisPrimary.GUIDED
-        else -> AnalysisPrimary.NONE
-    }
-    val label = when (primary) {
-        AnalysisPrimary.TOUR -> guidedTourButton(tourCount)
-        AnalysisPrimary.GUIDED -> "直し方を見る（${shortDays}日）"
-        AnalysisPrimary.NONE -> null
-    }
-    return AnalysisSummary(sentence, points, primary, label)
+    return AnalysisSummary(sentence, points)
 }
 
 /** 勤務表を組んでいる最中か（下書き・作成・仕上げの前景のジョブ＝画面を点けたままにする段、または閉じている間の作成）。短い違反チェックの running は含めない。 */

@@ -50,16 +50,14 @@ class ScheduleLayoutMetricsTest {
     }
 
     @Test fun `bar mode by tab sheet running and violation nav`() {
-        assertEquals(BottomBarMode.NONE, bottomBarMode(false, true, false, false, false))
-        assertEquals(BottomBarMode.COMMAND, bottomBarMode(true, false, false, false, false))
-        assertEquals(BottomBarMode.COMMAND, bottomBarMode(true, false, true, true, true))
-        assertEquals(BottomBarMode.MERGED_WEEK, bottomBarMode(true, true, false, false, false))
-        assertEquals(BottomBarMode.MERGED_VIOLATION, bottomBarMode(true, true, false, false, true))
-        assertEquals(BottomBarMode.HIDDEN, bottomBarMode(true, true, true, false, false))
-        assertEquals(BottomBarMode.HIDDEN, bottomBarMode(true, true, true, false, true))
+        assertEquals(BottomBarMode.NONE, bottomBarMode(false, true, false, false))
+        assertEquals(BottomBarMode.COMMAND, bottomBarMode(true, false, false, false))
+        assertEquals(BottomBarMode.COMMAND, bottomBarMode(true, false, true, true))
+        assertEquals(BottomBarMode.MERGED_WEEK, bottomBarMode(true, true, false, false))
+        assertEquals(BottomBarMode.HIDDEN, bottomBarMode(true, true, true, false))
+        assertEquals(BottomBarMode.HIDDEN, bottomBarMode(true, true, true, false))
         // 最適化中は「やめる」を持つバーを必ず残す（シートが開いていても。違反ナビはシート側の前/次を使う）
-        assertEquals(BottomBarMode.MERGED_WEEK, bottomBarMode(true, true, true, true, true))
-        assertEquals(BottomBarMode.MERGED_VIOLATION, bottomBarMode(true, true, false, true, true))
+        assertEquals(BottomBarMode.MERGED_WEEK, bottomBarMode(true, true, true, true))
     }
 
     @Test fun `scroll to grid top only on entering the schedule tab`() {

@@ -71,18 +71,17 @@ internal object ScheduleLayoutMetrics {
 }
 
 /** 勤務表タブの下部バー。タブ・シート・最適化・違反巡回から 1 つに決まる（描画は MagiApp）。 */
-internal enum class BottomBarMode { NONE, COMMAND, MERGED_WEEK, MERGED_VIOLATION, HIDDEN }
+internal enum class BottomBarMode { NONE, COMMAND, MERGED_WEEK, HIDDEN }
 
 /**
  * 勤務表タブ以外＝従来の BottomCommandBar。勤務表タブ＝週送り・元に戻す・つくるを 1 本に統合。
  * シートを開いていて最適化中でなければバーごと隠す（シートが代わる）。実行中は「やめる」を必ず残す。
- * 違反巡回は、シートが閉じているときだけバー側の違反ナビ（開いている間はシート側の前/次）。
+ * 違反の前後はバーに置かない（UI-S4、2026-10-28）＝問題は上部の「必須 N ▼」の一覧とシートの「次の違反 ▶」から。
  */
-internal fun bottomBarMode(loaded: Boolean, scheduleTab: Boolean, sheetOpen: Boolean, busy: Boolean, violationNav: Boolean): BottomBarMode = when {
+internal fun bottomBarMode(loaded: Boolean, scheduleTab: Boolean, sheetOpen: Boolean, busy: Boolean): BottomBarMode = when {
     !loaded -> BottomBarMode.NONE
     !scheduleTab -> BottomBarMode.COMMAND
     sheetOpen && !busy -> BottomBarMode.HIDDEN
-    violationNav && !sheetOpen -> BottomBarMode.MERGED_VIOLATION
     else -> BottomBarMode.MERGED_WEEK
 }
 
