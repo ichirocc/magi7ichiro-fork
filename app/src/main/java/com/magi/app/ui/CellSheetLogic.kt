@@ -1746,7 +1746,10 @@ internal fun forbiddenRunTag(escapable: Boolean): String = if (escapable) "崩�
 internal fun forbiddenRunCellsLine(cells: List<Pair<String, String>>): String = cells.joinToString(" · ") { "${it.first} ${it.second}" }
 
 /** [3.714.0] 設定タブの見出しと組む時間の 1 行（仕上げの秒数と注記は「詳しく」の中）。 */
-internal const val SETTINGS_HEADING = "設定"
+internal const val SETTINGS_HEADING = "計算"
+/** [UI-S7] 設定タブの区分: 計算・表示・色（畳む）・データ・詳細設定（畳む）。 */
+internal const val SETTINGS_DISPLAY_HEADING = "表示"
+internal const val SETTINGS_COLORS_HEADING = "色"
 internal const val BUDGET_CHANGE_BUTTON = "組む時間を変える"
 internal fun budgetShortLine(sec: Int): String = "組む時間 ${budgetText(sec)}"
 /** [3.714.0] 編集タブの見出しと 1 行。 */

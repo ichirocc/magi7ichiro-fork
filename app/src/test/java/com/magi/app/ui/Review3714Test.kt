@@ -55,7 +55,7 @@ class Review3714Test {
         assertEquals("閉じる", NO_FIX_CLOSE_BUTTON)
         assertEquals("希望の前日ルールに当たります", cellRuleLine("c3w"))
         assertEquals("詳しく", CELL_DETAIL_BUTTON)
-        assertEquals("設定", SETTINGS_HEADING)
+        assertEquals("計算", SETTINGS_HEADING)   // [UI-S7] 区分は 計算・表示・色・データ・詳細設定
         assertEquals("組む時間 1分", budgetShortLine(60))
         assertEquals("組む時間 10秒", budgetShortLine(10))
         assertEquals("組む時間を変える", BUDGET_CHANGE_BUTTON)
