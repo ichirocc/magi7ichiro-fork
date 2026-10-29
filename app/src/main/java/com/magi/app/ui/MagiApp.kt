@@ -116,6 +116,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -747,6 +748,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     val creationTop = if (ui.hasResult && ui.engineRan && !ui.running) {
                         CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
+                    val homeSelfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
+                    val nextItems = remember(tourItems, ui.staffNames, homeSelfKeys, ui.fixSearched, ui.fixSuggestions, ui.fixResolvedUnion, ui.schedule) {
+                        homeNextItems(hardViolationRows(tourItems, ui.staffNames, homeSelfKeys), tourItems, fixableHardKeys(ui))
+                    }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     // 代行の記録は主カードの先頭（別のカードにしない＝ホームのカードを 1 枚減らす）。
                     OperatorNextActionCard(
@@ -782,6 +787,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         creation = creationTop,
                         tourNext = tourNext,
                         onOpenConsults = { consultOpen = true },
+                        nextItems = nextItems,
+                        nextTotal = tourItems.size,
+                        onOpenNext = goTourItem,
+                        onOpenAll = openProblemList,
                     )
                     // iOS の天気にならった日ごとの印（作成のあと）。押すとその日の勤務表の列へ。
                     if (!ui.running) ui.preDraftNotice?.let { PreDraftNoticeCard(it, onRestore = { vm.restorePreDraft() }) }
@@ -1090,10 +1099,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 ProblemListPanel(
-                    title = hardListTitle(displayHardText(ui)), rows = rows, picked = picked,
+                    count = problemListCount(displayHardText(ui)), rows = rows, staffNames = ui.staffNames, picked = picked,
                     covULine = hardListCovULine(rows.none { it.hard }, ui.breakdown["covU"] ?: 0),
                     onStart = { rows.firstOrNull { it.hard }?.tourAt?.let(goTourItem) },
                     onRow = { idx, r -> listPick = idx; listPickFamily = r.family; listFocus = r.cell; focusCell = r.cell; focusRange = if (r.hard) Triple(r.staff, r.days.first(), r.days.last()) else null },
+                    onOpen = { r -> r.tourAt?.let(goTourItem) ?: run { editingCell = r.cell; focusRange = null } },
                     onClose = closePanel,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                 )
@@ -1604,40 +1614,52 @@ internal fun HardListChip(hard: String, onOpen: () -> Unit) {
 /**
  * [3.718.0] 下 1/3 のパネルの問題一覧（2026-10-18 ユーザー指示「制約違反を見ながら勤務表を修正したい」）。必須 1 件 1 行に続けて要調整。
  * 行を押すとパネルは閉じずに表をそのセルへ送って強調し、選んだ行の 1 行をパネルの先頭に出す（目線を動かさない）。主は「直し方を見る」1 つ（INV-09）。
+ * 形（2026-10-29 画面案）: 大きな題「問題」＋件数、行は印・名前・理由の 2 段＋「開く」（そのセルのシート）、要調整は畳む。
  */
 @Composable
-internal fun ProblemListPanel(title: String, rows: List<ProblemRow>, picked: Int?, covULine: String?, onStart: () -> Unit,
-                              onRow: (Int, ProblemRow) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ProblemListPanel(count: String, rows: List<ProblemRow>, staffNames: List<String>, picked: Int?, covULine: String?, onStart: () -> Unit,
+                              onRow: (Int, ProblemRow) -> Unit, onOpen: (ProblemRow) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val topCorner = MaterialTheme.shapes.extraLarge
     Surface(modifier = modifier, color = cs.surfaceContainerLow, shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)), tonalElevation = 2.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val pickedRow = picked?.let { rows.getOrNull(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(pickedRow?.line ?: title, style = MaterialTheme.typography.titleSmall, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis,
-                    color = if (pickedRow?.hard == true) cs.error else cs.onSurface, modifier = Modifier.weight(1f))
+                if (pickedRow != null) Text(pickedRow.line, style = MaterialTheme.typography.titleSmall, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis,
+                    color = if (pickedRow.hard) cs.error else cs.onSurface, modifier = Modifier.weight(1f))
+                else Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(PROBLEM_LIST_TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+                    Text(count, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                }
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
             }
             if (rows.any { it.hard }) Button(onClick = onStart, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(HARD_LIST_START_BUTTON) }
-            val softCount = rows.count { !it.hard }
+            val hardCount = rows.count { it.hard }
+            val softCount = rows.size - hardCount
+            var softOpen by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(picked) { if (picked != null && picked >= hardCount) softOpen = true }
             val listState = rememberLazyListState()
-            LaunchedEffect(picked) { picked?.let { listState.animateScrollToItem(it) } }   // 戻ったら見ていた行（または次の問題）まで送る
-            LazyColumn(Modifier.weight(1f, fill = false), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                itemsIndexed(rows) { idx, r ->
-                    if (!r.hard && (idx == 0 || rows[idx - 1].hard)) softRowsHeading(softCount)?.let {
-                        Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-                    }
-                    val sel = idx == picked
-                    Surface(onClick = { onRow(idx, r) }, color = if (sel) cs.primaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(r.line, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale), overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
-                        }
-                    }
+            // 戻ったら見ていた行（または次の問題）まで送る。要調整の行は畳みの行の 1 つ後ろから。
+            LaunchedEffect(picked, softOpen) { picked?.let { listState.animateScrollToItem(if (it < hardCount) it else it + 1) } }
+            fun parts(r: ProblemRow) = problemRowParts(r.line, if (r.family == "covU") null else staffNames.getOrNull(r.staff))
+            @Composable fun openButton(r: ProblemRow) = OutlinedButton(onClick = { onOpen(r) }, shape = MagiCorners.capsule,
+                modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 16.dp)) { Text(PROBLEM_OPEN_BUTTON) }
+            LazyColumn(Modifier.weight(1f, fill = false), state = listState) {
+                itemsIndexed(rows.take(hardCount)) { idx, r ->
+                    val (name, reason) = parts(r)
+                    ProblemItemRow(name, reason, if (r.wishOnly) WISH_ONLY_TAG else null, MagiAccent.orange, selected = idx == picked,
+                        lead = { HardMark() }, trailing = { openButton(r) }) { onRow(idx, r) }
                 }
-                covULine?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) } }
+                if (softCount > 0) item {
+                    MagiGroupRow(softFoldLabel(softCount), trailing = if (softOpen) "▾" else "▸", divider = softOpen, color = cs.onSurface, open = softOpen) { softOpen = !softOpen }
+                }
+                if (softOpen) itemsIndexed(rows.drop(hardCount)) { k, r ->
+                    val idx = hardCount + k
+                    val (name, reason) = parts(r)
+                    ProblemItemRow(name, reason, selected = idx == picked, divider = k < softCount - 1,
+                        lead = { HardMark(MagiAccent.orange) }, trailing = { openButton(r) }) { onRow(idx, r) }
+                }
+                covULine?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) } }
             }
         }
     }

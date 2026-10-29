@@ -137,6 +137,10 @@ class CellSheetLogicTest {
             assertEquals("shift $k rec", !newHard && r.hard < base.hard, k in m.recommended)
         }
         assertEquals(ShiftMarks(), evaluateShiftMarks(st, s, i, 0, CellSeverity.HARD, cands, stillWanted = { false }))
+        // 直す手＝おすすめのうち必須→重み付きの合計が最も小さい 1 つ。
+        val best = m.recommended.minWithOrNull(compareBy({ k -> UnifiedViolationChecker.check(st, Array(s.size) { s[it].copyOf() }.also { it[i][0] = k }).hard },
+            { k -> UnifiedViolationChecker.check(st, Array(s.size) { s[it].copyOf() }.also { it[i][0] = k }).weightedScore }))
+        assertEquals(best, m.best)
     }
 
     /** 職員10 10/8・10/9: おすすめ 0・置ける候補が全部警告＝1 マスでは直らない注記。印の計算前や、おすすめがあるセルには出ない。 */

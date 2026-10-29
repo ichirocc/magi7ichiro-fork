@@ -96,20 +96,10 @@ object MagiMarks {
     val extCross: Dp = 9.dp
 }
 
-/**
- * iOS 26 の同心の角（2026-10-29）: 内側の角＝外側の角−余白。カード（shapes.medium）の中の面は shapes.small、
- * 1 行の操作の札（状態の札・絞り込み・選ぶ札・切替）は [capsule]。
- */
+/** 1 行の操作の札（状態の札・絞り込み・選ぶ札・切替）の形。角の寸法は [CornerMetrics]。 */
 object MagiCorners {
-    const val INNER_DP = 10
-    const val CARD_INSET_DP = 16
-    const val CARD_DP = INNER_DP + CARD_INSET_DP
-    const val SHEET_DP = 28
     val capsule = RoundedCornerShape(percent = 50)
 }
-
-/** 外側の角 [outer] から余白 [inset] だけ内側に置いた面の角（小さすぎる角は [min] で止める）。 */
-internal fun concentricCornerDp(outer: Int, inset: Int, min: Int = 4): Int = (outer - inset).coerceAtLeast(min)
 
 object MagiSpacing {
     val xs: Dp = 4.dp
