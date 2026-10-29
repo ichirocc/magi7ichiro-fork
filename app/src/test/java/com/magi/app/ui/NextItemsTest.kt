@@ -27,6 +27,15 @@ class NextItemsTest {
         assertEquals(0 to 7, next[0].cell)
     }
 
+    @Test fun primaryOpensTheFirstItemByName() {
+        val next = homeNextItems(rows, items, null)
+        assertEquals("c3n", next[0].family)
+        assertEquals("1を開く（アリフの並び）", homeOpenFirstLabel(next[0]))
+        assertEquals("2を開く（福澤の希望）", homeOpenFirstLabel(next[1]))
+        assertEquals("1を開く", homeOpenFirstLabel(next[0].copy(name = "とても長い名前の職員さん"), 1f))
+        assertEquals("1を開く", homeOpenFirstLabel(next[0], 2f))   // 文字拡大では入る字数が縮む
+    }
+
     @Test fun noTagAboutFixesBeforeSearching() {
         val next = homeNextItems(rows, items, null, max = 4)
         assertEquals(listOf(null, null, null, WISH_ONLY_TAG), next.map { it.tag })
@@ -47,5 +56,6 @@ class NextItemsTest {
         assertTrue(s.indexOf(HomeSection.NEXT_ITEMS) < s.indexOf(HomeSection.PRIMARY))
         assertFalse(HomeSection.NEXT_ITEMS in homeCardSections(homePlan(false, true, true), UiState(loaded = true, hasResult = true, bestHard = 0L, checkRev = 1L)))
         assertFalse(HomeSection.NEXT_ITEMS in homeCardSections(plan, UiState(loaded = true, hasResult = true, bestHard = 3L, checkRev = 0L)))
+        assertEquals(HomeSection.INFO, s.last())   // まれな操作は最後の「…」の中（UI-S1）
     }
 }
