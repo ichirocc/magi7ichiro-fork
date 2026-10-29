@@ -107,7 +107,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -118,8 +117,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -207,7 +204,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     LaunchedEffect(ui.keepScreenOn) { rootView.keepScreenOn = ui.keepScreenOn }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
+    val magiHaptic = rememberMagiHaptics()
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
     var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）。[tourBase] での添字
@@ -614,6 +611,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     //   数秒で消える＝**イベントはSnackbar・状態は上部バッジと進捗行**、という役割分担になる。
     //   消えたあとも操作ログ（詳細設定＞ログ）に残るので読み返せる。
     val snackbarHostState = remember { SnackbarHostState() }
+    var wasRunning by remember { mutableStateOf(ui.running) }
+    LaunchedEffect(ui.running) {
+        hapticForRunEnd(wasRunning, ui.running, failed = ui.messageIsError)?.let(magiHaptic)
+        wasRunning = ui.running
+    }
     // 操作の通知（「元に戻す」付き）は検査の進み具合と別のイベント。出ている間は通常の文言で置き換えない。
     var noticeShowingId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(ui.opNotice?.id) {
@@ -632,6 +634,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         val m = ui.message ?: return@LaunchedEffect
         if (!messageMayReplaceNotice(noticeShowingId != null, ui.messageIsError)) { vm.clearMessage(m); return@LaunchedEffect }
         snackbarHostState.currentSnackbarData?.dismiss()
+        hapticForMessage(ui.messageIsError)?.let(magiHaptic)
         // [3.400.0] 失敗・拒否は長め（4秒だと120字級の失敗文を読み切る前に消える）。
         snackbarHostState.showSnackbar(m, duration = if (ui.messageIsError || ui.keptPrevious) SnackbarDuration.Long else SnackbarDuration.Short)
         vm.clearMessage(m)
@@ -674,11 +677,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         //   使っている errorContainer と同じ＝アプリの中で「これは失敗」を表す色が1つに揃う。
         snackbarHost = {
             SnackbarHost(snackbarHostState) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    containerColor = if (ui.messageIsError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = if (ui.messageIsError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.inverseOnSurface,
-                )
+                MagiNoticeCapsule(data, isError = ui.messageIsError)
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -844,7 +843,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         //   「タップで割当を即変更。」と言い切ってから拒否していた＝形が約束したことを
                         //   守れていなかった。判定と文言は VM 側の1箇所（setCell 等と同じ）に置く。
                         if (!vm.editBlockedNow()) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            magiHaptic(MagiHaptic.CONFIRM)
                             editingCell = i to j
                             // [窓ハイライト③] c1/c3/c3m はどの範囲の違反かをグリッド上でも示す（シート表示中のみ）。
                             focusRange = vm.violationRange(i, j)?.let { Triple(i, it.first, it.second) }
@@ -1130,7 +1129,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     cell = cell,
                     stateOf = { vm.state },
                     onPick = { k ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        magiHaptic(MagiHaptic.CONFIRM)
                         onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
                     },
                     onMove = { c ->
