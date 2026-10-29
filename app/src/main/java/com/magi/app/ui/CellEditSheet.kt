@@ -654,7 +654,7 @@ private fun SlotButton(
     val live = canDo && enabled
     val bg = if (live) hexToColor(ui.shiftColorHex.getOrNull(k) ?: "") else cs.surfaceVariant
     val fg = if (live) ensureReadable(bg, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")) else cs.onSurfaceVariant
-    val shape = MaterialTheme.shapes.large
+    val shape = MaterialTheme.shapes.small
     Box(
         modifier
             .heightIn(min = 52.dp)

@@ -210,11 +210,11 @@ internal fun ColorChip(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clip(MaterialTheme.shapes.medium)
+            .clip(MaterialTheme.shapes.small)
             .border(
                 width = if (custom) 2.dp else 1.dp,
                 color = if (custom) cs.primary else cs.outline,
-                shape = MaterialTheme.shapes.medium,
+                shape = MaterialTheme.shapes.small,
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),

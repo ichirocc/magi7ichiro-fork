@@ -66,7 +66,7 @@ fun MagiSegmentedControl(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = cs.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
+        shape = MagiCorners.capsule,
     ) {
         Row(
             Modifier.padding(4.dp).selectableGroup(),
@@ -81,7 +81,7 @@ fun MagiSegmentedControl(
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
                     contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                    shape = MaterialTheme.shapes.medium,
+                    shape = MagiCorners.capsule,
                     tonalElevation = 0.dp,
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

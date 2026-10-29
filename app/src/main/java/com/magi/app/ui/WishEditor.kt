@@ -148,7 +148,7 @@ internal fun WishCard(
                 Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     myExt.forEach { e ->
-                        InputChip(
+                        InputChip(shape = MagiCorners.capsule,
                             selected = false,
                             enabled = !ui.running,
                             onClick = { onDaysSel(e.days.toSet()) },
@@ -174,7 +174,7 @@ internal fun WishCard(
                     Text(list.first().staffName, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         list.forEach { r ->
-                            InputChip(
+                            InputChip(shape = MagiCorners.capsule,
                                 selected = false,
                                 enabled = !ui.running,
                                 onClick = { onStaffSel(r.i); onDaysSel(emptySet()) },

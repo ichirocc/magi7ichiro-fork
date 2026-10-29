@@ -965,7 +965,7 @@ internal fun CopilotCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // ガチャ操作の助言＋修正導線（NextActionBar相当）
             ui.copilotHint?.let {
-                Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("💡 $it", color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodyMedium)
                         OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("編集タブで見直す") }
@@ -973,7 +973,7 @@ internal fun CopilotCard(
                 }
             }
             if (ui.polishExhausted && !ui.running) {
-                Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+                Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         MagiTextButton(onClick = onSoftPolish, modifier = Modifier.heightIn(min = 48.dp)) { Text(SOFT_POLISH_LINK, color = cs.onTertiaryContainer) }
                         Text(SOFT_POLISH_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
@@ -1029,7 +1029,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     val infeasible = s.verdict == CoverageVerdict.INFEASIBLE
                     val container = if (infeasible) cs.errorContainer else cs.secondaryContainer
                     val onContainer = if (infeasible) cs.onErrorContainer else cs.onSecondaryContainer
-                    Surface(color = container, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = container, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(shortageRowLine(s.dayLabel, s.shiftSymbol, s.miss),
@@ -1050,7 +1050,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 }
                 if (shownShortfalls.size < diag.shortfalls.size) SettingIssuesShowAll(diag.shortfalls.size - shownShortfalls.size) { allShortfalls = true }
                 if (diag.relaxations.isNotEmpty()) {
-                    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("解けるようにするには（担当追加の案）", color = cs.onTertiaryContainer, style = MaterialTheme.typography.titleSmall)
                             for (r in diag.relaxations.take(4)) {
@@ -1067,7 +1067,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 Text("過剰 ${diag.totalSurplus} 人", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownSurpluses = if (allSurpluses) diag.surpluses else diag.surpluses.take(6)
                 for (s in shownSurpluses) {
-                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("${s.dayLabel}  ${s.shiftSymbol}  必要${s.need}/現状${s.got}（過剰${s.excess}）",
                                 color = cs.onSecondaryContainer, style = MaterialTheme.typography.titleSmall)
@@ -1121,7 +1121,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                 val blocked = !r.escapable
                 val container = if (blocked) cs.errorContainer else cs.secondaryContainer
                 val onContainer = if (blocked) cs.onErrorContainer else cs.onSecondaryContainer
-                Surface(color = container, shape = MaterialTheme.shapes.medium) {
+                Surface(color = container, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("${r.staffName}  ${r.seqLabel}",
@@ -1249,7 +1249,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
                 val pin = e.cause == com.magi.app.v6.C1PlateauCause.PIN_CONSTRAINED
                 val container = if (pin) cs.errorContainer else cs.secondaryContainer
                 val onContainer = if (pin) cs.onErrorContainer else cs.onSecondaryContainer
-                Surface(color = container, shape = MaterialTheme.shapes.medium) {
+                Surface(color = container, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(e.label, color = onContainer,
@@ -1339,7 +1339,7 @@ internal fun PinFixedImpactCard(
                 Text("止めていた回数固定", style = MaterialTheme.typography.titleSmall)
                 val shown = if (showAll) ui.pinTargets else ui.pinTargets.take(5)
                 for (t in shown) {
-                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("${t.staffName} ${t.shiftKigou}：${t.pinnedCount}回に固定（${t.attempts}回の試行を止めました）",
                                 color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodyMedium)
@@ -1419,7 +1419,7 @@ internal fun SettingIssuesCard(
                         com.magi.app.v6.IssueKind.DEMAND -> { label = "必要人数"; tagColor = MagiAccent.red }
                         com.magi.app.v6.IssueKind.RANGE -> { label = "回数"; tagColor = MagiAccent.orange }
                     }
-                    Surface(color = warnBg, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = warnBg, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 MagiTagChip(text = label, color = tagColor)
@@ -1733,7 +1733,7 @@ private fun ConfirmRow(
     val ws = item.wishStaff
     val ns = item.needShift
     Column(Modifier.fillMaxWidth()) {
-    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
+    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small, modifier = m) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
                 Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
@@ -1835,7 +1835,7 @@ internal fun AnalysisTriageCard(
                     TriageRowLine(row, cs.errorContainer, cs.onErrorContainer)
                 }
                 t.issues.forEach { row ->
-                    Surface(color = warnBg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                    Surface(color = warnBg, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(8.dp)) {
                             Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                             if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -1850,7 +1850,7 @@ internal fun AnalysisTriageCard(
                     if (t.computed) "作成後に残っている項目" else "作成で減らせる見込みの項目（まだ作成していません）",
                     style = MaterialTheme.typography.titleSmall,
                 )
-                Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         t.searching.forEach { row ->
                             Row {
@@ -1887,7 +1887,7 @@ internal fun AnalysisTriageCard(
 /** 上段の1行（族の見出し＋件数＋診断が語った理由）。理由が空なら何も主張しない。 */
 @Composable
 private fun TriageRowLine(row: TriageRow, bg: Color, fg: Color) {
-    Surface(color = bg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("${row.label} ${row.count}${row.unit}",
                 style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
@@ -1924,7 +1924,7 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
         severity == 1 -> { container = cs.secondaryContainer; onContainer = cs.onSecondaryContainer }
         else -> { container = cs.primaryContainer; onContainer = cs.onPrimaryContainer }
     }
-    val shape = MaterialTheme.shapes.small
+    val shape = MagiCorners.capsule
     var m = modifier.heightIn(min = 48.dp)
     if (expanded) m = m.border(2.dp, onContainer.copy(alpha = 0.7f), shape)
     if (active) m = m.clickable { onTap(famKey) }
@@ -1945,7 +1945,7 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
 
 @Composable
 internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.small, modifier = modifier) {
         Column(
             Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -2003,7 +2003,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 else -> ui.fixSuggestions.forEach { s ->
                     val (tag, tagColor) = fixKindTag(s.kind)
-                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             val (hardLine, caution) = fixImpactLines(s)
                             Text(fixBenefitLine(s) ?: hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)

@@ -44,6 +44,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -271,7 +273,7 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
         // [集中モード/Web試作③] 違反・未反映希望のセルだけを浮かせ、他を淡色に沈めるトグル（表示のみ）。
         // [3.459.0] 分析タブの統合カードから呼ぶときは showFocusToggle=false で隠す（グリッド専用の効果で
         //   意味を持たないため）。
-        if (showFocusToggle) FilterChip(selected = focusMode, onClick = { onFocusMode(!focusMode) },
+        if (showFocusToggle) FilterChip(shape = MagiCorners.capsule, selected = focusMode, onClick = { onFocusMode(!focusMode) },
             label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
     }
     Spacer(Modifier.height(4.dp))
@@ -295,7 +297,7 @@ private fun MoreBucketsChip(open: Boolean, onToggle: () -> Unit) {
 private fun BucketChip(key: String, label: String, n: Int, on: Boolean, onToggle: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val zero = n == 0
-    FilterChip(
+    FilterChip(shape = MagiCorners.capsule,
         selected = on,
         onClick = { onToggle(key) },
         label = { Text("$label $n", style = MaterialTheme.typography.titleSmall, fontWeight = if (zero) FontWeight.Normal else null) },
@@ -346,7 +348,7 @@ internal fun ScheduleToolsCard(
                     visibleVioBuckets(moreOpen, enabled).forEach { b -> BucketChip(b.key, b.label, bucketCounts[b.key] ?: 0, b.key in enabled, onToggle) }
                     MoreBucketsChip(moreOpen) { moreOpen = !moreOpen }
                     // [集中モード] 違反・未反映希望のセルだけを浮かせ、他を淡色に沈める（表示のみ）。
-                    FilterChip(selected = focusMode, onClick = { onFocusMode(!focusMode) },
+                    FilterChip(shape = MagiCorners.capsule, selected = focusMode, onClick = { onFocusMode(!focusMode) },
                         label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
                 }
             }
@@ -546,7 +548,7 @@ internal fun rememberScheduleNavState(): ScheduleNavState {
 
 /**
  * [勤務表の縦寸法] 勤務表タブの下部バー（旧 ScheduleNavBar 60dp＋BottomCommandBar 80dp を 64dp の 1 本へ）。
- * 左＝週送り、中＝元に戻す/やり直し（アイコン 48dp）、右＝主ボタン 60dp。
+ * 左＝週送り・元に戻す/やり直しを束ねた 1 本のカプセル（ボタン 48dp）、右＝主ボタン 60dp。
  */
 @Composable
 internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, onRevealGrid: () -> Unit = {}, onShowList: () -> Unit = {}) {
@@ -562,24 +564,38 @@ internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNav
             Modifier.fillMaxWidth().height(ScheduleLayoutMetrics.MERGED_BAR_DP.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (weeks.size > 1) {
-                OutlinedButton(
-                    onClick = { onRevealGrid(); val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                    enabled = curWeek > 0, modifier = small.semantics { contentDescription = "前の週へ" }, contentPadding = tight,
-                ) { Text("◀週") }
-                OutlinedButton(
-                    onClick = { onRevealGrid(); val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                    enabled = curWeek < weeks.size - 1 && nav.hScroll.canScrollForward, modifier = small.semantics { contentDescription = "次の週へ" }, contentPadding = tight,
-                ) { Text("週▶") }
-            }
-            if (ui.canUndo && !ui.running) {
-                OutlinedButton(onClick = { vm.undo() }, modifier = small.semantics { contentDescription = "直前の操作を元に戻す" }, contentPadding = tight) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
-                }
-            }
-            if (ui.canRedo && !ui.running) {
-                OutlinedButton(onClick = { vm.redo() }, modifier = small.semantics { contentDescription = "元に戻した操作をやり直す" }, contentPadding = tight) {
-                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null)
+            val showWeeks = weeks.size > 1
+            val showUndo = ui.canUndo && !ui.running
+            val showRedo = ui.canRedo && !ui.running
+            // [iOS 26 のツールバー] 週送り・元に戻す・やり直しは 1 本のカプセルに束ね、主ボタンと分ける（2026-10-29）。
+            if (showWeeks || showUndo || showRedo) {
+                Surface(shape = MagiCorners.capsule, color = cs.surface, border = BorderStroke(1.dp, cs.outlineVariant)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val sep = @Composable { VerticalDivider(Modifier.height(24.dp), color = cs.outlineVariant) }
+                        if (showWeeks) {
+                            TextButton(
+                                onClick = { onRevealGrid(); val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
+                                enabled = curWeek > 0, modifier = small.semantics { contentDescription = "前の週へ" }, contentPadding = tight,
+                            ) { Text("◀週") }
+                            sep()
+                            TextButton(
+                                onClick = { onRevealGrid(); val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
+                                enabled = curWeek < weeks.size - 1 && nav.hScroll.canScrollForward, modifier = small.semantics { contentDescription = "次の週へ" }, contentPadding = tight,
+                            ) { Text("週▶") }
+                        }
+                        if (showUndo) {
+                            if (showWeeks) sep()
+                            TextButton(onClick = { vm.undo() }, modifier = small.semantics { contentDescription = "直前の操作を元に戻す" }, contentPadding = tight) {
+                                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
+                            }
+                        }
+                        if (showRedo) {
+                            if (showWeeks || showUndo) sep()
+                            TextButton(onClick = { vm.redo() }, modifier = small.semantics { contentDescription = "元に戻した操作をやり直す" }, contentPadding = tight) {
+                                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null)
+                            }
+                        }
+                    }
                 }
             }
             PrimaryCommandButton(ui, vm, Modifier.weight(1f), compact = true, onShowList = onShowList)
@@ -2124,7 +2140,7 @@ internal fun FixSearchPanel(
                 val tv = ui.fixTiers?.takeIf { it.key == focus.key && target != null && !target.multi }
                 @Composable fun card(n: Int, s: com.magi.app.v6.FixSuggestion, ex: FixExplanation? = null, purposeOverride: String? = null) {
                     val e = effects?.get(s)
-                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             // 先頭＝いま見ている問題がどう変わるか。変更する勤務、ほかの問題への影響、操作の順。
                             val after = remember(s, ui.schedule) { boardAfter(ui.schedule, s.ops) }
@@ -2220,7 +2236,7 @@ internal fun FixSearchPanel(
                                 val e = target.effect(ui.schedule, s.ops)
                                 onEvent(MagiEvent.Board.PreviewFix(s, purpose, previewEffectLines(label, e, target.basis), focus.key, target))
                             }
-                            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+                            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                                 Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(cc.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                     Text(cc.a.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -2301,7 +2317,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
     val nextSym = target?.let { ui.shiftSymbols.getOrNull(it.shift) }
     val sameRemains = nextSym != null && appliedRemaining(ui, a, target, label, lim).isNotEmpty()
     val nextLabel = appliedNextButton(sameRemains, nextSym, a.hardAfter, if (onTour != null) tourCount else 0)
-    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.small) {
         Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)
             appliedLines(ui, a, target, label, cv?.let { c -> c::needCellLimits }).forEach {
