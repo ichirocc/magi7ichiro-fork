@@ -1749,6 +1749,9 @@ internal fun forbiddenRunCellsLine(cells: List<Pair<String, String>>): String = 
 internal const val SETTINGS_HEADING = "計算"
 /** [UI-S7] 設定タブの区分: 計算・表示・色（畳む）・データ・詳細設定（畳む）。 */
 internal const val SETTINGS_DISPLAY_HEADING = "表示"
+/** [UI-S5] 月次条件から年間マスター③（回数）への入口。 */
+internal const val EDIT_COUNT_ROW = "回数の目標"
+internal const val EDIT_COUNT_FOOTER = "年間マスターの③で設定します（制度の設定。毎月は変えません）。"
 internal const val SETTINGS_COLORS_HEADING = "色"
 internal const val BUDGET_CHANGE_BUTTON = "組む時間を変える"
 internal fun budgetShortLine(sec: Int): String = "組む時間 ${budgetText(sec)}"

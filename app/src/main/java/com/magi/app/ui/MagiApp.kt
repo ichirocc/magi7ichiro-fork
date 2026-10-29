@@ -921,6 +921,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             EditHeaderCard(ui, editPlan, editWish.noInput, onOpenWish = { wishScrollKey++ }, onOpenNeed = { needScrollKey++ },
                                 onWishConflicts = { wishConflicts = true },
                                 inner = { MonthPickerCard(ui, onEvent, bare = true) })
+                            // [UI-S5] よく使う 3 つ目の「回数の目標」は入口だけ（中身は年間マスター③＝制度の設定。月次と混ぜない）。
+                            MagiGroup(null, footer = EDIT_COUNT_FOOTER) { MagiGroupRow(EDIT_COUNT_ROW, divider = false) { openEditLanding(EditLanding(2, "yr_count")) } }
                             val period = editPeriodNow
                             val wishNow = resolvePick(wishPick, ui.staffNames, period)
                             val needNow = resolvePick(needPick, ui.shiftSymbols, period)
