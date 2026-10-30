@@ -446,11 +446,11 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         soft += raw * 10; if (bd) bd[9] += raw;
     }
 
-    // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=50（2026-10-26 90→50）。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
+    // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=25（2026-10-26 90→50、2026-10-30 50→25）。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
     { long long raw = c3check(p, a, p.cons3, false); soft += raw * 15; if (bd) bd[2] += raw; }
     { long long raw = c3check(p, a, p.cons3n, true); hard1 += raw; if (bd) bd[3] += raw; }
     { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 6; if (bd) bd[4] += raw; }
-    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 50; if (bd) bd[5] += raw; }
+    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 25; if (bd) bd[5] += raw; }
 
     // pref（実現可能な希望のみ）＋ [3.318.0] groupViol（担当できないシフトに就いているセル）。
     //   MirrorKeys.hard は元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に
@@ -491,7 +491,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         }
     }
 
-    // range low(120)/high(25) ＋ apt（L1偏差×4）。[3.522.0] low 90→120, apt 1→4。
+    // range low(120)/high(50) ＋ apt（L1偏差×4）。[3.522.0] low 90→120, apt 1→4。2026-10-30 high 25→50。
     {
         long long rawLow = 0, rawHigh = 0, rawApt = 0;
         for (int i = 0; i < S; i++) {
@@ -505,7 +505,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 if (t >= 0) rawApt += std::llabs((long long)n - t);
             }
         }
-        soft += rawLow * 120 + rawHigh * 25 + rawApt * 4;
+        soft += rawLow * 120 + rawHigh * 50 + rawApt * 4;
         if (bd) { bd[13] += rawLow; bd[14] += rawHigh; bd[16] += rawApt; }
     }
 
@@ -720,7 +720,7 @@ struct SaChunk {
         return contribC3RowFam(i, p.cons3, false, 15)
              + contribC3RowFam(i, p.cons3n, true, (long long)M)
              + contribC3RowFam(i, p.cons3m, false, 6)
-             + contribC3RowFam(i, p.cons3mn, true, 50);
+             + contribC3RowFam(i, p.cons3mn, true, 25);
     }
     // [3.318.0] このセルの HARD 寄与＝pref（実現可能な希望の未充足）＋ groupViol（担当できないシフト）。
     //   どちらもセル単位なので deltaApply の before/after で呼べば差分は自動的に正しい。
@@ -744,7 +744,7 @@ struct SaChunk {
         int hi = p.rangeHi[(size_t)i * K + k];
         int n = ssn[(size_t)i * K + k];
         if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) v += (long long)(lo - n) * 120;  // [3.522.0] low 90→120
-        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * 25;
+        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * 50;
         int t = p.apt[(size_t)i * K + k];
         if (t >= 0) v += std::llabs((long long)n - t) * 4;  // [3.522.0] apt 1→4
         return v;
@@ -1398,7 +1398,7 @@ inline long long staffCountPenaltyAtN(const MagiProblem& p, int i, int k, int n)
     int lo = p.rangeLo[(size_t)i * p.K + k], hi = p.rangeHi[(size_t)i * p.K + k];
     // [3.522.0] low 90→120, apt 1→4。
     if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) pen += (long long)(lo - n) * 120;
-    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 25;
+    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 50;
     int t = p.apt[(size_t)i * p.K + k];
     if (t >= 0) pen += std::llabs((long long)n - t) * 4;
     return pen;

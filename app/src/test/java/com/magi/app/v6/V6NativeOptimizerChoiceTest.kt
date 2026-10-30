@@ -1098,9 +1098,9 @@ class V6NativeOptimizerChoiceTest {
 
     @Test
     fun marginalCostUpperBoundIsUnchanged() {
-        // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×25=50。
+        // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×50=100（2026-10-30 high 50）。
         val p = Problem(canDoState(mapOf("0,1" to Range("", "1"))))
-        assertEquals("上限側は不変", 50L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
+        assertEquals("上限側は不変", 100L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
     }
 
     // ---- [3.346.1/方針B] 停滞シグナルの確認窓 ------------------------------------------------

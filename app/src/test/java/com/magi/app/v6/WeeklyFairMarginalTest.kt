@@ -52,7 +52,7 @@ class WeeklyFairMarginalTest {
         var pen = 0L
         val lo = p.rangeLo[i][shiftIdx]; val hi = p.rangeHi[i][shiftIdx]
         if (lo != Int.MIN_VALUE && lo != 0 && n < lo) pen += (lo - n).toLong() * 120L
-        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 25L
+        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 50L
         val tgt = p.apt[i][shiftIdx]
         if (tgt >= 0) pen += kotlin.math.abs(n - tgt).toLong() * 4L
         return pen

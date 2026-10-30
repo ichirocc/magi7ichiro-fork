@@ -32,7 +32,7 @@ data class ViolationReport(
     val cellFamilies: Map<String, List<String>> = emptyMap(),
     /**
      * [3.353.0] 回数キー("i,k")に重なった全違反クラスを重み降順で保持（`countViolations` は最重1クラス＝
-     * 後方互換のまま）。`cellFamilies` の回数空間版。低い重みの族（apt・c2）が重い族（low 90/high 25）と
+     * 後方互換のまま）。`cellFamilies` の回数空間版。低い重みの族（apt・c2）が重い族（low/high）と
      * 同じ (職員,シフト) に重なると `countViolations` から消え、診断に一切現れなかった
      * （実機ログ: 内訳 c2=1 なのに詳細行が無く、apt=29 に対し表示は7箇所ぶんしか無い）。表示のみ。
      */
@@ -140,14 +140,14 @@ object MirrorKeys {
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     // [HF77明示数値指示・全面見直し 3.522.0] tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定
-    //   （経緯・数値の詳細は docs/history/3.4xx.md）。high(25)は3.520.0以来不変。
+    //   （経緯・数値の詳細は docs/history/3.4xx.md）。high は 3.520.0 から 25、2026-10-30 に 50（HF77）。
     // **ここを変えたら `Evaluator.fullEvalParts` のリテラルと C++ も同時に変える**。
     //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
     val weights: Map<String, Double> = linkedMapOf(
         "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "c3w" to 9000.0, "pref" to 8000.0,
         // [3.653.0/HF77 明示指示「拡張希望の重みは希望シフトと同じにする」] 拡張希望の違反＝必須・希望と同じ重み。
         "extWish" to 8000.0,
-        "low" to 120.0, "c1" to 90.0, "c3mn" to 50.0, "high" to 25.0, "covO" to 10.0,
+        "low" to 120.0, "c1" to 90.0, "high" to 50.0, "c3mn" to 25.0, "covO" to 10.0,
         "c3" to 15.0, "c3m" to 6.0,
         "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
         "c2" to 4.0, "apt" to 4.0, "fair" to 5.0, "weekly" to 2.0,
