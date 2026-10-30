@@ -117,10 +117,10 @@ class DeltaEvaluator(private val p: Problem) {
     )
 
     /**
-     * [3.371.0/soft全族の完全差分] `hct` は low(重み120)/high(重み25) を**その場で重み適用済み**の1つの
+     * [3.371.0/soft全族の完全差分] `hct` は low(重み120)/high(重み50) を**その場で重み適用済み**の1つの
      * running total へ合算している（`rangeViol` 参照）。checker の `breakdown["low"]`/`breakdown["high"]`
      * は生カウント(UNweighted)なので、単体では直接比較できない。検証は
-     * `breakdown["low"]*120 + breakdown["high"]*25 == rangeWeighted()` の形で行う。
+     * `breakdown["low"]*120 + breakdown["high"]*50 == rangeWeighted()` の形で行う。
      */
     internal fun rangeWeighted(): Long = hct
 
@@ -184,7 +184,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
         ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * 90 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 50 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
+    ): Long = c1 * 90 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 25 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {
@@ -446,11 +446,11 @@ class DeltaEvaluator(private val p: Problem) {
     private fun viol01(b: Boolean): Long = if (b) 1L else 0L
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
-        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×120 / high=amount×25。[3.522.0] low 90→120。
+        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×120 / high=amount×50。[3.522.0] low 90→120。2026-10-30 high 25→50。
         val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
         var v = 0L
         if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 120L
-        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 25L
+        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 50L
         return v
     }
 

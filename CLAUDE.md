@@ -43,7 +43,7 @@
 - **c2**（職員別合計, SOFT, 重み4）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
   - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6）— **非forbidden**。
-  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み50）— **forbidden**。
+  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み25）— **forbidden**。
   - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
@@ -52,8 +52,8 @@
 - **covU**（人員不足, HARD, 重み10000）/ **covO**（人員過剰, SOFT, 重み10）。被覆は同日のみ（夜勤繰越なし）。
   最適化器とチェッカーは同じ値（重みの経緯は `docs/business-logic.md` §2）。
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
-- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み120/25。amount計上）。
-  **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 25 のまま、
+- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み120/50。amount計上）。
+  **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 50 のまま、
   希望固定は優先。ユーザー決定「最適化器だけ除外、表示は今のまま」）。
 - **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み4, L1偏差`|回数-目標|`）。
   担当可シフトのみ有効（`Problem.apt` 構築時に bucket=canDo ガード）。不足=赤(vio-aptLow)/超過=橙(vio-aptHigh)。
@@ -82,7 +82,7 @@
   最適化器は禁止へ置かない（`mayPlaceAt`）。
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
-c1(90) > c3mn(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
+c1(90) > high(50) > c3mn(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
 weekly(2)。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
 この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・
 `magi_native.cpp` の5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md`・この行を**同じコミットで**揃える

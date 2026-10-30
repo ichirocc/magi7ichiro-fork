@@ -33,7 +33,7 @@ internal fun c42PairCount(sameSet: Boolean, n1: Int, n2: Int): Long =
  *           + groupViol (担当できないシフトに就いているセル。3.318.0 でチェッカーの MirrorKeys.hard と揃えた)
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
- *           + [統一a/b] low/high (range, amount×120/25) + covO (over-coverage, amount×10, 3.522.0 HF77明示指示)
+ *           + [統一a/b] low/high (range, amount×120/50) + covO (over-coverage, amount×10, 3.522.0 HF77明示指示)
  *   ※ range と covO は UnifiedViolationChecker と同分類(SOFT)。重みは MirrorKeys.weights が単一の真実
  *     （hard1 は ×SCORE_HARD_UNIT で常に優先）。
  *
@@ -168,7 +168,7 @@ class Evaluator(private val p: Problem) {
         run { val raw = c3check(a, p.cons3, false); soft += raw * 15L; record("c3", raw) }
         run { val raw = c3check(a, p.cons3n, true); hard1 += raw; record("c3n", raw) }    // forbidden -> display HARD (count)
         run { val raw = c3check(a, p.cons3m, false); soft += raw * 6L; record("c3m", raw) }
-        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 50L; record("c3mn", raw) }
+        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 25L; record("c3mn", raw) }
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         run {
@@ -210,14 +210,14 @@ class Evaluator(private val p: Problem) {
             for (i in 0 until S) for (k in 0 until K) {
                 val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
                 val n = ssn[i][k]
-                // [3.522.0] low 90→120。high は3.520.0以来25のまま不変。
+                // [3.522.0] low 90→120。high 25→50・c3mn 50→25（2026-10-30、HF77）。
                 if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) rawLow += (lo - n).toLong()
                 if (hi != Int.MAX_VALUE && n > hi) rawHigh += (n - hi).toLong()
                 // [統一apt] 適切回数(双方向目標) SOFT・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。[3.522.0] 重み1→4。
                 val t = p.apt[i][k]
                 if (t >= 0) rawApt += kotlin.math.abs(n - t).toLong()
             }
-            soft += rawLow * 120L + rawHigh * 25L + rawApt * 4L
+            soft += rawLow * 120L + rawHigh * 50L + rawApt * 4L
             record("low", rawLow); record("high", rawHigh); record("apt", rawApt)
         }
 

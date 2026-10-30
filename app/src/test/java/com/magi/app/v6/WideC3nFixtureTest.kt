@@ -43,7 +43,7 @@ class WideC3nFixtureTest {
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, rep.hard)
         assertEquals(399, rep.total)   // [3.541.0] fair 達成率モード v2 で fair 19→17（3.538.0 は 23→19。他族は 3.509.0 の D9 以来不変）
-        assertEquals(8456.0, rep.weightedScore, 1e-9)   // [3.556.0] c3m 10→6（62件）・c42 1→9（3件）、[3.647.0] fair 2→5（17件）、[2026-10-26] c1 50→90・c3mn 90→50
+        assertEquals(8656.0, rep.weightedScore, 1e-9)   // [2026-10-30] high 25→50（8件）・c3mn 50→25（0件）、[3.556.0] c3m 10→6（62件）・c42 1→9（3件）、[3.647.0] fair 2→5（17件）、[2026-10-26] c1 50→90・c3mn 90→50
     }
 
     @Test
