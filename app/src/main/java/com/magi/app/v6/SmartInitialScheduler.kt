@@ -18,8 +18,6 @@ import kotlin.math.max
  * 従来どおり別ボタン「勤務表をつくる」が担う（本関数は初期解生成のみ、続けて最適化は行わない）。
  */
 object SmartInitialScheduler {
-    /** [avoidForbidden（既定 OFF＝測定中）] ③④⑤で禁止の並び（cons3n・cons3w）を作る置き方に足す罰。上限超過（1000）より軽く、需要の加点（-100）より重い。 */
-    private const val FORBID_PENALTY = 500
     private data class C1Rule(val days: Int, val minimum: Int)
 
     /**
@@ -28,7 +26,7 @@ object SmartInitialScheduler {
      */
     private const val MAX_DP_STATES = 200_000
 
-    fun generate(state: MagiState, avoidForbidden: Boolean = false): ScheduleRunResult {
+    fun generate(state: MagiState): ScheduleRunResult {
         val t0 = System.nanoTime()
         val p = Problem(state)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
@@ -108,8 +106,7 @@ object SmartInitialScheduler {
                         if (schedule[i][j] >= 0 || !p.mayPlace(i, k) || p.extBanned(i, j, k)) continue
                         val hi = p.rangeHi[i][k]
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
-                        val forbid = avoidForbidden && p.makesForbiddenRun(schedule, i, j, k)
-                        val penalty = (if (over) 1000 else 0) + (if (forbid) FORBID_PENALTY else 0) + counts[i][k] * 2
+                        val penalty = (if (over) 1000 else 0) + counts[i][k] * 2
                         if (penalty < bestPenalty) { bestPenalty = penalty; bestI = i }
                     }
                     if (bestI < 0) break
@@ -133,7 +130,7 @@ object SmartInitialScheduler {
                 while (need > 0 && pos < free.size) {
                     // 拡張希望の禁止の日は飛ばす（禁止が無ければ q == pos で従来どおり）
                     var q = pos
-                    while (q < free.size && (p.extBanned(i, free[q], k) || (avoidForbidden && p.makesForbiddenRun(schedule, i, free[q], k)))) q++
+                    while (q < free.size && p.extBanned(i, free[q], k)) q++
                     if (q >= free.size) break
                     if (q != pos) { val t = free[q]; free[q] = free[pos]; free[pos] = t }
                     val j = free[pos++]
@@ -162,8 +159,7 @@ object SmartInitialScheduler {
                     val demandBonus = if (p.covUCell(k, j, covNow) > 0) -100 else 0
                     // [3.345.0] 休は通常のシフト種の一つ＝残り埋めで優先しない（旧: 休だけ -10 のボーナス）。
                     //   実データ3件で hard/covO/covU/low/high/c1 が全て同一＝この優先は実質不活性だった。
-                    val forbid = avoidForbidden && p.makesForbiddenRun(schedule, i, j, k)
-                    val penalty = (if (over) 1000 else 0) + (if (forbid) FORBID_PENALTY else 0) + counts[i][k] + demandBonus
+                    val penalty = (if (over) 1000 else 0) + counts[i][k] + demandBonus
                     if (penalty < bestPenalty) { bestPenalty = penalty; bestK = k }
                 }
                 schedule[i][j] = bestK

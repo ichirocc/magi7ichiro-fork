@@ -1626,6 +1626,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var lastResultHard: Long = -1L
     /** 進捗の基準（initHard/initSoft）を取った入力の指紋。読込で null に戻す。 */
     private var initBaseKey: Long? = null
+    /** 自動の作り直しの回数。下書きを回ごとに変える（`V6FinalPort.rerunDraft`）。 */
+    private var rerunDraftVariant = 0
     /** 盤面を丸ごと差し替えた回数（CSV 取込・下書き・他の案）。進捗の基準の指紋に混ぜる＝手の編集では上げない。 */
     private var boardReplaceRev = 0L
     private var lastTopHardFamily: String? = null
@@ -1859,7 +1861,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     _ui.update { it.copy(initHard = baseReport.hard.toLong(), initSoft = baseReport.soft.toLong(), initBreakdown = baseReport.breakdown) }
                 }
                 val start = if (!fromDraft) sched0 else
-                    runCatching { V6FinalPort.handleSmartInitial(st0.withSchedule(sched0), allowImpossible = true).schedule }
+                    runCatching { V6FinalPort.handleSmartInitial(st0.withSchedule(sched0), allowImpossible = true, variant = ++rerunDraftVariant).schedule }
                         .onFailure { if (it is CancellationException) throw it }.getOrNull()
                         ?.also { logOp("I", OpLogText.withBoard(RERUN_FROM_DRAFT_LOG, boardKey(it))) } ?: sched0
                 val res = V6FinalPort.handleOptimize(
