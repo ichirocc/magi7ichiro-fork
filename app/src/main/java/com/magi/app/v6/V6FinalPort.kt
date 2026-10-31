@@ -191,6 +191,8 @@ object V6FinalPort {
      *  ＝発火を早めるとごく僅かに品質を落とし、時間と電池を大きく節約する。倍率2は
      *  「本当に詰まっている run は閾値の2倍まで待つ」保守側の設定。 */
     internal const val STALL_OVERRIDE_FACTOR = 2
+    /** [rerunDraft] が回す入口の種類の数（`HypothesisDiversityPolicy.startPlanFor` の 1〜6）。 */
+    internal const val RERUN_DRAFT_KINDS = 6
 
     internal fun watchdogStagnationFired(
         now: Long, startMs: Long, minRunMs: Long,
@@ -397,7 +399,10 @@ object V6FinalPort {
      * 初期解を組み立てる`SmartInitialScheduler`のポート。本最適化(SA/ALNS)へは続けず、
      * 生成した下書きをそのまま返す（続けての本最適化は既存の「勤務表をつくる」が担当）。
      */
-    suspend fun handleSmartInitial(state: MagiState, allowImpossible: Boolean = false): ActionResult = withContext(Dispatchers.Default) {
+    /**
+     * @param variant 0＝いつもの下書き（ボタン）。1 以上＝自動の作り直し用に下書きを少し変える（[rerunDraft]）。
+     */
+    suspend fun handleSmartInitial(state: MagiState, allowImpossible: Boolean = false, variant: Int = 0): ActionResult = withContext(Dispatchers.Default) {
         require(state.dayCount > 0) { "対象期間が無効です。終了日を開始日より後の日付にしてください" }
         // [3.360.3] 期間には T>0 のガードがあるのに職員数には無く、非対称だった。S=0 は編集画面からは
         //   作れない（Ws1Ops.removeStaff が最後の1名を消さない）が、**JSON/CSV 取込で外部から入りうる**。
@@ -413,9 +418,19 @@ object V6FinalPort {
             "estimatedIter" to "~800 回",
         ))
         val res = SmartInitialScheduler.generate(state)
-        val logs = gate.logs + res.report.logs + MirrorLog(tag = "MAGI_GenerateInitial", message = "初期解生成 完了 HARD=${res.report.hard} total=${res.report.total}")
-        ActionResult(res.schedule, res.report.copy(logs = logs), "smart_initial", busy, logs)
+        val sched = if (variant > 0) rerunDraft(state, res.schedule, variant) else res.schedule
+        val report = if (variant > 0) UnifiedViolationChecker.check(state, sched).copy(logs = res.report.logs) else res.report
+        val logs = gate.logs + report.logs + MirrorLog(tag = "MAGI_GenerateInitial",
+            message = "初期解生成 完了 HARD=${report.hard} total=${report.total}${if (variant > 0) "（作り直し用の変化 $variant）" else ""}")
+        ActionResult(sched, report.copy(logs = logs), "smart_initial", busy, logs)
     }
+
+    /**
+     * 自動の作り直し（前回と同じ結果）の下書きを、回ごとに少し変える。探索の入口の多様化（[PortfolioSearch.hypothesisStartFor]）と同じ手で、
+     * 希望・手動固定・拡張希望の禁止は崩さない。実データの測定（下書きから 60 秒×24 回ずつ）で、今の結果を下回った率が 25%→37.5%（2026-10-31）。
+     */
+    internal fun rerunDraft(state: MagiState, draft: Array<IntArray>, variant: Int): Array<IntArray> =
+        PortfolioSearch.hypothesisStartFor(state, draft, 1 + (variant - 1) % RERUN_DRAFT_KINDS, variant.toLong())
 
     suspend fun handleCheck(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): ActionResult = withContext(Dispatchers.Default) {
         val busy = buildBusyDetail(state, "違反チェック中", mapOf(
