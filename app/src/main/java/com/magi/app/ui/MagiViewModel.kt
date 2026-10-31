@@ -1394,6 +1394,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var agentJob: Job? = null
     private val agentSeen = HashSet<Long>()   // 代行が一度見た盤面×設定（元に戻した盤面・同じ結果で輪を回し直さない）
     private var agentResume = false           // 判断待ちを承認した＝次の検査のあと、作成を待たずに代行が続きを回す
+    private var agentWasRunning = false       // 直前に見た作成の実行中フラグ（作成が終わった瞬間を捉える）
+    private var agentRunStateKey: Long? = null // 作成が終わった時点の設定の指紋。これと違えば（作成のあとに制約を変えた）代行は動かない
 
     /** 希望・設定の判断を承認した入口から呼ぶ（再作成まで走る入口は作成の完了で回るので要らない）。 */
     internal fun agentDecisionApproved() { agentResume = true }
@@ -1412,11 +1414,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun maybeRunAgent() {
         val u = _ui.value
+        if (agentWasRunning && !u.running) agentRunStateKey = state?.let { stateKey(it) }
+        agentWasRunning = u.running
         if (u.running || u.agentRunning || optimizeInFlight()) return
         val resume = agentResume; agentResume = false
         if (!u.agentAuto || !(u.engineRan || resume) || !u.hasResult || u.bestHard <= 0L) return
         if (u.draftStage && !resume) return   // 下書きは作成の出発点＝「作成のあと」ではない（直後に作成が続くことが多い）
         val st = state ?: return
+        if (!resume && !agentAfterRun(agentRunStateKey, stateKey(st))) return
         val sched = currentSchedule ?: return
         val key0 = boardKey(sched)
         if (!agentSeen.add(key0 * 31 + stateKey(st))) return

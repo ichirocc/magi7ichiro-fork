@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -43,5 +45,12 @@ class AgentTextTest {
     @Test fun homeDiagnosisCountAllCards() {
         val u = UiState(copilotHint = "x", observedPinBlockedAttempts = 1)
         assertEquals(2, homeDiagnosisCount(u))
+    }
+
+    @Test
+    fun agentRunsOnlyWhenTheSettingsAreUnchangedSinceTheLastRun() {
+        assertTrue(agentAfterRun(42L, 42L))
+        assertFalse("作成のあとに制約を変えた", agentAfterRun(42L, 43L))
+        assertFalse("この画面でまだ作成していない", agentAfterRun(null, 42L))
     }
 }

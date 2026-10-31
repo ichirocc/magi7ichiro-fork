@@ -60,3 +60,6 @@ internal fun agentStopWord(stop: com.magi.app.v6.AgentLoop.Stop): String = when 
     com.magi.app.v6.AgentLoop.Stop.TIME_LIMIT -> "時間の上限"
     com.magi.app.v6.AgentLoop.Stop.CANCELLED -> "中断"
 }
+
+/** 代行は「作成のあと」だけ動く: 作成が終わった時点の設定の指紋 [runKey] と今の指紋 [nowKey] が同じとき。作成の後に制約を変えたら動かない。 */
+internal fun agentAfterRun(runKey: Long?, nowKey: Long): Boolean = runKey != null && runKey == nowKey
