@@ -115,8 +115,6 @@ data class PostStageRecord(
  * セッション内のみ（state には保存しない＝勤務表データに影響しない実行時の調整）。
  */
 object PolishGate {
-    /** [EngineConfig.stallLeftoverKick] の元（既定 OFF＝測定中）。 */
-    @Volatile var stallLeftoverKick: Boolean = false
     /**
      * [c3n 回避の範囲拡張, 3.303.0] 禁止連続を崩しに行く日を j±1 固定から「パターンがまたぐ全日」へ
      * 広げる。3連（`Dﾃ→休→A4`）の先頭 j-2 に届くようになる**正しい**一般化だが、

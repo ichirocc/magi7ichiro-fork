@@ -191,10 +191,6 @@ object V6FinalPort {
      *  ＝発火を早めるとごく僅かに品質を落とし、時間と電池を大きく節約する。倍率2は
      *  「本当に詰まっている run は閾値の2倍まで待つ」保守側の設定。 */
     internal const val STALL_OVERRIDE_FACTOR = 2
-    /** 停滞後の崩し直し（[EngineConfig.stallLeftoverKick]、既定 OFF）の 1 回で崩す連続日数と、1 回の時間の下限・上限。 */
-    internal const val KICK_DAYS = 4
-    internal const val KICK_ROUND_MIN_MS = 3_000L
-    internal const val KICK_ROUND_MAX_MS = 6_000L
 
     internal fun watchdogStagnationFired(
         now: Long, startMs: Long, minRunMs: Long,
@@ -892,31 +888,6 @@ object V6FinalPort {
                             message = "採用した勤務表の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
                     )
                 }
-            }
-            // [停滞後の崩し直し・既定 OFF＝測定中] 停滞で早期終了したとき、余った予約枠で「最良盤面の連続 4 日を崩して
-            //   短い ALNS で磨き直す」を繰り返す。採るのは betterReport で最良を上回ったときだけ（keep-best）。
-            if (config.stallLeftoverKick && stagnated && !stopRequested && extraMs >= 5_000 && refReport.total > 0 && state.dayCount > 0) {
-                val kickDeadline = tPost1 + extraMs
-                val rng = java.util.Random((seed ?: opts.seed) xor 0x6B1C4L)
-                var rounds = 0; var adopted = 0
-                val before = refReport
-                while (isActive && EngineClock.nowMs() + KICK_ROUND_MIN_MS < kickDeadline) {
-                    rounds++
-                    val start = refSched.copy2D()
-                    val first = rng.nextInt(state.dayCount)
-                    repeat(KICK_DAYS) { x -> DestroyRepairOperators.destroyRepairDayAt(state, start, (first + x) % state.dayCount, rng) }
-                    val roundDeadline = minOf(kickDeadline, EngineClock.nowMs() + KICK_ROUND_MAX_MS)
-                    val r = V6NativeOptimizer.optimize(
-                        state, start,
-                        optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (KICK_ROUND_MAX_MS / 1000L).toInt(),
-                            workers = optsR.workers.coerceAtMost(HypothesisPlanning.MAX_HYPOTHESES), seed = rng.nextLong()),
-                        { EngineClock.nowMs() >= roundDeadline || !isActive },
-                        { phase, rep, iters, elapsed -> progressWatch("崩し直し $phase", rep, iters, elapsed) },
-                    )
-                    if (betterReport(r.report, refReport)) { refSched = r.schedule; refReport = r.report; adopted++ }
-                }
-                extraLog = extraLog + MirrorLog(level = "I", tag = "StallKick",
-                    message = "停滞後の崩し直し: ${rounds}回・採用${adopted}回 / HARD ${before.hard}→${refReport.hard} 重み ${before.weightedScore.toLong()}→${refReport.weightedScore.toLong()}")
             }
         }
         val tExtra1 = EngineClock.nowMs()
