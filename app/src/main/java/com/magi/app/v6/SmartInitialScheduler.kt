@@ -1,7 +1,6 @@
 package com.magi.app.v6
 
 import com.magi.app.model.MagiState
-import java.util.Random
 import kotlin.math.max
 
 /**
@@ -27,7 +26,7 @@ object SmartInitialScheduler {
      */
     private const val MAX_DP_STATES = 200_000
 
-    fun generate(state: MagiState, seed: Long = 0x517A2L): ScheduleRunResult {
+    fun generate(state: MagiState): ScheduleRunResult {
         val t0 = System.nanoTime()
         val p = Problem(state)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
@@ -65,7 +64,6 @@ object SmartInitialScheduler {
             rulesByShift.getOrPut(c.shiftIdx) { ArrayList() }.add(C1Rule(c.day1, c.day2))
         }
         var c1Filled = 0
-        val rng = Random(seed)
         for (x in rulesByShift.keys.sorted()) {
             val rules = rulesByShift.getValue(x)
             for (i in 0 until p.S) {
@@ -75,7 +73,7 @@ object SmartInitialScheduler {
                     when (schedule[i][j]) { -1 -> if (p.extBanned(i, j, x)) 0 else -1; x -> 1; else -> 0 }
                 }
                 val cap = p.rangeHi[i][x]
-                val targetDays = solveConstructionDp(p.T, rules, forced, rng.nextLong(), cap) ?: continue
+                val targetDays = solveConstructionDp(p.T, rules, forced, cap) ?: continue
                 for (j in 0 until p.T) {
                     if (targetDays[j] && schedule[i][j] < 0) { schedule[i][j] = x; c1Filled++ }
                 }
@@ -227,13 +225,12 @@ object SmartInitialScheduler {
      *   forced済み(希望由来)の対象日もこの上限に含める＝希望だけで既に上限超過なら
      *   (=既存の別問題)これ以上は増やさずnullで安全側に諦める。
      * @return 目的= まず違反窓数を最小化、次に対象日数を最小化（他制約(③④⑤)への自由度を残す）、
-     *   最後にseed由来の決定的tie-breakで一意に選ぶ。
+     *   同点は対象日のビット列の小さい方で一意に選ぶ（決定的）。
      */
     private fun solveConstructionDp(
         t: Int,
         rules: List<C1Rule>,
         forced: IntArray,
-        seed: Long,
         maxCount: Int = Int.MAX_VALUE,
     ): BooleanArray? {
         if (t <= 0 || t > 62 || forced.size != t) return null
@@ -247,11 +244,6 @@ object SmartInitialScheduler {
         val capBound = if (maxCount >= t) t else maxCount.coerceAtLeast(0)
 
         data class Rec(val cost: Long, val bits: Long)
-        fun tie(day: Int): Long {
-            var z = seed xor (day.toLong() * -0x61c8864680b583ebL)
-            z = z xor (z ushr 33); z *= -0x00ae502812aa7333L; z = z xor (z ushr 29)
-            return z and 511L
-        }
 
         // 状態キー=(直近maxWindow-1日分のビット列, 累積対象日数)。累積数がcapBoundを超える遷移は
         // 生成しない＝個人上限を構造的に超過できない。
@@ -276,7 +268,7 @@ object SmartInitialScheduler {
                         val rm = (1L shl rule.days) - 1L
                         if (java.lang.Long.bitCount(full and rm) < rule.minimum) fireInc++
                     }
-                    val cost = rec.cost + fireInc.toLong() * 1_000_000L + bit.toLong() * 1_000L + tie(day)
+                    val cost = rec.cost + fireInc.toLong() * 1_000_000L + bit.toLong() * 1_000L
                     val newMask = full and keepMask
                     val bits = if (bit == 1) rec.bits or (1L shl day) else rec.bits
                     val nk = newMask to newCnt
