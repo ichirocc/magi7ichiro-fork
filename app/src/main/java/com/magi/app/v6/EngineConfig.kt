@@ -17,6 +17,8 @@ data class EngineConfig(
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
+    /** 停滞で早期終了したあと、余った予約枠で最良盤面を崩して磨き直す（既定 OFF＝測定中、`V6FinalPort` の StallKick）。 */
+    val stallLeftoverKick: Boolean = false,
 ) {
     fun postParams() = V6HotfixPasses.PostOptimizationParams(
         combineExhaustPairs = combineExhaustPairs,
@@ -39,6 +41,7 @@ data class EngineConfig(
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainPolish = PolishGate.countChainPolish,
             wideC3nBreakDays = PolishGate.wideC3nBreakDays,
+            stallLeftoverKick = PolishGate.stallLeftoverKick,
             ejection = EjectionFlags(
                 c1Chain = PolishGate.c1EjectionChain,
                 allFamilyChain = PolishGate.allFamilyEjectionChain,

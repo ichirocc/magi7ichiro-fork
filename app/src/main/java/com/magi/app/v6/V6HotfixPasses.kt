@@ -115,6 +115,8 @@ data class PostStageRecord(
  * セッション内のみ（state には保存しない＝勤務表データに影響しない実行時の調整）。
  */
 object PolishGate {
+    /** [EngineConfig.stallLeftoverKick] の元（既定 OFF＝測定中）。 */
+    @Volatile var stallLeftoverKick: Boolean = false
     /**
      * [c3n 回避の範囲拡張, 3.303.0] 禁止連続を崩しに行く日を j±1 固定から「パターンがまたぐ全日」へ
      * 広げる。3連（`Dﾃ→休→A4`）の先頭 j-2 に届くようになる**正しい**一般化だが、
@@ -814,6 +816,7 @@ object V6HotfixPasses {
 
         val mid = runMidStages(state, chain, params, seed, shouldStop, deadlineMs, t66Done)
 
+        val tFinal = EngineClock.nowMs()
         runFinalStages(state, chain, params, shouldStop, deadlineMs)
 
         val tHf = EngineClock.nowMs()
@@ -831,7 +834,8 @@ object V6HotfixPasses {
         chain.logs.add(MirrorLog(level = "I", tag = "POST",
             message = "後処理タイミング 総${tEnd - t0}ms: HF80=${pre.t67 - t0}ms HF67=${pre.t66 - pre.t67}ms HF66=${t66Done - pre.t66}ms" +
                 " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${mid.tC1Lns - t66Done}ms" +
-                " C1共同LNS+玉突き連鎖=${mid.tPersonalLns - mid.tC1Lns}ms 個人共同LNS=${tHf - mid.tPersonalLns}ms" +
+                " C1共同LNS(+従来の玉突き)=${mid.tPersonalLns - mid.tC1Lns}ms 個人共同LNS=${tFinal - mid.tPersonalLns}ms" +
+                " 最終段(違反起点修復+玉突きパイプライン+人員過剰の退避)=${tHf - tFinal}ms" +
                 " 最終検査+HF70=${tEnd - tHf}ms"))
         // パスごとの内訳（多い順・上位 N）。「時間を食っているのに採用0」のパスが各パス自身の行と突き合わせられる（3.339.0）。
         if (chain.passMs.isNotEmpty()) {

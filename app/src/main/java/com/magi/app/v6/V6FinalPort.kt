@@ -191,6 +191,10 @@ object V6FinalPort {
      *  ＝発火を早めるとごく僅かに品質を落とし、時間と電池を大きく節約する。倍率2は
      *  「本当に詰まっている run は閾値の2倍まで待つ」保守側の設定。 */
     internal const val STALL_OVERRIDE_FACTOR = 2
+    /** 停滞後の崩し直し（[EngineConfig.stallLeftoverKick]、既定 OFF）の 1 回で崩す連続日数と、1 回の時間の下限・上限。 */
+    internal const val KICK_DAYS = 4
+    internal const val KICK_ROUND_MIN_MS = 3_000L
+    internal const val KICK_ROUND_MAX_MS = 6_000L
 
     internal fun watchdogStagnationFired(
         now: Long, startMs: Long, minRunMs: Long,
@@ -688,10 +692,13 @@ object V6FinalPort {
                 val board = OptimizerRuntime.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
                 val hb = wd.bestHard.get()
                 val ok = wishReachedOn(board, hb)
-                // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
-                val fresh = ok || hb != wishFloorLogged || (board != null &&
-                    runCatching { UnifiedViolationChecker.check(state, board).hard == hb }.getOrDefault(false))
-                if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return ok
+                // liveBest は best 報告より遅れて届く経路がある。盤面が最良の報告と同じ（必須・重み・合計が一致）と
+                //   確かめられたときだけ世代に保存する。必須の件数だけの一致では別の盤面を取り違え、「到達」も「未到達」も誤って保存し得た。
+                val fresh = hb != wishFloorLogged || (board != null && runCatching {
+                    val r = UnifiedViolationChecker.check(state, board); val b = wd.bestReport
+                    r.hard == hb && b != null && r.weightedScore == b.weightedScore && r.total == b.total
+                }.getOrDefault(false))
+                if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return false   // 確かめられない盤面では「未到達」＝遅く止まる側
             }
             return wishReachedCache.get().second
         }
@@ -845,7 +852,7 @@ object V6FinalPort {
                 //   「予算残25s」と出る）。まさにその無駄を見せるための行なので、実測の残りを主に出す。
                 val leftMs = (hardDeadlineMs - tPost1).coerceAtLeast(0L)
                 extraLog = listOf(MirrorLog(level = "I", tag = "ExtraRefine",
-                    message = "予算残${leftMs / 1000}s（追加精製に使える上限は予約枠の${extraMs / 1000}s）だが実行せず: $why"))
+                    message = "締切まで残り${leftMs / 1000}s（うち探索予算${seconds}sの残り${((startMs + budgetMs - tPost1).coerceAtLeast(0L)) / 1000}s・残りは後置の予約枠。追加精製に使える上限は予約枠の${extraMs / 1000}s）だが実行せず: $why"))
             }
             if (extraMs >= 5_000 && canExtra) {
                 val extraDeadline = tPost1 + extraMs
@@ -886,6 +893,31 @@ object V6FinalPort {
                     )
                 }
             }
+            // [停滞後の崩し直し・既定 OFF＝測定中] 停滞で早期終了したとき、余った予約枠で「最良盤面の連続 4 日を崩して
+            //   短い ALNS で磨き直す」を繰り返す。採るのは betterReport で最良を上回ったときだけ（keep-best）。
+            if (config.stallLeftoverKick && stagnated && !stopRequested && extraMs >= 5_000 && refReport.total > 0 && state.dayCount > 0) {
+                val kickDeadline = tPost1 + extraMs
+                val rng = java.util.Random((seed ?: opts.seed) xor 0x6B1C4L)
+                var rounds = 0; var adopted = 0
+                val before = refReport
+                while (isActive && EngineClock.nowMs() + KICK_ROUND_MIN_MS < kickDeadline) {
+                    rounds++
+                    val start = refSched.copy2D()
+                    val first = rng.nextInt(state.dayCount)
+                    repeat(KICK_DAYS) { x -> DestroyRepairOperators.destroyRepairDayAt(state, start, (first + x) % state.dayCount, rng) }
+                    val roundDeadline = minOf(kickDeadline, EngineClock.nowMs() + KICK_ROUND_MAX_MS)
+                    val r = V6NativeOptimizer.optimize(
+                        state, start,
+                        optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (KICK_ROUND_MAX_MS / 1000L).toInt(),
+                            workers = optsR.workers.coerceAtMost(HypothesisPlanning.MAX_HYPOTHESES), seed = rng.nextLong()),
+                        { EngineClock.nowMs() >= roundDeadline || !isActive },
+                        { phase, rep, iters, elapsed -> progressWatch("崩し直し $phase", rep, iters, elapsed) },
+                    )
+                    if (betterReport(r.report, refReport)) { refSched = r.schedule; refReport = r.report; adopted++ }
+                }
+                extraLog = extraLog + MirrorLog(level = "I", tag = "StallKick",
+                    message = "停滞後の崩し直し: ${rounds}回・採用${adopted}回 / HARD ${before.hard}→${refReport.hard} 重み ${before.weightedScore.toLong()}→${refReport.weightedScore.toLong()}")
+            }
         }
         val tExtra1 = EngineClock.nowMs()
         val overBudget = tb.overBudget(tExtra1)
@@ -922,8 +954,8 @@ object V6FinalPort {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
             val kind = when {
-                wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
-                wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
+                config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
+                config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
@@ -1287,7 +1319,7 @@ object V6FinalPort {
                 earlyStop = fired,
                 kind = when {
                     !fired -> StopKind.DEADLINE
-                    wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
+                    config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
                     wishReachedEnd -> StopKind.WISH_FLOOR
                     wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
                         if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL

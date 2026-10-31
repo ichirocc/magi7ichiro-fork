@@ -190,6 +190,8 @@ object V6NativeOptimizer {
             MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s $workersNote"),
             MirrorLog(tag = "HF67", message = if (hf67Adopted)
                 "入口修復を採用 HARD ${entryReport.hard}->${repairedReport.hard} / total ${entryReport.total}->${repairedReport.total}"
+            else if (better(repairedReport, entryReport))
+                "入口修復を見送り（修復後の方が良いが拡張希望の禁止に触れる: HARD ${entryReport.hard}->${repairedReport.hard} / total ${entryReport.total}->${repairedReport.total}）"
             else
                 "入口修復を見送り（入力の方が良好: HARD ${entryReport.hard}/total ${entryReport.total} ≦ 修復後 HARD ${repairedReport.hard}/total ${repairedReport.total}）"),
         )
