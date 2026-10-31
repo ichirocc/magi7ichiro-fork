@@ -688,10 +688,13 @@ object V6FinalPort {
                 val board = OptimizerRuntime.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
                 val hb = wd.bestHard.get()
                 val ok = wishReachedOn(board, hb)
-                // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
-                val fresh = ok || hb != wishFloorLogged || (board != null &&
-                    runCatching { UnifiedViolationChecker.check(state, board).hard == hb }.getOrDefault(false))
-                if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return ok
+                // liveBest は best 報告より遅れて届く経路がある。盤面が最良の報告と同じ（必須・重み・合計が一致）と
+                //   確かめられたときだけ世代に保存する。必須の件数だけの一致では別の盤面を取り違え、「到達」も「未到達」も誤って保存し得た。
+                val fresh = hb != wishFloorLogged || (board != null && runCatching {
+                    val r = UnifiedViolationChecker.check(state, board); val b = wd.bestReport
+                    r.hard == hb && b != null && r.weightedScore == b.weightedScore && r.total == b.total
+                }.getOrDefault(false))
+                if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return false   // 確かめられない盤面では「未到達」＝遅く止まる側
             }
             return wishReachedCache.get().second
         }
@@ -845,7 +848,7 @@ object V6FinalPort {
                 //   「予算残25s」と出る）。まさにその無駄を見せるための行なので、実測の残りを主に出す。
                 val leftMs = (hardDeadlineMs - tPost1).coerceAtLeast(0L)
                 extraLog = listOf(MirrorLog(level = "I", tag = "ExtraRefine",
-                    message = "予算残${leftMs / 1000}s（追加精製に使える上限は予約枠の${extraMs / 1000}s）だが実行せず: $why"))
+                    message = "締切まで残り${leftMs / 1000}s（うち探索予算${seconds}sの残り${((startMs + budgetMs - tPost1).coerceAtLeast(0L)) / 1000}s・残りは後置の予約枠。追加精製に使える上限は予約枠の${extraMs / 1000}s）だが実行せず: $why"))
             }
             if (extraMs >= 5_000 && canExtra) {
                 val extraDeadline = tPost1 + extraMs
@@ -922,8 +925,8 @@ object V6FinalPort {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
             val kind = when {
-                wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
-                wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
+                config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
+                config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
@@ -1287,7 +1290,7 @@ object V6FinalPort {
                 earlyStop = fired,
                 kind = when {
                     !fired -> StopKind.DEADLINE
-                    wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
+                    config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
                     wishReachedEnd -> StopKind.WISH_FLOOR
                     wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
                         if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL
