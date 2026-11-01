@@ -10,7 +10,8 @@ import org.json.JSONObject
 import java.io.File
 
 fun cases(resDir: String, which: String): List<Pair<String, MagiState>> =
-    if (which == "fixtures") listOf("blocked_covu_state.json", "sample_state_v6.json", "oct2026_grid_state.json").map { f ->
+    if (which.startsWith("file:")) File(which.removePrefix("file:")).let { listOf(it.nameWithoutExtension to StateParser.parse(it.readText())) }
+    else if (which == "fixtures") listOf("blocked_covu_state.json", "sample_state_v6.json", "oct2026_grid_state.json").map { f ->
         f.removeSuffix(".json").removeSuffix("_state").removeSuffix("_state_v6") to StateParser.parse(File(resDir, f).readText())
     } else probe.Cases.specs.filter { it.id.contains(which.removePrefix("synth:")) }.map { it.id to probe.Cases.build(it) }
 
@@ -31,14 +32,22 @@ fun main(args: Array<String>) {
             o.put("c3wBan", JSONArray((0 until p.S).map { i -> JSONArray((0 until p.T).map { j -> JSONArray((0 until p.K).filter { k -> p.c3wBanned(i, j, k) }) }) }))
             o.put("canDo", JSONArray((0 until p.S).map { i -> JSONArray((0 until p.K).map { k -> p.canDo(i, k) }) }))
             o.put("wish", JSONArray((0 until p.S).map { i -> JSONArray(p.wish[i].toList()) }))
+            o.put("allowedAt", JSONArray((0 until p.S).map { i -> JSONArray((0 until p.T).map { j ->
+                if (p.wishLocked(i, j)) JSONArray(listOf(p.lockTo(i, j))) else JSONArray((0 until p.K).filter { k -> p.mayPlaceAt(i, j, k) })
+            }) }))
+            o.put("lo", JSONArray((0 until p.S).map { i -> JSONArray((0 until p.K).map { k -> p.rangeLo[i][k].let { if (it == Int.MIN_VALUE || it == 0 || !p.canDo(i, k)) -1 else it } }) }))
+            o.put("hi", JSONArray((0 until p.S).map { i -> JSONArray((0 until p.K).map { k -> p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) -1 else it } }) }))
+            o.put("c1", JSONArray(p.cons1.filter { it.day1 <= p.T }.map { JSONArray(listOf(it.day1, it.shiftIdx, it.day2)) }))
+            o.put("board", JSONArray(st.schedule.map { JSONArray(it) }))
             File(outDir, "$name.model.json").writeText(o.toString())
         } else {
-            for (tag in listOf("mayPlace", "canDo")) {
+            for (tag in listOf("mayPlace", "canDo", "c1", "c1lex")) {
                 val f = File(outDir, "$name.$tag.sol.json"); if (!f.exists()) continue
                 val a = JSONArray(f.readText())
                 val s = Array(a.length()) { i -> val r = a.getJSONArray(i); IntArray(r.length()) { r.getInt(it) } }
                 val rep = UnifiedViolationChecker.check(st, s)
-                println("$name $tag checker hard=${rep.hard} " + MirrorKeys.hard.associateWith { rep.breakdown[it] ?: 0 })
+                println("$name $tag checker hard=${rep.hard} total=${rep.total} weighted=${rep.breakdown.entries.sumOf { (k, v) -> MirrorKeys.weightOf(k) * v }.toLong()} " +
+                    MirrorKeys.all.associateWith { rep.breakdown[it] ?: 0 }.filterValues { it != 0 })
             }
         }
     }
