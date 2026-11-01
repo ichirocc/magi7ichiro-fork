@@ -28,7 +28,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
-| [`docs/weightless_objective.md`](./docs/weightless_objective.md) | **重みを使わない目的関数の設計書**（設計のみ・未実装、2026-11-01。優先順位の段 T0〜T3＋件数の許容ライン、段の鍵の比較器、公平の leximin、段の順に解く探索と利用者に見せない動的な重み、画面・移行・測り方・段階 P0〜P5・決定事項 Q1〜Q12、文献の根拠と取り入れた概念 C1〜C11（職員ごとのライン・受容度の帯・leximax・NuWLS 型の重み更新・見込み表示）） |
+| [`docs/weightless_objective.md`](./docs/weightless_objective.md) | **重みを使わない目的関数の設計書**（設計のみ・未実装、2026-11-01。優先順位の段 T0〜T3＋件数の許容ライン、段の鍵の比較器、公平の leximin、段の順に解く探索と利用者に見せない動的な重み、画面・移行・測り方・段階 P0〜P5・決定事項 Q1〜Q12、文献の根拠と取り入れた概念 C1〜C11（職員ごとのライン・受容度の帯・leximax・NuWLS 型の重み更新・見込み表示）、§3.2 取り入れる根拠（強さ A〜D・取り下げる条件）） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
