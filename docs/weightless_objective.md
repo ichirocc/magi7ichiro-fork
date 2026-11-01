@@ -82,7 +82,7 @@
 | # | MAGI で起きていること | 強さ | 出典 |
 |---|---|---|---|
 | W1 | 重みは決めても何度も直されている。c1 は 4→5→15→30→50→90、c3mn は 12→15→30→90→50→25（どちらも 5 回）、covO は 0.5→1→5→10、ほかにも high・apt・fair・weekly・c41 系・c3m を改定。どれも HF77 の明示指示 | B | `docs/business-logic.md` §2「重みの経緯」 |
-| W2 | 重みを動かすと、違反が族のあいだで**移るだけ**のことがある。3.727.14（high 25→50・c3mn 50→25）の 18 組: high −0.72、c3mn −0.11、代わりに c1 +1.56、c3m +1.83、必須の差 0。2026-10-26（c1 と c3mn の入れ替え）でも c1 −16.6 の代わりに low +3.8、high +4.6 | A | 同 §2、`tools/loop/results/w14-2026-10-31-high50-c3mn25.txt` |
+| W2 | 重みを動かすと、違反が族のあいだで**移るだけ**のことがある。3.727.14（high 25→50・c3mn 50→25）の 18 組: high −0.72、c3mn −0.11、代わりに c1 +1.56、c3m +1.83、必須の差 0。2026-10-26（c1 と c3mn の入れ替え）でも c1 −16.6 の代わりに low +3.8、high +4.6 | A | 同 §2（挙げられている `tools/loop/results/w14-2026-10-31-high50-c3mn25.txt` は main に無い。本物の交換か探索の見かけかは未判定＝`docs/seesaw.md`） |
 | W3 | 重みの比が、利用者の言葉に直せない。画面とログに「重み付き評価点が高いため」「全体は今より良い（重みつき）」「重み N」と出るが、何件の何と何件の何を交換したのかは書けない | B | `KeptResultText.kt:19`、`CellSheetLogic.kt:1701`、`ChangeSummary` |
 | W4 | 重み付き和では望む交換が採れない場面があり、例外の採用基準を足している。apt・fair の研磨だけ他の SOFT の悪化を許す `PolishGate.aptFairSoftTolerance`（既定 OFF、「じっくり」で ON） | B | `docs/business-logic.md`、CLAUDE.md の判断の基準 |
 | W5 | HARD どうしも重みの差で比べている。3.573.0 の指摘（HARD の合計が同じなら covU を減らして c3n を増やす手も改善になりうる）は、第 2 キーの weightedScore に頼っている | B | `MirrorCore.kt` の `reportComparator` 周辺のコメント |
