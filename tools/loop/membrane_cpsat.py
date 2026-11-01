@@ -3,14 +3,62 @@
 細胞＝部分問題の CP-SAT（外のセルは固定）と正式評価（CheckServer.kt＝UnifiedViolationChecker）で回す。
   /usr/bin/python3 tools/loop/membrane_cpsat.py <model.json> <state.json> <classpath> <outdir> [総秒=540]
 model.json は HardFloorExport の export（file:<state.json>）。classpath は CheckServer を含む JVM のクラスパス。
-目的関数は fair を除く全族の重み付き和を CP-SAT で厳密に写し（起点盤面で族ごとに checker と一致することを最初に確かめる）、
-fair を含む採否は checker の betterReport（必須→重み→合計）で決める。
+目的関数は全族の重み付き和を CP-SAT で厳密に写し（fair は細胞で回数が動く職員の回数を ±MAGI_MEM_FAIR_D に限った表。起点盤面で族ごとに checker と一致することを最初に確かめる）、
+採否は checker の betterReport（必須→重み→合計）で決める。fixture は OptDump.kt で製品の handleOptimize の出力を作ってから書き出す。
 """
-import json, os, subprocess, sys, time
+import itertools, json, math, os, subprocess, sys, time
 from ortools.sat.python import cp_model
 
-MODELLED = ["covU", "c3n", "c3w", "c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "weekly"]
+MODELLED = ["covU", "c3n", "c3w", "c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "weekly", "fair"]
+FAIR_D = int(os.environ.get("MAGI_MEM_FAIR_D", "3"))   # 細胞の職員の回数を ±D に限って fair を表で厳密に写す
 HARD = {"covU", "c3n", "c3w", "pref", "groupViol", "extWish"}
+
+
+def jround(v):
+    return math.floor(v + 0.5)
+
+
+def fair_dev(m, g, k, cnt):
+    """MirrorCore.kt の Problem.fairDevOfBucket（達成率モード v2、基準が欠ければ生回数の round(平均)）の写し。cnt(x) は回数。"""
+    mem = [x for x in m["groupMembers"][g] if m["mayPlace"][x][k] or cnt(x) > 0]
+    n = len(mem)
+    if n < 2:
+        return 0
+    c = [cnt(x) for x in mem]
+    ach, sc = [0.0] * n, [0.0] * n
+    for idx, x in enumerate(mem):
+        lo, hi = m["rLo"][x][k], m["rHi"][x][k]
+        if lo is not None and hi is not None:
+            e = lo if c[idx] < lo else hi if c[idx] > hi else c[idx]
+            s_ = (hi - lo) / 2.0 if hi > lo else 0.0
+            sc[idx] = s_; ach[idx] = (e - (lo + hi) / 2.0) / s_ if s_ > 0 else 0.0
+        elif m["apt"][x][k] >= 0:
+            t = m["apt"][x][k]
+            sc[idx] = float(t); ach[idx] = (c[idx] - t) / t if t > 0 else 0.0
+        else:
+            tg = jround(sum(c) / n)
+            return sum(abs(v - tg) for v in c)
+    w = sum(sc)
+    if w <= 0:
+        return 0
+    order = sorted(range(n), key=lambda q: (ach[q], q))
+    acc, tgt = 0.0, ach[order[-1]]
+    for q in order:
+        acc += sc[q]
+        if acc * 2 >= w:
+            tgt = ach[q]; break
+    return sum(jround(abs(ach[q] - tgt) * sc[q]) for q in range(n))
+
+
+def fair_total(m, board):
+    T = m["T"]
+    tot = 0
+    for g in range(m["G"]):
+        if len(m["groupMembers"][g]) < 2:
+            continue
+        for k in m["bucket"][g]:
+            tot += fair_dev(m, g, k, lambda x: sum(1 for j in range(T) if board[x][j] == k))
+    return tot
 
 
 class Oracle:
@@ -165,6 +213,33 @@ class Board:
                         pr = md.NewIntVar(0, S * S, ""); md.AddMultiplicationEquality(pr, [a, b])
                     terms[fam].append((pr, None, j, s1))
 
+        # fair: 群×シフトの桶ごとに、細胞で回数が動く職員の回数の組 → 偏差 を表で持つ（他の職員は固定）
+        movers = {i for (i, j) in free}
+        for g in range(m["G"]):
+            mem = m["groupMembers"][g]
+            if len(mem) < 2:
+                continue
+            for k in m["bucket"][g]:
+                c0 = {q: sum(1 for j in range(T) if board[q][j] == k) for q in mem}
+                mv = [q for q in mem if q in movers]
+                if not mv:
+                    v = fair_dev(m, g, k, lambda q: c0[q])
+                    if v:
+                        terms["fair"].append((v, None, None, k))
+                    continue
+                ranges = [range(max(0, c0[q] - FAIR_D), min(T, c0[q] + FAIR_D) + 1) for q in mv]
+                vs = []
+                for q, r in zip(mv, ranges):
+                    md.Add(cnt[q, k] >= r[0]); md.Add(cnt[q, k] <= r[-1])
+                    v = md.NewIntVar(r[0], r[-1], ""); md.Add(v == cnt[q, k]); vs.append(v)
+                rows = []
+                for combo in itertools.product(*ranges):
+                    cc = dict(c0); cc.update(zip(mv, combo))
+                    rows.append(list(combo) + [fair_dev(m, g, k, lambda q: cc[q])])
+                fv = md.NewIntVar(0, max(r[-1] for r in rows), "")
+                md.AddAllowedAssignments(vs + [fv], rows)
+                terms["fair"].append((fv, None, None, k))
+
         self.hard_expr = sum(e for f in ("covU", "c3n", "c3w") for e, *_ in terms[f])
         md.Add(self.hard_expr <= hmax)
         for f, cap in (fam_caps or {}).items():
@@ -247,7 +322,7 @@ def main():
     # 1. 写しの確認: fair 以外の全族で checker と一致すること
     fam, obj = modelled_counts(m, skin)
     bad = {f: (fam[f], rep["bd"][f]) for f in MODELLED if fam[f] != rep["bd"][f]}
-    say("写しの照合", "一致" if not bad else f"不一致 {bad}", "重み(fair除く)", obj, "checker−fair", rep["weighted"] - 5 * rep["bd"]["fair"])
+    say("写しの照合", "一致" if not bad else f"不一致 {bad}", "重み(写し)", obj, "checker", rep["weighted"])
     if bad:
         sys.exit(1)
 
@@ -336,6 +411,11 @@ def main():
                         grow |= {i2 for i2 in range(S) if m["canDo"][i2][k] and i2 not in staff}
                     if j is not None:
                         d2 = (max(0, min(d2[0], j - maxd)), min(T, max(d2[1], j + maxd + 1)))
+                if not bl:
+                    # 阻んだのが必須でない＝ソフトの交換（fair・apt など群の中の釣り合い）。同じ群で OWA の不利な順に 1 名ずつ融合する
+                    grps = {m["sgrp"][i] for i in staff}
+                    cand = [q for q in range(S) if q not in staff and m["sgrp"][q] in grps] or [q for q in range(S) if q not in staff]
+                    grow = set(sorted(cand, key=lambda q: -load[q])[:1])
                 add = sorted(grow - staff, key=lambda q: -load[q])[: max(0, CAP_STAFF - len(staff))]
                 if not add and d2 == days:
                     # 阻んだ必須が細胞の中だけ＝融合の先が無い。日を全期間へ一度だけ広げ、それでも同じなら証拠として止める
@@ -353,6 +433,8 @@ def main():
     say(f"膜の結果: 必須 {rep['hard']} 合計 {rep['total']} 重み {rep['weighted']} 採用 {accepted} 細胞内の最適証明 {proofs} 停止 {capped} {time.time()-t0:.0f}s")
     ref = float(os.environ.get("MAGI_MEM_GLOBAL", "0"))
     if ref > 0:
+        global FAIR_D
+        FAIR_D = 1
         st, sol, obj, fm, _ = Board(m, skin, {(i, j) for i in range(S) for j in range(T)}, hmax).solve(ref)
         if sol is not None:
             r2 = oracle.check(sol)
