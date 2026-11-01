@@ -28,6 +28,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
+| [`docs/weightless_objective.md`](./docs/weightless_objective.md) | **重みを使わない目的関数の設計書**（設計のみ・未実装、2026-11-01。優先順位の段 T0〜T3＋件数の許容ライン、段の鍵の比較器、公平の leximin、段の順に解く探索と利用者に見せない動的な重み、画面・移行・測り方・段階 P0〜P5・決定事項 Q1〜Q9、文献の根拠） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
@@ -44,6 +45,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-01（文書のみ: 重みを使わない目的関数の設計書 `docs/weightless_objective.md`）
 **最終更新**：2026-10-31（3.727.18: 代行は作成のあとだけ動く（制約の変更後に勝手に動かない））
 **最終更新**：2026-10-31（3.727.17: 自動の作り直しで下書きを回ごとに変える。山と谷の越え方の測定 6 案の記録）
 **最終更新**：2026-10-31（3.727.16: 実機ログからの不具合 5 件（希望衝突の床の判定で別の盤面を取り違える・ログの表示 4 件）。停滞後の崩し直しは測って否決）
