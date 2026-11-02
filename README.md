@@ -44,6 +44,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-02（3.727.19: 膜の細胞 LNS を後処理の最終段に追加（既定 OFF、2 腕比較 12 勝 3 敗）、`docs/membrane_search.md` §11）
 **最終更新**：2026-11-02（測定のみ: 膜の探索の試作で頭打ち盤面 13/13 を改善、`docs/membrane_search.md` §10）
 **最終更新**：2026-10-31（3.727.18: 代行は作成のあとだけ動く（制約の変更後に勝手に動かない））
 **最終更新**：2026-10-31（3.727.17: 自動の作り直しで下書きを回ごとに変える。山と谷の越え方の測定 6 案の記録）

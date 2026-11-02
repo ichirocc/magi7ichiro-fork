@@ -19,6 +19,7 @@ internal object PostStages {
     val PERSONAL_LNS = Stage("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS")
     val COMPONENT_REPAIR_FINAL = Stage("後処理 違反起点修復(最終)", "ComponentRepair")
     val EJECTION_PIPELINE = Stage("後処理 玉突き連鎖(予察つき・修復の後)", "玉突きパイプライン")
+    val MEMBRANE_CELL = Stage("後処理 膜の細胞LNS(最終・既定OFF)", "MembraneCellLns")
     val COVO_RELIEF = Stage("後処理 人員過剰の退避(最終)", "CovORelief")
     val CYCLIC = Stage("後処理 循環交換(k=2,3)", "CyclicSwapPolish")   // 巡回: label に巡の印が付く
     val C1_SAME_DAY = Stage("後処理 期間要件(c1)研磨", "C1同日交換")   // 巡回: label に巡の印が付く
@@ -42,5 +43,5 @@ internal object PostStages {
     val COMPONENT_REPAIR = Stage("後処理 違反連結成分修復", "ComponentRepair")   // 巡回: label に巡の印が付く
 
     /** 定義した段の一覧。 */
-    val ALL: List<Stage> = listOf(HF80, HF67, HF66, DAY_ASSIGN, WEEKLY_REBALANCE, ALTERNATING, C1_JOINT_LNS, C1_EJECTION, PERSONAL_LNS, COMPONENT_REPAIR_FINAL, EJECTION_PIPELINE, COVO_RELIEF, CYCLIC, C1_SAME_DAY, C1_INDEX, C1_TEMPORAL, C1_BEAM, C1_EXACT, C3_SEQUENCE, C3_ROTATE, C3MN, C3N, RANGE, C3_RUN, C3_PATTERN, ANCHORED_WINDOW, WISH_ISLAND, BLOCK_SWAP, COUNT_CHAIN, APT, FAIR, COMPONENT_REPAIR)
+    val ALL: List<Stage> = listOf(HF80, HF67, HF66, DAY_ASSIGN, WEEKLY_REBALANCE, ALTERNATING, C1_JOINT_LNS, C1_EJECTION, PERSONAL_LNS, COMPONENT_REPAIR_FINAL, EJECTION_PIPELINE, MEMBRANE_CELL, COVO_RELIEF, CYCLIC, C1_SAME_DAY, C1_INDEX, C1_TEMPORAL, C1_BEAM, C1_EXACT, C3_SEQUENCE, C3_ROTATE, C3MN, C3N, RANGE, C3_RUN, C3_PATTERN, ANCHORED_WINDOW, WISH_ISLAND, BLOCK_SWAP, COUNT_CHAIN, APT, FAIR, COMPONENT_REPAIR)
 }
