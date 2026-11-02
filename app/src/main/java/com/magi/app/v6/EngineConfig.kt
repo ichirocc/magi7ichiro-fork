@@ -14,7 +14,7 @@ data class EngineConfig(
     val combineExhaustPairs: Boolean = false,
     val aptFairSoftTolerance: Boolean = false,
     val countChainPolish: Boolean = false,
-    val membraneCellLns: Boolean = false,
+    val membraneCellLns: Boolean = true,
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),

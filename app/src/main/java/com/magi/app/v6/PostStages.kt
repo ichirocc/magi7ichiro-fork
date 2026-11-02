@@ -19,7 +19,7 @@ internal object PostStages {
     val PERSONAL_LNS = Stage("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS")
     val COMPONENT_REPAIR_FINAL = Stage("後処理 違反起点修復(最終)", "ComponentRepair")
     val EJECTION_PIPELINE = Stage("後処理 玉突き連鎖(予察つき・修復の後)", "玉突きパイプライン")
-    val MEMBRANE_CELL = Stage("後処理 膜の細胞LNS(最終・既定OFF)", "MembraneCellLns")
+    val MEMBRANE_CELL = Stage("後処理 膜の細胞LNS(最終)", "MembraneCellLns")
     val COVO_RELIEF = Stage("後処理 人員過剰の退避(最終)", "CovORelief")
     val CYCLIC = Stage("後処理 循環交換(k=2,3)", "CyclicSwapPolish")   // 巡回: label に巡の印が付く
     val C1_SAME_DAY = Stage("後処理 期間要件(c1)研磨", "C1同日交換")   // 巡回: label に巡の印が付く

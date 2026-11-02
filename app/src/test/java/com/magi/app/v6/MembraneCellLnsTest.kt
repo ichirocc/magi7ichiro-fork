@@ -41,8 +41,8 @@ class MembraneCellLnsTest {
     }
 
     @Test
-    fun offByDefault() {
-        assertFalse(PolishGate.membraneCellLns)
-        assertFalse(EngineConfig().postParams().membraneCell)
+    fun onByDefault() {
+        assertTrue(PolishGate.membraneCellLns)
+        assertTrue(EngineConfig().postParams().membraneCell)
     }
 }

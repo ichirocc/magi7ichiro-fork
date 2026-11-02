@@ -206,8 +206,8 @@ object PolishGate {
     /** [3.540.0] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（A/B 138 ペアで新2/同等135/旧1＝ゲート不合格、docs/algorithm_portfolio.md）。 */
     @Volatile var countChainPolish: Boolean = false
 
-    /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **false**（2 腕比較の前）。 */
-    @Volatile var membraneCellLns: Boolean = false
+    /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **true**（2 腕比較 12 勝 3 敗、3.727.20 ユーザー決定）。 */
+    @Volatile var membraneCellLns: Boolean = true
 
     /** 必須違反が構造の下限に届いたら停滞閾値を短縮する（`effectiveStallMs` の basePlateau）。false＝下限に届いても通常閾値で粘る。
      *  既定 **true**＝従来どおり（実機ログ 2026-10-15: 300 s 予算で 59 s に終わった件の測定用。採否は測ってから）。 */
@@ -471,7 +471,7 @@ object V6HotfixPasses {
         /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
         val countChainEnabled: Boolean = false,
         /** 膜の細胞 LNS を最終段に入れる（[EngineConfig.membraneCellLns] の写し）。 */
-        val membraneCell: Boolean = false,
+        val membraneCell: Boolean = true,
         /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
         val wideC3nBreakDays: Boolean = false,
         /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
