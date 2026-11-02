@@ -206,6 +206,9 @@ object PolishGate {
     /** [3.540.0] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（A/B 138 ペアで新2/同等135/旧1＝ゲート不合格、docs/algorithm_portfolio.md）。 */
     @Volatile var countChainPolish: Boolean = false
 
+    /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **true**（2 腕比較 12 勝 3 敗、3.727.20 ユーザー決定）。 */
+    @Volatile var membraneCellLns: Boolean = true
+
     /** 必須違反が構造の下限に届いたら停滞閾値を短縮する（`effectiveStallMs` の basePlateau）。false＝下限に届いても通常閾値で粘る。
      *  既定 **true**＝従来どおり（実機ログ 2026-10-15: 300 s 予算で 59 s に終わった件の測定用。採否は測ってから）。 */
     @Volatile var floorShortStall: Boolean = true
@@ -225,6 +228,7 @@ object PolishGate {
         "combineExhaustPairs" to combineExhaustPairs,
         "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish,
+        "membraneCellLns" to membraneCellLns,
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
         "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
@@ -243,6 +247,7 @@ object PolishGate {
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }
+        b("membraneCellLns") { membraneCellLns = it }
         b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }
         
@@ -465,6 +470,8 @@ object V6HotfixPasses {
         val aptFairSoftTolerance: Boolean = false,
         /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
         val countChainEnabled: Boolean = false,
+        /** 膜の細胞 LNS を最終段に入れる（[EngineConfig.membraneCellLns] の写し）。 */
+        val membraneCell: Boolean = true,
         /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
         val wideC3nBreakDays: Boolean = false,
         /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
@@ -682,6 +689,11 @@ object V6HotfixPasses {
                 PostFold.Swap(ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop))
             },
             PostStep(PostStages.EJECTION_PIPELINE, skipWhenStopped = true, enabled = { pipelineOn }) { work -> PostFold.Swap(runPipeline(work)) },
+            PostStep(PostStages.MEMBRANE_CELL, skipWhenStopped = true, enabled = { params.membraneCell }) { work ->
+                val cap = if (params.deterministic) 8_000L else minOf(8_000L, EngineClock.remainingMs(deadlineMs).coerceAtLeast(0L))
+                val r = MembraneCellLns.apply(state, work, MembraneCellLns.Params(maxMillis = cap, deterministic = params.deterministic, maxCells = if (params.deterministic) 40 else 64), shouldStop)
+                PostFold.Board(r.newSchedule, r.logs, null, r.applied)
+            },
             // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
             PostStep(PostStages.COVO_RELIEF, skipWhenStopped = true) { work ->
                 val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
