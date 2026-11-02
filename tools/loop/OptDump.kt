@@ -11,7 +11,7 @@ fun main(args: Array<String>) {
     val st = StateParser.parse(File(args[0]).readText())!!
     val res = runBlocking {
         V6FinalPort.handleOptimize(st, st.schedule.map { it.toIntArray() }.toTypedArray(), secondsRaw = args[2].toInt(), workers = args[3].toInt(),
-            allowImpossible = true, softPolish = true, seed = 1001L)
+            allowImpossible = true, softPolish = true, seed = 1000L + (args.getOrNull(4)?.toLong() ?: 1L))
     }
     File(args[1]).writeText(JSONArray(res.schedule.map { JSONArray(it.toList()) }).toString())
     System.err.println("hard=${res.report.hard} total=${res.report.total}")
