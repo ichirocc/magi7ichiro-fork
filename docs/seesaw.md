@@ -2,7 +2,8 @@
 
 ## 0. この文書の読み方
 
-- **対象**: `ichirocc/magi7ichiro-fork`。照合したコミットは `eb57f18`（main、2026-11-03）。エンジンの最後の変更は `ce011e5`（3.727.19〜3.727.20）。
+- **対象**: `ichirocc/magi7ichiro-fork`。照合したコミットは `eb57f18`（main、2026-11-03。`7e440d5` までエンジンの変更なし）。
+- **改訂**: 2026-11-03 に 2020 年代以降の論文で見直した（ユーザー「シーソーの設計書を2020年代以降の論文から見直しする」）。何をどう変えたかは §11。エンジンの最後の変更は `ce011e5`（3.727.19〜3.727.20）。
   読む時点で main が進んでいれば、`git diff eb57f18..HEAD -- app/src/main/java/com/magi/app/v6/ tools/loop/` で §5 の根拠ファイルに差分が無いことを先に確かめる。
 - **読み手**: 他社 AI（実装・測定・レビュー）と人。会話履歴なしで、この文書とリポジトリだけから判断・実装できることを目指す。
 - **状態ラベル**: 本文の各項目に次のどれかを付ける。
@@ -40,7 +41,9 @@
 | 腕 | 比較する設定の 1 つ（例: 旧重み、新重み） |
 | 対 | 同じデータ・同じ seed で 2 つの腕を走らせた最終盤面の組。差 Δ = f(新) − f(旧) |
 | 交換率 r(A→B) | 対の集合で、族 A が減った対について、ΔB の中央値 ÷ (−ΔA) の中央値。「A が 1 件減るあたり B が何件増えたか」 |
-| 競合・調和・独立 | 族 A と B の関係。対の集合で、A と B が逆向きに動く対が多ければ**競合**、同じ向きなら**調和**、どちらとも言えなければ**独立**（Purshouse & Fleming 2003 の分類を件数に写したもの。判定の式は §6.1） |
+| 競合・調和・独立 | 族 A と B の関係。対の集合で、A と B が逆向きに動く対が多ければ**競合**、同じ向きなら**調和**、どちらとも言えなければ**独立**（分類は Purshouse & Fleming 2003）。強さは相関係数ではなく**競合率**で測る（§6.1。理由は §11 の R1） |
+| 競合率 c(A, B) | 対のうち、A と B の少なくとも一方が動いた対を分母、A と B が逆向きに動いた対を分子にした割合。調和率は同じ向きに動いた対の割合 |
+| 代表点 | 前線の断面から利用者に見せるために選ぶ少数の点。両端・膝点・交換率が大きく変わる点（§6.4） |
 | 支点 | 交換をどこで止めるかの位置。今は重みの比で暗黙に決まっている。将来は件数の許容ライン（`docs/weightless_objective.md` §4.2）で明示する |
 | 膝点 | 前線の上で、片方を少し良くすると他方が大きく悪くなる点（Deb & Gupta 2011）。利用者に見せる候補（§6.4） |
 
@@ -112,9 +115,10 @@
 ### 6.1 S1: 交換の表とシーソーの地図（出力不変）
 
 - **地図**: 族 A ごとに、A の重みだけを ×2 にした腕 P_A を作り、今の重みの腕 Q と対にする。各族 B について ΔB の平均・区間・増/減/同を出す。行＝押した族 A、列＝出てきた族 B の表。
-- **競合・調和・独立の判定**（Purshouse & Fleming の分類を件数の対に写したもの。閾値は MAGI 側の案）:
-  - 対のうち ΔA < 0 のものだけを見て、ΔB > 0 の割合 p₊ と ΔB < 0 の割合 p₋ を出す。
-  - p₊ ≥ 0.6 かつ ΔB の区間が 0 を含まない（正）→ **競合**。p₋ ≥ 0.6 かつ区間が負 → **調和**。どちらでもない → **独立**。
+- **競合・調和・独立の判定**（分類は Purshouse & Fleming 2003。強さの測り方は §11 の R1 で見直した。閾値は MAGI 側の案）:
+  - 族の組 (A, B) ごとに、競合率 c(A, B) と調和率を出す（§2）。相関係数（Pearson・Kendall）は補助に出すだけで、判定には使わない。
+  - c ≥ 0.6 かつ「A が減った対での ΔB」の区間が正 → **競合**。調和率 ≥ 0.6 かつ区間が負 → **調和**。どちらでもない → **独立**。
+  - 分母（どちらかが動いた対）が 8 未満の組は判定しない（`docs/stall_escape.md` §13 の「対 8 以上」と同じ下限）。
 - **連鎖**: 地図を、族を節、競合の辺を矢印（重みは交換率）にした有向グラフにする。A→B→C の経路があれば、A のラインを動かすと C まで波及しうる。
 - **実装の罠**（重要）: 重みは定数で、`MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator`・C++ `magi_native.cpp` に書かれている（`.claude/rules/weights.md`）。
   腕ごとに重みを変えるには、①腕ごとにビルドする（今の `WeightSwapProbe` の使い方＝旧重みと新重みの 2 ビルド）か、②測定専用の重みの差し替え口を作るかのどちらか。
@@ -127,12 +131,20 @@
 - **S2a（集めた盤面）**: S1 の全腕・全 seed の最終盤面を、データごとに 1 つの集合にする。必須の件数が最小の盤面だけで非劣の盤面を求め、腕ごとに「優越された盤面の割合」を出す。計算は件数ベクトルの比較だけで、PC で数秒。
 - **S2b（前線）**: `c1_floor_cpsat.py` を一般化し、任意の族の組 (A, B) について「必須 ≤ h₀、f_A ≤ a のもとで f_B を最小化」を解く。a を起点の値から 1 件ずつ下げ、(a, min f_B) の列＝前線の断面を出す。
   - ε 制約法（Haimes ら 1971。弱効率解を避ける改良が Mavrotas 2009 の AUGMECON）。MAGI では §7 の I3 のとおり、得た盤面を辞書式で整えればよい（f_B が同じなら他の族の和を最小にする 2 回目の解き直し）。
+  - **解く回数の削り方**（AUGMECON2 の bypass と AUGMECON-R の刈り込み、§11 の R2）: a で解いた盤面の f_A が a より小さければ、a から f_A までの断面は同じ盤面なので解かずに飛ばす。
+    また、ある a で「必須 ≤ h₀ を満たす盤面が無い」と出たら、それより小さい a も無いので、そこで打ち切る。
+  - **全部の断面は要らない**: 見せるのは代表点（§6.4）だけなので、両端を先に解き、あいだは交換率が大きく変わるところだけを二分で細かくする（前線の代表を選ぶ ε 制約法の考え方、§11 の R2）。
   - 族を CP-SAT に写すときは、族ごとに `UnifiedViolationChecker` と件数が一致することを起点の盤面で確かめる（`membrane_cpsat.py` と同じ手順）。
 - 出すもの: 族の組ごとの判定（揺れ・見かけ・本物）と見かけの量。
 
 ### 6.3 S3: シーソーを割る探索（見かけのとき）
 
 - 両端の盤面（P の盤面と Q の盤面）のあいだを Path Relinking（Glover・Laguna・Martí 2000）で歩き、**両端のどちらかに優越する盤面**も拾う。今の `elitePathRelink` は `betterReport` で良い盤面しか拾わないので、拾う条件を足す。
+- 歩き方は 2 通りを持つ（§11 の R3。反応型 Path Relinking＝内側と外側の組み合わせ）:
+  - **内側**: P から Q へ、Q と違うセルを 1 つずつ Q に合わせる（今の `elitePathRelink` と同じ向き）。
+  - **外側**: P から、Q と**同じ**セルを 1 つずつ Q と違う値へ変える（Q から遠ざかる）。両端のどちらにも無い組み合わせを探す。
+  - どちらを多く使うかは、直近に優越する盤面を拾えた方を増やす（反応型）。
+- 族の組が複数あるときは、組ごとに 1 本ずつ歩く（分解型の多目的 Path Relinking、§11 の R3）。
 - 拾った盤面は、採否の比較（`betterReport`）に通す。通れば採る。通らなくても、§6.4 の案として残せる（採否は変えない）。
 - 作る条件: S2 で見かけの量が 6 fixture 中 2 件以上で 1 件以上あること。作ったら決定的後処理の 2 腕比較で、勝ち＞負け・必須の悪化 0・後処理の時間の増加 5 秒以内（CLAUDE.md の判断の基準、`docs/stall_escape.md` §13 の 4）。
 - 既に効いているもの: `MembraneCellLns` は、§3.2 の「シーソーでない改善」を探索の中で拾う役を、細胞の焼きなましで担っている。S3 はその前段（2 端点のあいだ）を足す提案。
@@ -141,6 +153,8 @@
 
 - 本物と判定した族の組は、前線の断面（S2b の (a, min f_B)）から 2〜3 点を選んで見せる: **両端**と**膝点**。
   - 膝点は、断面で隣どうしの交換率（Δf_B / Δa）が最も大きく変わる点（Deb & Gupta 2011 の考え方を整数の断面に写したもの。MAGI 側の案）。
+  - 膝点の定義は文献で一致していない（Yu ら 2022 の survey、§11 の R4）。この文書は上の 1 つに固定し、ほかの定義（角度・最遠点など）は使わない。断面が短く（点が 3 つ未満）膝が決まらないときは両端だけを見せる。
+- **説明の文**（§11 の R5）: 交換を、利用者が良くしたい族を起点に書く。「期間の制約を 2 件減らすなら、上限超過を 1 件譲ることになります」。どの族を譲るかは S1 の地図の競合の相手から選ぶ（説明可能な対話型多目的最適化の、「良くしたい目的を改善するために悪化を受け入れられる別の目的を示す」型）。
 - 文言は件数で書く（例:「上限超過を 1 件減らすと、期間の制約が約 2 件増えます」）。重みや点数は出さない。
 - 支点の置き方は `docs/weightless_objective.md`: 段が違えば上の段が勝つ（§4.3）、同じ段なら段の中の比べ方（§4.2・§4.2c）、件数で止めたいなら受容度の帯（§4.2b）。
 - 案の保持（同 §6.1）の「段の極端案」「妥協案」に、膝点を使う。
@@ -166,11 +180,12 @@
 - 対の単位は (データ, seed)。差は新−旧。区間は 95% ブートストラップ（`weight_swap_stats.py` と同じ: 4000 回の再標本、乱数 seed 7）。
 - 揺れ σ は同じ腕を seed 6 個で回して出す（§4 の 1）。
 - S3 の採否は既存の規則（決定的後処理の 2 腕比較、事前基準を先に固定、`docs/stall_escape.md` §13 の 4）。
+- **追加の報告（PROPOSAL、§11 の R6）**: 対が少ない（8〜20）ときは、p 値の代わりに「新しい腕が良い確率」を出す（ベイズ的な性能比較。対ごとの勝ち・負け・引き分けの数から、勝つ確率の事後分布の中央値と 95% 区間）。採否の規則そのものは変えない（区間の判定は従来どおりブートストラップ）。
 
 ## 9. 実装者向けチェックリスト
 
 1. `git diff eb57f18..HEAD` で §5 の道具に変更が無いか確かめる。
-2. S1: 腕ごとの重みの変え方（ビルドを分けるか、測定専用の差し替え口か）を決める（Q-S5）。
+2. S1: 腕ごとの重みの変え方（ビルドを分けるか、測定専用の差し替え口か）を決める（Q-S5）。競合の判定は相関係数でなく競合率（§6.1）。
 3. S1: 腕 Q の揺れ σ を先に測る（seed 6 個）。
 4. S1: 地図の CSV を `tools/loop/results/` にコミットする（§3.1 の欠けを繰り返さない）。
 5. S2a: 集めた盤面の非劣の判定は I1 を守る。
@@ -188,7 +203,24 @@
 | Q-S4 | S4 の画面（両端と膝点、交換率の文言）を出すか。出すなら設定の画面か結果の画面か | 結果の画面（案の保持と同じ場所） |
 | Q-S5 | 腕ごとの重みの変え方。①腕ごとにビルドを分ける、②測定専用の重みの差し替え口を作る（C++ と番兵にも通す） | ①から（製品コードを変えない） |
 
-## 11. 参考文献（確認の範囲）
+## 11. 2020 年代以降の論文による見直し（2026-11-03）
+
+本文を読めたものは無い。要旨・書誌・検索結果の抜粋で確かめた内容だけを使った。
+
+| # | 見直した点 | 2020 年代以降の論文 | 確かめた内容 | 設計の変更 |
+|---|---|---|---|---|
+| R1 | 競合の強さを相関係数で測る | Which Objectives Need a Dial? Predicting Objective Conflict and Covering（arXiv 2609.26929、2026。ID の確認が要る）、Impacts of Single-objective Landscapes on Multi-objective Optimization（arXiv 2608.03266、2026） | 前者: 目的の衝突を「選好の対のうち衝突した対の割合」で測り、事前の相関が高くても衝突を確かには予測しなかった。後者: 目的どうしの相関が高いほどパレート最適解の数が減る | 競合の判定を、相関係数から**競合率**（逆向きに動いた対の割合）へ（§2・§6.1）。相関は補助に出すだけ。対を数える型の競合の測り方は 2010 年代の文献にもある（conflict information measure） |
+| R2 | ε 制約法で前線の断面を求める回数 | Nikas, Fountoulakis, Forouli, Doukas. A robust augmented ε-constraint method (AUGMECON-R)…. Operational Research 22(2) (2022) 1291–1332。New ϵ-constraint methods for multi-objective integer linear programming: A Pareto front representation approach（EJOR、2022 年ごろ）。PyAUGMECON（Python 実装） | AUGMECON-R は不要な解き直しを刈り込み、前の版（AUGMECON2）より少ない解き直しと短い時間で解いたと報告（対象は多目的線形計画）。PyAUGMECON は早期打ち切り・bypass・刈り込みを実装。後者は前線全体でなく代表の部分集合を選ぶ | §6.2 に bypass と打ち切り、両端→二分の代表点の求め方を追加。整数（MAGI の件数）への適用は AUGMECON2 の系統で、AUGMECON-R 自体の整数での検証は確かめていない |
+| R3 | 2 つの盤面のあいだの探し方 | 分解型の多目的・多数目的 Path Relinking（Fernandes, Goldbarg ほか、Computers & Operations Research、2021）。反応型 Path Relinking（Lozano-Osorio ほか、2023、多目的の施設配置） | 前者: 多目的・多数目的の組合せ最適化に分解型の Path Relinking を提案。後者: 内側の Path Relinking と外側の Path Relinking を組み合わせた反応型 | §6.3 に内側・外側の 2 通りと反応型の配分、族の組ごとに歩く分解型を追加 |
+| R4 | 膝点の定義 | Yu, Ma, Jin, Du, Liu, Zhang. A Survey on Knee-Oriented Multiobjective Evolutionary Optimization. IEEE TEVC 26(6) (2022) 1452–1472。Finding Knees in Bayesian Multi-objective Optimization（2022） | 膝点は「片方を少し良くするのに他方を大きく犠牲にする」点で好まれやすいが、文献で定義が一致していない | §6.4 で膝点の定義を 1 つに固定し、点が少ないときは両端だけにする |
+| R5 | 交換の説明の書き方 | Misitano ほか. Towards explainable interactive multiobjective optimization: R-XIMO. Autonomous Agents and Multi-Agent Systems（2022）。Can LIME Make Interactive Multiobjective Optimization Methods Explainable?（2025） | 対話型の方法で、ある目的を変えると別の目的がどう動くかを示し、良くしたい目的のために悪化を受け入れられる別の目的を提案する | §6.4 に「良くしたい族を起点に、譲る族を示す」説明の文を追加。SHAP・LIME そのものは使わない（族の件数の差が直接見えるので） |
+| R6 | 少ない対での腕の比較 | Calvo, Shir, Ceberio ほか. Bayesian performance analysis for black-box optimization benchmarking（GECCO 2019 companion、2020 年に公開）。Rojas-Delgado, Ceberio, Calvo, Lozano. Bayesian Performance Analysis for Algorithm Ranking Comparison（IEEE TEVC、2022） | 確率的な最適化器の比較で、勝つ確率を事後分布として推定する。Wilcoxon 型の検定（対あり・なし）には既知の欠点がある | §8 に「新しい腕が良い確率」の報告を追加（採否の規則は変えない） |
+| R7 | 勤務表で前線をどう使うか | Böðvarsdóttir & Stidsen. A review of multi-objective optimization methods for personnel rostering problems. J. Scheduling（2025）。Optimizing Nurse Scheduling via Pareto Optimization—A Case Study（Springer、2020 年代） | レビュー: 35% 超の論文が多目的のメタヒューリスティクスで前線を近似し、意思決定者が最後に選ぶ必要がある。対話型の方法を実装した論文は 1 本だけ。事例研究: ε 制約法が重み付き和より有効だった（順位付けに TOPSIS） | 方針は変えない（S4 は少数の代表点を見せて利用者が選ぶ＝対話型）。TOPSIS は重みを使うので採らない |
+| R8 | 重み付き和で届く解の範囲 | On Supportedness in Multi-Objective Combinatorial Optimization（arXiv 2501.13842、2025） | 支持解と弱支持解を分ける提案。正の重みの重み付き和は、Geoffrion の意味で真に支持された点しか見つけない。組合せ問題では非支持の点の方が多いことが多い | §2 の支持解の定義はそのまま。重みを調整しても届かない盤面がある、という §1 の根拠の補強 |
+
+変えなかった点: 判定の 3 分類（揺れ・見かけ・本物）、不変条件 I1〜I6、提案 S1〜S5 の順序と事前基準。2020 年代の文献で、これらと食い違うものは見つからなかった。
+
+## 12. 参考文献（確認の範囲）
 
 本文を読めたものは無い（このセッションの通信設定で論文のホストへ届かない）。要旨・書誌で確かめた内容だけを使っている。
 
@@ -200,3 +232,5 @@
 | Deb, Gupta. Understanding knee points in bicriteria problems and their implications as preferred solution principles. Engineering Optimization 43(11) (2011) 1175–1204 | 膝点はあれば好まれる交換の解。膝の領域・端の膝の定義 | 要旨 |
 | Burke, Li, Qu. A Pareto-based search methodology for multi-objective nurse scheduling. Ann. OR 196 (2012) 91–109 | 優越関係の評価で SA をパレート集合へ向ける。目的 9 本で非劣解が最大 2000 個＝全部は見せられない | 要旨・2025 年のレビューの記述 |
 | Glover, Laguna, Martí. Fundamentals of scatter search and path relinking. Control and Cybernetics 29(3) (2000) | 2 つの良い解のあいだを歩いて中間の良い解を拾う | `EliteRelinking.kt` のコメントが引用している文献。本文は未確認 |
+
+2020 年代以降の文献は §11 の表にまとめた（出典の URL は §11 の各行の題名で検索できる。主なもの: https://link.springer.com/10.1007/s12351-020-00574-6 、https://dblp1.uni-trier.de/rec/journals/tec/YuMJDLZ22.html 、https://link.springer.com/article/10.1007/s10458-022-09577-3 、https://hal.sorbonne-universite.fr/hal-02179609 、https://link.springer.com/article/10.1007/s10951-025-00845-0 、https://arxiv.org/html/2501.13842v2 、https://jesussanchezoro.github.io/publications/lozanoosorio2023a.pdf ）。
