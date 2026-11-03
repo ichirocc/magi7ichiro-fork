@@ -47,6 +47,9 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-02（3.727.20: 膜の細胞 LNS を既定 ON）
+**最終更新**：2026-11-02（3.727.19: 膜の細胞 LNS を後処理の最終段に追加（既定 OFF、2 腕比較 12 勝 3 敗）、`docs/membrane_search.md` §11）
+**最終更新**：2026-11-02（測定のみ: 膜の探索の試作で頭打ち盤面 13/13 を改善、`docs/membrane_search.md` §10）
 **最終更新**：2026-11-01（文書のみ: シーソーを改良拡張する設計書 `docs/seesaw.md`）
 **最終更新**：2026-11-01（文書のみ: 膜計算を改良拡張した頭打ち盤面の探索の設計書 `docs/membrane_search.md`）
 **最終更新**：2026-11-01（文書のみ: 重みを使わない目的関数の設計書 `docs/weightless_objective.md`）

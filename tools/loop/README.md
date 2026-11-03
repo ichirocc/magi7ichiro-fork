@@ -54,7 +54,7 @@
   `handleOptimize`（時間制）、det＝LoopBench と同じ決定論モード（回数上限で切れるので取り逃しが多めに出る＝判定は ho で読む）。時間制なので計測中は他の重い処理を走らせない。
 - **経験的な c3n 壁の探索（2026-10-09、3.643.0 手順②）**: `tools/loop/run_wall_fixture_probe.sh <dir> [id の部分一致=""] [seed 変種=3] [予算秒=4] [方式=AUTO]`（`WallFixtureProbe.kt`）。合成ケース（`Cases.specs`）を短い予算で最適化し、最終盤面の禁止連続を `diagnoseForbiddenRuns` で診断。全セル塞がり（`allBlocked`）かつ希望固定でない（`!allBlockedCertified`）盤面を `wall_<id>_{refuted|confirmed}_state.json` に書く（refuted＝`c3nWallRefutedByOneMove` が必須を減らす手を見つけた＝`c3nWallDeepCheck` の計測に使える盤面）。`wall_probe.csv` に全ケースの hard・内訳・各セルの逃げ道（FR/CH/AD/PI/BL）。
   最終盤面の HARD を族・職員・日で並べ、既存の床（`structuralHardFloor`・`wishConflictFloorParts`・`ForbiddenDiag`・`PreRunCheck`）で分類し、
-  床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
+  床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。頭打ち盤面の c1 の下限は `c1_floor_cpsat.py`（必須・個人の下限/上限を上限に置いて c1 を最小化、`HardFloorExport` の `file:<state.json>` で書き出す）。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
   `hard_floor_cpsat.py`（ortools、置ける範囲は mayPlace と canDo の 2 通り。解は checker で照合）。結果は `docs/history/3.4xx.md`。
 
 ## HandleOptimizeBench（`run_handleoptimize_bench.sh`）の腕と集計（3.641.0〜3.643.0）
