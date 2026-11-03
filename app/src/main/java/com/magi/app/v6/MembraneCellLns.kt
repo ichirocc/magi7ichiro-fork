@@ -51,7 +51,7 @@ object MembraneCellLns {
             }
         }
         logs.add(MirrorLog(level = "I", tag = "MembraneCellLns",
-            message = "膜の細胞 LNS: 必須 ${startRep.hard}->${bestRep.hard} 合計 ${startRep.total}->${bestRep.total} 重み ${startRep.weightedScore}->${bestRep.weightedScore} 採用${applied} 細胞${tried} ${EngineClock.nowMs() - t0}ms"))
+            message = "膜の細胞 LNS: 必須 ${startRep.hard}->${bestRep.hard} 合計 ${startRep.total}->${bestRep.total} 重み ${startRep.weightedScore.toLong()}->${bestRep.weightedScore.toLong()} 採用${applied} 細胞${tried} ${EngineClock.nowMs() - t0}ms"))
         return Result(best, applied, tried, logs)
     }
 
