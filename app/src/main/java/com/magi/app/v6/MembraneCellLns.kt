@@ -37,6 +37,7 @@ object MembraneCellLns {
 
         while (tried < params.maxCells && !out()) {
             val order = staffOrder(p, bestRep)
+            if (order.isEmpty()) break   // 職員 0 人では tried が進まない
             for (seedStaff in order) {
                 if (tried >= params.maxCells || out()) break
                 tried++

@@ -690,7 +690,8 @@ object V6HotfixPasses {
             },
             PostStep(PostStages.EJECTION_PIPELINE, skipWhenStopped = true, enabled = { pipelineOn }) { work -> PostFold.Swap(runPipeline(work)) },
             PostStep(PostStages.MEMBRANE_CELL, skipWhenStopped = true, enabled = { params.membraneCell }) { work ->
-                val cap = if (params.deterministic) 8_000L else minOf(8_000L, EngineClock.remainingMs(deadlineMs).coerceAtLeast(0L))
+                // 残りの半分まで＝最後の人員過剰の退避に時間を残す（残りを使い切ると退避が締切で空振りする）。
+                val cap = if (params.deterministic) 8_000L else BudgetShare.half(EngineClock.remainingMs(deadlineMs).coerceAtLeast(0L), 8_000L)
                 val r = MembraneCellLns.apply(state, work, MembraneCellLns.Params(maxMillis = cap, deterministic = params.deterministic, maxCells = if (params.deterministic) 40 else 64), shouldStop)
                 PostFold.Board(r.newSchedule, r.logs, null, r.applied)
             },
