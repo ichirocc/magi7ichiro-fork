@@ -28,6 +28,9 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
+| [`docs/weightless_objective.md`](./docs/weightless_objective.md) | **重みを使わない目的関数の設計書**（設計のみ・未実装、2026-11-01。優先順位の段 T0〜T3＋件数の許容ライン、段の鍵の比較器、公平の leximin、段の順に解く探索と利用者に見せない動的な重み、画面・移行・測り方・段階 P0〜P5・決定事項 Q1〜Q22、文献の根拠と取り入れた概念 C1〜C11（職員ごとのライン・受容度の帯・leximax・NuWLS 型の重み更新・見込み表示）、§3.2 取り入れる根拠（強さ A〜D・取り下げる条件）、§3.3 外部提案の照合（許容スラック・職員ごとの不満の leximax・案の保持を採用、競合グラフ破壊と GLS は既存と重なり不採用）、§3.4 実機ログ 3.727.14 の頭打ち盤面の照合と §7.3b 存在の判定） |
+| [`docs/seesaw.md`](./docs/seesaw.md) | **シーソー（重みや段を動かすと違反が族のあいだを移る現象）を改良拡張する設計書**（設計のみ・未実装、2026-11-01。本物の交換・探索の見かけ・揺れの見分け、交換の表とシーソーの地図、集めた盤面での優越の判定と CP-SAT の前線、両端のあいだを探す Path Relinking の拡張、支点を件数で置く、地図で段を決める） |
+| [`docs/membrane_search.md`](./docs/membrane_search.md) | **膜計算（組織様 P システム）を改良拡張した頭打ち盤面の探索の設計書**（2026-11-01 設計、M0 は 13/13 で改善、3.727.19 で `MembraneCellLns`、3.727.20 で既定 ON。設計時の要点:細胞＝残る違反から作る職員×日の部分問題、通信＝ずらせる余裕を透過性にした交換・移動、阻んだ必須の位置で融合・分裂、細胞の中は厳密解、「この範囲では減らせない」の記録、M0 の測定で採否） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
@@ -45,9 +48,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
 **最終更新**：2026-11-03（3.727.21: 膜の細胞 LNS のレビュー是正＝C# のゲート・退避の時間・職員 0 人）
+**最終更新**：2026-11-03（文書のみ: 設計書 3 本の見直し＝P0b と膜の結果を重みを使わない設計書・シーソーの設計書へ、膜の設計書の状態行を実装済みに）
 **最終更新**：2026-11-02（3.727.20: 膜の細胞 LNS を既定 ON）
 **最終更新**：2026-11-02（3.727.19: 膜の細胞 LNS を後処理の最終段に追加（既定 OFF、2 腕比較 12 勝 3 敗）、`docs/membrane_search.md` §11）
 **最終更新**：2026-11-02（測定のみ: 膜の探索の試作で頭打ち盤面 13/13 を改善、`docs/membrane_search.md` §10）
+**最終更新**：2026-11-01（文書のみ: シーソーを改良拡張する設計書 `docs/seesaw.md`）
+**最終更新**：2026-11-01（文書のみ: 膜計算を改良拡張した頭打ち盤面の探索の設計書 `docs/membrane_search.md`）
+**最終更新**：2026-11-01（文書のみ: 重みを使わない目的関数の設計書 `docs/weightless_objective.md`）
 **最終更新**：2026-10-31（3.727.18: 代行は作成のあとだけ動く（制約の変更後に勝手に動かない））
 **最終更新**：2026-10-31（3.727.17: 自動の作り直しで下書きを回ごとに変える。山と谷の越え方の測定 6 案の記録）
 **最終更新**：2026-10-31（3.727.16: 実機ログからの不具合 5 件（希望衝突の床の判定で別の盤面を取り違える・ログの表示 4 件）。停滞後の崩し直しは測って否決）
