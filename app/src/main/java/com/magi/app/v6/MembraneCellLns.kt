@@ -109,7 +109,12 @@ object MembraneCellLns {
                 val s = de.apply(i, j, k)
                 if (accept(s - cur, temp, unit, rng)) { work[i][j] = k; cur = s } else cur = de.apply(i, j, old)
             }
-            if (cur < bestScore) { bestScore = cur; bestBoard = work.copy2D() }
+            if (cur < bestScore) {
+                bestScore = cur
+                // 細胞の外の行は盤面のまま＝2 回目からは細胞の行だけ写す（改善のたびに盤面全体を作らない）。
+                val bb = bestBoard ?: work.copy2D().also { bestBoard = it }
+                for (i in cell) System.arraycopy(work[i], 0, bb[i], 0, T)
+            }
         }
         return bestBoard
     }
