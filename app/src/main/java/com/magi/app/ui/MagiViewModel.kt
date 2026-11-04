@@ -208,13 +208,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   alts は snap の盤面/設定に対して有効だった「他の案」＝元に戻す/やり直すで盤面と一緒に一覧も戻す。
     //   colorKey は表示色だけの段（applyDisplayOnly）で変えた色の対象。非 null なら元に戻す/やり直すも結果を外さない。
     internal data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null, val serial: Long = 0)
-    internal class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long)
+    internal class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long, val lines: List<AltLine> = emptyList())
     internal val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
     private fun snapNow(label: String? = null, colorKey: String? = null): UndoSnap? {
         val st = state ?: return null; val sc = currentSchedule ?: return null
         val alts = alternativeScheds.takeIf { it.isNotEmpty() && altBoardKey == boardKey(sc) && altStateKey == stateKey(st) }
-            ?.let { AltSnap(it, _ui.value.alternatives, _ui.value.alternativeApplied, altBoardKey, altStateKey) }
+            ?.let { AltSnap(it, _ui.value.alternatives, _ui.value.alternativeApplied, altBoardKey, altStateKey, _ui.value.alternativeLines) }
         return UndoSnap(st, Array(sc.size) { sc[it].clone() }, label, alts, colorKey, ++undoSerialSeq)
     }
     private var undoSerialSeq = 0L
@@ -997,7 +997,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
         alternativeScheds = emptyList()
         // 完了カードの前後比較（runSummary）も直前の実行の盤面の話＝同じ理由で外す。
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null) }
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), alternativeLines = emptyList(), runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null) }
         return true
     }
 
@@ -1027,7 +1027,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
             relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
-            alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
+            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
             schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }
@@ -1055,7 +1055,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
             relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
-            alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
+            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }   // [3.592.0] undo()と同じ理由
         postOpNotice(if (label != null) "やり直す: $label" else "やり直しました", undoable = false)
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
@@ -1218,7 +1218,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 initBreakdown = lp.report.breakdown,
                                 elapsedMs = 0,
                                 // 前のデータの完了要約・ヒント・他の案・直し方は、このデータのものではない。
-                                runSummary = null, runDelta = null, stopSummary = null, copilotHint = null, alternatives = emptyList(),
+                                runSummary = null, runDelta = null, stopSummary = null, copilotHint = null, alternatives = emptyList(), alternativeLines = emptyList(),
                                 fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixFocusName = "", stalledHardFamilies = emptyList(),
                                 consults = emptyList(),   // 相談も前のデータの対象を指している（T01）
                                 sameResult = null,   // [3.716.0] 「前回と同じ結果」も前のデータの実行の印
@@ -1391,7 +1391,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setSeesawRelink(on: Boolean) {
         com.magi.app.v6.PolishGate.seesawRelink = on
         _ui.update { it.copy(seesawRelink = on) }
-        logOp("I", "設定変更: 他の案から交換の候補を作る → ${if (on) "ON" else "OFF"}")
+        logOp("I", "設定変更: 他の案を手がかりに仕上げる → ${if (on) "ON" else "OFF"}")
     }
 
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
@@ -1828,7 +1828,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 前回と同じ結果（今の盤面から作り直しても同じ谷の底に戻る）のあとの 1 回だけ、下書きから作り直して別の谷を探す。
         //   採るのは今の勤務表より良いときだけ（下の keep-best の比較は今の盤面 sched0 のまま）。2026-10-25 計測: 同じ結果の場面で 6 勝 0 敗。
         val fromDraft = s5 == null && sameResultVisible(_ui.value.sameResult, stateKey(st0), _ui.value.schedule)
-        _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, runDelta = null, stopSummary = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
+        _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, runDelta = null, stopSummary = null, alternatives = emptyList(), alternativeLines = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         writeRunMarker("fg", s5?.let { com.magi.app.work.RunMarker.S5(it.staff, it.day, it.symbol, it.name) })
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
         val startMs = System.currentTimeMillis()
@@ -2642,11 +2642,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val rep = reps[k]
                 val worse = curRep != null && betterReport(curRep, rep)
                 val trade = if (curRep != null && rep.hard == curRep.hard) altTradeLine(curRep.breakdown, rep.breakdown) else null
-                alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep), trade) to worse
+                Triple(alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep), trade), worse,
+                    curRep?.let { altLine(it.hard, it.breakdown, rep.hard, rep.breakdown) })
             }
         }
         alternativeScheds = alts
-        _ui.update { it.copy(alternatives = rows.map { r -> r.first }, alternativesWorse = rows.map { r -> r.second }, alternativeApplied = -1) }
+        _ui.update { it.copy(alternatives = rows.map { r -> r.first }, alternativesWorse = rows.map { r -> r.second },
+            alternativeLines = if (rows.all { r -> r.third != null }) rows.map { r -> r.third!! } else emptyList(), alternativeApplied = -1) }
     }
 
     /** 「他の案」を勤務表へ適用（Undo・操作ログ付き）。 */
@@ -2661,7 +2663,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   validate() に落ちて自動保存が開けなくなった。次元が合わなければ捨てる。
         if (sch.size != st.staffCount || sch.any { it.size != st.dayCount }) {
             alternativeScheds = emptyList()
-            _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
+            _ui.update { it.copy(alternatives = emptyList(), alternativeLines = emptyList(), messageIsError = true,
                 message = "この案は今のデータ（職員数・期間）と合わないため適用できません。案をもう一度作ってください") }
             logOp("W", "他の案 ${i + 1}: 職員数/期間が今のデータと違うため適用せず")
             return
@@ -2670,7 +2672,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val curSched = currentSchedule
         if (altBoardKey != 0L && curSched != null && (altBoardKey != boardKey(curSched) || altStateKey != stateKey(st))) {
             alternativeScheds = emptyList()
-            _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
+            _ui.update { it.copy(alternatives = emptyList(), alternativeLines = emptyList(), messageIsError = true,
                 message = "その後に勤務表か設定が変わったため、この案は適用できません。案をもう一度作ってください") }
             logOp("W", "他の案 ${i + 1}: 案の計算後に盤面/設定が変わったため適用せず")
             return
@@ -2679,6 +2681,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   指紋を適用後の盤面へ付け替える（この後に手編集が入れば pushUndo でまた外れる）。
         val keptAlts = alternativeScheds
         val keptSummaries = _ui.value.alternatives
+        val keptLines = _ui.value.alternativeLines
         pushUndo("他の案 ${i + 1} を適用")
         boardReplaceRev++
         currentSchedule = sch
@@ -2687,7 +2690,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         alternativeScheds = keptAlts
         altBoardKey = boardKey(sch)
         // 表示の盤面は内部と同時に差し替える（再検査が失敗しても画面と次の操作の対象が食い違わない、UI-02）。
-        _ui.update { it.copy(alternatives = keptSummaries, alternativeApplied = i, schedule = sch.map { r -> r.toList() },
+        _ui.update { it.copy(alternatives = keptSummaries, alternativeLines = keptLines, alternativeApplied = i, schedule = sch.map { r -> r.toList() },
             messageIsError = false, message = "他の案 ${i + 1} を適用（違反数を再計算中…）") }
         autoSave()
         // [3.475.0/論理監査] 再検査は checkJob/checkSeq に乗せる。旧: 独立した launch で順序保証が無く、

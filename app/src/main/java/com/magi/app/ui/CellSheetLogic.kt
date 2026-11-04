@@ -1705,6 +1705,28 @@ internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard:
     return "案$n：必須違反 $hardTxt$cmp" + (trade?.let { "。$it" } ?: "")
 }
 
+/**
+ * [シーソー S4、docs/screen_spec.md §01「他の案」] 他の案のカードの 1 案ぶんの表示。1 行目＝案の番号と札、2 行目＝減る項目、3 行目＝増える項目。
+ * 札は必須の件数が違えば「必須が少ない／多い」、同じなら族の件数の比べ方（[altTrade]）で「今より良い／一長一短／今より悪い／今と同じ」。
+ * 比べる相手は案を計算した時点の勤務表（[alternativesWorse] と同じ）。色に頼らず言葉で伝える。
+ */
+internal data class AltLine(val tag: String, val down: String?, val up: String?)
+
+internal fun altLine(curHard: Int, cur: Map<String, Int>, altHard: Int, alt: Map<String, Int>): AltLine {
+    val tag = when {
+        altHard < curHard -> "必須が少ない"
+        altHard > curHard -> "必須が多い"
+        else -> when (altTrade(cur, alt)) { AltTrade.DOMINATES -> "今より良い"; AltTrade.TRADE -> "一長一短"; AltTrade.DOMINATED -> "今より悪い"; AltTrade.SAME -> "今と同じ" }
+    }
+    val d = com.magi.app.v6.MirrorKeys.all.mapNotNull { f -> ((alt[f] ?: 0) - (cur[f] ?: 0)).takeIf { it != 0 }?.let { f to it } }
+    fun part(xs: List<Pair<String, Int>>, head: String): String? {
+        if (xs.isEmpty()) return null
+        return head + xs.take(2).joinToString("・") { (f, v) -> "${breakdownLabels[f] ?: f} ${kotlin.math.abs(v)}${unitOf(f)}" } +
+            (if (xs.size > 2) "（ほか ${xs.size - 2} 項目）" else "")
+    }
+    return AltLine(tag, part(d.filter { it.second < 0 }.sortedBy { it.second }, "減る："), part(d.filter { it.second > 0 }.sortedByDescending { it.second }, "増える："))
+}
+
 /** [シーソー S4、docs/seesaw.md §6.4] 他の案を今の勤務表と族の件数で比べた種類（重みを使わない）。 */
 internal enum class AltTrade { DOMINATES, TRADE, DOMINATED, SAME }
 

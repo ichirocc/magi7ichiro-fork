@@ -193,6 +193,7 @@ data class UiState(
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）
     val alternativesWorse: List<Boolean> = emptyList(),   // 他の案ごとに、計算した時点の勤務表より悪いか
+    val alternativeLines: List<AltLine> = emptyList(),   // 他の案ごとのカードの表示（札・減る・増える、docs/screen_spec.md §01）。alternatives と同じ順・同じ数
     val alternativeApplied: Int = -1,             // いま盤面に適用している他の案の添字（-1=どれでもない）
     val coverageDiag: CoverageDiagnosis? = null,  // 人員不足(covU)/人員過剰(covO)の原因診断（充足不可/充足可能の切り分け・過剰がなぜ動かせないか）
     val forbiddenDiag: ForbiddenRunDiagnosis? = null,  // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（c3n=0 なら null）
