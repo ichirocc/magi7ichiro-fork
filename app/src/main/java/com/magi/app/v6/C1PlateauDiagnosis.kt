@@ -70,6 +70,8 @@ data class C1PlateauEntry(
     val noCandidate: Int,
     /** 目的関数で却下された候補が最も悪化させた族（重み付き・多い順）。 */
     val topScoreCulprits: List<Pair<String, Int>>,
+    /** 最終盤面でこの決まりに残っている不足窓の数（c1 の件数と同じ数え方）。[refreshedWithCounts] だけが入れる。 */
+    val remaining: Int = 0,
 ) {
     /** 却下の総数（原因の判定に使った母数）。 */
     val observations: Int get() = rejectedByPin + rejectedByScore + noCandidate
@@ -179,6 +181,18 @@ data class C1PlateauDiagnosis(
                 .sortedByDescending { it.observations },
         )
 
+    /**
+     * [refreshedAgainst] の件数版。残った不足窓の数を各行に入れ、**残りの多い順**（同数は観測数の多い順）に並べる。
+     * 観測数の順だと、試行の多い職員が先に出て、件数の多く残った職員が上位から漏れる。
+     */
+    fun refreshedWithCounts(remainingC1: Int, remainingOf: (Int, Int, Int) -> Int): C1PlateauDiagnosis =
+        C1PlateauDiagnosis(
+            remainingC1,
+            entries.map { it.copy(remaining = remainingOf(it.staff, it.shift, it.ruleIndex)) }
+                .filter { it.remaining > 0 }
+                .sortedWith(compareByDescending<C1PlateauEntry> { it.remaining }.thenByDescending { it.observations }),
+        )
+
     fun logLines(): List<String> {
         if (causeUnknown) return listOf(
             "[W] C1Plateau: 期間の制約(c1) ${remainingC1}件が残存 — 却下の観測がなく原因未確定")
@@ -193,7 +207,7 @@ data class C1PlateauDiagnosis(
             }
             val culprits = e.topScoreCulprits.take(2).joinToString(" ") { "${it.first}:${it.second}" }
             out.add(
-                "[W] C1Plateau: ${e.label} — $causeTxt" +
+                "[W] C1Plateau: ${e.label}" + (if (e.remaining > 0) " 残${e.remaining}件" else "") + " — $causeTxt" +
                     "(ピン破り:${e.rejectedByPin} スコア却下:${e.rejectedByScore} 候補なし:${e.noCandidate}" +
                     (if (culprits.isEmpty()) "" else " 主因 $culprits") + ")"
             )

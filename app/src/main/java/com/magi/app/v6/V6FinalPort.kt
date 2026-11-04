@@ -1168,6 +1168,8 @@ object V6FinalPort {
             }.getOrDefault(0)
             // 回避の並び（c3mn）が希望だけでできている窓も、希望を取り消すまで残る（要調整）。
             val avoidSelf = runCatching { V6SanityPort.wishAvoidSoft(cachedProblem(state), finalSched) }.getOrDefault(0)
+            // 期間の制約（c1）のうち、固定のセルを変えない限り足りない窓（希望を調整するまで残る）。
+            val c1Wall = minOf(bd["c1"] ?: 0, runCatching { V6SanityPort.wishC1Floor(cachedProblem(state), finalSched) }.getOrDefault(0))
             var avoidShown = 0
             val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
@@ -1188,6 +1190,7 @@ object V6FinalPort {
                     "covU" -> n0 - covUWall
                     "extWish" -> n0 - minOf(n0, extPinned)
                     "c3mn" -> n0 - avoidShown
+                    "c1" -> n0 - c1Wall
                     else -> n0
                 } - self
                 if (n > 0) open.add("$key ${n}件")
@@ -1210,6 +1213,7 @@ object V6FinalPort {
             //   実データ3件の実測では 40〜56%（golden 73/183・real 126/226・user 106/214）が床＝追っても減らない。
             if (weeklyWall > 0) walls.add("weekly のうち${weeklyWall}件(回数が7の倍数でない＝配置では消せない)")
             if (extPinned > 0) walls.add("extWish のうち${extPinned}件(手動固定のセル＝自動では変えない)")
+            if (c1Wall > 0) walls.add("c1 のうち${c1Wall}件(窓の中が希望・固定で埋まり足りない＝希望を調整するまで解消しない)")
             if (personalWall > 0) {
                 walls.add("apt+high のうち${personalWall}件(個人の担当構成＝データ側)")
                 val rest = aptHighNow - personalWall

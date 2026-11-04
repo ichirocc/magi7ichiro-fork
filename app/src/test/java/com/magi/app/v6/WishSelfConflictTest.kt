@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C1Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C3wRow
 import com.magi.app.model.Group
@@ -26,13 +27,14 @@ class WishSelfConflictTest {
         cons3n: List<C3Row> = listOf(C3Row(listOf("休", "休", "休"))),
         cons3w: List<C3wRow> = emptyList(),
         cons3mn: List<C3Row> = emptyList(),
+        cons1: List<C1Row> = emptyList(),
     ) = MagiState(
         startDate = "2026-10-01", endDate = "2026-10-07",
         shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("Dﾃ", "Dﾃ", "", ""), Shift("A", "A", "", "")),
         groups = listOf(Group("G", "G")), staff = listOf(Staff("大島", 0), Staff("福澤", 0)),
         use2Patterns = false, groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = emptyList(),
         schedule = schedule, wishes = wishes, staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
-        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(),
+        cons1 = cons1, cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(),
         cons3mn = cons3mn, cons41 = emptyList(), cons42 = emptyList(), cons3w = cons3w,
     )
 
@@ -156,5 +158,14 @@ class WishSelfConflictTest {
         assertEquals(3, V6SanityPort.wishConflictHardShare(mapOf("c3n" to 2, "pref" to 4), mapOf("c3n" to 2, "pref" to 1), 10))
         assertEquals(2, V6SanityPort.wishConflictHardShare(mapOf("c3n" to 5), mapOf("c3n" to 5), 2))
         assertEquals(0, V6SanityPort.wishConflictHardShare(emptyMap(), mapOf("c3n" to 5), 5))
+    }
+
+    @Test fun c1WindowFilledByWishesIsCountedAsFloor() {
+        // 大島: 7 日窓（休 2 回以上）の 6 日が A の希望＝休は 1 日しか置けない。福澤は希望なし＝床にしない。
+        val wishes = (0..5).associate { "0,$it" to a }
+        val st = state(wishes, cons3n = emptyList(), cons1 = listOf(C1Row("7", "休", "2")))
+        val sched = Array(2) { IntArray(7) { a } }
+        assertEquals(1, V6SanityPort.wishC1Floor(Problem(st), sched))
+        assertEquals(0, V6SanityPort.wishC1Floor(Problem(state(emptyMap(), cons3n = emptyList(), cons1 = listOf(C1Row("7", "休", "2")))), sched))
     }
 }

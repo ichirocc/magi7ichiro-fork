@@ -1280,7 +1280,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
                 Surface(color = container, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(e.label, color = onContainer,
+                            Text(e.label + (if (e.remaining > 0) " 残${e.remaining}件" else ""), color = onContainer,
                                 style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             MagiTagChip(
                                 text = when (e.cause) {

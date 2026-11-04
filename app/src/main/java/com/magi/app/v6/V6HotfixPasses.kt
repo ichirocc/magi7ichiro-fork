@@ -853,7 +853,7 @@ object V6HotfixPasses {
             message = "後処理タイミング 総${tEnd - t0}ms: HF80=${pre.t67 - t0}ms HF67=${pre.t66 - pre.t67}ms HF66=${t66Done - pre.t66}ms" +
                 " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${mid.tC1Lns - t66Done}ms" +
                 " C1共同LNS(+従来の玉突き)=${mid.tPersonalLns - mid.tC1Lns}ms 個人共同LNS=${tFinal - mid.tPersonalLns}ms" +
-                " 最終段(違反起点修復+玉突きパイプライン+人員過剰の退避)=${tHf - tFinal}ms" +
+                " 最終段(違反起点修復+玉突きパイプライン+膜の細胞LNS+人員過剰の退避)=${tHf - tFinal}ms" +
                 " 最終検査+HF70=${tEnd - tHf}ms"))
         // パスごとの内訳（多い順・上位 N）。「時間を食っているのに採用0」のパスが各パス自身の行と突き合わせられる（3.339.0）。
         if (chain.passMs.isNotEmpty()) {
@@ -1100,10 +1100,10 @@ object V6HotfixPasses {
         val c1Left = report.breakdown["c1"] ?: 0
         val refreshed = plateau?.let { d ->
             val pFin = cachedProblem(state)
-            d.refreshedAgainst(c1Left) { i, x, ri ->
+            d.refreshedWithCounts(c1Left) { i, x, ri ->
                 val c = pFin.cons1.getOrNull(ri)
-                c != null && c.shiftIdx == x && c.day1 > 0 &&
-                    (0..pFin.T - c.day1).any { j -> inDeficientC1Window(pFin, work, i, x, c.day1, c.day2, j) }
+                if (c == null || c.shiftIdx != x || c.day1 <= 0 || c.day1 > pFin.T) 0
+                else (0..pFin.T - c.day1).count { w -> (0 until c.day1).count { l -> work[i][w + l] == x } < c.day2 }
             }
         }
         return refreshed?.takeIf { it.hasEntries || it.causeUnknown }
