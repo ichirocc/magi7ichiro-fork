@@ -116,6 +116,7 @@ data class UiState(
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val membraneCellLns: Boolean = true,  // PolishGate.membraneCellLns（膜の細胞 LNS）。保存しない
+    val seesawRelink: Boolean = false,  // PolishGate.seesawRelink（シーソーの交換の候補、docs/seesaw.md §6.3）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない

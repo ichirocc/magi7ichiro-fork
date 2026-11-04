@@ -200,6 +200,7 @@ internal sealed interface MagiEvent {
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
         data class SetMembraneCellLns(val on: Boolean) : Settings
+        data class SetSeesawRelink(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */
