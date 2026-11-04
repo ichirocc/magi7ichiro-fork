@@ -417,7 +417,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.seesawRelink, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSeesawRelink(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
-                Text("他の案から交換の候補を作る", style = MaterialTheme.typography.bodyMedium)
+                Text("他の案を手がかりに仕上げる", style = MaterialTheme.typography.bodyMedium)
                 Text(SEESAW_RELINK_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.seesawRelink, onCheckedChange = null, enabled = !ui.running)

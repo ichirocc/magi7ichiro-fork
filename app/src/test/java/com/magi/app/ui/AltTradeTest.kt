@@ -36,4 +36,15 @@ class AltTradeTest {
         assertEquals("案1：必須違反 1件（今と同じ）。期間の制約が 2件減り、上限超過が 1回増えます",
             alternativeSummary(1, "1件", 1, 1, worse = false, better = false, trade = "期間の制約が 2件減り、上限超過が 1回増えます"))
     }
+
+    /** カードの 1 案ぶん（docs/screen_spec.md §01「他の案」）: 札・減る・増える。 */
+    @Test
+    fun cardLineHasTagDownAndUp() {
+        assertEquals(AltLine("一長一短", "減る：期間の制約 2件", "増える：上限超過 1回"), altLine(0, cur, 0, cur + ("c1" to 3) + ("high" to 3)))
+        assertEquals(AltLine("今より良い", "減る：曜日の偏り 2pt", null), altLine(0, cur, 0, cur + ("weekly" to 8)))
+        assertEquals(AltLine("今より悪い", null, "増える：上限超過 2回"), altLine(0, cur, 0, cur + ("high" to 4)))
+        assertEquals(AltLine("今と同じ", null, null), altLine(0, cur, 0, cur))
+        assertEquals("必須が少ない", altLine(2, cur, 1, cur).tag)
+        assertEquals("必須が多い", altLine(1, cur, 2, cur).tag)
+    }
 }
