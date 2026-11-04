@@ -208,6 +208,7 @@ ViewModel ハブ
   担当列を列挙（対象日の強制休が少ない順）、窓の外の同日交換で夜勤を人から人へ移す候補（1〜3 日）も試し、内側で日ごとのビーム
   （推定は日内で決まる族だけ）、完成盤面は正式チェッカーで keep-best。最終段・退避（CovORelief）の前。C# は `V6HotfixPasses.RestZeroLns.cs`。
 - `MembraneCellLns.kt` — **膜の細胞 LNS**（3.727.19、3.727.20 で既定 ON＝`PolishGate.membraneCellLns`）。個人の違反が多い職員＋同じグループの職員 5 名×全期間を細胞にして焼きなまし、`betterReport` で良いときだけ書き戻す後処理の最終段。設計と測定は `docs/membrane_search.md` §10・§11。
+- `SeesawRelink.kt` — **シーソーの Path Relinking**（3.727.22、既定 OFF＝`PolishGate.seesawRelink`、`docs/seesaw.md` §6.3）。後処理の結果から「他の案」の各盤面へ歩き、`betterReport` で良ければ本命を差し替え、本命に優越されない交換の盤面を「他の案」にする（`V6FinalPort` が後処理の直後に呼ぶ）。
 - `CovOReliefPolish.kt` — **人員過剰(covO)の退避研磨**（3.554.0）。過剰セルの在勤者を、受け皿のある担当可シフト（B4 のような需要 0 の
   シフトを含む）へ 1 セルずつ動かし、正式チェッカーの `betterReport` で採る。`V6PortAnalyzer.diagnoseSurpluses` が「移すだけで良くなる」と
   見つける手と同じ探索を修復として行う。後処理チェーンの最終段（成分修復の後・HF70 の前）＝後続パスが無いので旧チェーンの結果より

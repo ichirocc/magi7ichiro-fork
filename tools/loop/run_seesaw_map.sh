@@ -10,7 +10,10 @@ export MAGI_WS_SEEDS=${MAGI_WS_SEEDS:-1,2,3,4,5,6}
 export MAGI_WS_FIXTURES=${MAGI_WS_FIXTURES:-blocked_covu_state.json,full_coverage_state.json,golden_state.json,oct2026_grid_state.json,sample_state_v6.json,sept2026_state.json}
 SECS=${MAGI_MAP_SECS:-60}
 for fam in $FAMS; do
-  [ -s "$OUT/P-$fam.csv" ] && [ $(wc -l < "$OUT/P-$fam.csv") -gt 1 ] && { echo "済: $fam"; continue; }
+  # 済んだ族は飛ばす（同じコマンドで続きから走る）。途中で止まった族は、両腕を最初からやり直す（同じ負荷で比べるため）。
+  NEED=$(( $(echo "$MAGI_WS_SEEDS" | tr ',' '\n' | wc -l) * $(echo "$MAGI_WS_FIXTURES" | tr ',' '\n' | wc -l) + 1 ))
+  if [ -s "$OUT/P-$fam.csv" ] && [ $(wc -l < "$OUT/P-$fam.csv") -ge $NEED ] && [ $(wc -l < "$OUT/Q-$fam.csv") -ge $NEED ]; then echo "済: $fam"; continue; fi
+  rm -f "$OUT/P-$fam.csv" "$OUT/Q-$fam.csv"
   WT="$OUT/wt-$fam"; [ -d "$WT" ] || git -C "$ROOT" worktree add -q --detach "$WT" HEAD
   git -C "$WT" checkout -q -- app && python3 "$HERE/seesaw_arm.py" "$WT" "$fam" 2
   MAGI_WS_BOARDS="$OUT/boards" MAGI_HOST_OUT="$OUT/build-Q-$fam" bash "$HERE/run_weight_swap_probe.sh" "$ROOT" "$OUT/Q-$fam.csv" "Q" "$SECS" 1 > "$OUT/Q-$fam.log" 2>&1 &

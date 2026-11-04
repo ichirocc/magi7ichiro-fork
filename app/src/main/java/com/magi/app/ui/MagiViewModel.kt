@@ -2611,20 +2611,29 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      *  （実行が重なると static は新しい実行の値に置き換わり、別の実行の候補を掴み得た）。 */
     private suspend fun captureAlternatives(source: List<Array<IntArray>>) {
         val st = state ?: return
-        val alts = source.map { it.copy2D() }
-        alternativeScheds = alts
+        val source2 = source.map { it.copy2D() }
         altBoardKey = currentSchedule?.let { boardKey(it) } ?: 0L
         altStateKey = stateKey(st)
         // [Main負荷回避] 他案（最大3件）の違反チェックは同期CPU → Default で実行してから反映。
         val cur = currentSchedule?.copy2D()
-        val rows = withContext(Dispatchers.Default) {
+        val (alts, rows) = withContext(Dispatchers.Default) {
             val curRep = cur?.let { UnifiedViolationChecker.check(st, it) }
-            alts.mapIndexed { idx, sch ->
-                val rep = UnifiedViolationChecker.check(st, sch)
+            // [シーソー S4、docs/seesaw.md §6.4] 必須の件数が今と同じ案は、族の件数で比べて「どの項目も同じか少ない」→「交換になる」→ ほかの順に並べ、
+            //   交換の説明（良くなる族と譲る族を件数で）を添える。並べ替えは盤面と要約を同じ順に保つ。
+            val reps = source2.map { UnifiedViolationChecker.check(st, it) }
+            val order = source2.indices.sortedBy { k ->
+                val r = reps[k]
+                if (curRep == null || r.hard != curRep.hard) 2 else when (altTrade(curRep.breakdown, r.breakdown)) { AltTrade.DOMINATES -> 0; AltTrade.TRADE -> 1; else -> 2 }
+            }
+            val sorted = order.map { source2[it] }
+            sorted to order.mapIndexed { idx, k ->
+                val rep = reps[k]
                 val worse = curRep != null && betterReport(curRep, rep)
-                alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep)) to worse
+                val trade = if (curRep != null && rep.hard == curRep.hard) altTradeLine(curRep.breakdown, rep.breakdown) else null
+                alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep), trade) to worse
             }
         }
+        alternativeScheds = alts
         _ui.update { it.copy(alternatives = rows.map { r -> r.first }, alternativesWorse = rows.map { r -> r.second }, alternativeApplied = -1) }
     }
 

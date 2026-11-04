@@ -209,6 +209,9 @@ object PolishGate {
     /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **true**（2 腕比較 12 勝 3 敗、3.727.20 ユーザー決定）。 */
     @Volatile var membraneCellLns: Boolean = true
 
+    /** シーソーの Path Relinking（`SeesawRelink`、`docs/seesaw.md` §6.3）を後処理の後に入れ、交換の候補を「他の案」にする。既定 **false**（測ってから採否）。 */
+    @Volatile var seesawRelink: Boolean = false
+
     /** 必須違反が構造の下限に届いたら停滞閾値を短縮する（`effectiveStallMs` の basePlateau）。false＝下限に届いても通常閾値で粘る。
      *  既定 **true**＝従来どおり（実機ログ 2026-10-15: 300 s 予算で 59 s に終わった件の測定用。採否は測ってから）。 */
     @Volatile var floorShortStall: Boolean = true
@@ -229,6 +232,7 @@ object PolishGate {
         "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish,
         "membraneCellLns" to membraneCellLns,
+        "seesawRelink" to seesawRelink,
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
         "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
@@ -248,6 +252,7 @@ object PolishGate {
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }
         b("membraneCellLns") { membraneCellLns = it }
+        b("seesawRelink") { seesawRelink = it }
         b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }
         
