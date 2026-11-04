@@ -80,7 +80,7 @@ def better(a, b):
 class Board:
     """盤面全体の CP-SAT。free にないセルは盤面の値に固定する。terms[族] = [(式, 職員 or None, 日 or None)]。"""
 
-    def __init__(self, m, board, free, hmax, fam_caps=None):
+    def __init__(self, m, board, free, hmax, fam_caps=None, fair="table"):
         S, T, K = m["S"], m["T"], m["K"]
         self.m, self.S, self.T, self.K = m, S, T, K
         md = self.md = cp_model.CpModel()
@@ -214,8 +214,9 @@ class Board:
                     terms[fam].append((pr, None, j, s1))
 
         # fair: 群×シフトの桶ごとに、細胞で回数が動く職員の回数の組 → 偏差 を表で持つ（他の職員は固定）
+        # fair="skip": fair を写さない（盤面全体を自由にすると表が爆発するため。seesaw_s2b.py が緩和として使う）
         movers = {i for (i, j) in free}
-        for g in range(m["G"]):
+        for g in (range(m["G"]) if fair == "table" else []):
             mem = m["groupMembers"][g]
             if len(mem) < 2:
                 continue
