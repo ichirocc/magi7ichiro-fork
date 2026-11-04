@@ -407,6 +407,13 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.membraneCellLns, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetMembraneCellLns(it)) }).semantics(mergeDescendants = true) {}) {
+                Column(Modifier.weight(1f)) {
+                    Text(MEMBRANE_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
+                    Text(MEMBRANE_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.membraneCellLns, onCheckedChange = null, enabled = !ui.running)
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.seesawRelink, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSeesawRelink(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
@@ -427,6 +434,8 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
+internal const val MEMBRANE_TOGGLE_LABEL = "最後に職員をまとめて組み直す"
+internal const val MEMBRANE_TOGGLE_NOTE = "違反の多い職員と同じグループの 5 名を全期間まとめて組み直し、良くなったときだけ採ります（膜の細胞 LNS、既定 ON・最長 8 秒）"
 internal const val SEESAW_RELINK_NOTE = "仕上げのあと、他の案へ向けて少しずつ入れ替え、良くなれば採ります。どこかの項目が今より少ない勤務表は「他の案」に残します（最大 3 秒）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"
 internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"

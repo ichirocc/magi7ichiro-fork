@@ -1376,6 +1376,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで探す範囲 → ${ejectionChainScopeLabel(scope)}")
     }
 
+    fun setMembraneCellLns(on: Boolean) {
+        com.magi.app.v6.PolishGate.membraneCellLns = on
+        _ui.update { it.copy(membraneCellLns = on) }
+        logOp("I", "設定変更: 最後に職員をまとめて組み直す → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setEjectionPipelineHardLeg(on: Boolean) {
         com.magi.app.v6.PolishGate.ejectionPipelineHardLeg = on
         _ui.update { it.copy(ejectionPipelineHardLeg = on) }

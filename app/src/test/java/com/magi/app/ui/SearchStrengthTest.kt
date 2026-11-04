@@ -23,6 +23,7 @@ class SearchStrengthTest {
             assertEquals(false, PolishGate.allFamilyEjectionChain)
             assertEquals(com.magi.app.v6.EjectionChainPipeline.Focus.BOTH, PolishGate.ejectionPipelineFocus)
             assertEquals(PolishGate.ejectionPipelineHardLeg, UiState().ejectionPipelineHardLeg)
+            assertEquals(PolishGate.membraneCellLns, UiState().membraneCellLns)   // 画面の既定はエンジンの既定と同じ
         } finally {
             PolishGate.combineExhaustPairs = saved[0]; PolishGate.wideC3nBreakDays = saved[1]
             PolishGate.countChainPolish = saved[2]; PolishGate.aptFairSoftTolerance = saved[3]
