@@ -12,6 +12,7 @@ fun main(args: Array<String>) {
     val files = args[0].split(','); val seconds = args[1].toInt(); val seeds = args[2].split(',').map { it.toLong() }
     val w = File(args[3]).bufferedWriter()
     w.write("fixture,seed,arm,hard,total,weighted,ms\n"); w.flush()
+    val before = PolishGate.membraneCellLns
     for (f in files) {
         val st = StateParser.parse(File(f).readText())!!
         for (seed in seeds) for (arm in listOf("off", "on")) {
@@ -26,6 +27,6 @@ fun main(args: Array<String>) {
             w.write(line + "\n"); w.flush(); System.err.println(line)
         }
     }
-    PolishGate.membraneCellLns = false
+    PolishGate.membraneCellLns = before
     w.close()
 }

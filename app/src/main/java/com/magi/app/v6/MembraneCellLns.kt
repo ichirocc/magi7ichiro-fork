@@ -37,6 +37,7 @@ object MembraneCellLns {
 
         while (tried < params.maxCells && !out()) {
             val order = staffOrder(p, bestRep)
+            if (order.isEmpty()) break   // 職員 0 人では tried が進まない
             for (seedStaff in order) {
                 if (tried >= params.maxCells || out()) break
                 tried++
@@ -50,7 +51,7 @@ object MembraneCellLns {
             }
         }
         logs.add(MirrorLog(level = "I", tag = "MembraneCellLns",
-            message = "膜の細胞 LNS: 必須 ${startRep.hard}->${bestRep.hard} 合計 ${startRep.total}->${bestRep.total} 重み ${startRep.weightedScore}->${bestRep.weightedScore} 採用${applied} 細胞${tried} ${EngineClock.nowMs() - t0}ms"))
+            message = "膜の細胞 LNS: 必須 ${startRep.hard}->${bestRep.hard} 合計 ${startRep.total}->${bestRep.total} 重み ${startRep.weightedScore.toLong()}->${bestRep.weightedScore.toLong()} 採用${applied} 細胞${tried} ${EngineClock.nowMs() - t0}ms"))
         return Result(best, applied, tried, logs)
     }
 
@@ -108,7 +109,12 @@ object MembraneCellLns {
                 val s = de.apply(i, j, k)
                 if (accept(s - cur, temp, unit, rng)) { work[i][j] = k; cur = s } else cur = de.apply(i, j, old)
             }
-            if (cur < bestScore) { bestScore = cur; bestBoard = work.copy2D() }
+            if (cur < bestScore) {
+                bestScore = cur
+                // 細胞の外の行は盤面のまま＝2 回目からは細胞の行だけ写す（改善のたびに盤面全体を作らない）。
+                val bb = bestBoard ?: work.copy2D().also { bestBoard = it }
+                for (i in cell) System.arraycopy(work[i], 0, bb[i], 0, T)
+            }
         }
         return bestBoard
     }

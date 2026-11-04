@@ -47,6 +47,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-03（3.727.21: 膜の細胞 LNS のレビュー是正＝C# のゲート・退避の時間・職員 0 人）
 **最終更新**：2026-11-03（測定のみ: シーソーの設計書のドッグフーディング検証 `docs/seesaw.md` §13、high×2 の 1 腕を実測）
 **最終更新**：2026-11-03（文書のみ: シーソーの設計書を 2020 年代以降の論文で見直し `docs/seesaw.md` §11）
 **最終更新**：2026-11-03（文書のみ: シーソーの設計書を他社 AI 向けの仕様に書き直し `docs/seesaw.md`）
