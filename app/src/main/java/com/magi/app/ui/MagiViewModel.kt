@@ -1382,6 +1382,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きを必須の違反からも始める → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setSeesawRelink(on: Boolean) {
+        com.magi.app.v6.PolishGate.seesawRelink = on
+        _ui.update { it.copy(seesawRelink = on) }
+        logOp("I", "設定変更: 他の案から交換の候補を作る → ${if (on) "ON" else "OFF"}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 

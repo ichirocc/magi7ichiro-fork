@@ -155,6 +155,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetEjectionChainSeconds -> vm.setEjectionChainSeconds(e.seconds)
             is MagiEvent.Settings.SetEjectionChainScope -> vm.setEjectionChainScope(e.scope)
             is MagiEvent.Settings.SetEjectionPipelineHardLeg -> vm.setEjectionPipelineHardLeg(e.on)
+            is MagiEvent.Settings.SetSeesawRelink -> vm.setSeesawRelink(e.on)
         }
         true
     },

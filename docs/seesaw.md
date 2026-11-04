@@ -413,7 +413,7 @@ weighted・7 日区間（11 区間）の結果（重みの差、合計の解く�
 | S1 シーソーの地図 | TOOL | `tools/loop/seesaw_arm.py`（族の重みだけを Kotlin の 3 か所で k 倍にした腕を作る）、`tools/loop/run_seesaw_map.sh`（族ごとに ×2 の腕と今の重みの腕を同時に走らせる。済んだ族は飛ばし、途中で止まった族は両腕をやり直す）、`tools/loop/seesaw_map_stats.py`（§6.1 の規則で集計し、今の重みの腕どうしの差から揺れ（A/A）も出す）。本番の測定（6 族×6 fixture×seed 6）の結果は §14.1 |
 | S2a・S2b | TOOL | `tools/loop/seesaw_dogfood_2026-11-03.py`（S2a）、`tools/loop/seesaw_s2b.py`（S2b、§13.4） |
 | S2c 前線の断面 | TOOL | `tools/loop/seesaw_front.py`（bypass と INFEASIBLE での打ち切り、各点を checker で照合）。可能解（時間切れ）の点を含む断面は前線ではないので膝点を出さない |
-| S3 シーソーを割る探索 | **既定 OFF**（`PolishGate.seesawRelink`、`EngineConfig.seesawRelink`） | `SeesawRelink`（Kotlin・C# 同値）。後処理の結果（本命）から「他の案」の各盤面へ、違うセルを違反セルから先に 1 つずつ写して歩く。`betterReport` で良く厳密ピンを破らなければ本命を差し替え、必須の件数が同じで本命に優越されない盤面を交換の候補として最大 3 つ選び、「他の案」として返す。`V6FinalPort` が後処理の直後（追加精製の前）に呼ぶ、上限 3 秒。置き場所は §6.3（既定の 60 秒で走らない `elitePathRelink` は使わない） |
+| S3 シーソーを割る探索 | **既定 OFF**（`PolishGate.seesawRelink`、`EngineConfig.seesawRelink`。3.727.24 から設定画面のスイッチ「他の案から交換の候補を作る」で切り替えられる。保存しない＝起動のたびに OFF。C# は画面に旗のスイッチを持たないのでエンジンの旗だけ） | `SeesawRelink`（Kotlin・C# 同値）。後処理の結果（本命）から「他の案」の各盤面へ、違うセルを違反セルから先に 1 つずつ写して歩く。`betterReport` で良く厳密ピンを破らなければ本命を差し替え、必須の件数が同じで本命に優越されない盤面を交換の候補として最大 3 つ選び、「他の案」として返す。`V6FinalPort` が後処理の直後（追加精製の前）に呼ぶ、上限 3 秒。置き場所は §6.3（既定の 60 秒で走らない `elitePathRelink` は使わない） |
 | S4 交換の見せ方 | **既定で動く**（画面の文言と並びだけ。採否は不変） | 「他の案」を今の勤務表と族の件数で比べ（`altTrade`）、必須の件数が同じ案は「どの項目も同じか少ない」→「交換になる」→ ほかの順に並べ、交換の説明を添える（`altTradeLine`、例:「案1：必須違反 1件（今と同じ）。期間の制約が 2件減り、上限超過が 1回増えます」）。重みや点数は出さない。Kotlin `CellSheetLogic.kt`・`MagiViewModel.captureAlternatives`、C# 同名 |
 | S5 地図で段を決める | 未（材料待ち） | §14.1 の地図が出たら、`docs/weightless_objective.md` の Q1・Q16 の判断材料として示す |
 
