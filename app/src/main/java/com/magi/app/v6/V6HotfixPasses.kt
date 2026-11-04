@@ -698,7 +698,8 @@ object V6HotfixPasses {
                 enabled = { params.membraneCell && (params.deterministic || EngineClock.remainingMs(deadlineMs) > 0L) }) { work ->
                 // 残り時間まで（上限 8 秒）。残りの半分にする案は 36 対で重み +97（人員過剰は差 0）＝採らない（3.727.23）。
                 val cap = if (params.deterministic) 8_000L else minOf(8_000L, EngineClock.remainingMs(deadlineMs).coerceAtLeast(0L))
-                val r = MembraneCellLns.apply(state, work, MembraneCellLns.Params(maxMillis = cap, deterministic = params.deterministic, maxCells = if (params.deterministic) 40 else 64), shouldStop)
+                val r = MembraneCellLns.apply(state, work, MembraneCellLns.Params(maxMillis = cap, deterministic = params.deterministic,
+                    maxCells = if (params.deterministic) 12 else 64, itersPerCell = if (params.deterministic) 20_000 else 60_000), shouldStop)
                 PostFold.Board(r.newSchedule, r.logs, null, r.applied)
             },
             // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
