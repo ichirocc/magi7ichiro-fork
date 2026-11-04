@@ -1693,7 +1693,7 @@ internal const val ALTERNATIVES_ALL_WORSE = "今の勤務表より良くあり�
  * 他の案の 1 行（必須違反と、計算した時点の勤務表との比べ）。比べは採用の基準（betterReport）の結果で語る＝
  * [better]＝案が今より良い、[worse]＝今のほうが良い、どちらでもなければ今と同じ。
  */
-internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard: Int, worse: Boolean, better: Boolean): String {
+internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard: Int, worse: Boolean, better: Boolean, trade: String? = null): String {
     val cmp = when {
         curHard == null -> ""
         altHard < curHard -> "（今より少ない）"
@@ -1702,7 +1702,41 @@ internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard:
         worse -> "（今と同じ・全体は今より悪い（重みつき））"
         else -> "（今と同じ）"
     }
-    return "案$n：必須違反 $hardTxt$cmp"
+    return "案$n：必須違反 $hardTxt$cmp" + (trade?.let { "。$it" } ?: "")
+}
+
+/** [シーソー S4、docs/seesaw.md §6.4] 他の案を今の勤務表と族の件数で比べた種類（重みを使わない）。 */
+internal enum class AltTrade { DOMINATES, TRADE, DOMINATED, SAME }
+
+/** cur・alt は族→件数（`ViolationReport.breakdown`）。DOMINATES＝案がどの族でも同じか少なく、どれかで少ない。TRADE＝少ない族と多い族の両方がある。 */
+internal fun altTrade(cur: Map<String, Int>, alt: Map<String, Int>): AltTrade {
+    var less = false; var more = false
+    for (f in com.magi.app.v6.MirrorKeys.all) {
+        val d = (alt[f] ?: 0) - (cur[f] ?: 0)
+        if (d < 0) less = true else if (d > 0) more = true
+    }
+    return when { less && more -> AltTrade.TRADE; less -> AltTrade.DOMINATES; more -> AltTrade.DOMINATED; else -> AltTrade.SAME }
+}
+
+/**
+ * 交換の説明（§6.4 の R5＝良くなる族を先に、譲る族を後に、件数で）。必須の件数が同じ案だけに付ける。重みや点数は出さない。
+ * 例:「期間の制約が 2件減り、上限超過が 1回増えます」。族が 3 つ以上あるときは件数の大きい 2 つと「ほか N 項目」。
+ */
+internal fun altTradeLine(cur: Map<String, Int>, alt: Map<String, Int>): String? {
+    val d = com.magi.app.v6.MirrorKeys.all.mapNotNull { f -> ((alt[f] ?: 0) - (cur[f] ?: 0)).takeIf { it != 0 }?.let { f to it } }
+    val down = d.filter { it.second < 0 }.sortedBy { it.second }
+    val up = d.filter { it.second > 0 }.sortedByDescending { it.second }
+    fun part(xs: List<Pair<String, Int>>, verb: String): String? {
+        if (xs.isEmpty()) return null
+        val head = xs.take(2).joinToString("・") { (f, v) -> "${breakdownLabels[f] ?: f}が ${kotlin.math.abs(v)}${unitOf(f)}" }
+        return head + (if (xs.size > 2) "（ほか ${xs.size - 2} 項目）" else "") + verb
+    }
+    return when (altTrade(cur, alt)) {
+        AltTrade.TRADE -> "${part(down, "減り")}、${part(up, "増えます")}"
+        AltTrade.DOMINATES -> "どの項目も今と同じか少なく、${part(down, "減ります")}"
+        AltTrade.DOMINATED -> "どの項目も今と同じか多い案です"
+        AltTrade.SAME -> null
+    }
 }
 
 /** すべての案が今より悪い（印の数が案の数と合うときだけ）。 */

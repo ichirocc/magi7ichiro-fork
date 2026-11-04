@@ -830,6 +830,16 @@ object V6FinalPort {
         var refSched = post.schedule
         var refReport = post.report
         var extraLog = emptyList<MirrorLog>()
+        // [シーソー S3、docs/seesaw.md §6.3] 後処理の結果から「他の案」へ歩く Path Relinking（既定 OFF）。良ければ本命を差し替え（betterReport）、
+        //   本命に優越されない交換の盤面を「他の案」にする（S4）。上限 3 秒・全体の締切まで。
+        var seesawTradeoffs: List<Array<IntArray>> = emptyList()
+        var seesawLog = emptyList<MirrorLog>()
+        if (config.seesawRelink && chained.alternatives.isNotEmpty() && isActive) {
+            val cap = minOf(3_000L, (hardDeadlineMs - EngineClock.nowMs()).coerceAtLeast(0L))
+            val sr = SeesawRelink.apply(state, refSched, chained.alternatives, maxMillis = cap, shouldStop = { !isActive })
+            if (betterReport(sr.report, refReport) && !exactPinRegression(cachedProblem(state), refSched, sr.schedule)) { refSched = sr.schedule; refReport = sr.report }
+            seesawTradeoffs = sr.tradeoffs; seesawLog = sr.logs
+        }
         run {
             // [監査(3e)] 上限は後処理予約枠(postReserveMs, 8〜25s)＝「未使用の予約を再利用する」設計意図に固定。
             //   全予算走行なら残り≒予約枠で従来どおり。N4 早期脱出等 stagnationFired 以外の早期復帰では
@@ -1320,7 +1330,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
@@ -1335,7 +1345,7 @@ object V6FinalPort {
         //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
         ensureActive()
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
-            alternatives = chained.alternatives, capZero = capZero, stop = stopSummary)
+            alternatives = if (seesawTradeoffs.isNotEmpty()) seesawTradeoffs else chained.alternatives, capZero = capZero, stop = stopSummary)
     }
 
     /**
