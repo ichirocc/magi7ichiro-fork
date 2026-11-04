@@ -135,7 +135,7 @@ C1共同LNS applied=1 rolledBack=false
 個人回数共同LNS applied=1 rolledBack=false
 ComponentRepair applied=9 rolledBack=false
 玉突きパイプライン applied=2 rolledBack=false
-MembraneCellLns applied=12 rolledBack=false
+MembraneCellLns applied=4 rolledBack=false
 CovORelief applied=-1 rolledBack=false
 == blocked_covu_state
 HF80StrategicOscillation applied=-1 rolledBack=false
@@ -203,7 +203,7 @@ C1共同LNS applied=0 rolledBack=false
 個人回数共同LNS applied=1 rolledBack=false
 ComponentRepair applied=2 rolledBack=false
 玉突きパイプライン applied=16 rolledBack=false
-MembraneCellLns applied=7 rolledBack=false
+MembraneCellLns applied=3 rolledBack=false
 CovORelief applied=-1 rolledBack=false
 == sept2026_state
 HF80StrategicOscillation applied=-1 rolledBack=false
@@ -354,5 +354,5 @@ C1共同LNS applied=1 rolledBack=false
 個人回数共同LNS applied=0 rolledBack=false
 ComponentRepair applied=0 rolledBack=false
 玉突きパイプライン applied=9 rolledBack=false
-MembraneCellLns applied=4 rolledBack=false
+MembraneCellLns applied=3 rolledBack=false
 CovORelief applied=-1 rolledBack=false

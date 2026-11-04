@@ -8,7 +8,7 @@ import java.io.File
 
 /**
  * 全面改修 P0 の安全網（`docs/overhaul_design.md` §6.1 の 1）。6 fixture で、決定的モードの後処理を通した
- * 最終盤面を `StateFingerprint` でハッシュし、基準版の写しと照合する。作り直しは `MAGI_UPDATE_SNAPSHOTS=1` のときだけ。
+ * 最終盤面を `StateFingerprint.ofBoard` でハッシュし、基準版の写しと照合する。作り直しは `MAGI_UPDATE_SNAPSHOTS=1` のときだけ。
  * 探索本体は決定的でないため対象外（時間制の対比較が受け持つ、§3.3）。seed は決定的モードでは盤面に効かない（1〜3 で同一ハッシュ）ため 1 つだけ。
  */
 class BoardHashFixtureTest {
@@ -25,7 +25,8 @@ class BoardHashFixtureTest {
                         deadlineMs = EngineClock.nowMs() + 3_600_000L,
                         params = V6HotfixPasses.PostOptimizationParams(deterministic = true,
                             c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
-                    val hash = StateFingerprint.of(st.copy(schedule = out.map { it.toList() }))
+                    // 盤面の指紋（ofBoard）。StateFingerprint.of は schedule を意図的に読まないので、盤面が変わっても検知できなかった。
+                    val hash = StateFingerprint.ofBoard(out)
                     appendLine("$name seed=$seed hash=$hash")
                 }
             }
