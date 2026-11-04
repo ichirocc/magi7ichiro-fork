@@ -407,13 +407,13 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.membraneCellLns, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetMembraneCellLns(it)) }).semantics(mergeDescendants = true) {}) {
-                Column(Modifier.weight(1f)) {
-                    Text(MEMBRANE_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
-                    Text(MEMBRANE_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.membraneCellLns, onCheckedChange = null, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.membraneCellLns, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetMembraneCellLns(it)) }).semantics(mergeDescendants = true) {}) {
+            Column(Modifier.weight(1f)) {
+                Text(MEMBRANE_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
+                Text(MEMBRANE_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Switch(checked = ui.membraneCellLns, onCheckedChange = null, enabled = !ui.running)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.seesawRelink, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSeesawRelink(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
