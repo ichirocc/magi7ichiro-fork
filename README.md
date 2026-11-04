@@ -47,6 +47,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-04（3.727.22: シーソーの設計書の実装＝S3 `SeesawRelink`（既定 OFF）・S4「他の案」を族の件数で並べて交換の説明・S1／S2c の測定の道具、`docs/seesaw.md` §14）
 **最終更新**：2026-11-04（測定のみ: 区間の部分問題はアプリの既定の予算に入らない（1 スレッドの CP-SAT で合計 25 秒以上から効く）、`docs/seesaw.md` §13.6）
 **最終更新**：2026-11-04（測定のみ: weekly の取り逃しの原因＝細胞の中の解き方（焼きなましは必須を増やさない 1 手ずつの道が無く、区間を CP-SAT で解けば届く）、`docs/seesaw.md` §13.5）
 **最終更新**：2026-11-04（測定のみ: シーソーの S2b（盤面ごとのパレート判定）の実地、24 盤面中 15 枚で優越する盤面＝主に weekly、`docs/seesaw.md` §13.4）
