@@ -1710,7 +1710,7 @@ internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard:
  * 札は必須の件数が違えば「必須が少ない／多い」、同じなら族の件数の比べ方（[altTrade]）で「今より良い／一長一短／今より悪い／今と同じ」。
  * 比べる相手は案を計算した時点の勤務表（[alternativesWorse] と同じ）。色に頼らず言葉で伝える。
  */
-internal data class AltLine(val tag: String, val down: String?, val up: String?)
+data class AltLine(val tag: String, val down: String?, val up: String?)
 
 internal fun altLine(curHard: Int, cur: Map<String, Int>, altHard: Int, alt: Map<String, Int>): AltLine {
     val tag = when {
