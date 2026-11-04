@@ -35,6 +35,8 @@ def main():
     ap.add_argument("model"); ap.add_argument("state"); ap.add_argument("cp"); ap.add_argument("boards", nargs="+")
     ap.add_argument("--secs", type=float, default=60); ap.add_argument("--cells", type=int, default=6)
     ap.add_argument("--cell-staff", type=int, default=4); ap.add_argument("--cell-secs", type=float, default=20)
+    ap.add_argument("--no-whole", action="store_true", help="盤面全体の判定を飛ばして細胞だけを見る")
+    ap.add_argument("--save-dir", default=None, help="優越した盤面を <盤面名>.dominating.json で書く")
     a = ap.parse_args()
     m = json.load(open(a.model))
     S, T = m["S"], m["T"]
@@ -56,12 +58,15 @@ def main():
         base = sum(fx[f] for f in nf)
         # whole（fair を省いた緩和）
         free = {(i, j) for i in range(S) for j in range(T)}
-        st, sol, obj, fam = pareto_solve(m, x, free, {f: fx[f] for f in nf}, nf, hx, a.secs, "skip")
+        st, sol, obj, fam = ("SKIP", None, None, None) if a.no_whole else pareto_solve(m, x, free, {f: fx[f] for f in nf}, nf, hx, a.secs, "skip")
         verdict = "未決"
         if sol is not None and obj < base:
             ry = oracle.check(sol)
             if ry["hard"] <= rx["hard"] and dominates(ry["bd"], fx):
                 verdict = "見かけあり（優越、盤面全体）"
+                if a.save_dir:
+                    os.makedirs(a.save_dir, exist_ok=True)
+                    json.dump(sol, open(os.path.join(a.save_dir, name.replace(".json", ".dominating.json")), "w"))
                 diff = {f: ry["bd"][f] - fx[f] for f in ALL if ry["bd"][f] != fx[f]}
                 print(f"{name}: whole {st} 和 {base}→{obj} {verdict} 差 {diff}", flush=True)
                 continue
@@ -97,6 +102,9 @@ def main():
                 ry = oracle.check(sol2)
                 if ry["hard"] <= rx["hard"] and dominates(ry["bd"], fx):
                     found = (staff, {f: ry["bd"][f] - fx[f] for f in ALL if ry["bd"][f] != fx[f]})
+                    if a.save_dir:
+                        os.makedirs(a.save_dir, exist_ok=True)
+                        json.dump(sol2, open(os.path.join(a.save_dir, name.replace(".json", ".dominating.json")), "w"))
                     break
         if found:
             print(f"{name}: cell 職員{found[0]} 見かけあり（優越、細胞） 差 {found[1]}", flush=True)
