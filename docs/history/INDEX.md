@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- シーソーの地図（S1、2026-11-04、測定のみ）: 6 fixture×seed 6×60 秒、族ごとに ×2 の腕と今の重みの腕を同時に、36 対ずつ。c1×2 → c1 −5.86・下限割れ +1.94・上限超過 +1.81（競合）、high×2 → high −0.89・c1 +3.28（競合）・c3m −1.42（調和）、c3m×2 は押せない。A/A 72 対はどの族も区間 0 を含む。c1 と個人の回数が強く競合＝重みを使わない設計の段の案では c1 が譲らされる（S5 の材料、Q1）。残り 3 族（c3mn・fair・apt）は上限で止まった  → `docs/seesaw.md` §14.1
 - **3.727.24（2026-11-04、ユーザー「フラグはUIで」）**: 膜の細胞 LNS（`PolishGate.membraneCellLns`、既定 ON）を詳細設定のスイッチ「最後に職員をまとめて組み直す」に出す（玉突きの設定の下、保存しない・実行中は操作不可、「必須の違反からも始める」と同じ配線＝`MagiEvent.Settings.SetMembraneCellLns`・`UiState.membraneCellLns`）。`SearchStrengthTest` で画面の既定とエンジンの既定の一致を検算。C# 同日同期
 - シーソーの S3 の 2 腕比較（2026-11-04、測定のみ）: SeesawOnOffBench、5 fixture×seed 1〜3×60 秒・workers 4。ON の勝ち 6・負け 9（重み差の中央値 +128）、必須は全組同じ、sept2026 は 3 組とも ON が悪い＝既定 OFF のまま（設定のスイッチで試せる）。交換の候補は OFF でも他の案 45 件中 42 件＝S4 は S3 なしで働く  → `docs/seesaw.md` §14.2
 - シーソーの S3 の旗を設定画面に（2026-11-04、3.727.25、ユーザー「フラグはUIで」）: 設定の玉突きの節の下にスイッチ「他の案から交換の候補を作る」（`MagiEvent.Settings.SetSeesawRelink`→`setSeesawRelink`→`PolishGate.seesawRelink`、`UiState.seesawRelink`、保存しない＝「必須の違反からも始める」と同じ扱い）。背景実行へは PolishGate の写しで渡る。C# は画面に旗のスイッチを持たない（探索の強さだけ）のでエンジンの旗のみ  → `docs/seesaw.md` §14
