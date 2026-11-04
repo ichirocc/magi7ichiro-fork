@@ -6,6 +6,7 @@ import com.magi.app.model.StateParser
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.V6FinalPort
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import java.io.File
 
 fun main(args: Array<String>) {
@@ -24,6 +25,11 @@ fun main(args: Array<String>) {
             val res = runBlocking {
                 V6FinalPort.handleOptimize(st, st.schedule.map { it.toIntArray() }.toTypedArray(), secondsRaw = seconds, workers = workers,
                     allowImpossible = true, softPolish = true, seed = 1000L + seed)
+            }
+            // [2026-11-04] シーソーの S2b（盤面ごとのパレート判定、docs/seesaw.md §4 の 2b）用に、指定があれば最終盤面も書く。
+            System.getenv("MAGI_WS_BOARDS")?.let { dir ->
+                File(dir).mkdirs()
+                File(dir, "${f.removeSuffix(".json")}.$seed.$arm.json").writeText(JSONArray(res.schedule.map { JSONArray(it.toList()) }).toString())
             }
             val line = "${f.removeSuffix(".json")},$seed,$arm,${System.currentTimeMillis() - t0},${res.report.hard},${res.report.total}," +
                 fams.joinToString(",") { (res.report.breakdown[it] ?: 0).toString() }
