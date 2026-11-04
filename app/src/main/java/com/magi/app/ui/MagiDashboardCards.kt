@@ -2088,10 +2088,21 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                     selected = selected,
                     onSelect = { i -> if (i != selected) confirm = i },
                 )
+                // [シーソー S4、docs/screen_spec.md §01「他の案」] 案ごとに「案N　札」→「減る：…」→「増える：…」。行のデータが揃わないときは従来の 1 文。
+                val lines = ui.alternativeLines.takeIf { it.size == ui.alternatives.size }
                 ui.alternatives.forEachIndexed { i, s ->
-                    Text(s, style = MaterialTheme.typography.bodySmall,
-                        fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (i == selected) cs.onSurface else cs.onSurfaceVariant)
+                    val emph = if (i == selected) FontWeight.Bold else FontWeight.Normal
+                    val tone = if (i == selected) cs.onSurface else cs.onSurfaceVariant
+                    val l = lines?.get(i)
+                    if (l == null) {
+                        Text(s, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone)
+                    } else {
+                        Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                            Text("案${i + 1}　${l.tag}", style = MaterialTheme.typography.bodyMedium, fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Medium, color = cs.onSurface)
+                            l.down?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
+                            l.up?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
+                        }
+                    }
                 }
             }
         }
