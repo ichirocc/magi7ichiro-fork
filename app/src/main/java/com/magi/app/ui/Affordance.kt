@@ -105,7 +105,7 @@ internal fun ConfirmDialog(title: String, points: List<String>, primary: String,
     val p = confirmDialogPoints(points)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { DialogHeader(title, onDismiss) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { p.forEach { Text(it) } } },
         confirmButton = { DialogConfirmButton(primary, onClick = onPrimary) },
         dismissButton = { DialogDismissButton(onClick = onDismiss, text = dismiss) },
@@ -160,7 +160,7 @@ fun DiscardConfirmDialog(onDiscard: () -> Unit, onContinue: () -> Unit) {
         onDismissRequest = onContinue,
         confirmButton = { DialogDangerButton("破棄する", onClick = onDiscard) },
         dismissButton = { DialogDismissButton(onClick = onContinue, text = "入力を続ける") },
-        title = { Text("入力を破棄しますか？") },
+        title = { DialogHeader("入力を破棄しますか？", onContinue) },
         text = { Text("入力中の内容は保存されません。") },
     )
 }

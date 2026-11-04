@@ -141,7 +141,7 @@ internal fun WishConflictDialog(
     var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ぶつかっている希望") },
+        title = { DialogHeader("ぶつかっている希望", onDismiss) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
@@ -281,7 +281,7 @@ internal fun RelaxTrialDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(modifier = Modifier.semantics { heading() }, text = when (step) {
+        title = { DialogHeader(onClose = onDismiss, title = when (step) {
             RelaxApproval.Step.R1 -> t?.dialogTitle ?: "試算結果の確認"
             RelaxApproval.Step.R2 -> "変更内容の確認"
             RelaxApproval.Step.R3 -> "承認"
@@ -380,7 +380,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(PREVIEW_TITLE) },
+        title = { DialogHeader(PREVIEW_TITLE, onDismiss) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
@@ -524,7 +524,7 @@ internal fun GuidedFixDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(guidedFixTitle(stage, target)) },
+        title = { DialogHeader(guidedFixTitle(stage, target), onDismiss) },
         text = {
             Column(
                 Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()),
@@ -1219,7 +1219,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     confirmRule?.let { (seq, n) ->
         AlertDialog(
             onDismissRequest = { confirmRule = null },
-            title = { Text("禁止の並びを解除しますか？") },
+            title = { DialogHeader("禁止の並びを解除しますか？", { confirmRule = null }) },
             text = { Text("「$seq」の禁止を全員について外します（いま崩せない並び ${n}件）。元に戻せます。") },
             confirmButton = { DialogDangerButton("解除する", onClick = { confirmRule = null; onRelaxRule(seq) }) },
             dismissButton = { DialogDismissButton(onClick = { confirmRule = null }, text = "解除しない") },
@@ -1471,7 +1471,7 @@ internal fun SettingIssuesCard(
     if (confirmClear && wishClearCount > 0) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("担当外の希望をまとめて消しますか？") },
+            title = { DialogHeader("担当外の希望をまとめて消しますか？", { confirmClear = false }) },
             text = { Text("担当外の希望 ${wishClearCount}件 をまとめて削除します。勤務表の割当は変わりません。元に戻すで取り消せます。") },
             confirmButton = { DialogDangerButton("まとめて消す", onClick = { confirmClear = false; onClearWishes() }) },
             dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
@@ -1830,7 +1830,6 @@ internal fun AnalysisTriageCard(
     var showSummary by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("分析", style = MaterialTheme.typography.titleMedium)
             // 状態の段: 一文・3 点まで・主ボタン 1 つ（[analysisSummary]）。
             Text(summary.sentence, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             summary.points.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
@@ -2110,7 +2109,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     confirm?.let { i ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("案${i + 1}を反映しますか？") },
+            title = { DialogHeader("案${i + 1}を反映しますか？", { confirm = null }) },
             text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
             confirmButton = { DialogConfirmButton("反映する", onClick = { confirm = null; onApply(i) }) },
             dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "反映しない") },

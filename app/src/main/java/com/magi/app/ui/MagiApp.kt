@@ -910,7 +910,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
                     // [3.714.0] タブの見出し＋1 行（区分ごとの説明は見出しカードの副題）。
-                    Text(EDIT_TAB_HEADING, style = MaterialTheme.typography.titleMedium)
                     Text(EDIT_TAB_LINE, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
                     when (editScope) {
@@ -1217,7 +1216,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         pendingCsvImport?.let { csvText ->
             AlertDialog(
                 onDismissRequest = { pendingCsvImport = null },
-                title = { Text("何として取り込みますか？") },
+                title = { DialogHeader("何として取り込みますか？", { pendingCsvImport = null }) },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Text(
@@ -1257,7 +1256,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         rosterCsvChoice?.let { csvText ->
             AlertDialog(
                 onDismissRequest = { rosterCsvChoice = null },
-                title = { Text("どちらとして取り込みますか？") },
+                title = { DialogHeader("どちらとして取り込みますか？", { rosterCsvChoice = null }) },
                 text = {
                     Text(
                         "・勤務表：表のとおり、いまの割り当てとして取り込みます。\n" +
@@ -1276,7 +1275,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (wishConfirm > 0) {
             AlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
-                title = { Text("担当外の希望を含めますか？") },
+                title = { DialogHeader("担当外の希望を含めますか？", { wishConfirm = 0 }) },
                 text = { Text("担当外の希望が ${wishConfirm} 件あります。\n含めると担当外の勤務として入り、必須違反になります。「担当内だけ反映する」なら入れません。どちらも元に戻せます。") },
                 // [3.398.0] 旧版は「含めて反映」「担当内のみ反映」の2つで、**どちらを押しても勤務表が変わる**のに
                 //   取消のボタンが1つも無かった（外側タップ/戻るでしか抜けられない）。しかも取消の位置

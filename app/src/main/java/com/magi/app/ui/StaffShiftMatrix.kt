@@ -208,7 +208,7 @@ internal fun StaffShiftMatrixCard(
         val aptSet = v.groupShiftApt.sumOf { row -> row.count { it.isNotBlank() } }
         AlertDialog(
             onDismissRequest = { confirmResetApt = false },
-            title = { Text("目標をすべて空欄に戻しますか？") },
+            title = { DialogHeader("目標をすべて空欄に戻しますか？", { confirmResetApt = false }) },
             text = {
                 Text(
                     "全グループ×全シフトの「目標」${aptSet}件を空欄（目標なし）に戻します。\n" +

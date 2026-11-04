@@ -1812,7 +1812,6 @@ internal const val SETTINGS_COLORS_HEADING = "色"
 internal const val BUDGET_CHANGE_BUTTON = "組む時間を変える"
 internal fun budgetShortLine(sec: Int): String = "組む時間 ${budgetText(sec)}"
 /** [3.714.0] 編集タブの見出しと 1 行。 */
-internal const val EDIT_TAB_HEADING = "条件"
 internal const val EDIT_TAB_LINE = "希望・人数・基本"
 
 /** 名前・記号が引けないときの共通の表示（番号を見せない）。 */
@@ -1918,8 +1917,7 @@ private val homeActionsToAnalysis = setOf(HomeAction.SHOW_MOVE, HomeAction.SHOW_
 internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = buildList {
     if (ui.running) { add(HomeSection.PROGRESS); return@buildList }
     val creation = ui.hasResult && ui.engineRan
-    if (creation) add(HomeSection.CREATION)
-    add(HomeSection.HEADLINE)
+    if (creation) add(HomeSection.CREATION) else add(HomeSection.HEADLINE)   // 作成の行が見出しを兼ねる（2 段続けない）
     if (ui.hasResult && ui.checkRev > 0) add(HomeSection.BADGES)   // [3.716.0] 札は検査済みのときだけ（検査前に「満たしています」と言わない）
     add(HomeSection.STATUS)
     if (ui.hasResult && ui.checkRev > 0 && ui.bestHard > 0L && plan.kind != HomePlanKind.DRAFT) add(HomeSection.NEXT_ITEMS)
