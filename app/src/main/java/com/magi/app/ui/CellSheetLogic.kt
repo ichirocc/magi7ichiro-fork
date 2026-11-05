@@ -1688,6 +1688,11 @@ internal fun conditionStatusTitle(ok: Int, busy: Int): String = "条件ごとの
 internal fun bulkClearWishesLabel(n: Int): String = "担当外の希望 ${n}件を外す"
 
 internal const val ALTERNATIVES_ALL_WORSE = "今の勤務表より良くありません"
+internal const val ALT_APPLIED_TAG = "反映中"
+internal const val ALT_BASELINE_NOTE = "札は案を作ったときの勤務表（元）との比べです。"
+
+/** 案を反映したあとは「今」が反映した案になるので、札の「今」を「元」（案を作ったときの勤務表）と読み替える。 */
+internal fun altTagAfterApply(tag: String, applied: Boolean): String = if (applied) tag.replace("今", "元") else tag
 
 /**
  * 他の案の 1 行（必須違反と、計算した時点の勤務表との比べ）。比べは採用の基準（betterReport）の結果で語る＝
@@ -1714,18 +1719,31 @@ data class AltLine(val tag: String, val down: String?, val up: String?)
 
 internal fun altLine(curHard: Int, cur: Map<String, Int>, altHard: Int, alt: Map<String, Int>): AltLine {
     val tag = when {
-        altHard < curHard -> "必須が少ない"
-        altHard > curHard -> "必須が多い"
+        altHard < curHard -> "必須が少ない（必須 ${altHard}件）"
+        altHard > curHard -> "必須が多い（必須 ${altHard}件）"
         else -> when (altTrade(cur, alt)) { AltTrade.DOMINATES -> "今より良い"; AltTrade.TRADE -> "一長一短"; AltTrade.DOMINATED -> "今より悪い"; AltTrade.SAME -> "今と同じ" }
     }
-    val d = com.magi.app.v6.MirrorKeys.all.mapNotNull { f -> ((alt[f] ?: 0) - (cur[f] ?: 0)).takeIf { it != 0 }?.let { f to it } }
-    fun part(xs: List<Pair<String, Int>>, head: String): String? {
-        if (xs.isEmpty()) return null
-        return head + xs.take(2).joinToString("・") { (f, v) -> "${breakdownLabels[f] ?: f} ${kotlin.math.abs(v)}${unitOf(f)}" } +
-            (if (xs.size > 2) "（ほか ${xs.size - 2} 項目）" else "")
-    }
-    return AltLine(tag, part(d.filter { it.second < 0 }.sortedBy { it.second }, "減る："), part(d.filter { it.second > 0 }.sortedByDescending { it.second }, "増える："))
+    val (down, up) = altDeltas(cur, alt)
+    fun part(xs: List<Pair<String, Int>>, head: String): String? = if (xs.isEmpty()) null else head + altDeltaPart(xs, " ")
+    return AltLine(tag, part(down, "減る："), part(up, "増える："))
 }
+
+/**
+ * 案と今の族ごとの差を、減る族と増える族に分けて並べる（カードと確認の 1 文で共有）。必須の族を先に置き、
+ * そのあとは差の大きい順＝札を決めた必須の変化が「ほか N 項目」に隠れない（件・人・回・pt は単位が違うので、
+ * 必須と要調整を同じ物差しで比べない）。
+ */
+internal fun altDeltas(cur: Map<String, Int>, alt: Map<String, Int>): Pair<List<Pair<String, Int>>, List<Pair<String, Int>>> {
+    val hard = com.magi.app.v6.MirrorKeys.hard.toSet()
+    val d = com.magi.app.v6.MirrorKeys.all.mapNotNull { f -> ((alt[f] ?: 0) - (cur[f] ?: 0)).takeIf { it != 0 }?.let { f to it } }
+    val order = compareBy<Pair<String, Int>>({ if (it.first in hard) 0 else 1 }, { -kotlin.math.abs(it.second) })
+    return d.filter { it.second < 0 }.sortedWith(order) to d.filter { it.second > 0 }.sortedWith(order)
+}
+
+/** 族の差の上位 2 つと「ほか N 項目」。[sep] は族名と件数のあいだ（カードは空白、1 文は「が 」）。 */
+internal fun altDeltaPart(xs: List<Pair<String, Int>>, sep: String): String =
+    xs.take(2).joinToString("・") { (f, v) -> "${breakdownLabels[f] ?: f}$sep${kotlin.math.abs(v)}${unitOf(f)}" } +
+        (if (xs.size > 2) "（ほか ${xs.size - 2} 項目）" else "")
 
 /** [シーソー S4、docs/seesaw.md §6.4] 他の案を今の勤務表と族の件数で比べた種類（重みを使わない）。 */
 internal enum class AltTrade { DOMINATES, TRADE, DOMINATED, SAME }
@@ -1745,14 +1763,8 @@ internal fun altTrade(cur: Map<String, Int>, alt: Map<String, Int>): AltTrade {
  * 例:「期間の制約が 2件減り、上限超過が 1回増えます」。族が 3 つ以上あるときは件数の大きい 2 つと「ほか N 項目」。
  */
 internal fun altTradeLine(cur: Map<String, Int>, alt: Map<String, Int>): String? {
-    val d = com.magi.app.v6.MirrorKeys.all.mapNotNull { f -> ((alt[f] ?: 0) - (cur[f] ?: 0)).takeIf { it != 0 }?.let { f to it } }
-    val down = d.filter { it.second < 0 }.sortedBy { it.second }
-    val up = d.filter { it.second > 0 }.sortedByDescending { it.second }
-    fun part(xs: List<Pair<String, Int>>, verb: String): String? {
-        if (xs.isEmpty()) return null
-        val head = xs.take(2).joinToString("・") { (f, v) -> "${breakdownLabels[f] ?: f}が ${kotlin.math.abs(v)}${unitOf(f)}" }
-        return head + (if (xs.size > 2) "（ほか ${xs.size - 2} 項目）" else "") + verb
-    }
+    val (down, up) = altDeltas(cur, alt)
+    fun part(xs: List<Pair<String, Int>>, verb: String): String? = if (xs.isEmpty()) null else altDeltaPart(xs, "が ") + verb
     return when (altTrade(cur, alt)) {
         AltTrade.TRADE -> "${part(down, "減り")}、${part(up, "増えます")}"
         AltTrade.DOMINATES -> "どの項目も今と同じか少なく、${part(down, "減ります")}"

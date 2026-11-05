@@ -44,7 +44,24 @@ class AltTradeTest {
         assertEquals(AltLine("今より良い", "減る：曜日の偏り 2pt", null), altLine(0, cur, 0, cur + ("weekly" to 8)))
         assertEquals(AltLine("今より悪い", null, "増える：上限超過 2回"), altLine(0, cur, 0, cur + ("high" to 4)))
         assertEquals(AltLine("今と同じ", null, null), altLine(0, cur, 0, cur))
-        assertEquals("必須が少ない", altLine(2, cur, 1, cur).tag)
-        assertEquals("必須が多い", altLine(1, cur, 2, cur).tag)
+        assertEquals("必須が少ない（必須 1件）", altLine(2, cur, 1, cur).tag)
+        assertEquals("必須が多い（必須 2件）", altLine(1, cur, 2, cur).tag)
+    }
+
+    /** 札を決めた必須の変化は、要調整の大きな変化より先に出る（「ほか N 項目」に隠れない）。 */
+    @Test
+    fun hardFamiliesComeFirst() {
+        val c = mapOf("covU" to 2, "weekly" to 20, "fair" to 10)
+        val l = altLine(2, c, 1, mapOf("covU" to 1, "weekly" to 12, "fair" to 5))
+        assertEquals("減る：人員不足 1人・曜日の偏り 8pt（ほか 1 項目）", l.down)
+        assertEquals("どの項目も今と同じか少なく、人員不足が 1人・曜日の偏りが 8pt（ほか 1 項目）減ります", altTradeLine(c, mapOf("covU" to 1, "weekly" to 12, "fair" to 5)))
+    }
+
+    /** 案を反映したあとの札は「今」を「元」と読む（今＝反映した案になるため）。 */
+    @Test
+    fun tagAfterApplySaysOriginal() {
+        assertEquals("元より良い", altTagAfterApply("今より良い", applied = true))
+        assertEquals("今より良い", altTagAfterApply("今より良い", applied = false))
+        assertEquals("必須が少ない（必須 1件）", altTagAfterApply("必須が少ない（必須 1件）", applied = true))
     }
 }

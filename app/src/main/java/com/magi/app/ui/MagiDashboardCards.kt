@@ -2110,15 +2110,19 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                 )
                 // [シーソー S4、docs/screen_spec.md §01「他の案」] 案ごとに「案N　札」→「減る：…」→「増える：…」。行のデータが揃わないときは従来の 1 文。
                 val lines = ui.alternativeLines.takeIf { it.size == ui.alternatives.size }
+                // 札は案を作ったときの勤務表との比べ。案を反映したあとの「今」は反映した案なので、札の「今」を「元」と読み替える。
+                if (lines != null && selected >= 0) Text(ALT_BASELINE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 ui.alternatives.forEachIndexed { i, s ->
-                    val emph = if (i == selected) FontWeight.Bold else FontWeight.Normal
-                    val tone = if (i == selected) cs.onSurface else cs.onSurfaceVariant
+                    val isSel = i == selected
+                    val emph = if (isSel) FontWeight.Bold else FontWeight.Normal
+                    val headEmph = if (isSel) FontWeight.Bold else FontWeight.Medium
+                    val tone = if (isSel) cs.onSurface else cs.onSurfaceVariant
                     val l = lines?.get(i)
                     if (l == null) {
                         Text(s, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone)
                     } else {
                         Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-                            Text("案${i + 1}　${l.tag}", style = MaterialTheme.typography.bodyMedium, fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Medium, color = cs.onSurface)
+                            Text("案${i + 1}　" + if (isSel) ALT_APPLIED_TAG else altTagAfterApply(l.tag, selected >= 0), style = MaterialTheme.typography.bodyMedium, fontWeight = headEmph, color = cs.onSurface)
                             l.down?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
                             l.up?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
                         }
