@@ -208,13 +208,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   alts は snap の盤面/設定に対して有効だった「他の案」＝元に戻す/やり直すで盤面と一緒に一覧も戻す。
     //   colorKey は表示色だけの段（applyDisplayOnly）で変えた色の対象。非 null なら元に戻す/やり直すも結果を外さない。
     internal data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null, val serial: Long = 0)
-    internal class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long, val lines: List<AltLine> = emptyList())
+    internal class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long, val lines: List<AltLine> = emptyList(), val worse: List<Boolean> = emptyList())
     internal val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
     private fun snapNow(label: String? = null, colorKey: String? = null): UndoSnap? {
         val st = state ?: return null; val sc = currentSchedule ?: return null
         val alts = alternativeScheds.takeIf { it.isNotEmpty() && altBoardKey == boardKey(sc) && altStateKey == stateKey(st) }
-            ?.let { AltSnap(it, _ui.value.alternatives, _ui.value.alternativeApplied, altBoardKey, altStateKey, _ui.value.alternativeLines) }
+            ?.let { AltSnap(it, _ui.value.alternatives, _ui.value.alternativeApplied, altBoardKey, altStateKey, _ui.value.alternativeLines, _ui.value.alternativesWorse) }
         return UndoSnap(st, Array(sc.size) { sc[it].clone() }, label, alts, colorKey, ++undoSerialSeq)
     }
     private var undoSerialSeq = 0L
@@ -1027,7 +1027,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
             relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
-            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
+            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativesWorse = snap.alts?.worse ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
             schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }
@@ -1055,7 +1055,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
             relaxedBoard = false, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, runDelta = null, stopSummary = null, preDraftNotice = null,
             editRev = it.editRev + 1,
-            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
+            alternatives = snap.alts?.summaries ?: emptyList(), alternativeLines = snap.alts?.lines ?: emptyList(), alternativesWorse = snap.alts?.worse ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }   // [3.592.0] undo()と同じ理由
         postOpNotice(if (label != null) "やり直す: $label" else "やり直しました", undoable = false)
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
@@ -3229,7 +3229,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 外した段の盤面へ戻る＝元に戻すと同じく、その段に退避した「他の案」も戻す。
         val alts = undoStack.removeLastOrNull()?.alts
         restoreAlts(alts)
-        _ui.update { it.copy(canUndo = undoStack.isNotEmpty(), alternatives = alts?.summaries ?: emptyList(), alternativeApplied = alts?.applied ?: -1,
+        _ui.update { it.copy(canUndo = undoStack.isNotEmpty(), alternatives = alts?.summaries ?: emptyList(), alternativeLines = alts?.lines ?: emptyList(), alternativesWorse = alts?.worse ?: emptyList(), alternativeApplied = alts?.applied ?: -1,
             hasResult = ui0.hasResult, engineRan = ui0.engineRan, ranBeforeEdit = ui0.ranBeforeEdit, relaxedBoard = ui0.relaxedBoard, runSummary = ui0.runSummary, runDelta = ui0.runDelta, fixSuggestions = ui0.fixSuggestions, fixTiers = ui0.fixTiers,
             fixSearched = ui0.fixSearched, fixFocusName = ui0.fixFocusName, stalledHardFamilies = ui0.stalledHardFamilies) }
         autoSave()

@@ -18,7 +18,7 @@ data class RelaxRollback<S, R, A>(
         canUndo = ui.canUndo, canRedo = ui.canRedo, editRev = ui.editRev, messageIsError = ui.messageIsError,
         fixSuggestions = ui.fixSuggestions, fixTiers = ui.fixTiers, fixSearched = ui.fixSearched, fixDoneKey = ui.fixDoneKey,
         fixFailedKey = ui.fixFailedKey, stalledHardFamilies = ui.stalledHardFamilies, alternatives = ui.alternatives,
-        alternativeApplied = ui.alternativeApplied,
+        alternativeApplied = ui.alternativeApplied, alternativeLines = ui.alternativeLines, alternativesWorse = ui.alternativesWorse,
     )
 
     /** 段の控えを [undoStack]・[redoStack] へ書き戻す（30 段を超えて落とした最古の段も戻る）。 */
