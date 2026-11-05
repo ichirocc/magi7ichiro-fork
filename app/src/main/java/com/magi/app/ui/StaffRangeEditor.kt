@@ -3,7 +3,6 @@ package com.magi.app.ui
 import com.magi.app.toHankakuKigou
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -109,8 +109,9 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                                 onClick = { dialogInit = gr; dialog = true },
                                 label = { Text("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
                                 trailingIcon = {
-                                    Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }.padding(7.dp))
+                                    IconButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }, enabled = !ui.running) {
+                                        Icon(Icons.Filled.Close, contentDescription = "削除", modifier = Modifier.size(18.dp))
+                                    }
                                 },
                             )
                         }
