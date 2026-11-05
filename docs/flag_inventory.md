@@ -1,5 +1,16 @@
 # エンジン／探索フラグ棚卸し（読み取りのみ・2026-10-22）
 
+> **2026-11-05 追記（この表は 3.724.0 より前の写し）**: 下の表の「定着→外す」「削除候補」の多くは **3.724.0（#399）で外し済み**。
+> 外部の監査がこの表を「まだ残っているフラグ」と読んだ例が 2 回あったので、今の状態をここに書く（照合: `grep -rw` を `app/src/main/java` に、2026-11-05）。
+> - **Android で外したフラグ（26 個、既定の値で固定）**: c1MoveARepair・rotationDeltaPrescreen・roundPassMemo・hardDeltaPrefilter・ejectionPipelineAfterRepair・
+>   ejectionPipelineRounds・ejectionChainSwapMoves・ejectionUseLeftover・hardEjectionChainEarly・allEjectionChainEarly・allEjectionChainFinal・
+>   hardEjectionChainRetry・allEjectionChainAfterRepair・softCascade・lnsAdaptive・postChainRollbackCountsZero・stallPolishInjection・prePostDescent・
+>   c3nWallShortStall・c3nWallLegacy・lateOpStopPropagation・adaptiveStall・floorCountsUpperZero・filterC3nIncrease・personSwapKick・wishPinStrict
+>   （最後の 3 つは関数名やコメントに名前が残るだけでフラグではない）。
+> - **今も残るフラグ（12 個）**: wideC3nBreakDays・c1EjectionChain・allFamilyEjectionChain・ejectionPipelineFocus・ejectionPipelineHardLeg・
+>   ejectionChainMaxMillis・normalStallFraction・combineExhaustPairs・aptFairSoftTolerance・countChainPolish・floorShortStall・c3nWallDeepCheck。
+> - **C#（-MAGI_PC）**: 上の 26 個のうち 13 個が `PolishGate.cs` にまだある。出力が変わらず写す費用が大きいので**見送りの決定**（`windows/README.md` 2026-10-28「写さないもの・理由」）。外すのは C# 側の判断で、Android からは求めない。
+
 対象: Android `origin/main` f19fb8cf（3.723.1）、C# `-MAGI_PC` main f34de5e2。どちらのリポジトリも変更していない。
 行数は `git archive` で展開した写しを grep と wc で数えた概算。分岐の本体、宣言と KDoc、snapshot/restore の各 1 行を含む。
 
