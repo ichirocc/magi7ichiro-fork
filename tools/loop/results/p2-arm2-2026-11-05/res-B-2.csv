@@ -1,0 +1,7 @@
+fixture,seed,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5
+golden_state,2,0,350,0,105,75,170,21,105,9,21 17 16 13 12,1,4,1 1 1 1
+sample_state_v6,2,1,286,1,9,117,159,3,9,7,3 1 1 1 1,1,2,1 1
+blocked_covu_state,2,4,279,4,53,14,208,18,53,8,18 9 7 7 5,2,12,2 1 1 1 1
+sept2026_state,2,0,413,0,71,68,274,30,71,10,30 7 6 6 5,3,18,3 1 1 1 1
+oct2026_grid_state,2,9,406,9,36,18,343,18,36,9,18 5 4 3 2,10,59,10 10 3 2 2
+full_coverage_state,2,0,138,0,1,33,104,1,1,1,1,5,28,5 5 5 4 2
