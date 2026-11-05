@@ -8,6 +8,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
@@ -857,41 +860,19 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
     SchedulePanel("希望シフトの一括操作", onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
-                    val s = scope == idx
-                    Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                        .clickable { scope = idx }, contentAlignment = Alignment.Center) {
-                        Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                            fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            }
-            if (scope == 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    weekdays.forEachIndexed { idx, wd ->
-                        val s = weekday == idx
-                        Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
-                            .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
-                            Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
-                                fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
-                        }
-                    }
-                }
-            }
+            MagiSegmentedControl(options = listOf("この曜日", "期間全体"), selected = scope, onSelect = { scope = it })
+            if (scope == 0) MagiSegmentedControl(options = weekdays, selected = weekday, onSelect = { weekday = it })
             Text("対象 ${targetDays.size}日" + (if (daysText.isNotEmpty()) "（$daysText）" else "") + "。既存の希望は上書きします。", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
-                    .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MagiCorners.capsule)
+                    .selectable(selected = staffSel < 0, role = Role.RadioButton) { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
-                    .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MagiCorners.capsule)
+                    .selectable(selected = staffSel >= 0, role = Role.RadioButton) { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
@@ -905,7 +886,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
                             .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
                             .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, MaterialTheme.shapes.small)
-                            .clickable { picked = k }, contentAlignment = Alignment.Center) {
+                            .selectable(selected = sel, role = Role.RadioButton) { picked = k }, contentAlignment = Alignment.Center) {
                             Text((ui.shiftSymbols.getOrNull(k) ?: "$k") + (if (ng) " 外" else ""),
                                 color = if (ng) cs.error else cs.onSurface, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                         }
@@ -1005,40 +986,18 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
     SchedulePanel("割当の一括操作", onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
-                    val s = scope == idx
-                    Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                        .clickable { scope = idx }, contentAlignment = Alignment.Center) {
-                        Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                            fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            }
-            if (scope == 0) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    weekdays.forEachIndexed { idx, wd ->
-                        val s = weekday == idx
-                        Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
-                            .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
-                            Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
-                                fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
-                        }
-                    }
-                }
-            }
+            MagiSegmentedControl(options = listOf("この曜日", "期間全体"), selected = scope, onSelect = { scope = it })
+            if (scope == 0) MagiSegmentedControl(options = weekdays, selected = weekday, onSelect = { weekday = it })
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
-                    .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MagiCorners.capsule)
+                    .selectable(selected = staffSel < 0, role = Role.RadioButton) { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
-                    .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MagiCorners.capsule)
+                    .selectable(selected = staffSel >= 0, role = Role.RadioButton) { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
@@ -1055,7 +1014,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
                             .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
                             .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
-                            .clickable { picked = k }, contentAlignment = Alignment.Center) {
+                            .selectable(selected = sel, role = Role.RadioButton) { picked = k }, contentAlignment = Alignment.Center) {
                             Text(ui.shiftSymbols.getOrNull(k) ?: "$k",
                                 color = ensureReadable(if (sel) cs.primaryContainer else cs.surface, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")), fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                         }
