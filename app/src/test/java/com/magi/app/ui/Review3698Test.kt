@@ -28,6 +28,7 @@ class Review3698Test {
             assertTrue(case, s.indexOf(HomeSection.HELPER) < s.indexOf(HomeSection.DETAIL))
             assertEquals(case, hasResult, HomeSection.SATISFACTION in s)
             assertEquals(case, hasResult, HomeSection.CREATION in s)
+            assertEquals(case, !hasResult, HomeSection.HEADLINE in s)
             assertEquals(case, hasResult, HomeSection.BADGES in s)
             if (hasResult) assertTrue(case, s.indexOf(HomeSection.DETAIL) < s.indexOf(HomeSection.SATISFACTION) && s.indexOf(HomeSection.SATISFACTION) < s.indexOf(HomeSection.INFO))
         }

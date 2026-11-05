@@ -110,6 +110,21 @@ class C1PlateauDiagnosisTest {
     }
 
     @Test
+    fun finalCountsOrderEntriesByRemainingThenObservations() {
+        val stats = mapOf(
+            Triple(0, 1, 0) to mapOf(C1PlateauDiagnosis.REASON_SCORE to 50),
+            Triple(1, 1, 0) to mapOf(C1PlateauDiagnosis.REASON_NO_CANDIDATE to 2),
+            Triple(2, 1, 0) to mapOf(C1PlateauDiagnosis.REASON_SCORE to 9),
+            Triple(3, 1, 0) to mapOf(C1PlateauDiagnosis.REASON_SCORE to 90),
+        )
+        val left = mapOf(0 to 1, 1 to 8, 2 to 1, 3 to 0)
+        val d = build(stats).refreshedWithCounts(10) { i, _, _ -> left.getValue(i) }
+        assertEquals(listOf(1, 0, 2), d.entries.map { it.staff })
+        assertEquals(listOf(8, 1, 1), d.entries.map { it.remaining })
+        assertTrue(d.logLines()[1].contains("残8件"))
+    }
+
+    @Test
     fun alreadyResolvedTargetsAreNeverListed() {
         // 対象が全部解消されたなら c1 も 0（残っていないので語ることが無い）。
         val d = build(

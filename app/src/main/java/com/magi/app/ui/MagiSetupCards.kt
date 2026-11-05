@@ -543,7 +543,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = { onEvent(MagiEvent.Structure.CancelMonthMove) },
-        title = { Text("${plan.year}年 ${plan.month}月 に移りますか？") },
+        title = { DialogHeader("${plan.year}年 ${plan.month}月 に移りますか？", { onEvent(MagiEvent.Structure.CancelMonthMove) }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 monthMoveLines(plan).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }

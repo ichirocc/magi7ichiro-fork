@@ -324,6 +324,9 @@ internal fun ScheduleToolsCard(
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val anyViol = bucketCounts.values.any { it > 0 }
+    // 種別のチップは既定で畳む（表を上げる）。絞り込み中・集中中は開いたまま＝いまの状態が見える。
+    var filterOpen by rememberSaveable { mutableStateOf(false) }
+    val filterShown = filterOpen || enabled != allVioBucketKeys || focusMode
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (hardChip != null || anyViol) {
@@ -336,13 +339,17 @@ internal fun ScheduleToolsCard(
                             MagiTextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
                                 Text("すべて表示", style = MaterialTheme.typography.labelLarge)
                             }
+                        } else if (!focusMode) {
+                            MagiTextButton(onClick = { filterOpen = !filterOpen }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                DisclosureText(VIO_FILTER_LABEL, filterOpen, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                            }
                         }
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
                 }
             }
-            if (anyViol) {
+            if (anyViol && filterShown) {
                 var moreOpen by rememberSaveable { mutableStateOf(false) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     visibleVioBuckets(moreOpen, enabled).forEach { b -> BucketChip(b.key, b.label, bucketCounts[b.key] ?: 0, b.key in enabled, onToggle) }
@@ -962,7 +969,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                 })
             },
             dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
-            title = { Text("${clearCount}件の希望を消しますか？") },
+            title = { DialogHeader("${clearCount}件の希望を消しますか？", { confirmClear = false }) },
             text = {
                 Text((if (clearAll) "登録済みの希望をすべて消します。" else "${targetWho}・${if (scope == 1) "期間全体" else "${weekdays[weekday]}曜日 ${targetDays.size}日"}（$daysText）の希望を消します。") +
                     "割当には影響しません。元に戻すで復元できます。")
@@ -1341,7 +1348,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
             detail?.let { d ->
                 AlertDialog(
                     onDismissRequest = { detail = null },
-                    title = { Text(d.title) },
+                    title = { DialogHeader(d.title, { detail = null }) },
                     text = {
                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -1882,7 +1889,7 @@ internal fun ShortageSlotHeader(ui: UiState, cv: ConditionsView?, shift: Int, da
 private fun GridMarkDialog(title: String, lines: List<String>, empty: Boolean, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { DialogHeader(title, onDismiss) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (empty && lines.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
@@ -1911,7 +1918,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { DialogHeader(title, onDismiss) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MagiSpacing.sm)) {
                 if (sheet.isEmpty) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
@@ -2436,7 +2443,7 @@ private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("「${ui.shiftSymbols.getOrNull(shift) ?: "?"}」を追加する候補日") },
+        title = { DialogHeader("「${ui.shiftSymbols.getOrNull(shift) ?: "?"}」を追加する候補日", onDismiss) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 list.sortedBy { if (it.reason != null) 0 else 1 }.forEach { c ->

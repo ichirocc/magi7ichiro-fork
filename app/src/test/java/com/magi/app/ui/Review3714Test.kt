@@ -59,7 +59,6 @@ class Review3714Test {
         assertEquals("組む時間 1分", budgetShortLine(60))
         assertEquals("組む時間 10秒", budgetShortLine(10))
         assertEquals("組む時間を変える", BUDGET_CHANGE_BUTTON)
-        assertEquals("条件", EDIT_TAB_HEADING)
         assertEquals("希望・人数・基本", EDIT_TAB_LINE)
         assertEquals("まだ作っていません", homeHeadline(HomePlanKind.MAKE))
         assertEquals("データを開く", EMPTY_STATE_TITLE)
@@ -67,7 +66,7 @@ class Review3714Test {
     }
 
     @Test fun lengthLimits() {
-        for (h in listOf(SETTINGS_HEADING, EDIT_TAB_HEADING, HOME_MAKE_HEADLINE, EMPTY_STATE_TITLE, hardListTitle("12件"))) assertTrue(h, h.length <= 12)
+        for (h in listOf(SETTINGS_HEADING, HOME_MAKE_HEADLINE, EMPTY_STATE_TITLE, hardListTitle("12件"))) assertTrue(h, h.length <= 12)
         val fams = listOf("c3n", "c3mn", "c3w", "pref", "extWish", "groupViol", "covU", "covO", "low", "high", "c1", "c41s", "c42s")
         for (l in fams.map { cellRuleLine(it) } + listOf(EDIT_TAB_LINE, budgetShortLine(300), c3wShortLine(true, "Dﾃ"), c3wShortLine(false, "Pｼ"), emptyStateSubtitle(false)))
             assertTrue(l, l.length <= 22)

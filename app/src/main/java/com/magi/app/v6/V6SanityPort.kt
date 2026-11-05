@@ -295,6 +295,30 @@ object V6SanityPort {
         return out
     }
 
+    /**
+     * 期間の制約（c1）の窓のうち、固定のセル（希望・手動固定）を変えない限り足りない窓の数（報告の c1 と同じ単位＝窓ごとに 1）。
+     * 窓の中で「x に固定されたセル」＋「固定されていず x を置けるセル」が下限に届かなければ、ほかの条件と関係なく満たせない。
+     */
+    fun wishC1Floor(p: Problem, schedule: Array<IntArray>): Int {
+        var n = 0
+        for (c in p.cons1) {
+            if (c.day1 <= 0 || c.day1 > p.T) continue
+            val x = c.shiftIdx
+            for (i in 0 until p.S) {
+                if (!p.canDo(i, x)) continue
+                val row = schedule.getOrNull(i) ?: continue
+                for (w in 0..p.T - c.day1) {
+                    var reach = 0
+                    for (j in w until w + c.day1) {
+                        if (if (p.wishLocked(i, j)) row[j] == x else p.mayPlaceAt(i, j, x)) reach++
+                    }
+                    if (reach < c.day2) n++
+                }
+            }
+        }
+        return n
+    }
+
     /** [wishAvoidRuns] のうち盤面で成立している窓の数（報告の c3mn と同じ単位＝窓ごとに 1）。 */
     fun wishAvoidSoft(p: Problem, schedule: Array<IntArray>): Int =
         wishAvoidRuns(p).count { g -> g.days.all { j -> schedule.getOrNull(g.staff)?.getOrNull(j) == p.wish[g.staff][j] } }

@@ -102,7 +102,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
         val refNote = if (refs > 0) " このスキルグループを使うルールが${refs}件あります。削除すると、そのルールは使われなくなります。" else ""
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("スキルグループを削除しますか？") },
+            title = { DialogHeader("スキルグループを削除しますか？", { confirmDelete = null }) },
             text = { Text("「$name」を削除します。${memberNote}元に戻すで取り消せます。$refNote") },
             confirmButton = { DialogDangerButton("削除する", onClick = { onEvent(MagiEvent.Structure.RemoveSkillGroup(g)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }, text = "削除しない") },

@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,7 +142,7 @@ internal fun WishConflictDialog(
     var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ぶつかっている希望") },
+        title = { DialogHeader("ぶつかっている希望", onDismiss) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
@@ -281,7 +282,7 @@ internal fun RelaxTrialDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(modifier = Modifier.semantics { heading() }, text = when (step) {
+        title = { DialogHeader(onClose = onDismiss, title = when (step) {
             RelaxApproval.Step.R1 -> t?.dialogTitle ?: "試算結果の確認"
             RelaxApproval.Step.R2 -> "変更内容の確認"
             RelaxApproval.Step.R3 -> "承認"
@@ -374,20 +375,40 @@ internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShort
 
 // 着地先（EditLanding・landingFor・landingButtonLabel）は ui/EditLanding.kt（3.644.0 でつくる前の確認と共有）。
 
+/** 変わるセル 1 行: 名前と日付、前（淡い）→ 後（強調）のカプセル。読み上げは 1 文（[previewRowLine]）。 */
+@Composable
+private fun ChangeCapsuleRow(r: ChangeRow) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clearAndSetSemantics { contentDescription = previewRowLine(r.staff, r.date, r.before, r.after) },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(r.staff, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(r.date, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
+        }
+        Surface(color = cs.surfaceContainerHighest, shape = MagiCorners.capsule) {
+            Text(r.before, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+        }
+        Text("→", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+        Surface(color = cs.primaryContainer, shape = MagiCorners.capsule) {
+            Text(r.after, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+        }
+    }
+}
+
 /** [3.644.0/UX-03] 複数人の入替を当てる前に、変わる人・日・勤務（前 → 後）と必須の増減を一覧で見せる。当てるのは確認のあと（元に戻せる）。 */
 @Composable
 internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, consulted: Boolean = false, onConsult: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(PREVIEW_TITLE) },
+        title = { DialogHeader(PREVIEW_TITLE, onDismiss) },
         text = {
             Column(Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
                 // [3.713.0] 最初は「Nか所変わります」と変わるセルの行だけ。目的・回数・判断材料・注記は「詳しく」の中。
                 Text(previewCountLine(p.suggestion.ops.size), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
+                p.rows.forEach { r -> ChangeCapsuleRow(r) }
                 var more by remember { mutableStateOf(false) }
                 MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, more) }
                 if (more) {
@@ -524,7 +545,7 @@ internal fun GuidedFixDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(guidedFixTitle(stage, target)) },
+        title = { DialogHeader(guidedFixTitle(stage, target), onDismiss) },
         text = {
             Column(
                 Modifier.heightIn(max = panelMaxHeightDp(LocalConfiguration.current.screenHeightDp).dp).verticalScroll(rememberScrollState()),
@@ -1219,7 +1240,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     confirmRule?.let { (seq, n) ->
         AlertDialog(
             onDismissRequest = { confirmRule = null },
-            title = { Text("禁止の並びを解除しますか？") },
+            title = { DialogHeader("禁止の並びを解除しますか？", { confirmRule = null }) },
             text = { Text("「$seq」の禁止を全員について外します（いま崩せない並び ${n}件）。元に戻せます。") },
             confirmButton = { DialogDangerButton("解除する", onClick = { confirmRule = null; onRelaxRule(seq) }) },
             dismissButton = { DialogDismissButton(onClick = { confirmRule = null }, text = "解除しない") },
@@ -1280,7 +1301,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
                 Surface(color = container, shape = MaterialTheme.shapes.small) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(e.label, color = onContainer,
+                            Text(e.label + (if (e.remaining > 0) " 残${e.remaining}件" else ""), color = onContainer,
                                 style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                             MagiTagChip(
                                 text = when (e.cause) {
@@ -1471,7 +1492,7 @@ internal fun SettingIssuesCard(
     if (confirmClear && wishClearCount > 0) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("担当外の希望をまとめて消しますか？") },
+            title = { DialogHeader("担当外の希望をまとめて消しますか？", { confirmClear = false }) },
             text = { Text("担当外の希望 ${wishClearCount}件 をまとめて削除します。勤務表の割当は変わりません。元に戻すで取り消せます。") },
             confirmButton = { DialogDangerButton("まとめて消す", onClick = { confirmClear = false; onClearWishes() }) },
             dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
@@ -1830,7 +1851,6 @@ internal fun AnalysisTriageCard(
     var showSummary by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("分析", style = MaterialTheme.typography.titleMedium)
             // 状態の段: 一文・3 点まで・主ボタン 1 つ（[analysisSummary]）。
             Text(summary.sentence, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             summary.points.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
@@ -2110,7 +2130,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     confirm?.let { i ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("案${i + 1}を反映しますか？") },
+            title = { DialogHeader("案${i + 1}を反映しますか？", { confirm = null }) },
             text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
             confirmButton = { DialogConfirmButton("反映する", onClick = { confirm = null; onApply(i) }) },
             dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "反映しない") },

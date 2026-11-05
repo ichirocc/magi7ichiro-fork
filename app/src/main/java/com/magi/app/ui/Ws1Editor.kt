@@ -225,7 +225,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             onDismissRequest = { dialog = null },
             confirmButton = { DialogDangerButton("期間を縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
             dismissButton = { DialogDismissButton(onClick = { dialog = null }, text = "縮めない") },
-            title = { Text("期間を縮めますか？") },
+            title = { DialogHeader("期間を縮めますか？", { dialog = null }) },
             text = {
                 val cut = DayText.range(v.startDate, d.days, v.days - 1)
                 val wishN = ui.wishes.keys.count { (VioKey.dayOf(it) ?: -1) >= d.days }
@@ -244,7 +244,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 })
             },
             dismissButton = { DialogDismissButton(onClick = { dialog = null }, text = "削除しない") },
-            title = { Text("${d.label} を削除しますか？") },
+            title = { DialogHeader("${d.label} を削除しますか？", { dialog = null }) },
             // [design-review] 「インデックス」は開発者向けの内部語（operator_ux.md §1「専門用語を使わない」）。
             //   ふつうの言葉に置き換え、参照件数(note)は独立の文として挟む。
             text = { Text("${d.label} を削除します。${d.note}残りの設定は自動で調整されます。元に戻すで取り消せます。") },
