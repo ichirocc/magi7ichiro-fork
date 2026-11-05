@@ -1231,7 +1231,10 @@ object V6FinalPort {
             ), MirrorLog(
                 level = "I", tag = "必須内訳",
                 message = "必須 ${finalReport.hard}件 = 希望どうしのぶつかり ${hardWishFloor}件 + それ以外 ${finalReport.hard - hardWishFloor}件",
-            ))
+            )) + listOfNotNull(runCatching {
+                // [#50 P1] 重みを使わない比べ方の鍵を並べて出すだけ（採否には使わない）。
+                MirrorLog(level = "I", tag = "段の鍵", message = TierObjective.logLine(TierObjective.key(cachedProblem(state), finalSched, finalReport)))
+            }.getOrNull())
         }
         // [3.387.0/3.388.0] 並行アクセスの実レースは実機でしか確かめられない、と記録してきた項目の
         //   唯一の実測点。`publishLiveBest` の CAS が再試行した回数＝別スレッドと同時に publish が
