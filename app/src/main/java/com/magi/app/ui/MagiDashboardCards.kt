@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -374,6 +375,26 @@ internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShort
 
 // 着地先（EditLanding・landingFor・landingButtonLabel）は ui/EditLanding.kt（3.644.0 でつくる前の確認と共有）。
 
+/** 変わるセル 1 行: 名前と日付、前（淡い）→ 後（強調）のカプセル。読み上げは 1 文（[previewRowLine]）。 */
+@Composable
+private fun ChangeCapsuleRow(r: ChangeRow) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clearAndSetSemantics { contentDescription = previewRowLine(r.staff, r.date, r.before, r.after) },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(r.staff, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(r.date, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
+        }
+        Surface(color = cs.surfaceContainerHighest, shape = MagiCorners.capsule) {
+            Text(r.before, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+        }
+        Text("→", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+        Surface(color = cs.primaryContainer, shape = MagiCorners.capsule) {
+            Text(r.after, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+        }
+    }
+}
+
 /** [3.644.0/UX-03] 複数人の入替を当てる前に、変わる人・日・勤務（前 → 後）と必須の増減を一覧で見せる。当てるのは確認のあと（元に戻せる）。 */
 @Composable
 internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, consulted: Boolean = false, onConsult: () -> Unit = {}) {
@@ -387,7 +408,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 // [3.713.0] 最初は「Nか所変わります」と変わるセルの行だけ。目的・回数・判断材料・注記は「詳しく」の中。
                 Text(previewCountLine(p.suggestion.ops.size), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                p.rows.forEach { r -> Text(previewRowLine(r.staff, r.date, r.before, r.after), style = MaterialTheme.typography.bodyMedium) }
+                p.rows.forEach { r -> ChangeCapsuleRow(r) }
                 var more by remember { mutableStateOf(false) }
                 MagiTextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { DisclosureText(DIAG_DETAILS_LABEL, more) }
                 if (more) {
