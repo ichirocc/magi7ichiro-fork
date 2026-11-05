@@ -55,10 +55,10 @@ object MembraneCellLns {
         return Result(best, applied, tried, logs)
     }
 
-    /** OWA の順: 個人の違反（盤面の印の数）が多い職員から。同数は添字順。 */
+    /** OWA の順: 個人の違反（盤面の印と回数の印の数）が多い職員から。同数は添字順。2 種の印は別々に数える（同じ文字列の鍵でも別の印）。 */
     private fun staffOrder(p: Problem, rep: ViolationReport): List<Int> {
         val load = IntArray(p.S)
-        for (key in rep.violations.keys + rep.countViolations.keys) { val i = key.substringBefore(',').toIntOrNull() ?: continue; if (i in 0 until p.S) load[i]++ }
+        for (key in rep.violations.keys.asSequence() + rep.countViolations.keys.asSequence()) { val i = key.substringBefore(',').toIntOrNull() ?: continue; if (i in 0 until p.S) load[i]++ }
         return (0 until p.S).sortedWith(compareBy({ -load[it] }, { it }))
     }
 
