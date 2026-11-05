@@ -607,7 +607,7 @@ def find_p13():
 # [2026-10-28] P14: 4dp 刻みから外れた余白（spacedBy・padding・Spacer の寸法、ラチェット）。ユーザー「画面の統一感を揃える」→
 #   6・10dp を 8dp へ、14dp を 12dp へ寄せた。残りは部品の内側の寸法（削除アイコン 32dp の内側 7dp・札の内側・勤務表のセル・
 #   日の見出し・集計の表・上部の帯の高さ）＝意図して残す。2dp 以下（細線・印の余白）は数えない。
-P14_BASELINE = 20
+P14_BASELINE = 16
 RE_P14_CALL = re.compile(r'(spacedBy|padding|height|width|size)\(([^)]*?)\)')
 RE_P14_NUM = re.compile(r'(?<![\d.])(\d+(?:\.\d+)?)\.dp')
 
