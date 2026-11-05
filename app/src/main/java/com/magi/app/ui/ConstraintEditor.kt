@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -151,8 +152,9 @@ private fun SeqFamilyGrouped(
                         label = { Text(next) },
                         trailingIcon = {
                             // [a11y] 削除は × の onClick で。チップ本体のタップは変更（行操作と同じ2操作を保つ）。
-                            Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除",
-                                modifier = Modifier.size(32.dp).clickable(enabled = enabled) { onDelete(idx) }.padding(7.dp))
+                            IconButton(onClick = { onDelete(idx) }, enabled = enabled) {
+                                Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除", modifier = Modifier.size(18.dp))
+                            }
                         },
                     )
                 }
@@ -382,7 +384,7 @@ private fun ConstraintDialog(
             val isDup = dup(listOf(gk, sk, l, u))
             Shell("スキルグループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { onEvent(MagiEvent.Constraint.AddCons41s(gk, sk, l, u)) } },
                 gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup, dirty = listOf(gk, sk, l, u) != remember { listOf(gk, sk, l, u) }) {
-                Picker("スキル", skills, gk) { gk = it }
+                Picker("スキルグループ", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumField("下限(空=0)", l, Modifier.weight(1f), isError = bad) { l = it }
@@ -399,9 +401,9 @@ private fun ConstraintDialog(
             val isDup = dup(listOf(g1, s1, g2, s2))
             Shell("スキルグループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { onEvent(MagiEvent.Constraint.AddCons42s(g1, g2, s1, s2)) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup, dirty = listOf(g1, s1, g2, s2) != remember { listOf(g1, s1, g2, s2) }) {
-                Picker("スキル1", skills, g1) { g1 = it }
+                Picker("スキルグループ1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
-                Picker("スキル2", skills, g2) { g2 = it }
+                Picker("スキルグループ2", skills, g2) { g2 = it }
                 Picker("シフト2", shifts, s2) { s2 = it }
                 InputHint(DUPLICATE_ROW_HINT.takeIf { isDup })
             }

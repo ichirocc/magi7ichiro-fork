@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -154,8 +155,9 @@ internal fun WishCard(
                             onClick = { onDaysSel(e.days.toSet()) },
                             label = { Text("${e.days.joinToString(",")}日 ${e.kigou.joinToString("・")}以外") },
                             trailingIcon = {
-                                Icon(Icons.Filled.Close, contentDescription = "拡張希望を削除",
-                                    modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveExtWish(e.index)) }.padding(7.dp))
+                                IconButton(onClick = { onEvent(MagiEvent.Condition.RemoveExtWish(e.index)) }, enabled = !ui.running) {
+                                    Icon(Icons.Filled.Close, contentDescription = "拡張希望を削除", modifier = Modifier.size(18.dp))
+                                }
                             },
                         )
                     }
@@ -180,8 +182,9 @@ internal fun WishCard(
                                 onClick = { onStaffSel(r.i); onDaysSel(emptySet()) },
                                 label = { Text("${r.day}日 ${r.kigou}") },
                                 trailingIcon = {
-                                    Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveWish(r.i, r.j)) }.padding(7.dp))
+                                    IconButton(onClick = { onEvent(MagiEvent.Condition.RemoveWish(r.i, r.j)) }, enabled = !ui.running) {
+                                        Icon(Icons.Filled.Close, contentDescription = "削除", modifier = Modifier.size(18.dp))
+                                    }
                                 },
                             )
                         }
