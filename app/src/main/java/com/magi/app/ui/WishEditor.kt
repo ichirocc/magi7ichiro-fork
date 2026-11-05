@@ -228,16 +228,7 @@ private fun WishApplyPanel(
             CountPill("${days.size}日選択中")
             Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("希望にする" to false, "以外にする" to true).forEach { (label, mode) ->
-                val s = extMode == mode
-                Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                    .clickable { extMode = mode }, contentAlignment = Alignment.Center) {
-                    Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant, fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
-                }
-            }
-        }
+        MagiSegmentedControl(options = listOf("希望にする", "以外にする"), selected = if (extMode) 1 else 0, onSelect = { extMode = it == 1 })
         if (extMode) {
             ExtWishPanel(ui, onEvent, staffIdx, days, shifts, wishDays, extSel, { k -> extSel = if (k in extSel) extSel - k else extSel + k }, onCancel, onDone)
             return@Column
