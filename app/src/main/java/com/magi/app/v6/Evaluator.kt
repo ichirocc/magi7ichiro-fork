@@ -44,6 +44,8 @@ internal fun c42PairCount(sameSet: Boolean, n1: Int, n2: Int): Long =
  * native speed absorbs the cost. Δ-evaluation is a later optimization.
  */
 class Evaluator(private val p: Problem) {
+    /** 採点の重み（方式で切り替わる、[ObjectiveWeights]）。作った時点の方式で固定。 */
+    private val w = ObjectiveWeights.soft()
 
     fun fullEval(a: Array<IntArray>): Long {
         val v = fullEvalParts(a)
@@ -89,7 +91,7 @@ class Evaluator(private val p: Problem) {
                     }
                 }
             }
-            soft += raw * 90L; record("c1", raw)
+            soft += raw * w.c1; record("c1", raw)
         }
 
         // c2: per-staff total of a shift must reach count [3.522.0] 重み1→4。
@@ -103,7 +105,7 @@ class Evaluator(private val p: Problem) {
                     raw += if (z < c.count) 1L else 0L
                 }
             }
-            soft += raw * 4L; record("c2", raw)
+            soft += raw * w.c2; record("c2", raw)
         }
 
         // c41: per-day, count of (group, shift) must lie in [l, u]
@@ -116,7 +118,7 @@ class Evaluator(private val p: Problem) {
                     raw += if (z < c.l || c.u < z) 1L else 0L
                 }
             }
-            soft += raw * 9L; record("c41", raw)
+            soft += raw * w.c41; record("c41", raw)
         }
 
         // c42: per-day, (g1,s1) co-occurring with (g2,s2) is penalized per pair
@@ -132,7 +134,7 @@ class Evaluator(private val p: Problem) {
                     raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
                 }
             }
-            soft += raw * 9L; record("c42", raw)
+            soft += raw * w.c42; record("c42", raw)
         }
 
         // c41s / c42s: スキルグループ版（ssk = スキル群index。既存 sgrp とは独立）。[3.522.0] 重み1→6。
@@ -145,7 +147,7 @@ class Evaluator(private val p: Problem) {
                     raw += if (z < c.l || c.u < z) 1L else 0L
                 }
             }
-            soft += raw * 10L; record("c41s", raw)
+            soft += raw * w.c41s; record("c41s", raw)
         }
         run {
             var raw = 0L
@@ -159,16 +161,16 @@ class Evaluator(private val p: Problem) {
                     raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
                 }
             }
-            soft += raw * 10L; record("c42s", raw)
+            soft += raw * w.c42s; record("c42s", raw)
         }
 
         // c3 family — [統一] UnifiedViolationChecker と同じ重みを soft に適用。
         // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
         // [3.522.0] c3=3→15・c3m=2→10・c3mn=30→90（全面見直し）。[3.556.0] c3m 10→6、c41/c42 1→9、c41s/c42s 6→10（HF77 明示指示）。
-        run { val raw = c3check(a, p.cons3, false); soft += raw * 15L; record("c3", raw) }
+        run { val raw = c3check(a, p.cons3, false); soft += raw * w.c3; record("c3", raw) }
         run { val raw = c3check(a, p.cons3n, true); hard1 += raw; record("c3n", raw) }    // forbidden -> display HARD (count)
-        run { val raw = c3check(a, p.cons3m, false); soft += raw * 6L; record("c3m", raw) }
-        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 25L; record("c3mn", raw) }
+        run { val raw = c3check(a, p.cons3m, false); soft += raw * w.c3m; record("c3m", raw) }
+        run { val raw = c3check(a, p.cons3mn, true); soft += raw * w.c3mn; record("c3mn", raw) }
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         run {
@@ -217,7 +219,7 @@ class Evaluator(private val p: Problem) {
                 val t = p.apt[i][k]
                 if (t >= 0) rawApt += kotlin.math.abs(n - t).toLong()
             }
-            soft += rawLow * 120L + rawHigh * 50L + rawApt * 4L
+            soft += rawLow * w.low + rawHigh * w.high + rawApt * w.apt
             record("low", rawLow); record("high", rawHigh); record("apt", rawApt)
         }
 
@@ -231,7 +233,7 @@ class Evaluator(private val p: Problem) {
                 if (mem.size < 2) continue
                 for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k, members = false) { x -> ssn[x][k] }.total.toLong()
             }
-            soft += raw * 5L; record("fair", raw)
+            soft += raw * w.fair; record("fair", raw)
         }
 
         // [統一weekly] 7日周期のシフト平準化 SOFT。職員ごと**シフトごと**に、そのシフトが入る日の
@@ -244,7 +246,7 @@ class Evaluator(private val p: Problem) {
                 for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) wd[k][(p.dow0 + j) % 7]++ }
                 for (k in 0 until K) raw += weeklyDevOfBucket(wd[k]).toLong()
             }
-            soft += raw * 2L; record("weekly", raw)
+            soft += raw * w.weekly; record("weekly", raw)
         }
 
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。共有ヘルパで Δ/Checker と同式。
@@ -260,7 +262,7 @@ class Evaluator(private val p: Problem) {
                     rawCovO += p.covOCell(k, j, dsn).toLong()
                 }
             }
-            hard1 += covU; soft += rawCovO * 10L; record("covU", covU); record("covO", rawCovO)
+            hard1 += covU; soft += rawCovO * w.covO; record("covU", covU); record("covO", rawCovO)
         }
 
         return longArrayOf(hard1, soft)

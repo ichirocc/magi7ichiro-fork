@@ -150,7 +150,7 @@ internal object WishIslandPolish {
         }
 
         /** 重みは最低 1（重み 0 の族も「違反がある」事実として数える）。 */
-        private fun weightOfClass(cls: String): Long = MirrorKeys.weightOf(cls.removePrefix("vio-")).toLong().coerceAtLeast(1L)
+        private fun weightOfClass(cls: String): Long = ObjectiveWeights.of(cls.removePrefix("vio-")).toLong().coerceAtLeast(1L)
 
         // ---- 手の適用・巻き戻し・事前枝刈り ----
         private fun apply(m: Move): IntArray {

@@ -6,17 +6,12 @@ package com.magi.app.v6
  * 別に保つ（それぞれ ObjectiveParityTest と native-parity が一致を守る）。
  */
 internal object PenaltyWeights {
-    @JvmField val LOW: Long = w("low")
-    @JvmField val HIGH: Long = w("high")
-    @JvmField val APT: Long = w("apt")
-    @JvmField val FAIR: Long = w("fair")
-    @JvmField val WEEKLY: Long = w("weekly")
-    @JvmField val COVU: Long = w("covU")
-    @JvmField val COVO: Long = w("covO")
-
-    private fun w(family: String): Long {
-        val v = MirrorKeys.weights.getValue(family)
-        check(v == Math.floor(v)) { "$family の重み $v は整数でない（見積りは Long で掛ける）" }
-        return v.toLong()
-    }
+    // [#50] 方式（[ObjectiveWeights]）で切り替わるので、毎回いまの表から読む（表は方式ごとに 1 つだけ作ってある）。
+    val LOW: Long get() = ObjectiveWeights.soft().low
+    val HIGH: Long get() = ObjectiveWeights.soft().high
+    val APT: Long get() = ObjectiveWeights.soft().apt
+    val FAIR: Long get() = ObjectiveWeights.soft().fair
+    val WEEKLY: Long get() = ObjectiveWeights.soft().weekly
+    val COVU: Long get() = ObjectiveWeights.soft().covU
+    val COVO: Long get() = ObjectiveWeights.soft().covO
 }

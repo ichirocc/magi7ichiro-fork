@@ -15,6 +15,8 @@ package com.magi.app.v6
  * differential test (zero mismatches on both preview and committed score).
  */
 class DeltaEvaluator(private val p: Problem) {
+    /** 採点の重み（[Evaluator] と同じ方式・同じ表）。 */
+    private val w = ObjectiveWeights.soft()
 
     private val S = p.S; private val T = p.T; private val K = p.K
     private val a: Array<IntArray>
@@ -155,7 +157,7 @@ class DeltaEvaluator(private val p: Problem) {
         val hard = s / SCORE_HARD_UNIT
         val raw = familyRaw()
         var hardW = 0.0
-        for (f in MirrorKeys.hard) hardW += (raw[f] ?: 0L) * MirrorKeys.weightOf(f)
+        for (f in MirrorKeys.hard) hardW += (raw[f] ?: 0L) * ObjectiveWeights.of(f)
         val (lo, hi) = rangeRaw()
         return longArrayOf(hard, (s - hard * SCORE_HARD_UNIT) + hardW.toLong(), raw.values.sum() + lo + hi)
     }
@@ -184,7 +186,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
         ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * 90 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 25 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
+    ): Long = c1 * w.c1 + c2 * w.c2 + c41 * w.c41 + c42 * w.c42 + c41s * w.c41s + c42s * w.c42s + c3 * w.c3 + c3m * w.c3m + c3mn * w.c3mn + ct + apt * w.apt + fair * w.fair + weekly * w.weekly + covO * w.covO
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {
@@ -449,8 +451,8 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×120 / high=amount×50。[3.522.0] low 90→120。2026-10-30 high 25→50。
         val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
         var v = 0L
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 120L
-        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 50L
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * w.low
+        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * w.high
         return v
     }
 

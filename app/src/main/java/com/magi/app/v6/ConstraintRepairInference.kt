@@ -7,7 +7,7 @@ package com.magi.app.v6
 internal object ConstraintRepairInference {
     fun temporarySoftDebtAllowance(
         report: ViolationReport, family: String,
-        weightOf: (String) -> Double = MirrorKeys::weightOf, temporaryDebtFactor: Double = 2.0,
+        weightOf: (String) -> Double = ObjectiveWeights::of, temporaryDebtFactor: Double = 2.0,
     ): Long {
         if (family in MirrorKeys.hard) return 0L
         val v = report.breakdown[family] ?: 0

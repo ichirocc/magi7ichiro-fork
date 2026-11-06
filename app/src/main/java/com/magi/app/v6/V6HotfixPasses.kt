@@ -236,6 +236,7 @@ object PolishGate {
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
         "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
+        "objectiveMethod" to ObjectiveWeights.method.name,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -258,6 +259,7 @@ object PolishGate {
         
         b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }
         b("ejectionPipelineShallowOnly") { EjectionChainPipeline.shallowOnly = it }
+        (m["objectiveMethod"] as? String)?.let { n -> ObjectiveMethod.entries.firstOrNull { it.name == n }?.let { ObjectiveWeights.method = it } }
     }
 }
 

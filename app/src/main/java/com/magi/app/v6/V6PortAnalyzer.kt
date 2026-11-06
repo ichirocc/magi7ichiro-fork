@@ -850,8 +850,8 @@ object V6PortAnalyzer {
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
-                val weighted = (after - firesBefore) * MirrorKeys.weightOf("c3n") +
-                    prefCost * MirrorKeys.weightOf("pref") + c3wDelta * MirrorKeys.weightOf("c3w") - extGain * MirrorKeys.weightOf("extWish")
+                val weighted = (after - firesBefore) * ObjectiveWeights.of("c3n") +
+                    prefCost * ObjectiveWeights.of("pref") + c3wDelta * ObjectiveWeights.of("c3w") - extGain * ObjectiveWeights.of("extWish")
                 if (prefCost > 0 && !departureHole && after + prefCost + otherHard == firesBefore && weighted < 0) scoreImproves = true
             } else {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。

@@ -101,10 +101,10 @@ internal object C1EjectionChainPolish {
     private fun familyWeighted(de: DeltaEvaluator): LongArray {
         val raw = de.familyRaw()
         val out = LongArray(FAMILIES.size + 2)
-        for ((idx, f) in FAMILIES.withIndex()) out[idx] = ((raw[f] ?: 0L) * MirrorKeys.weightOf(f)).toLong()
+        for ((idx, f) in FAMILIES.withIndex()) out[idx] = ((raw[f] ?: 0L) * ObjectiveWeights.of(f)).toLong()
         val (lo, hi) = de.rangeRaw()
-        out[FAMILIES.size] = (lo * MirrorKeys.weightOf("low")).toLong()
-        out[FAMILIES.size + 1] = (hi * MirrorKeys.weightOf("high")).toLong()
+        out[FAMILIES.size] = (lo * ObjectiveWeights.of("low")).toLong()
+        out[FAMILIES.size + 1] = (hi * ObjectiveWeights.of("high")).toLong()
         return out
     }
     private val FAMILIES = listOf("c1", "c2", "c41", "c42", "c41s", "c42s", "c3", "c3n", "c3m", "c3mn",
@@ -240,7 +240,7 @@ internal object C1EjectionChainPolish {
                 }
                 if (out.isNotEmpty()) lists.add(f to out.distinctBy { Triple(it.i, it.j, it.k) })
             }
-            lists.sortWith(compareBy<Pair<String, List<Seed>>>({ if (it.first in MirrorKeys.hard) 0 else 1 }, { -MirrorKeys.weightOf(it.first) }, { it.first }))
+            lists.sortWith(compareBy<Pair<String, List<Seed>>>({ if (it.first in MirrorKeys.hard) 0 else 1 }, { -ObjectiveWeights.of(it.first) }, { it.first }))
             val merged = ArrayList<Seed>()
             var n = 0
             while (true) {
