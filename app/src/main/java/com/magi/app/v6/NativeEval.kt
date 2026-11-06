@@ -54,10 +54,13 @@ object NativeEval {
             val b = p.bucket.getOrNull(gg) ?: IntArray(0)
             bucket.add(b.size); b.forEach { bucket.add(it) }
         }
-        return NativeBridge.nativeCreateProblem(
+        val h = NativeBridge.nativeCreateProblem(
             meta, staff, canDo, wish, needs, ranges,
             cons.toIntArray(), c3.toIntArray(), bucket.toIntArray(),
         )
+        // [#50] 採点の重みは方式で切り替わる（Kotlin の評価器と同じ表を渡す。既定の方式なら C++ の既定と同じ値）。
+        if (h != 0L) NativeBridge.nativeSetSoftWeights(h, ObjectiveWeights.soft().toLongArray())
+        return h
     }
 
     fun flatten(schedule: Array<IntArray>): IntArray {

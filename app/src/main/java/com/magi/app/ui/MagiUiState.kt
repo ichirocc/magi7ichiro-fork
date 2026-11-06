@@ -4,6 +4,7 @@ import com.magi.app.v6.CoverageDiagnosis
 import com.magi.app.v6.ForbiddenRunDiagnosis
 import com.magi.app.v6.C1PlateauDiagnosis
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.ObjectiveMethod
 import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.V6PortReport
 
@@ -113,6 +114,7 @@ data class UiState(
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val aptFairToleranceUnguarded: Boolean = false,  // !AptFairPolish.heavySoftGuard（測定用・既定OFF）。じっくりの容認 6% でだけ効く。保存しない
+    val objectiveMethod: ObjectiveMethod = ObjectiveMethod.WEIGHTS,  // ObjectiveWeights.method（直す順番、試験）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val membraneCellLns: Boolean = true,  // PolishGate.membraneCellLns（膜の細胞 LNS）。保存しない

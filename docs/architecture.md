@@ -207,6 +207,7 @@ ViewModel ハブ
   休が余るとき、前後の窓を職員ごとの窓内並べ替えで組み直す。外側で夜勤型シフト（翌日が自分か休に限られる＝2 長の禁止連続から判定）の
   担当列を列挙（対象日の強制休が少ない順）、窓の外の同日交換で夜勤を人から人へ移す候補（1〜3 日）も試し、内側で日ごとのビーム
   （推定は日内で決まる族だけ）、完成盤面は正式チェッカーで keep-best。最終段・退避（CovORelief）の前。C# は `V6HotfixPasses.RestZeroLns.cs`。
+- `ObjectiveWeights.kt` — **採点の重みの方式**（3.727.37）。`WEIGHTS`＝`MirrorKeys.weights`（既定）／`PRIORITY`＝T1 200・T2 20・T3 1。評価器・差分評価・チェッカーの weightedScore・研磨/修復の見積り（`PenaltyWeights`・`ObjectiveWeights.of`）・C++（`SoftW`、`nativeSetSoftWeights`）が読む。表示の重み（色・重なり）は `MirrorKeys.weights` のまま。
 - `TierObjective.kt` — **重みを使わない目的関数の P1**（3.727.36、`docs/weightless_objective.md` §4・§8）。段の鍵（許容ライン 0）・T1 の職員ごとの不満・fair の leximin を出し、作成の終わりのログ「段の鍵」に並べる。**採否には使わない**（出力不変）。職員ごとの量はチェッカーと同じ数え方（`TierObjectiveTest` が合計の一致を固定）。
 - `MembraneCellLns.kt` — **膜の細胞 LNS**（3.727.19、3.727.20 で既定 ON＝`PolishGate.membraneCellLns`）。個人の違反が多い職員＋同じグループの職員 5 名×全期間を細胞にして焼きなまし、`betterReport` で良いときだけ書き戻す後処理の最終段。設計と測定は `docs/membrane_search.md` §10・§11。
 - `SeesawRelink.kt` — **シーソーの Path Relinking**（3.727.22、既定 OFF＝`PolishGate.seesawRelink`、`docs/seesaw.md` §6.3）。後処理の結果から「他の案」の各盤面へ歩き、`betterReport` で良ければ本命を差し替え、本命に優越されない交換の盤面を「他の案」にする（`V6FinalPort` が後処理の直後に呼ぶ）。
