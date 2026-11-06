@@ -34,7 +34,7 @@ object ViolationComponentRepair {
             fun of(report: ViolationReport, changedCells: Int): QualityVector {
                 var hardW = 0.0; var softW = 0.0
                 for ((k, v) in report.breakdown) {
-                    val c = v * MirrorKeys.weightOf(k)
+                    val c = v * ObjectiveWeights.of(k)
                     if (k in MirrorKeys.hard) hardW += c else softW += c
                 }
                 return QualityVector(report.hard, hardW, softW, report.breakdown["pref"] ?: 0, changedCells)

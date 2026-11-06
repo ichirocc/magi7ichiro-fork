@@ -58,5 +58,37 @@ TEST_SRC=$(find "$ROOT/app/src/test/java" -name '*.kt')
 echo "== compile tests ($(echo "$TEST_SRC" | wc -l) files)"
 kotlinc -cp "$CP:$OUT/main" -Xfriend-paths="$OUT/main" -d "$OUT/test" $TEST_SRC | grep -E "^e: |error:|exception" | head -40; [ ${PIPESTATUS[0]} -eq 0 ] || { echo "TEST COMPILE FAILED"; exit 1; }
 CLASSES=$(cd "$OUT/test" && find . -name '*Test.class' ! -name '*$*' | sed 's#^\./##; s#\.class$##; s#/#.#g' | sort)
-echo "== run $(echo "$CLASSES" | wc -l) test classes"
-cd "$ROOT/app" && java -Xmx3g -cp "$CP:$OUT/main:$OUT/test:$ROOT/app/src/test/resources" org.junit.runner.JUnitCore $CLASSES 2>&1 | grep -vE "^\s*at |^$|JAVA_TOOL" | tail -8; rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "JUNIT FAILED (exit $rc)"; exit "$rc"
+# クラスを JVM の本数（既定はコア数、MAGI_HOST_SHARDS で変える）へ振り分けて並列に流す。重いものから順に、いちばん空いた本へ
+#   （所要は test_times.tsv の実測。無いクラスは 1 秒と見る）。1 本だけなら従来どおり 1 つの JVM で順に流す。
+SHARDS=${MAGI_HOST_SHARDS:-$(nproc 2>/dev/null || echo 1)}
+echo "== run $(echo "$CLASSES" | wc -l) test classes in $SHARDS JVM(s)"
+MAGI_CLASSES="$CLASSES" python3 - "$HERE/test_times.tsv" "$SHARDS" "$OUT" <<'PY'
+import os, sys
+times = {}
+try:
+    for line in open(sys.argv[1], encoding='utf-8'):
+        ms, cls = line.rstrip('\n').split('\t'); times[cls] = int(ms)
+except FileNotFoundError:
+    pass
+n = max(1, int(sys.argv[2])); out = sys.argv[3]
+classes = sorted(os.environ['MAGI_CLASSES'].split(), key=lambda c: -times.get(c, 1000))
+bins = [[0, []] for _ in range(n)]
+for c in classes:
+    b = min(bins, key=lambda x: x[0]); b[0] += times.get(c, 1000); b[1].append(c)
+for i, (_, cs) in enumerate(bins):
+    open(f"{out}/shard{i}.txt", 'w').write('\n'.join(cs))
+PY
+cd "$ROOT/app" || exit 1
+pids=()
+for ((i = 0; i < SHARDS; i++)); do
+  [ -s "$OUT/shard$i.txt" ] || continue
+  java -Xmx3g -cp "$CP:$OUT/main:$OUT/test:$ROOT/app/src/test/resources" org.junit.runner.JUnitCore $(cat "$OUT/shard$i.txt") > "$OUT/shard$i.log" 2>&1 &
+  pids+=("$i:$!")
+done
+rc=0
+for e in "${pids[@]}"; do
+  i=${e%%:*}; wait "${e#*:}" || rc=1
+  echo "-- shard $i: $(grep -E "^OK \(|^Tests run:" "$OUT/shard$i.log" | tail -1)"
+  if grep -q "^Tests run:.*Failures: [1-9]" "$OUT/shard$i.log"; then grep -vE "^\s*at |^$|JAVA_TOOL" "$OUT/shard$i.log" | grep -A3 -E "^[0-9]+\) " | head -40; fi
+done
+[ "$rc" -eq 0 ] || echo "JUNIT FAILED"; exit "$rc"

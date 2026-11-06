@@ -39,7 +39,7 @@ internal fun splitPrimary(t: FixTarget, schedule: List<List<Int>>, ops: List<Fix
 /** 族の重みつきの差（後 − 前）。正＝後のほうが重い。 */
 private fun weightedDelta(before: ViolationReport, after: ViolationReport): Map<String, Double> =
     (before.breakdown.keys + after.breakdown.keys).associateWith { k ->
-        ((after.breakdown[k] ?: 0) - (before.breakdown[k] ?: 0)) * (MirrorKeys.weights[k] ?: 0.0)
+        ((after.breakdown[k] ?: 0) - (before.breakdown[k] ?: 0)) * (com.magi.app.v6.ObjectiveWeights.table()[k] ?: 0.0)
     }
 
 /** 違反の鍵が入り口の範囲の中か（個人の回数＝その職員、日の人員＝その日／まとめて見る日々）。 */
@@ -77,7 +77,7 @@ internal fun explainExtras(state: MagiState, s: Array<IntArray>, target: FixTarg
         val without = UnifiedViolationChecker.check(state, apply(sug.ops - g.toSet()))
         val back = ViolationIdentity.keys(without) - fullKeys
         val comp = back.filter { it in introduced }
-        val w: (ViolationKey) -> Double = { MirrorKeys.weights[it.family] ?: 0.0 }
+        val w: (ViolationKey) -> Double = { com.magi.app.v6.ObjectiveWeights.table()[it.family] ?: 0.0 }
         if (comp.isNotEmpty()) {
             val top = comp.maxBy(w)
             val n = comp.count { it.family == top.family }
@@ -127,7 +127,7 @@ internal fun extraReasonLines(e: FixExplanation, schedule: List<List<Int>>, staf
 /** 必須違反が残っているのに案が必須を変えないときの添え書き（重い要調整が減るだけなら件数が同じことも言う）。 */
 internal fun hardUnchangedLines(s: FixSuggestion, hardRemains: Boolean): List<String> {
     if (!hardRemains || s.deltaHard != 0) return emptyList()
-    val weighted = s.diff.sumOf { (k, d) -> d * (MirrorKeys.weights[k] ?: 0.0) }
+    val weighted = s.diff.sumOf { (k, d) -> d * (com.magi.app.v6.ObjectiveWeights.table()[k] ?: 0.0) }
     return listOf("必須違反は変わりません（要調整だけが変わります）") +
         (if (s.deltaTotal == 0 && weighted < 0) listOf("件数は同じで、重い要調整が減ります") else emptyList())
 }

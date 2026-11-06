@@ -301,15 +301,15 @@ internal object C3RotationPolish {
             while (j <= p.T - c.day1) {
                 var z = 0
                 for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
-                if (z < c.day2) { total++; weighted += MirrorKeys.weightOf("c1") }
+                if (z < c.day2) { total++; weighted += ObjectiveWeights.of("c1") }
                 j++
             }
         }
-        for (c in p.cons2) if (p.canDo(i, c.shiftIdx) && cnt[c.shiftIdx] < c.count) { total++; weighted += MirrorKeys.weightOf("c2") } // c2
+        for (c in p.cons2) if (p.canDo(i, c.shiftIdx) && cnt[c.shiftIdx] < c.count) { total++; weighted += ObjectiveWeights.of("c2") } // c2
         for (k in 0 until p.K) {                                  // low/high: 回数レンジ(不足/超過「量」を加算)
             val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val n = cnt[k]
-            if (lo != Int.MIN_VALUE && lo != 0 && p.canDo(i, k) && n < lo) { val d = (lo - n).toLong(); total += d; weighted += d * MirrorKeys.weightOf("low") }
-            if (hi != Int.MAX_VALUE && n > hi) { val d = (n - hi).toLong(); total += d; weighted += d * MirrorKeys.weightOf("high") }
+            if (lo != Int.MIN_VALUE && lo != 0 && p.canDo(i, k) && n < lo) { val d = (lo - n).toLong(); total += d; weighted += d * ObjectiveWeights.of("low") }
+            if (hi != Int.MAX_VALUE && n > hi) { val d = (n - hi).toLong(); total += d; weighted += d * ObjectiveWeights.of("high") }
         }
         val c3nC = c3FamCount(p, sched, i, p.cons3n, true)        // c3n は HARD
         val c3C = c3FamCount(p, sched, i, p.cons3, false)
@@ -321,11 +321,11 @@ internal object C3RotationPolish {
             if (p.hasExtBan && p.extBanned(i, j, sched[i][j])) extC++
         }
         total += c3nC + c3C + c3mC + c3mnC + c3wC + extC
-        weighted += c3wC.toDouble() * MirrorKeys.weightOf("c3w") + extC.toDouble() * MirrorKeys.weightOf("extWish") +
-            c3nC.toDouble() * MirrorKeys.weightOf("c3n") +
-            c3C.toDouble() * MirrorKeys.weightOf("c3") +
-            c3mC.toDouble() * MirrorKeys.weightOf("c3m") +
-            c3mnC.toDouble() * MirrorKeys.weightOf("c3mn")
+        weighted += c3wC.toDouble() * ObjectiveWeights.of("c3w") + extC.toDouble() * ObjectiveWeights.of("extWish") +
+            c3nC.toDouble() * ObjectiveWeights.of("c3n") +
+            c3C.toDouble() * ObjectiveWeights.of("c3") +
+            c3mC.toDouble() * ObjectiveWeights.of("c3m") +
+            c3mnC.toDouble() * ObjectiveWeights.of("c3mn")
         return StaffObjective(c3nC + c3wC + extC, weighted, total)
     }
 

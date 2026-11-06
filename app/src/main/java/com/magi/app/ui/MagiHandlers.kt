@@ -151,6 +151,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetNativeParity -> vm.setNativeParity(e.on)
             is MagiEvent.Settings.SetSearchStrength -> vm.setSearchStrength(e.strength)
             is MagiEvent.Settings.SetAptFairToleranceUnguarded -> vm.setAptFairToleranceUnguarded(e.on)
+            is MagiEvent.Settings.SetObjectiveMethod -> vm.setObjectiveMethod(e.method)
             is MagiEvent.Settings.SetEjectionChain -> vm.setEjectionChain(e.mode)
             is MagiEvent.Settings.SetEjectionChainSeconds -> vm.setEjectionChainSeconds(e.seconds)
             is MagiEvent.Settings.SetEjectionChainScope -> vm.setEjectionChainScope(e.scope)

@@ -72,6 +72,7 @@ import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.V6FinalPort
 import com.magi.app.v6.CoverageVerdict
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.ObjectiveMethod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -362,6 +363,20 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
         }
         Column(Modifier.fillMaxWidth()) {
+            Text("直す順番", style = MaterialTheme.typography.titleSmall)
+            Text(OBJECTIVE_METHOD_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ObjectiveMethod.values().forEach { m ->
+                    val label = objectiveMethodLabel(m)
+                    if (ui.objectiveMethod == m) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetObjectiveMethod(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetObjectiveMethod(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth()) {
             Text("玉突きで直す（月全体）", style = MaterialTheme.typography.titleSmall)
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す（行の間も 8dp 空ける＝押し間違いを防ぐ）。
@@ -440,6 +455,11 @@ internal const val SEESAW_RELINK_NOTE = "仕上げのあと、他の案へ向け
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"
 internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
+internal fun objectiveMethodLabel(m: ObjectiveMethod): String = when (m) {
+    ObjectiveMethod.WEIGHTS -> "重み（今）"
+    ObjectiveMethod.PRIORITY -> "優先順位（試験）"
+}
+internal const val OBJECTIVE_METHOD_NOTE = "優先順位: 個人の回数・期間の制約を先に、連続の希望・グループの人数を次に、適切回数や偏りは最後に直します。必ず守るものは同じです"
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {

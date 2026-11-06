@@ -1358,6 +1358,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 容認 6% で重い違反の増加も許す → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setObjectiveMethod(m: com.magi.app.v6.ObjectiveMethod) {
+        com.magi.app.v6.ObjectiveWeights.method = m
+        _ui.update { it.copy(objectiveMethod = m) }
+        logOp("I", "設定変更: 直す順番 → ${objectiveMethodLabel(m)}")
+        // 点数の重みが変わる＝今の勤務表の weightedScore と提案の並びを取り直す。
+        refreshCheck()
+    }
+
     fun setEjectionChain(mode: EjectionChainMode) {
         mode.apply()
         _ui.update { it.copy(ejectionChain = mode) }

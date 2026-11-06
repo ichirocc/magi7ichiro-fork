@@ -706,7 +706,7 @@ static int runMarginalCostTest() {
         std::vector<int> countsCopy = counts;
 
         const int bucket = (p.dow0 + j) % 7;
-        long long mWeekly = weeklyMarginalN(wd.data(), p.K, bucket, oldK, newK);
+        long long mWeekly = weeklyMarginalN(wd.data(), p.K, bucket, oldK, newK, p.w.weekly);
         long long mFair = fairMarginalN(p, i, oldK, -1, counts)
                         + fairMarginalN(p, i, newK, 1, counts);
 
@@ -1034,6 +1034,19 @@ int main(int argc, char** argv) {
             std::vector<int> noisy = board;
             injectRealisticNoise(p, noisy, rng);
             runParityLoop(p, noisy, "noisy", seed + 100, seed % 2 == 1, 40000, totalMoves, mismatches);
+        }
+    }
+    // [#50] 優先順位の方式（T1=200・T2=20・T3=1、Kotlin ObjectiveWeights の PRIORITY と同値）でも Δ と全体が一致すること。
+    for (const Dim& d : dims) {
+        for (uint64_t seed = 1; seed <= 2; seed++) {
+            MagiProblem p = buildProblem(d.S, d.T, d.K, d.G, seed * 7919ULL, d.use2);
+            SoftW& w = p.w;
+            w.low = w.c1 = w.high = w.c3mn = 200;
+            w.c3 = w.c3m = w.c41 = w.c42 = w.c41s = w.c42s = 20;
+            w.apt = w.c2 = w.covO = w.weekly = w.fair = 1;
+            std::mt19937_64 rng(seed * 104729ULL);
+            std::vector<int> board = randomBoard(p, rng);
+            runParityLoop(p, board, "priority weights", seed, seed % 2 == 0, 40000, totalMoves, mismatches);
         }
     }
     printf("\nPARITY: %lld moves checked (scalar + bit-op paths), %lld mismatches\n", totalMoves, mismatches);

@@ -115,8 +115,12 @@ static inline long long c42PairCount(bool sameSet, long long n1, long long n2) {
 struct C3r { std::vector<int> seq; bool singleRun; };
 struct C3wr { int wishK, prevK; };   // 希望で固定した wishK の前日に prevK を禁止（Kotlin C3w, HARD, 3.542.0）
 
+// [#50] 採点の SOFT の重み（Kotlin ObjectiveWeights.Soft と同じ並び）。既定は今の重み、優先順位の方式は nativeSetSoftWeights で差し替える。
+struct SoftW { long long c1 = 90, c2 = 4, c3 = 15, c3m = 6, c3mn = 25, c41 = 9, c42 = 9, c41s = 10, c42s = 10, covO = 10, low = 120, high = 50, apt = 4, fair = 5, weekly = 2; };
+
 struct MagiProblem {
     int S = 0, T = 0, K = 0, G = 0, restIdx = 0, dow0 = 0;
+    SoftW w;
     bool use2 = false;
     std::vector<int> sgrp, ssk;              // S
     std::vector<uint8_t> canDo;              // S*K
@@ -371,7 +375,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 }
             }
         }
-        soft += raw * 90; if (bd) bd[0] += raw;
+        soft += raw * p.w.c1; if (bd) bd[0] += raw;
     }
 
     // c2（canDo ガード）
@@ -386,7 +390,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += (z < c.c ? 1 : 0);
             }
         }
-        soft += raw * 4; if (bd) bd[1] += raw;  // [3.522.0] c2 1→4
+        soft += raw * p.w.c2; if (bd) bd[1] += raw;
     }
 
     // c41 / c42（通常群）
@@ -399,7 +403,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += (z < c.l || c.u < z ? 1 : 0);
             }
         }
-        soft += raw * 9; if (bd) bd[6] += raw;
+        soft += raw * p.w.c41; if (bd) bd[6] += raw;
     }
     {
         long long raw = 0;
@@ -414,7 +418,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
             }
         }
-        soft += raw * 9; if (bd) bd[7] += raw;
+        soft += raw * p.w.c42; if (bd) bd[7] += raw;
     }
 
     // c41s / c42s（スキル群）
@@ -428,7 +432,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += (z < c.l || c.u < z ? 1 : 0);
             }
         }
-        soft += raw * 10; if (bd) bd[8] += raw;
+        soft += raw * p.w.c41s; if (bd) bd[8] += raw;
     }
     {
         long long raw = 0;
@@ -443,14 +447,14 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
             }
         }
-        soft += raw * 10; if (bd) bd[9] += raw;
+        soft += raw * p.w.c42s; if (bd) bd[9] += raw;
     }
 
     // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=25（2026-10-26 90→50、2026-10-30 50→25）。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
-    { long long raw = c3check(p, a, p.cons3, false); soft += raw * 15; if (bd) bd[2] += raw; }
+    { long long raw = c3check(p, a, p.cons3, false); soft += raw * p.w.c3; if (bd) bd[2] += raw; }
     { long long raw = c3check(p, a, p.cons3n, true); hard1 += raw; if (bd) bd[3] += raw; }
-    { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 6; if (bd) bd[4] += raw; }
-    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 25; if (bd) bd[5] += raw; }
+    { long long raw = c3check(p, a, p.cons3m, false); soft += raw * p.w.c3m; if (bd) bd[4] += raw; }
+    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * p.w.c3mn; if (bd) bd[5] += raw; }
 
     // pref（実現可能な希望のみ）＋ [3.318.0] groupViol（担当できないシフトに就いているセル）。
     //   MirrorKeys.hard は元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に
@@ -505,7 +509,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 if (t >= 0) rawApt += std::llabs((long long)n - t);
             }
         }
-        soft += rawLow * 120 + rawHigh * 50 + rawApt * 4;
+        soft += rawLow * p.w.low + rawHigh * p.w.high + rawApt * p.w.apt;
         if (bd) { bd[13] += rawLow; bd[14] += rawHigh; bd[16] += rawApt; }
     }
 
@@ -516,7 +520,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
             if (p.members[g].size() < 2) continue;
             for (int k : p.bucket[g]) raw += fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; });
         }
-        soft += raw * 5; if (bd) bd[17] += raw;   // [3.647.0] fair 2→5
+        soft += raw * p.w.fair; if (bd) bd[17] += raw;
     }
 
     // weekly（職員×シフト×曜日、round(そのシフトの回数/7) からの L1 偏差）。[3.522.0] 重み1→2。
@@ -533,7 +537,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
             }
             for (int k = 0; k < K; k++) raw += weeklyDevOfBucket(&wdk[(size_t)k * 7]);
         }
-        soft += raw * 2; if (bd) bd[18] += raw;
+        soft += raw * p.w.weekly; if (bd) bd[18] += raw;
     }
 
     // 被覆（covU=HARD / covO=SOFT, per-cell OR/AND）
@@ -553,7 +557,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 rawCovO += p.covOCell(k, j, dsn[k]);
             }
         }
-        hard1 += covU; soft += rawCovO * 10; if (bd) { bd[10] += covU; bd[11] += rawCovO; }
+        hard1 += covU; soft += rawCovO * p.w.covO; if (bd) { bd[10] += covU; bd[11] += rawCovO; }
     }
 
     out[0] = hard1;
@@ -654,7 +658,7 @@ struct SaChunk {
                 uint64_t rm = rowMask[(size_t)i * K + c.si];
                 uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
                 for (int j = 0; j <= T - c.d1; j++)
-                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 90;
+                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += p.w.c1;
             }
             return v;
         }
@@ -664,7 +668,7 @@ struct SaChunk {
             for (int j = 0; j <= T - c.d1; j++) {
                 int z = 0;
                 for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) v += 90;
+                if (z < c.d2) v += p.w.c1;
             }
         }
         return v;
@@ -674,7 +678,7 @@ struct SaChunk {
         for (const auto& c : p.cons2) {
             if (!p.cd(i, c.si)) continue;
             long long z = ssn[(size_t)i * K + c.si];
-            v += ((z < c.c ? 1 : 0)) * 4;
+            v += ((z < c.c ? 1 : 0)) * p.w.c2;
         }
         return v;
     }
@@ -717,10 +721,10 @@ struct SaChunk {
         return v;
     }
     long long contribC3Row(int i) const {  // [3.522.0] c3/c3m/c3mn 3/2/30→15/10/90
-        return contribC3RowFam(i, p.cons3, false, 15)
+        return contribC3RowFam(i, p.cons3, false, p.w.c3)
              + contribC3RowFam(i, p.cons3n, true, (long long)M)
-             + contribC3RowFam(i, p.cons3m, false, 6)
-             + contribC3RowFam(i, p.cons3mn, true, 25);
+             + contribC3RowFam(i, p.cons3m, false, p.w.c3m)
+             + contribC3RowFam(i, p.cons3mn, true, p.w.c3mn);
     }
     // [3.318.0] このセルの HARD 寄与＝pref（実現可能な希望の未充足）＋ groupViol（担当できないシフト）。
     //   どちらもセル単位なので deltaApply の before/after で呼べば差分は自動的に正しい。
@@ -743,23 +747,23 @@ struct SaChunk {
         int lo = p.rangeLo[(size_t)i * K + k];
         int hi = p.rangeHi[(size_t)i * K + k];
         int n = ssn[(size_t)i * K + k];
-        if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) v += (long long)(lo - n) * 120;  // [3.522.0] low 90→120
-        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * 50;
+        if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) v += (long long)(lo - n) * p.w.low;
+        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * p.w.high;
         int t = p.apt[(size_t)i * K + k];
-        if (t >= 0) v += std::llabs((long long)n - t) * 4;  // [3.522.0] apt 1→4
+        if (t >= 0) v += std::llabs((long long)n - t) * p.w.apt;
         return v;
     }
     long long contribFair(int g, int k) const {  // [3.538.0] fairDevOfBucket＝達成率モード or 従来方式
         if (g < 0 || g >= p.G || k < 0 || k >= K) return 0;
         if (!p.bucketHas[(size_t)g * K + k]) return 0;
         if (p.members[g].size() < 2) return 0;
-        return fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; }) * 5;  // [3.522.0] fair 1→2、[3.647.0] 2→5
+        return fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; }) * p.w.fair;
     }
     // [3.345.0] weekly は職員×シフト。deltaApply では old/nw の2バケットだけが動くので
     //   contribRangeApt/contribFair と同じく (i,old)+(i,nw) の形で before/after を取る。
     long long contribWeeklyK(int i, int k) const {  // [3.522.0] weekly 1→2
         if (k < 0 || k >= K) return 0;
-        return weeklyDevOfBucket(&wd[((size_t)i * K + k) * 7]) * 2;
+        return weeklyDevOfBucket(&wd[((size_t)i * K + k) * 7]) * p.w.weekly;
     }
     long long contribDayGroups(int j) const {
         long long v = 0;
@@ -767,28 +771,28 @@ struct SaChunk {
             const uint64_t* dm = &dayShiftMask[(size_t)j * K];
             for (const auto& c : p.cons41) {
                 int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
-                v += ((z < c.l || c.u < z ? 1 : 0)) * 9;
+                v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41;
             }
             for (const auto& c : p.cons42) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
                 long long n2 = __builtin_popcountll(dm[c.s2] & grpMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 9;
+                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42;
             }
             for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
                 int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
-                v += ((z < c.l || c.u < z ? 1 : 0)) * 10;
+                v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41s;
             }
             for (const auto& c : p.cons42s) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
                 long long n2 = __builtin_popcountll(dm[c.s2] & sskMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 10;
+                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42s;
             }
             return v;
         }
         for (const auto& c : p.cons41) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += ((z < c.l || c.u < z ? 1 : 0)) * 9;
+            v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41;
         }
         for (const auto& c : p.cons42) {
             long long n1 = 0, n2 = 0;
@@ -797,12 +801,12 @@ struct SaChunk {
                 if (p.sgrp[i] == c.g1 && x == c.s1) n1++;
                 if (p.sgrp[i] == c.g2 && x == c.s2) n2++;
             }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 9;
+            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42;
         }
         for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
             int z = 0;
             for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += ((z < c.l || c.u < z ? 1 : 0)) * 10;
+            v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41s;
         }
         for (const auto& c : p.cons42s) {
             long long n1 = 0, n2 = 0;
@@ -811,7 +815,7 @@ struct SaChunk {
                 if (p.ssk[i] == c.g1 && x == c.s1) n1++;
                 if (p.ssk[i] == c.g2 && x == c.s2) n2++;
             }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 10;
+            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42s;
         }
         return v;
     }
@@ -819,7 +823,7 @@ struct SaChunk {
         if (k < 0 || k >= K) return 0;
         int got = dsn[(size_t)j * K + k];
         // [3.522.0] covO 重み5→10（fullEval と同時に変更）。
-        return (long long)p.covUCell(k, j, got) * M + (long long)p.covOCell(k, j, got) * 10;
+        return (long long)p.covUCell(k, j, got) * M + (long long)p.covOCell(k, j, got) * p.w.covO;
     }
 
     // セル(i,j)を nw へ差分適用（影響スライスの before/after 再計算で score を維持）。
@@ -1346,7 +1350,7 @@ inline int rnInt(std::mt19937_64& rng, int bound) { return (int)(rng() % (uint64
 //   個人回数(low/high/apt)＋群レンジ(c41)だけで weekly/fair を一切見ておらず、
 //   タイブレークも先頭固定だった＝**同じ operator がネイティブ加速の ON/OFF で別物**になっていた。
 //   2層番兵はスコアの一致しか見ないためこの乖離を検出できない（候補生成は番兵の対象外）。
-inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK) {
+inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK, long long weeklyW) {
     if (oldK == newK) return 0;
     long long acc = 0;
     if (oldK >= 0 && oldK < K) {
@@ -1359,7 +1363,7 @@ inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK
         long long before = weeklyDevOfBucket(b);
         b[bucket]++; acc += weeklyDevOfBucket(b) - before; b[bucket]--;
     }
-    return acc * 2;   // Kotlin weeklyMarginalAt と同じく重みを掛ける（weekly 2。旧: 重みなし）
+    return acc * weeklyW;   // Kotlin weeklyMarginalAt と同じく重みを掛ける（旧: 重みなし）
 }
 
 // [3.538.0] counts(S*K) は一時的に書き換えて必ず戻す（Kotlin fairMarginalAt と同じ手）。fairDevOfBucket
@@ -1376,7 +1380,7 @@ inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, st
     counts[(size_t)i * K + k] += delta;
     long long after = fairDevOfBucket(p, g, k, countAt);
     counts[(size_t)i * K + k] -= delta;
-    return (after - before) * 5;   // Kotlin fairMarginalAt と同じく重みを掛ける（[3.647.0] fair 5。旧: 重みなしで候補の順位が Kotlin とずれていた）
+    return (after - before) * p.w.fair;   // Kotlin fairMarginalAt と同じく重みを掛ける（旧: 重みなしで候補の順位が Kotlin とずれていた）
 }
 
 inline bool reservoirTieN(int tieCount, std::mt19937_64& rng) {
@@ -1397,10 +1401,10 @@ inline long long staffCountPenaltyAtN(const MagiProblem& p, int i, int k, int n)
     long long pen = 0;
     int lo = p.rangeLo[(size_t)i * p.K + k], hi = p.rangeHi[(size_t)i * p.K + k];
     // [3.522.0] low 90→120, apt 1→4。
-    if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) pen += (long long)(lo - n) * 120;
-    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 50;
+    if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) pen += (long long)(lo - n) * p.w.low;
+    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * p.w.high;
     int t = p.apt[(size_t)i * p.K + k];
-    if (t >= 0) pen += std::llabs((long long)n - t) * 4;
+    if (t >= 0) pen += std::llabs((long long)n - t) * p.w.apt;
     return pen;
 }
 
@@ -1472,7 +1476,7 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
                 if (a[(size_t)i * T + j] != rest || wishLockedN(p, i, j) || !p.pl(i, k) || p.extBanned(i, j, k)) continue;
                 long long delta = staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k] + 1)
                     - staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k]) + c41DayMarg(p.sgrp[i], k)
-                    + weeklyMarginalN(&wd[((size_t)i * K) * 7], K, bucket, rest, k)
+                    + weeklyMarginalN(&wd[((size_t)i * K) * 7], K, bucket, rest, k, p.w.weekly)
                     + fairMarginalN(p, i, rest, -1, cnt)
                     + fairMarginalN(p, i, k, 1, cnt);
                 if (delta < bestDelta) { bestDelta = delta; bestI = i; tied = 1; }
@@ -1531,7 +1535,7 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
             //   旧2条件（need<=0 / 充足済み）は「残る不足が無い」の1条件に畳まれる。
             if (p.covUCell(k, j, cov[(size_t)j * K + k]) <= 0) continue;
             long long delta = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k])
-                + weeklyMarginalN(wd.data(), K, bucket, rest, k)
+                + weeklyMarginalN(wd.data(), K, bucket, rest, k, p.w.weekly)
                 + fairMarginalN(p, i, rest, -1, counts)
                 + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
@@ -1585,7 +1589,7 @@ void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<in
                 ? staffCountPenaltyAtN(p, i, old, cntI[old] - 1) - staffCountPenaltyAtN(p, i, old, cntI[old]) : 0;
             long long dK = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k]);
             long long delta = dOld + dK
-                + weeklyMarginalN(wd.data(), K, bucket, old, k)
+                + weeklyMarginalN(wd.data(), K, bucket, old, k, p.w.weekly)
                 + ((old >= 0 && old < K) ? fairMarginalN(p, i, old, -1, counts) : 0)
                 + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
@@ -2363,7 +2367,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 8;
+    return 9;   // [#50] 9＝nativeSetSoftWeights を追加
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。
@@ -2707,6 +2711,18 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     p->buildC3wBan();
 
     return reinterpret_cast<jlong>(p);
+}
+
+// [#50] 採点の SOFT の重みを差し替える（Kotlin ObjectiveWeights.Soft.toLongArray の並び。15 個未満なら何もしない）。
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeSetSoftWeights(JNIEnv* env, jclass, jlong handle, jlongArray arr) {
+    auto* p = reinterpret_cast<MagiProblem*>(handle);
+    if (p == nullptr || arr == nullptr || env->GetArrayLength(arr) < 15) return;
+    jlong v[15];
+    env->GetLongArrayRegion(arr, 0, 15, v);
+    SoftW& w = p->w;
+    w.c1 = v[0]; w.c2 = v[1]; w.c3 = v[2]; w.c3m = v[3]; w.c3mn = v[4]; w.c41 = v[5]; w.c42 = v[6]; w.c41s = v[7]; w.c42s = v[8];
+    w.covO = v[9]; w.low = v[10]; w.high = v[11]; w.apt = v[12]; w.fair = v[13]; w.weekly = v[14];
 }
 
 extern "C" JNIEXPORT void JNICALL

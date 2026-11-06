@@ -9,7 +9,7 @@
 
 ## 環境の注意点（見ても分からない罠）
 - Android のビルドはこのサンドボックスでは不可。ただし **UI を触ったら `android-sdk.yml` を `workflow_dispatch` で作業ブランチに走らせて実コンパイルを確認する**（約 8 分。`docs/environment.md`）。エンジン層と JUnit は
-  `tools/host/hosttest.sh` でホスト JVM で回る（約 6 分＝コンパイル約 2 分＋JUnit 約 5 分。`MAGI_HOST_OUT` で出力先を分けるとベンチ中でも安全）。UI 層（Compose）は不可。
+  `tools/host/hosttest.sh` でホスト JVM で回る（約 7 分＝コンパイル約 2 分＋JUnit をコア数の JVM へ振り分けて約 5 分。`MAGI_HOST_OUT` で出力先を分けるとベンチ中でも安全）。UI 層（Compose）は不可。
 - 規模の上限は職員 30 名・31 日（業務前提）。ビット化経路（`C3nBitScan`・C++ `SaChunk`）はこの範囲で常に有効＝スカラー経路は防御。
 - **Kotlin が正**。C++（`magi_native.cpp`）と C#（`ichirocc/-MAGI_PC`）は同値の移植。評価器を変えたら C++ を同じコミットで
   （`.claude/rules/weights.md`）、C# は同日に同期。パリティは CI（native-parity）が守る。
@@ -83,7 +83,7 @@
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
 c1(90) > high(50) > c3mn(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
-weekly(2)。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
+weekly(2)。詳細設定「直す順番：優先順位（試験）」を選ぶと採点だけ SOFT が T1 200／T2 20／T3 1（`ObjectiveWeights`、3.727.37）。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
 この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・
 `magi_native.cpp` の5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md`・この行を**同じコミットで**揃える
 （destroy-repair/polish系4ファイルは `PenaltyWeights` 経由で追従＝直さない。詳細は `.claude/rules/weights.md`）。

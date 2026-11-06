@@ -61,11 +61,11 @@ internal object CountChainPolish {
                 val c = counts[i][k]
                 val hi = p.rangeHi[i][k]
                 val apt = p.apt[i][k]
-                if (hi != Int.MAX_VALUE && c > hi) out.add(Target(i, k, c - hi, MirrorKeys.weightOf("high") * (c - hi)))
-                else if (apt >= 0 && c > apt) out.add(Target(i, k, c - apt, MirrorKeys.weightOf("apt") * (c - apt)))
+                if (hi != Int.MAX_VALUE && c > hi) out.add(Target(i, k, c - hi, ObjectiveWeights.of("high") * (c - hi)))
+                else if (apt >= 0 && c > apt) out.add(Target(i, k, c - apt, ObjectiveWeights.of("apt") * (c - apt)))
             }
             // 人員過剰(covO)セル: 過剰の日にそのシフトを持つ人（非希望）ごとに起点を立てる。
-            val wCovO = MirrorKeys.weightOf("covO")
+            val wCovO = ObjectiveWeights.of("covO")
             for (j in 0 until p.T) for (k in 0 until p.K) {
                 var got = 0
                 for (i in 0 until p.S) if (work[i][j] == k) got++
@@ -76,7 +76,7 @@ internal object CountChainPolish {
             return out.sortedByDescending { it.weight }.take(config.maxTargets)
         }
 
-        val wLow = MirrorKeys.weightOf("low"); val wHigh = MirrorKeys.weightOf("high"); val wApt = MirrorKeys.weightOf("apt")
+        val wLow = ObjectiveWeights.of("low"); val wHigh = ObjectiveWeights.of("high"); val wApt = ObjectiveWeights.of("apt")
         /** (s,k) の回数が c のときの回数族(low/high/apt)の重み付き罰則。連鎖の途中経過を採点する「回数の負債」の単位。 */
         fun pen(s: Int, k: Int, c: Int): Double {
             var v = 0.0
@@ -86,7 +86,7 @@ internal object CountChainPolish {
             return v
         }
 
-        val wC1 = MirrorKeys.weightOf("c1"); val wC3 = MirrorKeys.weightOf("c3"); val wC3m = MirrorKeys.weightOf("c3m"); val wC3mn = MirrorKeys.weightOf("c3mn")
+        val wC1 = ObjectiveWeights.of("c1"); val wC3 = ObjectiveWeights.of("c3"); val wC3m = ObjectiveWeights.of("c3m"); val wC3mn = ObjectiveWeights.of("c3mn")
         /** 職員 s の行だけで決まる連続系(c1/c3/c3m/c3mn)の重み付き罰則。`UnifiedViolationChecker` と同じ数え方（窓・run-deficit）。 */
         fun seqPenRow(s: Int, row: IntArray): Double {
             var v = 0.0
@@ -145,7 +145,7 @@ internal object CountChainPolish {
                 var d = 0.0
                 for ((kk, v) in delta) if (v != 0) d += entryDebt(kk / p.K, kk % p.K, v)
                 for (s in 0 until p.S) d += seqCur[s] - seqBase[s]
-                if (target.day >= 0 && cur[target.staff][target.day] != target.shift) d -= MirrorKeys.weightOf("covO")
+                if (target.day >= 0 && cur[target.staff][target.day] != target.shift) d -= ObjectiveWeights.of("covO")
                 return d
             }
             /** 次に直す (s,k)＝負債が最大の項。起点がまだ動いていなければ起点。 */

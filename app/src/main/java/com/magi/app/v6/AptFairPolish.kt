@@ -29,7 +29,7 @@ internal object AptFairPolish {
 
     /** internal＝`AptFairPolishToleranceTest` から直接検証するため（private だとファイル外から呼べない）。 */
     internal fun nonFamilySoftTotal(rep: ViolationReport, excludeFamily: String): Double =
-        MirrorKeys.soft.filter { it != excludeFamily }.sumOf { (rep.breakdown[it] ?: 0) * MirrorKeys.weights.getValue(it) }
+        MirrorKeys.soft.filter { it != excludeFamily }.sumOf { (rep.breakdown[it] ?: 0) * ObjectiveWeights.table().getValue(it) }
 
     /**
      * [3.535.0] OFF時はbetterReport(keep-best)のまま。ON時はHARD不増加は変えず、対象家族以外のSOFT

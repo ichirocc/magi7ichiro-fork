@@ -14,7 +14,7 @@ package com.magi.app.v6
  */
 object NativeBridge {
     /** Kotlin 側が期待する ABI バージョン。C++ 側と不一致ならネイティブ経路を使わない。 */
-    const val ABI_VERSION = 8
+    const val ABI_VERSION = 9
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
@@ -34,6 +34,10 @@ object NativeBridge {
         needs: IntArray, ranges: IntArray, cons: IntArray, c3: IntArray,
         bucket: IntArray,
     ): Long
+
+    /** [#50] 採点の SOFT の重み（[ObjectiveWeights.Soft.toLongArray] の並び）を差し替える。 */
+    @JvmStatic
+    external fun nativeSetSoftWeights(handle: Long, weights: LongArray)
 
     @JvmStatic
     external fun nativeDestroyProblem(handle: Long)

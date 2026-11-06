@@ -502,7 +502,7 @@ internal fun worstWorsenedFamily(after: ViolationReport, before: ViolationReport
     var worstFam: String? = null
     var worstDelta = 0.0
     for (fam in MirrorKeys.all) {
-        val d = ((after.breakdown[fam] ?: 0) - (before.breakdown[fam] ?: 0)) * MirrorKeys.weightOf(fam)
+        val d = ((after.breakdown[fam] ?: 0) - (before.breakdown[fam] ?: 0)) * ObjectiveWeights.of(fam)
         if (d > worstDelta) { worstDelta = d; worstFam = fam }
     }
     return worstFam

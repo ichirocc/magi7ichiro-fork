@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import com.magi.app.v6.FixSuggestion
+import com.magi.app.v6.ObjectiveMethod
 import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.SettingIssue
 
@@ -195,6 +196,7 @@ internal sealed interface MagiEvent {
         data class SetNativeParity(val on: Boolean) : Settings
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetAptFairToleranceUnguarded(val on: Boolean) : Settings
+        data class SetObjectiveMethod(val method: ObjectiveMethod) : Settings
         data class SetEjectionChain(val mode: EjectionChainMode) : Settings
         data class SetEjectionChainSeconds(val seconds: Int) : Settings
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings

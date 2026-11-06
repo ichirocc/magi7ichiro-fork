@@ -682,7 +682,8 @@ object UnifiedViolationChecker {
         // [N2/⛏11] 重みは MirrorKeys.weights を単一の真実として参照。挿入順を保持しているため
         //   加算順は従来と同一＝Double 結果は不変。UI の重み表も同マップを描画する。
         var out = 0.0
-        for ((key, weight) in MirrorKeys.weights) out += (b[key] ?: 0).toDouble() * weight
+        // [#50] 採点の重みは方式で切り替わる（[ObjectiveWeights]）。表示の優先は MirrorKeys.weights のまま。
+        for ((key, weight) in ObjectiveWeights.table()) out += (b[key] ?: 0).toDouble() * weight
         return out
     }
 

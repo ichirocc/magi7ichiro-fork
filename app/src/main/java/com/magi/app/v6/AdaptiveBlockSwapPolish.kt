@@ -162,8 +162,8 @@ internal object AdaptiveBlockSwapPolish {
      * 重みを変えたときにここだけ古い値で残る事故を防ぐ。順位付けの見積りでは apt を L1×1 で足す（正式な重み 4 とは異なる。採否は betterReport）。
      */
     private class PersonalPenalty(private val p: Problem) {
-        private val lowW = MirrorKeys.weightOf("low").toLong()
-        private val highW = MirrorKeys.weightOf("high").toLong()
+        private val lowW = ObjectiveWeights.of("low").toLong()
+        private val highW = ObjectiveWeights.of("high").toLong()
 
         fun of(staff: Int, shift: Int, count: Int): Long {
             var out = 0L
@@ -186,12 +186,12 @@ internal object AdaptiveBlockSwapPolish {
         fun add(key: String, cls: String) {
             val i = key.substringBefore(',').toIntOrNull() ?: return
             if (i !in 0 until p.S) return
-            out[i] += MirrorKeys.weightOf(cls.removePrefix("vio-")).toLong().coerceAtLeast(1L)
+            out[i] += ObjectiveWeights.of(cls.removePrefix("vio-")).toLong().coerceAtLeast(1L)
         }
         report.violations.forEach { (key, cls) -> add(key, cls) }
         report.countViolations.forEach { (key, cls) -> add(key, cls) }
         report.distLocations.forEach { (family, rows) ->
-            val weight = MirrorKeys.weightOf(family).toLong().coerceAtLeast(1L)
+            val weight = ObjectiveWeights.of(family).toLong().coerceAtLeast(1L)
             for (row in rows) {
                 val i = row.firstOrNull() ?: continue
                 if (i in 0 until p.S) out[i] += weight

@@ -69,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
+import com.magi.app.v6.ObjectiveMethod
+import com.magi.app.v6.ObjectiveWeights
 import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.CoverageShortfall
 import com.magi.app.v6.CoverageVerdict
@@ -1578,14 +1580,14 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
 
 
 /**
- * [N2/⛏11] 重み表カード。weightedScore の内部重み（MirrorKeys.weights）をそのまま描画し、
+ * [N2/⛏11] 重み表カード。weightedScore の内部重み（ObjectiveWeights.table＝選んだ方式の表）をそのまま描画し、
  * 「できあがり度/スコア」の根拠（どの違反が何倍効くか）を上級者が逆算できるようにする。
  * 重みは最適化器と同じマップを参照＝表示と最適化器が常に一致（統一思想の延長）。プロ表示時のみ。
  */
 @Composable
-internal fun WeightTableCard() {
+internal fun WeightTableCard(method: ObjectiveMethod = ObjectiveMethod.WEIGHTS) {
     fun fmt(w: Double): String = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
-    val sorted = MirrorKeys.weights.entries.sortedByDescending { it.value }
+    val sorted = ObjectiveWeights.table(method).entries.sortedByDescending { it.value }
     val hard = sorted.filter { it.value >= 1000.0 }
     val soft = sorted.filter { it.value < 1000.0 }
     Card(Modifier.fillMaxWidth()) {
