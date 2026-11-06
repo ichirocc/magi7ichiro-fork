@@ -1033,8 +1033,12 @@ object V6FinalPort {
         val capSafeStages = excludeCapZeroStages(baseProblem, pinSafeStages) +
             clearedCapZeroStages(state, baseProblem, pinSafeStages)
         val extLog = extBanLogs(state, baseProblem, cappedInput, capSafeStages)
-        val safeStages = excludeExtBanStages(baseProblem, cappedInput, capSafeStages) +
+        val extSafeStages = excludeExtBanStages(baseProblem, cappedInput, capSafeStages) +
             revertedExtBanStages(state, baseProblem, cappedInput, capSafeStages)
+        // 規則 A（希望固定は「希望どおり」か「入力のまま」）を盤面で確かめる。各経路は手ごとに守る＝ここは多重防御（入力は必ず残る）。
+        val safeStages = extSafeStages.filter { baseProblem.keepsWishPins(cappedInput, it.sched) }
+        val wishLog = (extSafeStages - safeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
+            message = "${it.label}の盤面が希望固定のセルを希望でない値へ変えていたため候補から外しました（多重防御）") }
         val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
@@ -1337,7 +1341,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

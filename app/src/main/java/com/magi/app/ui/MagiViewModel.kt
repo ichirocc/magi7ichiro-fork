@@ -1359,10 +1359,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setObjectiveMethod(m: com.magi.app.v6.ObjectiveMethod) {
+        if (m == com.magi.app.v6.ObjectiveWeights.method) return
+        // 設定のイベントは実行中も通るが、方式はチェッカーが毎回読む＝走っている最適化の採否が 2 つの重みで混ざる。
+        if (optimizeInFlight()) {
+            _ui.update { it.copy(objectiveMethod = com.magi.app.v6.ObjectiveWeights.method, messageIsError = true, message = "実行中は直す順番を変えられません。終わってから、もう一度お試しください") }
+            return
+        }
         com.magi.app.v6.ObjectiveWeights.method = m
-        _ui.update { it.copy(objectiveMethod = m) }
+        // 改善案は前の方式の点数で並べた差分、他の案の「悪くなる」も前の方式の比べ＝方式と一緒に外す・比べ直す。
+        fixJob?.cancel(); fixJob = null
+        _ui.update { it.copy(objectiveMethod = m, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, fixDoneKey = "", fixFailedKey = "") }
+        val st = state; val sc = currentSchedule
+        if (st != null && sc != null && alternativeScheds.isNotEmpty() && altBoardKey == boardKey(sc) && altStateKey == stateKey(st)) {
+            val alts = alternativeScheds
+            viewModelScope.launch { captureAlternatives(alts) }
+        }
         logOp("I", "設定変更: 直す順番 → ${objectiveMethodLabel(m)}")
-        // 点数の重みが変わる＝今の勤務表の weightedScore と提案の並びを取り直す。
         refreshCheck()
     }
 
