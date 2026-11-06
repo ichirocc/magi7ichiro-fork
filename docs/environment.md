@@ -3,7 +3,7 @@
 > CLAUDE.md には「見ても分からない罠」と判断基準だけを残し、手順の本文はここに置く。実装が正・環境が変わったらここを直す。
 
 ## ホスト JVM でエンジン層を検証する
-- `tools/host/hosttest.sh`（kotlin-compiler-embeddable で `v6/`・`model/`・Android 非依存の `ui/work` と全 JUnit をコンパイルして実行。約 6 分＝コンパイル約 2 分＋JUnit 約 5 分、2026-10-10 に単独で実測）。
+- `tools/host/hosttest.sh`（kotlin-compiler-embeddable で `v6/`・`model/`・Android 非依存の `ui/work` と全 JUnit をコンパイルして実行。約 7 分＝コンパイル約 2 分＋JUnit 約 5 分、2026-11-06 に 4 コアで実測）。**JUnit はクラスを JVM の本数（既定はコア数、`MAGI_HOST_SHARDS=1` で従来どおり 1 本）へ振り分けて並列に流す**: 実測の所要（`tools/host/test_times.tsv`）の重い順に、いちばん空いた本へ詰める。1 本で順に流すと JUnit だけで約 14 分（2026-11-06、825 秒）＝合計 16〜17 分だった。JVM が別なので、エンジンのプロセス全体の static（`OptimizerRuntime` の最新の実行など）は本ごとに分かれる。重いクラスの上位は `ExtWishOptimizeTest`（約 290 秒＝作成 1 回が探索 2 秒＋後処理の予備 20 秒で、12 回呼ぶ）・`ZeroCapExclusionTest`・`PinInvariantTest`。クラスを大きく足したら `test_times.tsv` を測り直す（無いクラスは 1 秒と見る）。
   出力先は `MAGI_HOST_OUT=/tmp/magi-hostbuild-xxx` で変えられる。**ベンチや probe が掴んでいる出力先を再ビルドしない**（クラスファイルが差し替わり結果が汚れる）。
   2026-09-22 から冒頭で `tools/design_lint.py` も走る（落ちたら即終了。別ツリーのバグ注入検証など不要なときは
   `MAGI_SKIP_LINT=1`）。また `LANG=C.utf8` を強制する（POSIX ロケールだと kotlinc が日本語リテラルを化かして
