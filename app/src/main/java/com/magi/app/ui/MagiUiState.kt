@@ -119,6 +119,10 @@ data class UiState(
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val membraneCellLns: Boolean = true,  // PolishGate.membraneCellLns（膜の細胞 LNS）。保存しない
     val seesawRelink: Boolean = false,  // PolishGate.seesawRelink（シーソーの交換の候補、docs/seesaw.md §6.3）。保存しない
+    val floorShortStall: Boolean = true,  // PolishGate.floorShortStall。保存しない
+    val c3nWallDeepCheck: Boolean = false,  // PolishGate.c3nWallDeepCheck。保存しない
+    val normalStallFraction: Double = 0.9,  // PolishGate.normalStallFraction（停滞閾値の割合、(0,1)）。保存しない
+    val wishConflictFloorMode: com.magi.app.v6.WishFloorMode = com.magi.app.v6.WishFloorMode.OFF,  // PolishGate.wishConflictFloorMode。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない

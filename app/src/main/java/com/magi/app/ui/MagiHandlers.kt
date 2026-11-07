@@ -158,6 +158,10 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetEjectionPipelineHardLeg -> vm.setEjectionPipelineHardLeg(e.on)
             is MagiEvent.Settings.SetMembraneCellLns -> vm.setMembraneCellLns(e.on)
             is MagiEvent.Settings.SetSeesawRelink -> vm.setSeesawRelink(e.on)
+            is MagiEvent.Settings.SetFloorShortStall -> vm.setFloorShortStall(e.on)
+            is MagiEvent.Settings.SetC3nWallDeepCheck -> vm.setC3nWallDeepCheck(e.on)
+            is MagiEvent.Settings.SetNormalStallFraction -> vm.setNormalStallFraction(e.fraction)
+            is MagiEvent.Settings.SetWishConflictFloorMode -> vm.setWishConflictFloorMode(e.mode)
         }
         true
     },

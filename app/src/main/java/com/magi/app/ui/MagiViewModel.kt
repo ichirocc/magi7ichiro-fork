@@ -1416,6 +1416,31 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 他の案を手がかりに仕上げる → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setFloorShortStall(on: Boolean) {
+        com.magi.app.v6.PolishGate.floorShortStall = on
+        _ui.update { it.copy(floorShortStall = on) }
+        logOp("I", "設定変更: 必須が下限に届いたら早めに終える → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setC3nWallDeepCheck(on: Boolean) {
+        com.magi.app.v6.PolishGate.c3nWallDeepCheck = on
+        _ui.update { it.copy(c3nWallDeepCheck = on) }
+        logOp("I", "設定変更: 禁止の並びの壁を 1 手探索で確かめる → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setNormalStallFraction(fraction: Double) {
+        if (!(fraction > 0.0 && fraction < 1.0)) return   // V6FinalPort.normalStallMs の require と同じ範囲
+        com.magi.app.v6.PolishGate.normalStallFraction = fraction
+        _ui.update { it.copy(normalStallFraction = fraction) }
+        logOp("I", "設定変更: 停滞とみなすまでの長さ → ${normalStallFractionLabel(fraction)}")
+    }
+
+    fun setWishConflictFloorMode(mode: com.magi.app.v6.WishFloorMode) {
+        com.magi.app.v6.PolishGate.wishConflictFloorMode = mode
+        _ui.update { it.copy(wishConflictFloorMode = mode) }
+        logOp("I", "設定変更: 希望どうしの衝突で必須が止まったら → ${wishFloorModeLabel(mode)}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 

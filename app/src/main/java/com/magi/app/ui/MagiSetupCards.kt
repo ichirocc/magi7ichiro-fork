@@ -437,6 +437,48 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Switch(checked = ui.seesawRelink, onCheckedChange = null, enabled = !ui.running)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.floorShortStall, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetFloorShortStall(it)) }).semantics(mergeDescendants = true) {}) {
+            Column(Modifier.weight(1f)) {
+                Text("必須が下限に届いたら早めに終える", style = MaterialTheme.typography.bodyMedium)
+                Text(FLOOR_SHORT_STALL_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.floorShortStall, onCheckedChange = null, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.c3nWallDeepCheck, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetC3nWallDeepCheck(it)) }).semantics(mergeDescendants = true) {}) {
+            Column(Modifier.weight(1f)) {
+                Text("禁止の並びの壁を 1 手探索で確かめる", style = MaterialTheme.typography.bodyMedium)
+                Text(C3N_WALL_DEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.c3nWallDeepCheck, onCheckedChange = null, enabled = !ui.running)
+        }
+        Column(Modifier.fillMaxWidth()) {
+            Text("停滞とみなすまでの長さ", style = MaterialTheme.typography.titleSmall)
+            Text(NORMAL_STALL_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NORMAL_STALL_FRACTIONS.forEach { f ->
+                    val label = normalStallFractionLabel(f)
+                    if (ui.normalStallFraction == f) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetNormalStallFraction(f)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetNormalStallFraction(f)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth()) {
+            Text("希望どうしの衝突で必須が止まったら", style = MaterialTheme.typography.titleSmall)
+            Text(WISH_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.magi.app.v6.WishFloorMode.entries.forEach { m ->
+                    val label = wishFloorModeLabel(m)
+                    if (ui.wishConflictFloorMode == m) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetWishConflictFloorMode(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetWishConflictFloorMode(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -449,6 +491,17 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
+internal const val FLOOR_SHORT_STALL_NOTE = "必須の違反がこれ以上減らせない下限に届いたら、改善が止まった時点で早めに終えます（既定 ON）。OFF は時間いっぱい粘ります"
+internal const val C3N_WALL_DEEP_NOTE = "禁止の並びが崩せないと判断する前に、直し方の探索（最長 2 秒）でも減らせないかを確かめます（測定中・既定 OFF）"
+internal const val NORMAL_STALL_NOTE = "必須が残っているとき、改善がこの長さ（組む時間に対する割合）止まったら終えます。短いほど早く終わり、粘りは減ります"
+internal val NORMAL_STALL_FRACTIONS = listOf(0.5, 0.7, 0.9)
+internal fun normalStallFractionLabel(f: Double): String = "${(f * 100).toInt()}%" + if (f == 0.9) "（既定）" else ""
+internal const val WISH_FLOOR_NOTE = "希望どうしがぶつかって必須がこれ以上減らないとき、そこで打ち切るか（測定中・既定は打ち切らない）"
+internal fun wishFloorModeLabel(m: com.magi.app.v6.WishFloorMode): String = when (m) {
+    com.magi.app.v6.WishFloorMode.OFF -> "打ち切らない（既定）"
+    com.magi.app.v6.WishFloorMode.E0A -> "打ち切る"
+    com.magi.app.v6.WishFloorMode.E0B -> "打ち切って仕上げも省く"
+}
 internal const val MEMBRANE_TOGGLE_LABEL = "最後に職員をまとめて組み直す"
 internal const val MEMBRANE_TOGGLE_NOTE = "違反の多い職員と同じグループの 5 名を全期間まとめて組み直し、良くなったときだけ採ります（膜の細胞 LNS、既定 ON・最長 8 秒）"
 internal const val SEESAW_RELINK_NOTE = "仕上げのあと、他の案へ向けて少しずつ入れ替え、良くなれば採ります。どこかの項目が今より少ない勤務表は「他の案」に残します（最大 3 秒）"
