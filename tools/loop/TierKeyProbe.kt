@@ -3,6 +3,8 @@
 package probe.tierkey
 
 import com.magi.app.model.StateParser
+import com.magi.app.v6.ObjectiveMethod
+import com.magi.app.v6.ObjectiveWeights
 import com.magi.app.v6.Problem
 import com.magi.app.v6.TierObjective
 import com.magi.app.v6.UnifiedViolationChecker
@@ -15,6 +17,8 @@ fun main(args: Array<String>) {
     val seconds = args.getOrNull(2)?.toInt() ?: 60
     val fixtures = (System.getenv("MAGI_TK_FIXTURES") ?: "golden_state.json,sample_state_v6.json,blocked_covu_state.json,sept2026_state.json,oct2026_grid_state.json,full_coverage_state.json").split(',')
     val seeds = (System.getenv("MAGI_TK_SEEDS") ?: "1,2,3").split(',').map { it.trim().toLong() }
+    // 採点の方式（3.727.37）。MAGI_TK_METHOD=PRIORITY で「直す順番：優先順位（試験）」と同じ採点で作る。
+    System.getenv("MAGI_TK_METHOD")?.let { ObjectiveWeights.method = ObjectiveMethod.valueOf(it) }
     val w = out.bufferedWriter()
     w.write("fixture,seed,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5\n"); w.flush()
     for (f in fixtures) {
