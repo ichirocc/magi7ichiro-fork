@@ -456,10 +456,10 @@ internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反�
 internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
 internal fun objectiveMethodLabel(m: ObjectiveMethod): String = when (m) {
-    ObjectiveMethod.WEIGHTS -> "重み（今）"
-    ObjectiveMethod.PRIORITY -> "優先順位（試験）"
+    ObjectiveMethod.WEIGHTS -> "重み（従来）"
+    ObjectiveMethod.PRIORITY -> "優先順位"
 }
-internal const val OBJECTIVE_METHOD_NOTE = "優先順位: 個人の回数・期間の制約を先に、連続の希望・グループの人数を次に、適切回数や偏りは最後に直します。必ず守るものは同じです"
+internal const val OBJECTIVE_METHOD_NOTE = "優先順位（既定）: 個人の回数・期間の制約を先に、連続の希望・グループの人数を次に、適切回数や偏りは最後に直します。必ず守るものは同じです。重み（従来）は前の版と同じ直し方です"
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
