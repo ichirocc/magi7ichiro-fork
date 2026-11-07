@@ -203,6 +203,10 @@ internal sealed interface MagiEvent {
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
         data class SetMembraneCellLns(val on: Boolean) : Settings
         data class SetSeesawRelink(val on: Boolean) : Settings
+        data class SetFloorShortStall(val on: Boolean) : Settings
+        data class SetC3nWallDeepCheck(val on: Boolean) : Settings
+        data class SetNormalStallFraction(val fraction: Double) : Settings
+        data class SetWishConflictFloorMode(val mode: com.magi.app.v6.WishFloorMode) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */
