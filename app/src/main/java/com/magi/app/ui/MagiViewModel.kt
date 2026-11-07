@@ -420,6 +420,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
 
     init {
+        // 直す順番のアプリの既定は優先順位（3.727.40、実データ 16 勝 2 敗）。エンジン単体の既定（重み）とテストの基準は変えない。
+        com.magi.app.v6.ObjectiveWeights.method = _ui.value.objectiveMethod
         // ホームの見出しの「解消する必須違反」の名と場所。盤面と先頭の手が変わるたびに Default で作り直す（main で検査しない）。
         viewModelScope.launch {
             _ui.map { u -> u.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.ops to u.schedule }.distinctUntilChanged().collectLatest { (ops, sch) ->
