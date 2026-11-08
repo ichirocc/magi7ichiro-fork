@@ -1103,7 +1103,8 @@ object V6FinalPort {
                     //   ビルドの取り残し＝差分と次の一手まで書く。
                     else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません " +
                         "(C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft}" +
-                        "・差 hard=${parity.nativeHard - parity.kotlinHard} soft=${parity.nativeSoft - parity.kotlinSoft})" +
+                        "・差 hard=${parity.nativeHard - parity.kotlinHard} soft=${parity.nativeSoft - parity.kotlinSoft}" +
+                        (if (parity.familyDiffs.isEmpty()) "" else "・族のずれ ${parity.familyDiffs.take(5).joinToString("、")}") + ")" +
                         "／CIは言語跨ぎパリティ(golden実データ)を検証済み＝ソースが揃っていれば .so が古い可能性が高い（再ビルドを試す）$gate"
                 },
             )
