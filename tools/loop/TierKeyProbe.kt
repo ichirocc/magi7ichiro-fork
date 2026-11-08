@@ -19,6 +19,10 @@ fun main(args: Array<String>) {
     val seeds = (System.getenv("MAGI_TK_SEEDS") ?: "1,2,3").split(',').map { it.trim().toLong() }
     // 採点の方式（3.727.37）。MAGI_TK_METHOD=PRIORITY で「直す順番：優先順位（試験）」と同じ採点で作る。
     System.getenv("MAGI_TK_METHOD")?.let { ObjectiveWeights.method = ObjectiveMethod.valueOf(it) }
+    // 機構の腕（2026-11-08、既定の採否を優先順位で測り直す）。指定が無ければ製品の既定のまま。
+    System.getenv("MAGI_TK_MEMBRANE")?.let { com.magi.app.v6.PolishGate.membraneCellLns = it.toBoolean() }
+    System.getenv("MAGI_TK_SEESAW")?.let { com.magi.app.v6.PolishGate.seesawRelink = it.toBoolean() }
+    System.getenv("MAGI_TK_EJECT")?.let { if (!it.toBoolean()) com.magi.app.v6.PolishGate.ejectionPipelineFocus = com.magi.app.v6.EjectionChainPipeline.Focus.OFF }
     val w = out.bufferedWriter()
     w.write("fixture,seed,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5\n"); w.flush()
     for (f in fixtures) {
