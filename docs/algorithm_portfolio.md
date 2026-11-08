@@ -175,8 +175,8 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 計測が支持しなかった、あるいはこのサンドボックスでは測れなかった経路。コードは残してあるので
 トグル1つで戻せる。`wideC3nBreakDays` は
 **設定タブ→詳細設定（上級者向け）から実機で切り替えられる**（`MagiSetupCards` の
-`OptimizationTuningSection`）。`normalStallFraction` は **UI トグル無し**＝コード/計測ハーネスから
-のみ設定（3.424.0 で明記。旧: この前文が「全て設定タブから」と書いており、この行には偽だった）。`ejectionPipelineHardLeg` は設定タブ「玉突きで直す」の下のスイッチ（3.657.0）。
+`OptimizationTuningSection`）。`normalStallFraction` は 3.727.41 から詳細設定「停滞とみなすまでの長さ」（50/70/90%）でも変えられる
+（3.424.0〜3.727.40 は UI トグル無し＝コード/計測ハーネスからのみ）。`ejectionPipelineHardLeg` は設定タブ「玉突きで直す」の下のスイッチ（3.657.0）。
 
 | 機構 | 状態 | 根拠 |
 |---|---|---|

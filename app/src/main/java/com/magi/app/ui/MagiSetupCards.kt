@@ -492,11 +492,11 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val FLOOR_SHORT_STALL_NOTE = "必須の違反がこれ以上減らせない下限に届いたら、改善が止まった時点で早めに終えます（既定 ON）。OFF は時間いっぱい粘ります"
-internal const val C3N_WALL_DEEP_NOTE = "禁止の並びが崩せないと判断する前に、直し方の探索（最長 2 秒）でも減らせないかを確かめます（測定中・既定 OFF）"
+internal const val C3N_WALL_DEEP_NOTE = "残った禁止の並びを「崩せない壁」と判定する前に、直し方の探索（最長 2 秒）でも減らせないかを確かめます。判定と表示だけに効き、探索の時間は変わりません（測定中・既定 OFF）"
 internal const val NORMAL_STALL_NOTE = "必須が残っているとき、改善がこの長さ（組む時間に対する割合）止まったら終えます。短いほど早く終わり、粘りは減ります"
 internal val NORMAL_STALL_FRACTIONS = listOf(0.5, 0.7, 0.9)
 internal fun normalStallFractionLabel(f: Double): String = "${(f * 100).toInt()}%" + if (f == 0.9) "（既定）" else ""
-internal const val WISH_FLOOR_NOTE = "希望どうしがぶつかって必須がこれ以上減らないとき、そこで打ち切るか（測定中・既定は打ち切らない）"
+internal const val WISH_FLOOR_NOTE = "希望どうしがぶつかって必須がこれ以上減らないとき、そこで打ち切るか。画面を開いて作るときだけ効き、閉じている間の作成には効きません（測定中・既定は打ち切らない）"
 internal fun wishFloorModeLabel(m: com.magi.app.v6.WishFloorMode): String = when (m) {
     com.magi.app.v6.WishFloorMode.OFF -> "打ち切らない（既定）"
     com.magi.app.v6.WishFloorMode.E0A -> "打ち切る"

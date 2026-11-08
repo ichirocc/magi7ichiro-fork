@@ -834,10 +834,13 @@ object V6FinalPort {
         //   本命に優越されない交換の盤面を「他の案」にする（S4）。上限 3 秒・全体の締切まで。
         var seesawTradeoffs: List<Array<IntArray>> = emptyList()
         var seesawLog = emptyList<MirrorLog>()
-        // 停滞で早く終えたときは走らせない（「無改善なら早く返す」方針。追加精製と同じ）。
-        if (config.seesawRelink && chained.alternatives.isNotEmpty() && isActive && !wd.stagnationFired.get()) {
+        // 歩く先＝探索の「他の案」（211 秒以上の並列方式だけが作る）＋どの予算でもある探索・統合の段の盤面（3.727.43）。
+        //   シーソーの価値は本命の改善より交換の候補（選べる別案）なので、停滞で早く終えたときも走らせる（上限 3 秒）。
+        val seesawGuides = (chained.alternatives + listOf(chained.schedule, integrated.schedule))
+            .filter { !it.contentDeepEquals(refSched) }.distinctBy { BoardKey(it) }
+        if (config.seesawRelink && seesawGuides.isNotEmpty() && isActive) {
             val cap = minOf(3_000L, (hardDeadlineMs - EngineClock.nowMs()).coerceAtLeast(0L))
-            val sr = SeesawRelink.apply(state, refSched, chained.alternatives, maxMillis = cap, shouldStop = { !isActive })
+            val sr = SeesawRelink.apply(state, refSched, seesawGuides, maxMillis = cap, shouldStop = { !isActive })
             if (betterReport(sr.report, refReport) && !exactPinRegression(cachedProblem(state), refSched, sr.schedule)) { refSched = sr.schedule; refReport = sr.report }
             seesawTradeoffs = sr.tradeoffs; seesawLog = sr.logs
         }
@@ -1238,10 +1241,10 @@ object V6FinalPort {
             ), MirrorLog(
                 level = "I", tag = "必須内訳",
                 message = "必須 ${finalReport.hard}件 = 希望どうしのぶつかり ${hardWishFloor}件 + それ以外 ${finalReport.hard - hardWishFloor}件",
-            )) + listOfNotNull(runCatching {
-                // [#50 P1] 重みを使わない比べ方の鍵を並べて出すだけ（採否には使わない）。
+            )) + listOf(runCatching {
+                // [#50 P1] 重みを使わない比べ方の鍵を並べて出すだけ（採否には使わない）。失敗しても理由を残す（MAGI-005: 旧は無言で欠落）。
                 MirrorLog(level = "I", tag = "段の鍵", message = TierObjective.logLine(TierObjective.key(cachedProblem(state), finalSched, finalReport)))
-            }.getOrNull())
+            }.getOrElse { e -> MirrorLog(level = "W", tag = "段の鍵", message = "段の鍵を出せませんでした（${e.javaClass.simpleName}: ${e.message?.take(120)}）。採否には影響しません") })
         }
         // [3.387.0/3.388.0] 並行アクセスの実レースは実機でしか確かめられない、と記録してきた項目の
         //   唯一の実測点。`publishLiveBest` の CAS が再試行した回数＝別スレッドと同時に publish が
@@ -1364,7 +1367,10 @@ object V6FinalPort {
             r.hard == finalReport.hard && !SeesawRelink.dominates(finalReport, r) && r.breakdown != finalReport.breakdown
         }
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
-            alternatives = if (finalTradeoffs.isNotEmpty()) finalTradeoffs else chained.alternatives, capZero = capZero, stop = stopSummary)
+            // 交換の候補を先に、空いた枠（最大 3）を探索の他の案で埋める（旧: 候補が 1 件でもあると他の案を全部置き換えていた）。
+            alternatives = if (finalTradeoffs.isEmpty()) chained.alternatives
+                else (finalTradeoffs + chained.alternatives).filter { !it.contentDeepEquals(finalSched) }.distinctBy { BoardKey(it) }.take(SeesawRelink.MAX_TRADEOFFS),
+            capZero = capZero, stop = stopSummary)
     }
 
     /**

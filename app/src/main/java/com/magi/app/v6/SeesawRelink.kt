@@ -70,7 +70,9 @@ object SeesawRelink {
             val diffs = ArrayList<Pair<Int, Int>>()
             for (i in cur.indices) for (j in cur[i].indices) if (cur[i][j] != alt[i][j]) diffs.add(i to j)
             diffs.sortBy { (i, j) -> if (i.toLong() * p.T + j in vcells) 0 else 1 }
-            fun movable(i: Int, j: Int) = !(p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) && !p.extBanned(i, j, alt[i][j])
+            // 上限 0 のシフトは置かない（`mayPlaceAt`＝最適化器の規則。3.727.43。旧: 拡張希望の禁止だけ見ていた）。
+            fun movable(i: Int, j: Int) = !(p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) &&
+                (p.mayPlaceAt(i, j, alt[i][j]) || (p.wishLocked(i, j) && alt[i][j] == p.lockTo(i, j)))
             // 歩きの盤面は必須を増やさない（増える手は取り消す）＝磨いた本命から粗い案へ 1 マス写すたびに人員不足が出て、
             //   以後の盤面がすべて悪くなるのを防ぐ。同じ日に値を交換し合っている 2 人は対で写す（その日の人数が変わらない）。
             var curRep = startRep
