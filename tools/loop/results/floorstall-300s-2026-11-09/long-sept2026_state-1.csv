@@ -1,0 +1,2 @@
+fixture,seed,iters,usedSec,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5
+sept2026_state,1,92615680,318,0,393,0,61,61,271,13,61,10,13 13 10 7 5,3,21,3 1 1 1 1

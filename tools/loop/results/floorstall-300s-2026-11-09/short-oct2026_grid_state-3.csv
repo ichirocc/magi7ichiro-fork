@@ -1,0 +1,2 @@
+fixture,seed,iters,usedSec,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5
+oct2026_grid_state,3,108843560,315,9,407,9,35,22,341,19,35,9,19 4 4 3 1,4,50,4 4 4 3 3

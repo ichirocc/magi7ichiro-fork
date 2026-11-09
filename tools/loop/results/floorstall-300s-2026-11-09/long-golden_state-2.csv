@@ -1,0 +1,2 @@
+fixture,seed,iters,usedSec,hard,total,T0,T1,T2,T3,disMax,disSum,disStaff,disTop5,fairMax,fairSum,fairTop5
+golden_state,2,194868640,318,0,305,0,76,78,151,17,76,9,17 13 11 10 8,1,3,1 1 1
