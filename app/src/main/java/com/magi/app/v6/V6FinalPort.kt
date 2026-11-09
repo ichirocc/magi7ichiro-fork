@@ -1048,6 +1048,9 @@ object V6FinalPort {
         val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
+        // [MAGI-021/022] 採否は必須の「件数」で比べる（docs/adoption.md）＝人員不足 1 を解いて禁止連続 1 を作る入れ替わりは件数では見えない。
+        //   採否は変えず、入力に無かった必須違反（族・場所）と解消した必須違反をログに出す（画面の変更案の同一性検査と説明を揃える）。
+        val identityLog = identitySwapLog(state, inputReport, finalReport)
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
         //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
         //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
@@ -1348,7 +1351,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + identityLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
@@ -1476,6 +1479,23 @@ object V6FinalPort {
                         "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
                     })
         }
+
+    /** 入力に無かった必須違反（族・場所）と解消した必須違反の 1 行。新しく生まれたものが無ければ空。 */
+    internal fun identitySwapLog(state: MagiState, input: ViolationReport, final: ViolationReport): List<MirrorLog> {
+        val born = ViolationIdentity.newHard(input, final)
+        if (born.isEmpty()) return emptyList()
+        val gone = ViolationIdentity.keys(input, hardOnly = true) - ViolationIdentity.keys(final, hardOnly = true)
+        fun fam(ks: Set<ViolationKey>) = ks.groupingBy { it.family }.eachCount().entries.joinToString("・") { (f, n) -> "${FixApplyGate.famLabel(f)}$n" }
+        fun where(k: ViolationKey) = when (k.space) {
+            ViolationKey.Space.CELL -> "${state.staff.getOrNull(k.a)?.name ?: k.a}/${k.b + 1}日目"
+            ViolationKey.Space.NEED -> "${state.shifts.getOrNull(k.a)?.kigou ?: k.a}/${k.b + 1}日目"
+            ViolationKey.Space.COUNT -> "${state.staff.getOrNull(k.a)?.name ?: k.a}/${state.shifts.getOrNull(k.b)?.kigou ?: k.b}"
+        }
+        return listOf(MirrorLog(level = "W", tag = "必須の入れ替わり",
+            message = "入力に無かった必須違反 ${born.size}件（${fam(born)}）・入力の必須で解消 ${gone.size}件" +
+                (if (gone.isEmpty()) "" else "（${fam(gone)}）") + "。必須の件数は ${input.hard}→${final.hard}（採否は件数で比べる）。" +
+                "例: " + born.take(3).joinToString("、") { "${FixApplyGate.famLabel(it.family)} ${where(it)}" }))
+    }
 
     /** [3.575.0] [reportComparator] で候補中の最良を選ぶ（同値なら早い段を残す）。 */
     internal fun pickBestStage(candidates: List<StageCandidate>): StageCandidate =
