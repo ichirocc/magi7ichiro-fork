@@ -118,7 +118,7 @@ data class UiState(
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val membraneCellLns: Boolean = true,  // PolishGate.membraneCellLns（膜の細胞 LNS）。保存しない
-    val seesawRelink: Boolean = false,  // PolishGate.seesawRelink（シーソーの交換の候補、docs/seesaw.md §6.3）。保存しない
+    val seesawRelink: Boolean = true,  // PolishGate.seesawRelink（シーソーの交換の候補、docs/seesaw.md §6.3）。アプリの既定は ON（3.727.45）。保存しない
     val floorShortStall: Boolean = true,  // PolishGate.floorShortStall。保存しない
     val c3nWallDeepCheck: Boolean = false,  // PolishGate.c3nWallDeepCheck。保存しない
     val normalStallFraction: Double = 0.9,  // PolishGate.normalStallFraction（停滞閾値の割合、(0,1)）。保存しない

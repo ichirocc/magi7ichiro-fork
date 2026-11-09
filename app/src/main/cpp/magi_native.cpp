@@ -2367,7 +2367,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 9;   // [#50] 9＝nativeSetSoftWeights を追加
+    return 10;   // 10＝nativeFullEval が族別の量も返す（MAGI-003）
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。
@@ -2733,19 +2733,23 @@ Java_com_magi_app_v6_NativeBridge_nativeDestroyProblem(JNIEnv*, jclass, jlong ha
 // フル評価。schedule は S*T の平坦配列。戻り値 long[2] = {hard1, soft}（Evaluator.fullEvalParts と同値）。
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeFullEval(JNIEnv* env, jclass, jlong handle, jintArray schedArr) {
+    // [MAGI-003] 戻り値＝[hard1, soft, 族別の生の量 21（kBreakdownNames 順）]。実行時の照合が合計だけでなく族ごとにも比べる（ABI 10）。
     auto* p = reinterpret_cast<MagiProblem*>(handle);
-    jlongArray out = env->NewLongArray(2);
+    jlongArray out = env->NewLongArray(2 + kBreakdownCount);
     long long v[2] = {-1, -1};
+    long long bd[kBreakdownCount] = {0};
     if (p != nullptr) {
         jsize n = env->GetArrayLength(schedArr);
         if (n == p->S * p->T) {
             std::vector<int> a((size_t)n);
             env->GetIntArrayRegion(schedArr, 0, n, reinterpret_cast<jint*>(a.data()));
-            fullEvalParts(*p, a.data(), v);
+            fullEvalParts(*p, a.data(), v, bd);
         }
     }
-    jlong jv[2] = {(jlong)v[0], (jlong)v[1]};
-    env->SetLongArrayRegion(out, 0, 2, jv);
+    jlong jv[2 + kBreakdownCount];
+    jv[0] = (jlong)v[0]; jv[1] = (jlong)v[1];
+    for (int f = 0; f < kBreakdownCount; f++) jv[2 + f] = (jlong)bd[f];
+    env->SetLongArrayRegion(out, 0, 2 + kBreakdownCount, jv);
     return out;
 }
 #endif  // MAGI_HOST_TEST

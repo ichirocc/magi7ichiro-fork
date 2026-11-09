@@ -91,10 +91,18 @@ object NativeEval {
             val t0 = System.nanoTime()
             val native = NativeBridge.nativeFullEval(handle, flat)
             val t1 = System.nanoTime()
-            val kotlin = Evaluator(p).fullEvalParts(schedule)
+            val kotlinBd = HashMap<String, Long>()
+            val kotlin = Evaluator(p).fullEvalParts(schedule, kotlinBd)
             val t2 = System.nanoTime()
+            // [MAGI-003] 合計だけだと、重みの同じ 2 族が +1／−1 ずれても一致に見える（優先順位の方式は段ごとに重みが同じ）＝族ごとにも比べる。
+            val familyDiffs = if (native.size < 2 + MirrorKeys.all.size) listOf("族別の量なし") else
+                MirrorKeys.all.withIndex().mapNotNull { (f, k) ->
+                    val c = native[2 + f]; val kt = kotlinBd[k] ?: 0L
+                    if (c == kt) null else "$k C++$c≠Kotlin$kt"
+                }
             return ParityResult(
-                match = native.size == 2 && native[0] == kotlin[0] && native[1] == kotlin[1],
+                match = native.size >= 2 && native[0] == kotlin[0] && native[1] == kotlin[1] && familyDiffs.isEmpty(),
+                familyDiffs = familyDiffs,
                 nativeHard = native.getOrElse(0) { -1L }, nativeSoft = native.getOrElse(1) { -1L },
                 kotlinHard = kotlin[0], kotlinSoft = kotlin[1],
                 nativeUs = (t1 - t0) / 1000, kotlinUs = (t2 - t1) / 1000,
@@ -106,6 +114,7 @@ object NativeEval {
 
     data class ParityResult(
         val match: Boolean,
+        val familyDiffs: List<String> = emptyList(),
         val nativeHard: Long, val nativeSoft: Long,
         val kotlinHard: Long, val kotlinSoft: Long,
         val nativeUs: Long, val kotlinUs: Long,

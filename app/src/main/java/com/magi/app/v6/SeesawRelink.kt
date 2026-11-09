@@ -3,8 +3,8 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /**
- * シーソーの S3（`docs/seesaw.md` §6.3）。後処理の結果（本命）から「他の案」の各盤面へ、違うセルを違反セルから先に 1 つずつ写して歩く
- * Path Relinking。途中の盤面が `betterReport` で本命より良く固定（厳密ピン）も破らなければ本命を差し替え、必須の件数が同じで本命に
+ * シーソーの S3（`docs/seesaw.md` §6.3）。本命から「他の案」の各盤面へ、違うセルを違反セルから先に 1 つずつ（同じ日に値を交換し合う 2 人は対で）
+ * 写して歩く Path Relinking。必須が増える手は取り消す（3.727.42）。途中の盤面が `betterReport` で本命より良く固定（厳密ピン）も破らなければ本命を差し替え、必須の件数が同じで本命に
  * 優越されない盤面は**交換の候補**として残す（S4 の「他の案」に出す）。採否は `betterReport` だけ（I2）。
  * 既定 OFF（[PolishGate.seesawRelink]）＝測ってから採否。
  */
@@ -20,6 +20,13 @@ object SeesawRelink {
     )
 
     const val MAX_TRADEOFFS = 3
+
+    /**
+     * 案ごとの歩き方（3.727.42）。どれも数ミリ秒なので全部走らせ、良いほうを採る。
+     * PLAIN＝1 マスずつ写し戻さない（3.727.22 からの歩き）、PAIRED＝同じ日に値を交換し合う 2 人は対で写す、
+     * PAIRED_KEEP_HARD＝対で写し、必須が増える手は戻す（磨いた本命から粗い案へ歩いても途中が崩れない）。
+     */
+    enum class Walk { PLAIN, PAIRED, PAIRED_KEEP_HARD }
 
     /** a が b に優越する（21 族すべて a ≤ b、どれかで <）。重みを使わない比較（`docs/seesaw.md` §2）。 */
     fun dominates(a: ViolationReport, b: ViolationReport): Boolean {
@@ -38,6 +45,7 @@ object SeesawRelink {
         alternatives: List<Array<IntArray>>,
         maxMillis: Long = 3_000L,
         shouldStop: () -> Boolean = { false },
+        walks: List<Walk> = Walk.entries,
     ): Result {
         val p = cachedProblem(state)
         val t0 = EngineClock.nowMs()
@@ -46,7 +54,9 @@ object SeesawRelink {
         var bestRep = UnifiedViolationChecker.check(state, best)
         var applied = 0
         val pool = ArrayList<Pair<Array<IntArray>, ViolationReport>>()
-        for (alt in alternatives) {
+        for (alt in alternatives) for (walk in walks) {
+            val pairMoves = walk != Walk.PLAIN
+            val undoHardIncrease = walk == Walk.PAIRED_KEEP_HARD
             if (out()) break
             if (alt.size != best.size || alt.any { it.size != p.T }) continue
             val start = best.copy2D()
@@ -60,13 +70,27 @@ object SeesawRelink {
             val diffs = ArrayList<Pair<Int, Int>>()
             for (i in cur.indices) for (j in cur[i].indices) if (cur[i][j] != alt[i][j]) diffs.add(i to j)
             diffs.sortBy { (i, j) -> if (i.toLong() * p.T + j in vcells) 0 else 1 }
+            // 上限 0 のシフトは置かない（`mayPlaceAt`＝最適化器の規則。3.727.43。旧: 拡張希望の禁止だけ見ていた）。
+            fun movable(i: Int, j: Int) = !(p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) &&
+                (p.mayPlaceAt(i, j, alt[i][j]) || (p.wishLocked(i, j) && alt[i][j] == p.lockTo(i, j)))
+            // 歩きの盤面は必須を増やさない（増える手は取り消す）＝磨いた本命から粗い案へ 1 マス写すたびに人員不足が出て、
+            //   以後の盤面がすべて悪くなるのを防ぐ。同じ日に値を交換し合っている 2 人は対で写す（その日の人数が変わらない）。
+            var curRep = startRep
             for ((i, j) in diffs) {
                 if (out()) break
-                if (p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) continue
-                if (p.extBanned(i, j, alt[i][j])) continue
-                cur[i][j] = alt[i][j]
+                if (cur[i][j] == alt[i][j] || !movable(i, j)) continue
+                val partner = if (!pairMoves) null else (0 until p.S).firstOrNull { b ->
+                    b != i && cur[b][j] != alt[b][j] && cur[b][j] == alt[i][j] && alt[b][j] == cur[i][j] && movable(b, j)
+                }
+                val cells = if (partner != null) listOf(i, partner) else listOf(i)
+                val saved = cells.map { cur[it][j] }
+                for (a in cells) cur[a][j] = alt[a][j]
+                fun undo() { cells.forEachIndexed { x, a -> cur[a][j] = saved[x] } }
+                // PLAIN は 3.727.22 の歩きのまま（回数固定を崩した盤面は採らずに先へ進む＝道筋は戻さない）。
+                if (exactPinRegression(p, start, cur)) { if (pairMoves) undo(); continue }
                 val rep = UnifiedViolationChecker.check(state, cur)
-                if (exactPinRegression(p, start, cur)) continue
+                if (undoHardIncrease && rep.hard > curRep.hard) { undo(); continue }
+                curRep = rep
                 if (betterReport(rep, bestRep)) {
                     best = cur.copy2D(); bestRep = rep; applied++
                 } else if (rep.hard == bestRep.hard && !dominates(bestRep, rep) && rep.breakdown != bestRep.breakdown) {

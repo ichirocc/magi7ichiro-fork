@@ -374,7 +374,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | `PolishGate.postChainRollbackCountsZero` | false | 巻き戻したパスの採用数を 0 と数える |
 | `PolishGate.aptFairSoftTolerance` | false（「じっくり」で ON） | apt/fair 限定の採用例外。`AptFairPolish.heavySoftGuard`（既定 true、3.637.0）は無害化②の測定スイッチ |
 | `PolishGate.prePostDescent` | false | 後処理前の局所降下 |
-| `PolishGate.normalStallFraction` | 0.9（UI なし） | §5.1 の `fraction` |
+| `PolishGate.normalStallFraction` | 0.9（詳細設定「停滞とみなすまでの長さ」50/70/90%、3.727.41） | §5.1 の `fraction` |
 | `PolishGate.c3nWallShortStall` | **false**（3.673.0〜。設定画面のスイッチ「禁止の並びだけ残ったら早めに切り上げる」） | true で c3n 壁による短縮をかける（3.641.0 の測定スイッチ、3.673.0 で既定を反転） |
 | `PolishGate.c3nWallLegacy` | false（UI なし） | true で HEAD の c3n 壁判定（版ごと固定・生存盤面の診断・一致の検査なし）。測定の基準腕（3.642.0、§5.3） |
 | `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算の試行ごとの停止確認を切る（入口の確認は残るので HEAD とは完全に一致しない）。測定の切り分け（3.642.0、§5.5） |

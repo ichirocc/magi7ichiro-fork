@@ -422,6 +422,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     init {
         // 直す順番のアプリの既定は優先順位（3.727.40、実データ 16 勝 2 敗）。エンジン単体の既定（重み）とテストの基準は変えない。
         com.magi.app.v6.ObjectiveWeights.method = _ui.value.objectiveMethod
+        // 他の案を手がかりに仕上げる（シーソー）もアプリの既定は ON（3.727.45、交換の候補が 18 回中 16 回・必須の悪化 0）。エンジン単体の既定は OFF のまま。
+        com.magi.app.v6.PolishGate.seesawRelink = _ui.value.seesawRelink
         // ホームの見出しの「解消する必須違反」の名と場所。盤面と先頭の手が変わるたびに Default で作り直す（main で検査しない）。
         viewModelScope.launch {
             _ui.map { u -> u.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.ops to u.schedule }.distinctUntilChanged().collectLatest { (ops, sch) ->

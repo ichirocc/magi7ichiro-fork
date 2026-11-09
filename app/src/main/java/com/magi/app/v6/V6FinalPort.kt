@@ -834,9 +834,13 @@ object V6FinalPort {
         //   本命に優越されない交換の盤面を「他の案」にする（S4）。上限 3 秒・全体の締切まで。
         var seesawTradeoffs: List<Array<IntArray>> = emptyList()
         var seesawLog = emptyList<MirrorLog>()
-        if (config.seesawRelink && chained.alternatives.isNotEmpty() && isActive) {
+        // 歩く先＝探索の「他の案」（211 秒以上の並列方式だけが作る）＋どの予算でもある探索・統合の段の盤面（3.727.43）。
+        //   シーソーの価値は本命の改善より交換の候補（選べる別案）なので、停滞で早く終えたときも走らせる（上限 3 秒）。
+        val seesawGuides = (chained.alternatives + listOf(chained.schedule, integrated.schedule))
+            .filter { !it.contentDeepEquals(refSched) }.distinctBy { BoardKey(it) }
+        if (config.seesawRelink && seesawGuides.isNotEmpty() && isActive) {
             val cap = minOf(3_000L, (hardDeadlineMs - EngineClock.nowMs()).coerceAtLeast(0L))
-            val sr = SeesawRelink.apply(state, refSched, chained.alternatives, maxMillis = cap, shouldStop = { !isActive })
+            val sr = SeesawRelink.apply(state, refSched, seesawGuides, maxMillis = cap, shouldStop = { !isActive })
             if (betterReport(sr.report, refReport) && !exactPinRegression(cachedProblem(state), refSched, sr.schedule)) { refSched = sr.schedule; refReport = sr.report }
             seesawTradeoffs = sr.tradeoffs; seesawLog = sr.logs
         }
@@ -860,7 +864,7 @@ object V6FinalPort {
                         diag.hasRuns && diag.allBlocked
                     } catch (_: Exception) { false }
                 }
-            val canExtra = !stopRequested && !stagnated && post.report.total > 0 && !structuralHardResidual
+            val canExtra = !stopRequested && !stagnated && refReport.total > 0 && !structuralHardResidual
             if (extraMs >= 5_000 && !canExtra) {
                 val why = when {
                     stopRequested -> "停止要求"
@@ -885,7 +889,9 @@ object V6FinalPort {
                 //   nativeハンドル生成 が小予算を侵食し、3.102.0が回収した予約枠が高worker設定で再び浪費
                 //   される）→ ここだけ意図的に MAX_HYPOTHESES(5) までにキャップ＝旧来の5×1構成を維持。
                 val extra = V6NativeOptimizer.optimize(
-                    state, post.schedule,
+                    // 今の本命（シーソーが差し替えたならその盤面）から始めて、今の本命と比べる（3.727.42。旧: 後処理の盤面から始めて後処理と比べ、
+                    //   シーソーの改善より小さい改善でも本命を上書きして、シーソーの盤面を捨てていた）。シーソー OFF なら refSched＝post で不変。
+                    state, refSched,
                     optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5),
                         workers = optsR.workers.coerceAtMost(HypothesisPlanning.MAX_HYPOTHESES)),
                     extraStop,
@@ -893,20 +899,20 @@ object V6FinalPort {
                     { phase, rep, iters, elapsed -> progressWatch("追加精製 $phase", rep, iters, elapsed) },
                 )
                 // [3.287.0 keep-best統一] hard→weighted→total（betterReport と同順）。
-                val imp = betterReport(extra.report, post.report)
+                val imp = betterReport(extra.report, refReport)
                 if (!imp) {
                     // [3.378.0/実機ログ起因] 旧: 改善したときだけログしていたため、**12秒（予算の4%）を
                     //   使った追加精製が1行も残らない**実行があった（実機ログ: TIME 行に 追加精製12.007s と
                     //   出るのに ExtraRefine 行が無く、効果0なのか実行されなかったのか区別できない）。
                     extraLog = listOf(MirrorLog(level = "I", tag = "ExtraRefine",
                         message = "予算残${extraMs / 1000}sで追加精製: 改善なし" +
-                            "（HARD ${post.report.hard} / total ${post.report.total} のまま後処理の結果を採用）"))
+                            "（HARD ${refReport.hard} / total ${refReport.total} のまま後処理の結果を採用）"))
                 }
                 if (imp) {
                     refSched = extra.schedule; refReport = extra.report
                     extraLog = listOf(
                         MirrorLog(level = "I", tag = "ExtraRefine",
-                            message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"),
+                            message = "予算残${extraMs / 1000}sで追加精製: HARD ${refReport.hard}→${extra.report.hard} / total ${refReport.total}→${extra.report.total}"),
                         // [監査(3c)/N3と同型] ログ末尾の UnifiedCheck/違反詳細は「精製前の盤面」の診断のまま残るため、
                         //   採用した勤務表の集計を明示して件数の取り違えを防ぐ。
                         MirrorLog(level = "I", tag = "UnifiedCheck",
@@ -1097,7 +1103,8 @@ object V6FinalPort {
                     //   ビルドの取り残し＝差分と次の一手まで書く。
                     else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません " +
                         "(C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft}" +
-                        "・差 hard=${parity.nativeHard - parity.kotlinHard} soft=${parity.nativeSoft - parity.kotlinSoft})" +
+                        "・差 hard=${parity.nativeHard - parity.kotlinHard} soft=${parity.nativeSoft - parity.kotlinSoft}" +
+                        (if (parity.familyDiffs.isEmpty()) "" else "・族のずれ ${parity.familyDiffs.take(5).joinToString("、")}") + ")" +
                         "／CIは言語跨ぎパリティ(golden実データ)を検証済み＝ソースが揃っていれば .so が古い可能性が高い（再ビルドを試す）$gate"
                 },
             )
@@ -1235,10 +1242,10 @@ object V6FinalPort {
             ), MirrorLog(
                 level = "I", tag = "必須内訳",
                 message = "必須 ${finalReport.hard}件 = 希望どうしのぶつかり ${hardWishFloor}件 + それ以外 ${finalReport.hard - hardWishFloor}件",
-            )) + listOfNotNull(runCatching {
-                // [#50 P1] 重みを使わない比べ方の鍵を並べて出すだけ（採否には使わない）。
+            )) + listOf(runCatching {
+                // [#50 P1] 重みを使わない比べ方の鍵を並べて出すだけ（採否には使わない）。失敗しても理由を残す（MAGI-005: 旧は無言で欠落）。
                 MirrorLog(level = "I", tag = "段の鍵", message = TierObjective.logLine(TierObjective.key(cachedProblem(state), finalSched, finalReport)))
-            }.getOrNull())
+            }.getOrElse { e -> MirrorLog(level = "W", tag = "段の鍵", message = "段の鍵を出せませんでした（${e.javaClass.simpleName}: ${e.message?.take(120)}）。採否には影響しません") })
         }
         // [3.387.0/3.388.0] 並行アクセスの実レースは実機でしか確かめられない、と記録してきた項目の
         //   唯一の実測点。`publishLiveBest` の CAS が再試行した回数＝別スレッドと同時に publish が
@@ -1355,8 +1362,16 @@ object V6FinalPort {
         //   親のキャンセルを見て自分で投げるので、実効上は元から例外で返っていた（StopSemanticsTest の変異検証で
         //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
         ensureActive()
+        // 交換の候補はシーソーの時点の本命と比べて選んだ＝最終の本命（追加精製・最終番兵の後）と比べ直し、必須が違うか優越されるものは外す。
+        val finalTradeoffs = seesawTradeoffs.filter { t ->
+            val r = UnifiedViolationChecker.check(state, t)
+            r.hard == finalReport.hard && !SeesawRelink.dominates(finalReport, r) && r.breakdown != finalReport.breakdown
+        }
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
-            alternatives = if (seesawTradeoffs.isNotEmpty()) seesawTradeoffs else chained.alternatives, capZero = capZero, stop = stopSummary)
+            // 交換の候補を先に、空いた枠（最大 3）を探索の他の案で埋める（旧: 候補が 1 件でもあると他の案を全部置き換えていた）。
+            alternatives = if (finalTradeoffs.isEmpty()) chained.alternatives
+                else (finalTradeoffs + chained.alternatives).filter { !it.contentDeepEquals(finalSched) }.distinctBy { BoardKey(it) }.take(SeesawRelink.MAX_TRADEOFFS),
+            capZero = capZero, stop = stopSummary)
     }
 
     /**

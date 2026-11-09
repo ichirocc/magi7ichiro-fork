@@ -49,6 +49,27 @@ class SeesawRelinkTest {
         assertEquals(EXPECTED_HASH, r.schedule.joinToString(";") { it.joinToString(",") }.hashCode())
     }
 
+    /** 3.727.42: 旧の歩き（PLAIN）に対で写す歩きを足しても本命は旧以上のまま、交換の候補は増える（full_coverage・優先順位の採点で 1→3）。 */
+    @Test
+    fun pairedWalksKeepTheMainAndAddTradeoffs() {
+        ObjectiveWeights.method = ObjectiveMethod.PRIORITY
+        try {
+            val st = StateParser.parse(javaClass.classLoader!!.getResource("full_coverage_state.json")!!.readText())!!
+            val b0 = st.schedule.map { it.toIntArray() }.toTypedArray()
+            fun pol(seed: Long) = MembraneCellLns.apply(st, b0, MembraneCellLns.Params(deterministic = true, maxCells = 30, itersPerCell = 60_000, seed = seed)).newSchedule
+            val b = pol(1L); val alts = listOf(pol(5L), pol(9L), pol(13L))
+            val plain = SeesawRelink.apply(st, b, alts, maxMillis = 600_000L, walks = listOf(SeesawRelink.Walk.PLAIN))
+            val all = SeesawRelink.apply(st, b, alts, maxMillis = 600_000L)
+            assertFalse(betterReport(plain.report, all.report))
+            assertTrue("交換の候補 ${all.tradeoffs.size} > ${plain.tradeoffs.size}", all.tradeoffs.size > plain.tradeoffs.size)
+            for (t in all.tradeoffs) {
+                val rt = UnifiedViolationChecker.check(st, t)
+                assertEquals(all.report.hard, rt.hard)
+                assertFalse(SeesawRelink.dominates(all.report, rt))
+            }
+        } finally { ObjectiveWeights.method = ObjectiveMethod.WEIGHTS }
+    }
+
     @Test
     fun offByDefault() {
         assertFalse(PolishGate.seesawRelink)
