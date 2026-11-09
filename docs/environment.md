@@ -33,6 +33,8 @@
   リポジトリ Secrets に `MAGI_KEYSTORE_B64`（`base64 -w0 鍵.jks`）・`MAGI_KEYSTORE_PASSWORD`・`MAGI_KEY_ALIAS`・`MAGI_KEY_PASSWORD` を登録すると
   固定鍵で署名し、run の Summary に署名鍵と SHA-256 が出る。未登録ならデバッグ鍵で警告付き。鍵を切り替えた最初の 1 回だけは端末で
   JSON を書き出してからアンインストール→インストールが要る。gate と release は並列、配布（Release 添付／`app-release-*`）は両方が緑の後だけ。
+  gate は同じコミットで V6 Engine Check のテストジョブ（`v6-engine-check`）が成功済みなら JUnit を回し直さない（2026-11-09。旧: 9〜17 分の二重実行＝全体 10〜18 分。
+  見つからないときは従来どおり `hosttest.sh`。成功済みの判定は job の conclusion＝作業ブランチの「main と同一」で飛ばした run は数えない）。
 - **成果物の保持方針（3.570.0、ユーザー決定）**: 通常の CI 成果物（lint 結果・失敗ログ・debug/native-parity 等の
   ビルド成果物）は `cleanup-artifacts.yml` が毎日 03:00 UTC に無条件で全削除する（`workflow_dispatch` でも即時実行可）。
   **`release-build.yml` のリリース APK（成果物名 `app-release-*`）だけは対象外**にし、`retention-days: 14` を

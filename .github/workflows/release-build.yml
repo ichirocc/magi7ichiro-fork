@@ -34,6 +34,9 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,7 +50,22 @@ jobs:
       - name: Design lint
         run: python3 tools/design_lint.py
 
+      # 同じコミットで V6 Engine Check のテストジョブが成功済みなら、同じ JUnit を回し直さない（9〜17 分の二重実行）。
+      #   見つからない（未実行・実行中・失敗・main の検査を経ていないコミット）ときは従来どおりここで回す。
+      - name: Find a passed V6 Engine Check for this commit
+        id: prior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ok=false
+          for id in $(gh api "repos/${{ github.repository }}/actions/workflows/v6-engine-check.yml/runs?head_sha=${{ github.sha }}&status=success" --jq '.workflow_runs[].id' || true); do
+            c=$(gh api "repos/${{ github.repository }}/actions/runs/$id/jobs" --jq '.jobs[] | select(.name=="v6-engine-check") | .conclusion' || true)
+            if [ "$c" = "success" ]; then ok=true; echo "V6 Engine Check run $id passed on ${{ github.sha }}"; break; fi
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+
       - name: Engine unit tests (host JVM)
+        if: steps.prior.outputs.ok != 'true'
         run: bash tools/host/hosttest.sh
 
   # [速度] 旧: needs: gate で直列（約 4.4 分＋2.8 分）。並列化し、配布側の job が両方を待つ。
