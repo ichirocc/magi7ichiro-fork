@@ -707,8 +707,7 @@ fun Array<IntArray>.copy2D(): Array<IntArray> {
 
 fun Problem.canDo(staffI: Int, shiftK: Int): Boolean {
     if (staffI !in 0 until S || shiftK !in 0 until K) return false
-    val g = sgrp[staffI]
-    return bucket.getOrNull(g)?.contains(shiftK) == true
+    return canDoHas[staffI][shiftK]
 }
 
 /** [監査#11①] セル(i,j)に「実現可能な希望」が入っているか（希望の意味＝pref の計数・希望の診断・S5 が読む）。
