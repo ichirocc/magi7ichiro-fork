@@ -11,7 +11,16 @@ import kotlin.random.Random
  * チェッカーの weightedScore・評価器・差分評価が同じ重みで一致すること（片方だけ切り替わると探索と採否がずれる）。
  */
 class ObjectiveWeightsTest {
-    @After fun back() { ObjectiveWeights.method = ObjectiveMethod.WEIGHTS }
+    @After fun back() { ObjectiveWeights.method = ObjectiveMethod.WEIGHTS; PolishGate.aptFairSoftTolerance = false }
+
+    /** 優先順位では apt/fair の 6% 許容を入れても実行の設定には載らない（重み（従来）では従来どおり載る）。 */
+    @Test fun aptFairToleranceIsOffUnderPriority() {
+        PolishGate.aptFairSoftTolerance = true
+        ObjectiveWeights.method = ObjectiveMethod.PRIORITY
+        assertEquals(false, EngineConfig.snapshot().aptFairSoftTolerance)
+        ObjectiveWeights.method = ObjectiveMethod.WEIGHTS
+        assertEquals(true, EngineConfig.snapshot().aptFairSoftTolerance)
+    }
 
     @Test fun defaultMethodIsTheCurrentWeights() {
         assertEquals(ObjectiveMethod.WEIGHTS, ObjectiveWeights.method)

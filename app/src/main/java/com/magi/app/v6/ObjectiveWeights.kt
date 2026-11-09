@@ -21,6 +21,10 @@ object ObjectiveWeights {
 
     fun table(m: ObjectiveMethod = method): Map<String, Double> = if (m == ObjectiveMethod.PRIORITY) priority else MirrorKeys.weights
 
+    /** 公平化／適切回数の 6% 許容（[PolishGate.aptFairSoftTolerance]）を使える方式か。PRIORITY は T3 の apt/fair のために上の段を
+     *  悪くする手を採らない＝許容と両立しないので使わない（2026-11-09 ユーザー指示「優先順位のときは自動で OFF」）。 */
+    fun allowsAptFairTolerance(m: ObjectiveMethod = method): Boolean = m != ObjectiveMethod.PRIORITY
+
     /** 族 1 つの採点の重み（[MirrorKeys.weightOf] の採点版。aptLow/aptHigh は apt）。研磨・修復の見積りが読む。 */
     fun of(family: String): Double = when (family) {
         "aptLow", "aptHigh" -> table()["apt"] ?: 0.0

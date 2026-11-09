@@ -1378,6 +1378,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val alts = alternativeScheds
             viewModelScope.launch { captureAlternatives(alts) }
         }
+        // 置き換え前の勤務表の重みは前の方式の点数＝新しい方式で付け直す（旧: そのまま比べ、優先順位の 48932 と重みの 43389 を比べて
+        //   「今の結果が良い」と判定し、戻す先を捨てていた）。必須・合計は方式に依らない。
+        preDraft = preDraft?.let { p ->
+            if (st == null || p.stateKey != stateKey(st)) null
+            else PreDraftBoard(p.board, p.stateKey, p.hard, com.magi.app.v6.UnifiedViolationChecker.check(st, p.board).weightedScore, p.total, p.hardWord)
+        }
+        _ui.update { it.copy(preDraftNotice = null) }
         logOp("I", "設定変更: 直す順番 → ${objectiveMethodLabel(m)}")
         refreshCheck()
     }
@@ -1759,7 +1766,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         nativeOn = _ui.value.nativeAccel, parityOn = _ui.value.nativeParity,
         wideOn = com.magi.app.v6.PolishGate.wideC3nBreakDays,
         softPolishOn = _ui.value.softPolish, combineOn = com.magi.app.v6.PolishGate.combineExhaustPairs,
-        aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance,
+        aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance && com.magi.app.v6.ObjectiveWeights.allowsAptFairTolerance(),
         countChainOn = com.magi.app.v6.PolishGate.countChainPolish,
     )
 
