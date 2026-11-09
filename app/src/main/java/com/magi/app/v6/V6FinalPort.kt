@@ -827,8 +827,11 @@ object V6FinalPort {
         //   大半が未使用のまま返っていた(実機: 予約25s中 実使用0.45s＝約24.5s廃棄)。残り5s以上かつ違反が残る場合、
         //   最終盤面を起点に keep-best の追加精製(ALNS)へ回す。runAlns は入力比番兵つき＝結果は post 以上を保証。
         //   停滞検知(stagnationFired)による早期終了時はスキップ＝「無改善なら早く返す」方針を壊さない。
-        var refSched = post.schedule
-        var refReport = post.report
+        // 後処理が統合より悪い盤面を返したとき（apt/fair の 6% 許容が後処理の中で重みを悪化させた場合）は統合の盤面から続ける
+        //   （旧: 悪い方から歩き、最終番兵が統合を採ってシーソー・追加精製の成果ごと捨てていた。実機ログ 3.727.47 #6）。
+        val postRegressed = betterReport(integrated.report, post.report) && !exactPinRegression(cachedProblem(state), post.schedule, integrated.schedule)
+        var refSched = if (postRegressed) integrated.schedule else post.schedule
+        var refReport = if (postRegressed) integrated.report else post.report
         var extraLog = emptyList<MirrorLog>()
         // [シーソー S3、docs/seesaw.md §6.3] 後処理の結果から「他の案」へ歩く Path Relinking（既定 OFF）。良ければ本命を差し替え（betterReport）、
         //   本命に優越されない交換の盤面を「他の案」にする（S4）。上限 3 秒・全体の締切まで。

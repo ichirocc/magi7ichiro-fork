@@ -40,7 +40,7 @@ data class EngineConfig(
             floorShortStall = PolishGate.floorShortStall,
             c3nWallDeepCheck = PolishGate.c3nWallDeepCheck,
             combineExhaustPairs = PolishGate.combineExhaustPairs,
-            aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
+            aptFairSoftTolerance = PolishGate.aptFairSoftTolerance && ObjectiveWeights.allowsAptFairTolerance(),
             countChainPolish = PolishGate.countChainPolish,
             membraneCellLns = PolishGate.membraneCellLns,
             seesawRelink = PolishGate.seesawRelink,

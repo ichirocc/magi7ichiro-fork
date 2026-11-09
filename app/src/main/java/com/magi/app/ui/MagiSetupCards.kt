@@ -354,12 +354,13 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.aptFairToleranceUnguarded, enabled = !ui.running && ui.searchStrength == SearchStrength.THOROUGH, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) }).semantics(mergeDescendants = true) {}) {
+            val toleranceUsable = ui.searchStrength == SearchStrength.THOROUGH && ui.objectiveMethod != ObjectiveMethod.PRIORITY
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.aptFairToleranceUnguarded, enabled = !ui.running && toleranceUsable, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
                     Text("容認 6% で重い違反の増加も許す", style = MaterialTheme.typography.bodyMedium)
-                    Text(APT_FAIR_UNGUARDED_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (ui.objectiveMethod == ObjectiveMethod.PRIORITY) APT_FAIR_PRIORITY_NOTE else APT_FAIR_UNGUARDED_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = ui.aptFairToleranceUnguarded, onCheckedChange = null, enabled = !ui.running && ui.searchStrength == SearchStrength.THOROUGH)
+                Switch(checked = ui.aptFairToleranceUnguarded, onCheckedChange = null, enabled = !ui.running && toleranceUsable)
             }
         }
         Column(Modifier.fillMaxWidth()) {
@@ -514,6 +515,7 @@ internal fun objectiveMethodLabel(m: ObjectiveMethod): String = when (m) {
 }
 internal const val OBJECTIVE_METHOD_NOTE = "優先順位（既定）: 個人の回数・期間の制約を先に、連続の希望・グループの人数を次に、適切回数や偏りは最後に直します。必ず守るものは同じです。重み（従来）は前の版と同じ直し方です"
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
+internal const val APT_FAIR_PRIORITY_NOTE = "直す順番が優先順位のときは使いません（適切回数・偏りのために上の段を悪くしない）。じっくりの 6% 容認も同じく使いません"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"
