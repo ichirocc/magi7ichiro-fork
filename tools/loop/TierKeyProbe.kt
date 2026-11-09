@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
     val fixtures = (System.getenv("MAGI_TK_FIXTURES") ?: "golden_state.json,sample_state_v6.json,blocked_covu_state.json,sept2026_state.json,oct2026_grid_state.json,full_coverage_state.json").split(',')
     val seeds = (System.getenv("MAGI_TK_SEEDS") ?: "1,2,3").split(',').map { it.trim().toLong() }
     val workers = System.getenv("MAGI_TK_WORKERS")?.toInt() ?: 1
-    val logTag = System.getenv("MAGI_TK_LOGTAG")
+    val logTags = System.getenv("MAGI_TK_LOGTAG")?.split(',')?.map { it.trim() }?.toSet()
     // 採点の方式（3.727.37）。MAGI_TK_METHOD=PRIORITY で「直す順番：優先順位（試験）」と同じ採点で作る。
     System.getenv("MAGI_TK_METHOD")?.let { ObjectiveWeights.method = ObjectiveMethod.valueOf(it) }
     // 機構の腕（2026-11-08、既定の採否を優先順位で測り直す）。指定が無ければ製品の既定のまま。
@@ -36,7 +36,7 @@ fun main(args: Array<String>) {
                     allowImpossible = true, softPolish = true, seed = 1000L + seed)
             }
             val rep = UnifiedViolationChecker.check(st, res.schedule)
-            if (logTag != null) res.logs.filter { it.tag == logTag }.forEach { System.err.println("$f seed=$seed [${it.tag}] ${it.message}") }
+            if (logTags != null) res.logs.filter { it.tag in logTags }.forEach { System.err.println("$f seed=$seed [${it.tag}] ${it.message}") }
             val k = TierObjective.key(p, res.schedule, rep)
             val line = listOf(f.removeSuffix(".json"), seed, rep.hard, rep.total) + k.excess +
                 listOf(k.maxDissatisfaction, k.sumDissatisfaction, k.dissatisfaction.size, k.dissatisfaction.take(5).joinToString(" "),
