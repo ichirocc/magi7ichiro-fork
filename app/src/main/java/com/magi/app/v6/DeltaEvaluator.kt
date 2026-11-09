@@ -71,6 +71,14 @@ class DeltaEvaluator(private val p: Problem) {
     // [fairCur] g*K+k＝群 g・シフト k の公平化偏差の現在値（rebuild が全件、commit が動いた 2 件を更新）。
     private val fairCur = LongArray(p.G * K)
     private var fairOldAfter = 0L; private var fairNwAfter = 0L
+    private val fairScratch = Array(p.G) { FairScratch(p.groupMembers[it].size) }
+    // [c3Cur] c3 族 f の規則 e の職員 i の行全体の寄与（生の件数、i*件数+e）。ビット経路でだけ持つ＝変更前を数え直さない。
+    //   直前の previewMove が測った変更後の値を [c3PendE]/[c3PendV] に置き、commit が表へ書く。
+    private val c3Cached = useBits && (0 until 4).all { f -> c3InRange[f].indices.all { e -> c3InRange[f][e] } }
+    private val c3Cur = Array(4) { f -> LongArray(if (c3Cached) S * c3Lists[f].size else 0) }
+    private val c3PendE = Array(4) { f -> IntArray(c3Lists[f].size) }
+    private val c3PendV = Array(4) { f -> LongArray(c3Lists[f].size) }
+    private val c3PendN = IntArray(4)
 
     init {
         a = p.initialAssignment()
@@ -222,9 +230,9 @@ class DeltaEvaluator(private val p: Problem) {
         }
 
         // windowed families (c1, c3 family): before/after via temporary swap
-        val bC1 = c1Local(i, j, old, nw); val bC3 = c3Local(i, j, 0, old, nw)
-        val bC3n = c3Local(i, j, 1, old, nw); val bC3m = c3Local(i, j, 2, old, nw)
-        val bC3mn = c3Local(i, j, 3, old, nw)
+        val bC1 = c1Local(i, j, old, nw); val bC3 = c3Before(i, j, 0, old, nw)
+        val bC3n = c3Before(i, j, 1, old, nw); val bC3m = c3Before(i, j, 2, old, nw)
+        val bC3mn = c3Before(i, j, 3, old, nw)
         // [外部レビュー検証/例外安全性] a[i][j] を一時的に nw へ書き換えて after 側を測るこの窓は、
         //   c1Local/c3Local が現行の不変条件下では例外を投げない（境界は min/max で常にクランプ済み）
         //   ため実害は未確認だが、将来の変更で throw する経路が増えても「復元されないまま盤面が
@@ -233,9 +241,9 @@ class DeltaEvaluator(private val p: Problem) {
         setCell(i, j, nw)
         var aC1 = 0L; var aC3 = 0L; var aC3n = 0L; var aC3m = 0L; var aC3mn = 0L
         try {
-            aC1 = c1Local(i, j, old, nw); aC3 = c3Local(i, j, 0, old, nw)
-            aC3n = c3Local(i, j, 1, old, nw); aC3m = c3Local(i, j, 2, old, nw)
-            aC3mn = c3Local(i, j, 3, old, nw)
+            aC1 = c1Local(i, j, old, nw); aC3 = c3After(i, j, 0, old, nw)
+            aC3n = c3After(i, j, 1, old, nw); aC3m = c3After(i, j, 2, old, nw)
+            aC3mn = c3After(i, j, 3, old, nw)
         } finally {
             setCell(i, j, old)
         }
@@ -409,6 +417,8 @@ class DeltaEvaluator(private val p: Problem) {
                 if (nw in 0 until K) wdCnt[i][nw][wIdx]++
             }
             fairCur[p.sgrp[i] * K + old] = fairOldAfter; fairCur[p.sgrp[i] * K + nw] = fairNwAfter
+            if (c3Cached) for (f in 0 until 4) { val n = c3Lists[f].size; val cur = c3Cur[f]
+                for (t in 0 until c3PendN[f]) cur[i * n + c3PendE[f][t]] = c3PendV[f][t] }
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
             hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hExt += dExt; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
@@ -457,6 +467,7 @@ class DeltaEvaluator(private val p: Problem) {
         }
 
         sc1 = c1All(); sc2 = c2All(); sc41 = c41All(); sc42 = c42All(); sc41s = c41sAll(); sc42s = c42sAll()
+        if (c3Cached) for (f in 0 until 4) { val n = c3Lists[f].size; for (i in 0 until S) for (e in 0 until n) c3Cur[f][i * n + e] = c3Row(i, f, e) }
         sc3 = c3All(p.cons3, false); hc3n = c3All(p.cons3n, true)
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
         hpref = prefAll(); hGrpV = groupViolAll(); hc3w = c3wAll(); hExt = extWishAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); sWeekly = weeklyAll(); scovO = covOAll()
@@ -512,6 +523,42 @@ class DeltaEvaluator(private val p: Problem) {
             js++
         }
         return tot
+    }
+
+    /** 変更前の c3 族 [f] の寄与（old か nw を参照する規則）。表があれば行全体の値の和、無ければ窓の寄与。 */
+    private fun c3Before(i: Int, j: Int, f: Int, old: Int, nw: Int): Long {
+        if (!c3Cached) return c3Local(i, j, f, old, nw)
+        val ix = c3Index[f]; val n = c3Lists[f].size; val cur = c3Cur[f]
+        var sub = 0L
+        for (e in ix.byK[old]) sub += cur[i * n + e]
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) sub += cur[i * n + e]
+        return sub
+    }
+
+    /** 変更後（セルを書き換えた状態）の寄与。表があれば行全体を測り、commit 用に [c3PendE]/[c3PendV] へ置く。 */
+    private fun c3After(i: Int, j: Int, f: Int, old: Int, nw: Int): Long {
+        if (!c3Cached) return c3Local(i, j, f, old, nw)
+        val ix = c3Index[f]; val pe = c3PendE[f]; val pv = c3PendV[f]
+        var sub = 0L; var m = 0
+        for (e in ix.byK[old]) { val v = c3Row(i, f, e); pe[m] = e; pv[m] = v; m++; sub += v }
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) { val v = c3Row(i, f, e); pe[m] = e; pv[m] = v; m++; sub += v }
+        c3PendN[f] = m
+        return sub
+    }
+
+    /** 職員 i の行全体での c3 族 [f] の規則 e の寄与（ビット経路・seq は [0,K)）。窓の寄与の行全体の和と等しい。 */
+    private fun c3Row(i: Int, f: Int, e: Int): Long {
+        val fbd = f == 1 || f == 3
+        val seq = c3Lists[f][e].seq; val D = seq.size
+        if (D == 0) return 0L
+        if (!fbd && c3Single[f][e]) return rowDeficitBits(bits[i][seq[0]], D)
+        if (D > T) return 0L
+        val first = bits[i][seq[0]]
+        var full = first
+        for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
+        val range = (-1L) ushr (63 - (T - D))
+        val nFull = java.lang.Long.bitCount(full and range)
+        return if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
     }
 
     /** c3 族 [f]（0=c3, 1=c3n, 2=c3m, 3=c3mn）のうち old か nw を参照する規則の、セル (i,j) を含む窓の寄与。 */
@@ -706,8 +753,11 @@ class DeltaEvaluator(private val p: Problem) {
      *  `Problem.fairDevOfBucket` を呼ぶだけ（達成率モード、全員に基準が無ければ従来の生回数round(平均)方式）。
      *  UnifiedViolationChecker の "fair" と一致。 */
     private fun fairDevAt(g: Int, k: Int, special: Int, delta: Int): Long {
-        if (p.groupMembers[g].size < 2) return 0L
-        return p.fairDevOfBucket(g, k, members = false) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
+        val all = p.groupMembers[g]
+        if (all.size < 2) return 0L
+        val sc = fairScratch[g]
+        for (pos in all.indices) { val x = all[pos]; sc.counts[pos] = cntSS[x][k] + (if (x == special) delta else 0) }
+        return p.fairDevTotal(g, k, sc).toLong()
     }
     private fun fairAll(): Long {
         var h = 0L
