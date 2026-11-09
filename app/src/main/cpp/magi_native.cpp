@@ -20,80 +20,82 @@
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
 // ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
-//  L  101  fn     jround
-//  L  103  struct C1r
-//  L  104  struct C2r
-//  L  105  struct C41r
-//  L  106  struct C42r
-//  L  112  fn     c42PairCount
-//  L  115  struct C3r
-//  L  116  struct C3wr
-//  L  118  struct MagiProblem
-//  L  214  fn     consIndicesValidN
-//  L  247  fn     weeklyDevOfBucket
-//  L  260  fn     fairDevOfBucket
-//  L  302  fn     rowDeficit
-//  L  319  fn     c3check
-//  L  355  fn     fullEvalParts
-//  L  568  const  SCORE_HARD_UNIT
-//  L  571  const  ACCEPT_REJECT_DELTA
-//  L  573  fn     fullEvalCombined
-//  L  584  struct SaChunk
-//  L  879  fn     wishLockedN
-//  L  886  fn     lockToN
-//  L  892  fn     runSaChunk
-//  L 1028  struct LahcState
-//  L 1047  fn     runLahcChunk
-//  L 1174  fn     collectViolationCells
-//  L 1278  struct GlsPenaltyN
-//  L 1323  fn     glsAcceptN
-//  L 1341  fn     rnInt
-//  L 1349  fn     weeklyMarginalN
-//  L 1367  fn     fairMarginalN
-//  L 1382  fn     reservoirTieN
-//  L 1396  fn     staffCountPenaltyAtN
-//  L 1407  fn     randomAllowedCellN
-//  L 1420  fn     destroyRepairDayAtN
-//  L 1495  fn     destroyRepairStaffAtN
-//  L 1554  fn     destroyRepairViolationsN
-//  L 1600  struct Fix
-//  L 1602  fn     findCovOFixN
-//  L 1629  fn     findC2FixN
-//  L 1646  fn     findRangeLowFixN
-//  L 1670  fn     findRangeHighFixN
-//  L 1701  fn     findC41FamFixN
-//  L 1734  fn     findC3WantFixN
-//  L 1764  fn     findAptFixN
-//  L 1796  fn     findTargetedFixN
-//  L 1821  fn     coverageShortageCostN
-//  L 1829  fn     bestStaffForCoverageN
-//  L 1844  fn     hf67HardRepairN
-//  L 1930  fn     rouletteSelectN
-//  L 1938  fn     thompsonSelectN
-//  L 1952  fn     greatDelugeLevelN
-//  L 1961  struct AlnsState
-//  L 2004  fn     runAlnsChunk
-//  L 2205  struct PolishState
-//  L 2228  fn     polishAcceptN
-//  L 2238  fn     runPolishChunk
-//  L 2353  fn     readIntArray
-//  L 2364  JNI    nativeAbiVersion
-//  L 2371  JNI    nativeAlnsCreate
-//  L 2385  JNI    nativeAlnsDestroy
-//  L 2391  JNI    nativeAlnsChunk
-//  L 2405  JNI    nativeAlnsRead
-//  L 2417  JNI    nativePolishCreate
-//  L 2430  JNI    nativePolishDestroy
-//  L 2436  JNI    nativePolishChunk
-//  L 2449  JNI    nativePolishRead
-//  L 2461  JNI    nativeLahcCreate
-//  L 2474  JNI    nativeLahcDestroy
-//  L 2480  JNI    nativeLahcChunk
-//  L 2493  JNI    nativeLahcRead
-//  L 2507  JNI    nativeSaChunk
-//  L 2537  JNI    nativeCreateProblem
-//  L 2712  JNI    nativeDestroyProblem
-//  L 2718  JNI    nativeFullEval
+//  L  103  fn     jround
+//  L  105  struct C1r
+//  L  106  struct C2r
+//  L  107  struct C41r
+//  L  108  struct C42r
+//  L  114  fn     c42PairCount
+//  L  117  struct C3r
+//  L  118  struct C3wr
+//  L  121  struct SoftW
+//  L  123  struct MagiProblem
+//  L  220  fn     consIndicesValidN
+//  L  253  fn     weeklyDevOfBucket
+//  L  266  fn     fairDevOfBucket
+//  L  311  fn     rowDeficit
+//  L  328  fn     c3check
+//  L  364  fn     fullEvalParts
+//  L  577  const  SCORE_HARD_UNIT
+//  L  580  const  ACCEPT_REJECT_DELTA
+//  L  582  fn     fullEvalCombined
+//  L  593  struct SaChunk
+//  L  952  fn     wishLockedN
+//  L  959  fn     lockToN
+//  L  965  fn     runSaChunk
+//  L 1101  struct LahcState
+//  L 1120  fn     runLahcChunk
+//  L 1247  fn     collectViolationCells
+//  L 1351  struct GlsPenaltyN
+//  L 1396  fn     glsAcceptN
+//  L 1414  fn     rnInt
+//  L 1422  fn     weeklyMarginalN
+//  L 1440  fn     fairMarginalN
+//  L 1455  fn     reservoirTieN
+//  L 1469  fn     staffCountPenaltyAtN
+//  L 1480  fn     randomAllowedCellN
+//  L 1493  fn     destroyRepairDayAtN
+//  L 1568  fn     destroyRepairStaffAtN
+//  L 1627  fn     destroyRepairViolationsN
+//  L 1673  struct Fix
+//  L 1675  fn     findCovOFixN
+//  L 1702  fn     findC2FixN
+//  L 1719  fn     findRangeLowFixN
+//  L 1743  fn     findRangeHighFixN
+//  L 1774  fn     findC41FamFixN
+//  L 1807  fn     findC3WantFixN
+//  L 1837  fn     findAptFixN
+//  L 1869  fn     findTargetedFixN
+//  L 1894  fn     coverageShortageCostN
+//  L 1902  fn     bestStaffForCoverageN
+//  L 1917  fn     hf67HardRepairN
+//  L 2003  fn     rouletteSelectN
+//  L 2011  fn     thompsonSelectN
+//  L 2025  fn     greatDelugeLevelN
+//  L 2034  struct AlnsState
+//  L 2077  fn     runAlnsChunk
+//  L 2278  struct PolishState
+//  L 2301  fn     polishAcceptN
+//  L 2311  fn     runPolishChunk
+//  L 2426  fn     readIntArray
+//  L 2437  JNI    nativeAbiVersion
+//  L 2444  JNI    nativeAlnsCreate
+//  L 2458  JNI    nativeAlnsDestroy
+//  L 2464  JNI    nativeAlnsChunk
+//  L 2478  JNI    nativeAlnsRead
+//  L 2490  JNI    nativePolishCreate
+//  L 2503  JNI    nativePolishDestroy
+//  L 2509  JNI    nativePolishChunk
+//  L 2522  JNI    nativePolishRead
+//  L 2534  JNI    nativeLahcCreate
+//  L 2547  JNI    nativeLahcDestroy
+//  L 2553  JNI    nativeLahcChunk
+//  L 2566  JNI    nativeLahcRead
+//  L 2580  JNI    nativeSaChunk
+//  L 2610  JNI    nativeCreateProblem
+//  L 2786  JNI    nativeSetSoftWeights
+//  L 2797  JNI    nativeDestroyProblem
+//  L 2803  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
@@ -208,7 +210,7 @@ struct MagiProblem {
 
 // [3.409.23/監査G3] 群/日レンジ・ペア禁止の index 健全性。**ここで拒否しないと SaChunk のビット経路が
 //   `grpMask[(size_t)c.g]`（負値→巨大 size_t）と `dayShiftMask[j*K + c.s]`（c.s>=K は隣日の行・j=T-1 で
-//   末尾越え）を無検査で引く**。兄弟の `contribC3RowFam` は seq を [0,K) 検査してスカラーへ退避するのに、
+//   末尾越え）を無検査で引く**。兄弟の `contribC3` は seq を [0,K) 検査してスカラーへ退避するのに、
 //   c41/c42/c41s/c42s のビット経路だけ非対称だった。帰結はスコアのドリフト（番兵が status=1 で捕まえて
 //   Kotlin 退化＝正しいが遅い）か SIGSEGV（番兵では捕捉不能・3.171.0 の監査#7 と同クラス）。
 //   **群の上限は課さない**: buildGroupMasks が cons の参照群 id からもベクタ長を決めるので非負なら安全。
@@ -230,7 +232,7 @@ static bool consIndicesValidN(const MagiProblem& p) {
     //   ＝正規経路では到達しないが、入口で一括拒否すればホットパスに分岐を足さずに閉じられる
     //   （3.409.23 と同じ理由・同じ契約＝0 返却で「native 不可 → Kotlin へ安全退化」）。
     //   cons3 系は seq を **比較にしか使わない**（`c3check` の `row[j]==first`・`rowDeficit`）ので対象外。
-    //   bit 経路の `contribC3RowFam` は 3.174.0 が seq を範囲検査して scalar へ退避する。
+    //   bit 経路の `contribC3` は 3.174.0 が seq を範囲検査して scalar へ退避する。
     for (const auto& c : p.cons1)
         if (c.si < 0 || c.si >= K || c.d1 <= 0 || c.d2 <= 0) return false;
     for (const auto& c : p.cons2)
@@ -294,7 +296,10 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
     if (w <= 0.0) return 0;
     int order[64];
     for (int idx = 0; idx < n; idx++) order[idx] = idx;
-    std::stable_sort(order, order + n, [&](int a, int b) { return ach[a] < ach[b]; });
+    // 昇順・同値は添字順（stable_sort と同じ並び。n は群の人数なので挿入整列で一時領域を取らない＝Kotlin と同じ手順）。
+    for (int x = 1; x < n; x++) { int v = order[x]; int y = x - 1;
+        while (y >= 0 && ach[order[y]] > ach[v]) { order[y + 1] = order[y]; y--; }
+        order[y + 1] = v; }
     double acc = 0.0; double tgt = ach[order[n - 1]];
     for (int oi = 0; oi < n; oi++) { int idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break; } }
     long long total = 0;
@@ -603,12 +608,52 @@ struct SaChunk {
     std::vector<uint64_t> sskMask;       // skill群id -> 職員bit集合（静的）
     long long score = 0;   // hard*M(=1e9)+soft（combined）
     std::mt19937_64 rng;
+    // deltaApply が旧/新シフトを含む規則だけを測るための索引（盤面非依存）。byK[k]＝k を参照する規則の添字、has[e*K+k]＝規則 e が k を参照するか。
+    //   参照しない規則は (i,j) の old→nw 書換えで寄与が変わらない＝差分 0 なので、測らなくてもスコアは同じ。
+    struct ShiftIndex { std::vector<std::vector<int>> byK; std::vector<uint8_t> has; };
+    ShiftIndex ix3[4], ix1, ix41, ix42, ix41s, ix42s;
+    // 規則ごとの現在の寄与（resetBoard が全件、deltaApply が書き換えた行・日の該当規則を更新）。変更前の値を測り直さないため。
+    std::vector<long long> c1Cur, c3Cur[4];            // S*件数（職員 i・規則 e）
+    std::vector<long long> d41Cur, d42Cur, d41sCur, d42sCur;  // T*件数（日 j・規則 e）
+    std::vector<long long> fairCur;   // G*K: contribFair の現在値
 
     SaChunk(const MagiProblem& prob, const int* cur, uint64_t seed)
         : p(prob), S(prob.S), T(prob.T), K(prob.K),
           useBits(prob.S <= 64 && prob.T <= 64), rng(seed) {
         if (useBits) buildGroupMasks();
+        buildShiftIndexes();
         resetBoard(cur);
+    }
+
+    void indexAdd(ShiftIndex& x, int e, int k) const {
+        if (k < 0 || k >= K) return;
+        uint8_t& h = x.has[(size_t)e * K + k];
+        if (!h) { h = 1; x.byK[k].push_back(e); }
+    }
+    void indexInit(ShiftIndex& x, size_t n) const { x.byK.assign((size_t)K, {}); x.has.assign(n * K, 0); }
+    void buildShiftIndexes() {
+        const std::vector<C3r>* fams[4] = {&p.cons3, &p.cons3n, &p.cons3m, &p.cons3mn};
+        for (int f = 0; f < 4; f++) {
+            indexInit(ix3[f], fams[f]->size());
+            for (size_t e = 0; e < fams[f]->size(); e++) for (int v : (*fams[f])[e].seq) indexAdd(ix3[f], (int)e, v);
+        }
+        indexInit(ix1, p.cons1.size());
+        for (size_t e = 0; e < p.cons1.size(); e++) indexAdd(ix1, (int)e, p.cons1[e].si);
+        indexInit(ix41, p.cons41.size());
+        for (size_t e = 0; e < p.cons41.size(); e++) indexAdd(ix41, (int)e, p.cons41[e].s);
+        indexInit(ix41s, p.cons41s.size());
+        for (size_t e = 0; e < p.cons41s.size(); e++) indexAdd(ix41s, (int)e, p.cons41s[e].s);
+        indexInit(ix42, p.cons42.size());
+        for (size_t e = 0; e < p.cons42.size(); e++) { indexAdd(ix42, (int)e, p.cons42[e].s1); indexAdd(ix42, (int)e, p.cons42[e].s2); }
+        indexInit(ix42s, p.cons42s.size());
+        for (size_t e = 0; e < p.cons42s.size(); e++) { indexAdd(ix42s, (int)e, p.cons42s[e].s1); indexAdd(ix42s, (int)e, p.cons42s[e].s2); }
+    }
+    // old または nw を参照する規則の寄与の和（old != nw、どちらも [0,K)）。
+    template <typename F> long long sumTouched(const ShiftIndex& x, int old, int nw, F f) const {
+        long long v = 0;
+        for (int e : x.byK[(size_t)old]) v += f(e);
+        for (int e : x.byK[(size_t)nw]) if (!x.has[(size_t)e * K + old]) v += f(e);
+        return v;
     }
 
     // 群→職員bit集合（静的・盤面非依存）。制約が参照する群idまで被覆してサイズ確保。
@@ -642,7 +687,63 @@ struct SaChunk {
                 if (k >= 0 && k < K) wd[((size_t)i * K + k) * 7 + (p.dow0 + j) % 7]++;
             }
         }
+        fairCur.assign((size_t)p.G * K, 0);
+        for (int g = 0; g < p.G; g++) for (int k = 0; k < K; k++) fairCur[(size_t)g * K + k] = contribFair(g, k);
+        c1Cur.assign((size_t)S * p.cons1.size(), 0);
+        for (int f = 0; f < 4; f++) c3Cur[f].assign((size_t)S * c3Fam(f).size(), 0);
+        d41Cur.assign((size_t)T * p.cons41.size(), 0); d42Cur.assign((size_t)T * p.cons42.size(), 0);
+        d41sCur.assign((size_t)T * p.cons41s.size(), 0); d42sCur.assign((size_t)T * p.cons42s.size(), 0);
+        for (int i = 0; i < S; i++) rowContrib(i, -1, -1, true);
+        for (int j = 0; j < T; j++) dayContrib(j, -1, -1, true);
         score = fullEvalCombined(p, a.data());
+    }
+    const std::vector<C3r>& c3Fam(int f) const { return f == 0 ? p.cons3 : f == 1 ? p.cons3n : f == 2 ? p.cons3m : p.cons3mn; }
+    bool c3Forbidden(int f) const { return f == 1 || f == 3; }
+    long long c3Weight(int f) const { return f == 0 ? p.w.c3 : f == 1 ? (long long)M : f == 2 ? p.w.c3m : p.w.c3mn; }
+    // 行 i（c1・c3 族）／日 j（群規則）の規則の寄与。old<0 は全規則、そうでなければ old か nw を参照する規則だけ。
+    //   fresh=false は表の値の和（変更前）、true は測り直して表へ書く（変更後）。
+    template <typename F> long long visit(const ShiftIndex& x, size_t n, int old, int nw, F f) const {
+        long long v = 0;
+        if (old < 0) { for (size_t e = 0; e < n; e++) v += f((int)e); return v; }
+        return sumTouched(x, old, nw, f);
+    }
+    long long rowContrib(int i, int old, int nw, bool fresh) {
+        const size_t n1 = p.cons1.size();
+        long long v = visit(ix1, n1, old, nw, [&](int e) {
+            long long& c = c1Cur[(size_t)i * n1 + e];
+            if (fresh) c = contribC1(i, p.cons1[(size_t)e]);
+            return c; });
+        for (int f = 0; f < 4; f++) {
+            const auto& list = c3Fam(f); const size_t n = list.size();
+            const bool fb = c3Forbidden(f); const long long w = c3Weight(f);
+            auto& cache = c3Cur[f];
+            v += visit(ix3[f], n, old, nw, [&](int e) {
+                long long& c = cache[(size_t)i * n + e];
+                if (fresh) c = contribC3(i, list[(size_t)e], fb, w);
+                return c; });
+        }
+        return v;
+    }
+    long long dayContrib(int j, int old, int nw, bool fresh) {
+        auto fam41 = [&](const ShiftIndex& x, const std::vector<C41r>& list, std::vector<long long>& cache, bool skill) {
+            const size_t n = list.size();
+            return visit(x, n, old, nw, [&](int e) {
+                long long& c = cache[(size_t)j * n + e];
+                if (fresh) c = contribC41(j, list[(size_t)e], skill);
+                return c; });
+        };
+        auto fam42 = [&](const ShiftIndex& x, const std::vector<C42r>& list, std::vector<long long>& cache, bool skill) {
+            const size_t n = list.size();
+            return visit(x, n, old, nw, [&](int e) {
+                long long& c = cache[(size_t)j * n + e];
+                if (fresh) c = contribC42(j, list[(size_t)e], skill);
+                return c; });
+        };
+        return fam41(ix41, p.cons41, d41Cur, false) + fam42(ix42, p.cons42, d42Cur, false)
+             + fam41(ix41s, p.cons41s, d41sCur, true) + fam42(ix42s, p.cons42s, d42sCur, true);
+    }
+    long long fairCached(int g, int k) const {
+        return (g < 0 || g >= p.G || k < 0 || k >= K) ? 0 : fairCur[(size_t)g * K + k];
     }
 
     inline int nextInt(int bound) { return (int)(rng() % (uint64_t)bound); }
@@ -650,26 +751,21 @@ struct SaChunk {
 
     // ---- 影響スライスの寄与（combined: HARD族は ×1e6）----
     // [3.522.0] c1 重み30→50・c3mn重み30→90、2026-10-26 c1 50→90・c3mn 90→50。経緯はdocs/history/3.4xx.md。
-    long long contribC1Row(int i) const {
+    long long contribC1(int i, const C1r& c) const {
+        if (!p.cd(i, c.si)) return 0;
         long long v = 0;
         if (useBits) {
-            for (const auto& c : p.cons1) {
-                if (!p.cd(i, c.si)) continue;
-                uint64_t rm = rowMask[(size_t)i * K + c.si];
-                uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
-                for (int j = 0; j <= T - c.d1; j++)
-                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += p.w.c1;
-            }
+            uint64_t rm = rowMask[(size_t)i * K + c.si];
+            uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
+            for (int j = 0; j <= T - c.d1; j++)
+                if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += p.w.c1;
             return v;
         }
-        for (const auto& c : p.cons1) {
-            if (!p.cd(i, c.si)) continue;
-            const int* row = a.data() + (size_t)i * T;
-            for (int j = 0; j <= T - c.d1; j++) {
-                int z = 0;
-                for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) v += p.w.c1;
-            }
+        const int* row = a.data() + (size_t)i * T;
+        for (int j = 0; j <= T - c.d1; j++) {
+            int z = 0;
+            for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
+            if (z < c.d2) v += p.w.c1;
         }
         return v;
     }
@@ -682,49 +778,40 @@ struct SaChunk {
         }
         return v;
     }
-    long long contribC3RowFam(int i, const std::vector<C3r>& list, bool forbidden, long long w) const {
+    long long contribC3(int i, const C3r& c, bool forbidden, long long w) const {
         long long v = 0;
         const int* row = a.data() + (size_t)i * T;
-        for (const auto& c : list) {
-            const int D = (int)c.seq.size();
-            if (D == 0) continue;
-            const int first = c.seq[0];
-            // 非forbidden単一シフト連は run-deficit（run長ベース＝popcount化困難。3.172.0 の対象外方針を踏襲）。
-            if (!forbidden && c.singleRun) { v += rowDeficit(row, T, first, D) * w; continue; }
-            // [ビット化] 窓マッチ（forbidden 完全一致 / 非forbidden 多シフト部分不一致）を popcount で。
-            //   rowMask[i*K+k]=職員 i がシフト k を持つ日ビット集合（deltaApply が維持済＝新規マスク不要）。
-            //   (rowMask[seq[l]] >> l) の bit j = (row[j+l]==seq[l])。AND で「窓開始 j に完全一致」の集合を得る。
-            //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=先頭一致−完全一致（z<D-1）。
-            //   マスク索引の安全のため seq が全て [0,K) のときのみ（範囲外は理論上到達不能だが scalar へ退避）。
-            if (useBits && D <= T) {
-                bool seqOk = first >= 0 && first < K;
-                for (int l = 1; seqOk && l < D; l++) if (c.seq[l] < 0 || c.seq[l] >= K) seqOk = false;
-                if (seqOk) {
-                    uint64_t full = rowMask[(size_t)i * K + first];
-                    for (int l = 1; l < D; l++) full &= (rowMask[(size_t)i * K + c.seq[l]] >> l);
-                    uint64_t range = (T - D + 1 >= 64) ? ~0ULL : ((1ULL << (T - D + 1)) - 1ULL);
-                    long long fullCnt = __builtin_popcountll(full & range);
-                    if (forbidden) v += fullCnt * w;
-                    else v += (__builtin_popcountll(rowMask[(size_t)i * K + first] & range) - fullCnt) * w;
-                    continue;
-                }
+        const int D = (int)c.seq.size();
+        if (D == 0) return 0;
+        const int first = c.seq[0];
+        // 非forbidden単一シフト連は run-deficit（run長ベース＝popcount化困難。3.172.0 の対象外方針を踏襲）。
+        if (!forbidden && c.singleRun) return rowDeficit(row, T, first, D) * w;
+        // [ビット化] 窓マッチ（forbidden 完全一致 / 非forbidden 多シフト部分不一致）を popcount で。
+        //   rowMask[i*K+k]=職員 i がシフト k を持つ日ビット集合（deltaApply が維持済＝新規マスク不要）。
+        //   (rowMask[seq[l]] >> l) の bit j = (row[j+l]==seq[l])。AND で「窓開始 j に完全一致」の集合を得る。
+        //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=先頭一致−完全一致（z<D-1）。
+        //   マスク索引の安全のため seq が全て [0,K) のときのみ（範囲外は理論上到達不能だが scalar へ退避）。
+        if (useBits && D <= T) {
+            bool seqOk = first >= 0 && first < K;
+            for (int l = 1; seqOk && l < D; l++) if (c.seq[l] < 0 || c.seq[l] >= K) seqOk = false;
+            if (seqOk) {
+                uint64_t full = rowMask[(size_t)i * K + first];
+                for (int l = 1; l < D; l++) full &= (rowMask[(size_t)i * K + c.seq[l]] >> l);
+                uint64_t range = (T - D + 1 >= 64) ? ~0ULL : ((1ULL << (T - D + 1)) - 1ULL);
+                long long fullCnt = __builtin_popcountll(full & range);
+                if (forbidden) return fullCnt * w;
+                return (__builtin_popcountll(rowMask[(size_t)i * K + first] & range) - fullCnt) * w;
             }
-            for (int j = 0; j <= T - D; j++) {
-                if (row[j] == first) {
-                    int z = 0;
-                    for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
-                    bool fire = forbidden ? (z == D - 1) : (z < D - 1);
-                    if (fire) v += w;
-                }
+        }
+        for (int j = 0; j <= T - D; j++) {
+            if (row[j] == first) {
+                int z = 0;
+                for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
+                bool fire = forbidden ? (z == D - 1) : (z < D - 1);
+                if (fire) v += w;
             }
         }
         return v;
-    }
-    long long contribC3Row(int i) const {  // [3.522.0] c3/c3m/c3mn 3/2/30→15/10/90
-        return contribC3RowFam(i, p.cons3, false, p.w.c3)
-             + contribC3RowFam(i, p.cons3n, true, (long long)M)
-             + contribC3RowFam(i, p.cons3m, false, p.w.c3m)
-             + contribC3RowFam(i, p.cons3mn, true, p.w.c3mn);
     }
     // [3.318.0] このセルの HARD 寄与＝pref（実現可能な希望の未充足）＋ groupViol（担当できないシフト）。
     //   どちらもセル単位なので deltaApply の before/after で呼べば差分は自動的に正しい。
@@ -765,59 +852,34 @@ struct SaChunk {
         if (k < 0 || k >= K) return 0;
         return weeklyDevOfBucket(&wd[((size_t)i * K + k) * 7]) * p.w.weekly;
     }
-    long long contribDayGroups(int j) const {
-        long long v = 0;
+    // 群/日レンジ（skill=false: c41・sgrp、true: c41s・ssk）の日 j の寄与。
+    long long contribC41(int j, const C41r& c, bool skill) const {
+        int z = 0;
         if (useBits) {
+            z = __builtin_popcountll(dayShiftMask[(size_t)j * K + c.s] & (skill ? sskMask : grpMask)[(size_t)c.g]);
+        } else {
+            const std::vector<int>& grp = skill ? p.ssk : p.sgrp;
+            for (int i = 0; i < S; i++) if (grp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
+        }
+        return ((z < c.l || c.u < z ? 1 : 0)) * (skill ? p.w.c41s : p.w.c41);
+    }
+    // 群ペア禁止（skill=false: c42、true: c42s）の日 j の寄与。
+    long long contribC42(int j, const C42r& c, bool skill) const {
+        long long n1 = 0, n2 = 0;
+        if (useBits) {
+            const std::vector<uint64_t>& gm = skill ? sskMask : grpMask;
             const uint64_t* dm = &dayShiftMask[(size_t)j * K];
-            for (const auto& c : p.cons41) {
-                int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
-                v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41;
-            }
-            for (const auto& c : p.cons42) {
-                long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
-                long long n2 = __builtin_popcountll(dm[c.s2] & grpMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42;
-            }
-            for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
-                int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
-                v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41s;
-            }
-            for (const auto& c : p.cons42s) {
-                long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
-                long long n2 = __builtin_popcountll(dm[c.s2] & sskMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42s;
-            }
-            return v;
-        }
-        for (const auto& c : p.cons41) {
-            int z = 0;
-            for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41;
-        }
-        for (const auto& c : p.cons42) {
-            long long n1 = 0, n2 = 0;
+            n1 = __builtin_popcountll(dm[c.s1] & gm[(size_t)c.g1]);
+            n2 = __builtin_popcountll(dm[c.s2] & gm[(size_t)c.g2]);
+        } else {
+            const std::vector<int>& grp = skill ? p.ssk : p.sgrp;
             for (int i = 0; i < S; i++) {
                 int x = a[(size_t)i * T + j];
-                if (p.sgrp[i] == c.g1 && x == c.s1) n1++;
-                if (p.sgrp[i] == c.g2 && x == c.s2) n2++;
+                if (grp[i] == c.g1 && x == c.s1) n1++;
+                if (grp[i] == c.g2 && x == c.s2) n2++;
             }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42;
         }
-        for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
-            int z = 0;
-            for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += ((z < c.l || c.u < z ? 1 : 0)) * p.w.c41s;
-        }
-        for (const auto& c : p.cons42s) {
-            long long n1 = 0, n2 = 0;
-            for (int i = 0; i < S; i++) {
-                int x = a[(size_t)i * T + j];
-                if (p.ssk[i] == c.g1 && x == c.s1) n1++;
-                if (p.ssk[i] == c.g2 && x == c.s2) n2++;
-            }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * p.w.c42s;
-        }
-        return v;
+        return c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * (skill ? p.w.c42s : p.w.c42);
     }
     long long contribCov(int k, int j) const {
         if (k < 0 || k >= K) return 0;
@@ -842,12 +904,14 @@ struct SaChunk {
         const bool oldIn = old >= 0 && old < K;
         const bool newIn = nw >= 0 && nw < K;
         int g = p.sgrp[i];
-        long long before = contribC1Row(i) + contribC2Row(i) + contribC3Row(i)
+        // 旧/新とも [0,K) なら、どちらかを参照する規則だけを測る（-1 を含む書換えは行・日の全規則を測る）。
+        const int lo = (oldIn && newIn) ? old : -1;
+        long long before = rowContrib(i, lo, nw, false) + dayContrib(j, lo, nw, false)
+            + contribC2Row(i)
             + contribCellHard(i, j)
             + contribRangeApt(i, old) + contribRangeApt(i, nw)
-            + contribFair(g, old) + contribFair(g, nw)
+            + fairCached(g, old) + fairCached(g, nw)
             + contribWeeklyK(i, old) + contribWeeklyK(i, nw)
-            + contribDayGroups(j)
             + contribCov(old, j) + contribCov(nw, j);
         a[(size_t)i * T + j] = nw;
         if (oldIn) { ssn[(size_t)i * K + old]--; dsn[(size_t)j * K + old]--; }
@@ -863,12 +927,17 @@ struct SaChunk {
             if (oldIn) wd[((size_t)i * K + old) * 7 + b]--;
             if (newIn) wd[((size_t)i * K + nw) * 7 + b]++;
         }
-        long long after = contribC1Row(i) + contribC2Row(i) + contribC3Row(i)
+        const long long fairOld = contribFair(g, old), fairNw = contribFair(g, nw);
+        if (g >= 0 && g < p.G) {
+            if (oldIn) fairCur[(size_t)g * K + old] = fairOld;
+            if (newIn) fairCur[(size_t)g * K + nw] = fairNw;
+        }
+        long long after = rowContrib(i, lo, nw, true) + dayContrib(j, lo, nw, true)
+            + contribC2Row(i)
             + contribCellHard(i, j)
             + contribRangeApt(i, old) + contribRangeApt(i, nw)
-            + contribFair(g, old) + contribFair(g, nw)
+            + fairOld + fairNw
             + contribWeeklyK(i, old) + contribWeeklyK(i, nw)
-            + contribDayGroups(j)
             + contribCov(old, j) + contribCov(nw, j);
         score += after - before;
     }

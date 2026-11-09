@@ -54,6 +54,24 @@ class DeltaEvaluator(private val p: Problem) {
     private var dC3 = 0L; private var dC3n = 0L; private var dC3m = 0L; private var dC3mn = 0L
     private var dPref = 0L; private var dGrpV = 0L; private var dC3w = 0L; private var dExt = 0L; private var dCt = 0L; private var dApt = 0L; private var dFair = 0L; private var dWeekly = 0L; private var dCovO = 0L; private var nCovU = 0L
 
+    /** シフト k を参照する規則の添字（[byK]）と、規則 e が k を参照するか（[has]、e*K+k）。盤面非依存。 */
+    private class ShiftIndex(val byK: Array<IntArray>, val has: BooleanArray)
+    private fun shiftIndex(n: Int, refs: (Int) -> IntArray): ShiftIndex {
+        val has = BooleanArray(n * K)
+        val lists = Array(K) { ArrayList<Int>() }
+        for (e in 0 until n) for (k in refs(e)) if (k in 0 until K && !has[e * K + k]) { has[e * K + k] = true; lists[k].add(e) }
+        return ShiftIndex(Array(K) { lists[it].toIntArray() }, has)
+    }
+    // previewMove は旧/新シフトを参照する規則だけを測る。参照しない規則は (i,j) の old→nw 書換えで値が変わらない＝差分 0。
+    private val c3Lists = arrayOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)
+    private val c3Index = Array(4) { f -> val l = c3Lists[f]; shiftIndex(l.size) { l[it].seq } }
+    private val c3Single = Array(4) { f -> val l = c3Lists[f]; BooleanArray(l.size) { C3Run.isSingleShiftSeq(l[it].seq) } }
+    private val c3InRange = Array(4) { f -> val l = c3Lists[f]; BooleanArray(l.size) { e -> l[e].seq.all { it in 0 until K } } }
+    private val c1Index = shiftIndex(p.cons1.size) { intArrayOf(p.cons1[it].shiftIdx) }
+    // [fairCur] g*K+k＝群 g・シフト k の公平化偏差の現在値（rebuild が全件、commit が動いた 2 件を更新）。
+    private val fairCur = LongArray(p.G * K)
+    private var fairOldAfter = 0L; private var fairNwAfter = 0L
+
     init {
         a = p.initialAssignment()
         rebuild()
@@ -204,9 +222,9 @@ class DeltaEvaluator(private val p: Problem) {
         }
 
         // windowed families (c1, c3 family): before/after via temporary swap
-        val bC1 = c1Local(i, j); val bC3 = c3Local(i, j, p.cons3, false)
-        val bC3n = c3Local(i, j, p.cons3n, true); val bC3m = c3Local(i, j, p.cons3m, false)
-        val bC3mn = c3Local(i, j, p.cons3mn, true)
+        val bC1 = c1Local(i, j, old, nw); val bC3 = c3Local(i, j, 0, old, nw)
+        val bC3n = c3Local(i, j, 1, old, nw); val bC3m = c3Local(i, j, 2, old, nw)
+        val bC3mn = c3Local(i, j, 3, old, nw)
         // [外部レビュー検証/例外安全性] a[i][j] を一時的に nw へ書き換えて after 側を測るこの窓は、
         //   c1Local/c3Local が現行の不変条件下では例外を投げない（境界は min/max で常にクランプ済み）
         //   ため実害は未確認だが、将来の変更で throw する経路が増えても「復元されないまま盤面が
@@ -215,9 +233,9 @@ class DeltaEvaluator(private val p: Problem) {
         setCell(i, j, nw)
         var aC1 = 0L; var aC3 = 0L; var aC3n = 0L; var aC3m = 0L; var aC3mn = 0L
         try {
-            aC1 = c1Local(i, j); aC3 = c3Local(i, j, p.cons3, false)
-            aC3n = c3Local(i, j, p.cons3n, true); aC3m = c3Local(i, j, p.cons3m, false)
-            aC3mn = c3Local(i, j, p.cons3mn, true)
+            aC1 = c1Local(i, j, old, nw); aC3 = c3Local(i, j, 0, old, nw)
+            aC3n = c3Local(i, j, 1, old, nw); aC3m = c3Local(i, j, 2, old, nw)
+            aC3mn = c3Local(i, j, 3, old, nw)
         } finally {
             setCell(i, j, old)
         }
@@ -247,8 +265,9 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一fair] グループ内公平化 — staff i の群 gI の old/nw 列のみ偏差が動く（本人 ±1 で平均も動くので群内再計算）。
         val gI = p.sgrp[i]
         dFair = 0L
-        if (p.canDo(i, old)) dFair += fairDevAt(gI, old, i, -1) - fairDevAt(gI, old, -1, 0)
-        if (p.canDo(i, nw)) dFair += fairDevAt(gI, nw, i, +1) - fairDevAt(gI, nw, -1, 0)
+        fairOldAfter = fairCur[gI * K + old]; fairNwAfter = fairCur[gI * K + nw]
+        if (p.canDo(i, old)) { fairOldAfter = fairDevAt(gI, old, i, -1); dFair += fairOldAfter - fairCur[gI * K + old] }
+        if (p.canDo(i, nw)) { fairNwAfter = fairDevAt(gI, nw, i, +1); dFair += fairNwAfter - fairCur[gI * K + nw] }
 
         // [統一weekly/3.345.0] 曜日平準化 — シフト別なので old と nw の2バケットだけが動く（old==nw は不変）。
         //   範囲外セントネル(-1等)はそのバケットを持たないので、範囲ガードで片側だけ動かす。
@@ -389,6 +408,7 @@ class DeltaEvaluator(private val p: Problem) {
                 if (old in 0 until K) wdCnt[i][old][wIdx]--
                 if (nw in 0 until K) wdCnt[i][nw][wIdx]++
             }
+            fairCur[p.sgrp[i] * K + old] = fairOldAfter; fairCur[p.sgrp[i] * K + nw] = fairNwAfter
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
             hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hExt += dExt; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
@@ -463,68 +483,76 @@ class DeltaEvaluator(private val p: Problem) {
         return s
     }
 
-    private fun c1Local(i: Int, j: Int): Long {
+    private fun c1Local(i: Int, j: Int, old: Int, nw: Int): Long {
         var tot = 0L
-        for (c in p.cons1) {
-            if (!p.canDo(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
-            val js0 = maxOf(0, j - c.day1 + 1); val js1 = minOf(T - c.day1, j)
-            if (useBits && c.day1 in 1..63 && c.shiftIdx in 0 until K) {
-                val row = bits[i][c.shiftIdx]; val win = if (c.day1 == 63) Long.MAX_VALUE else (1L shl c.day1) - 1
-                var js = js0
-                while (js <= js1) {
-                    if (java.lang.Long.bitCount((row ushr js) and win) < c.day2) tot += 1
-                    js++
-                }
-                continue
-            }
+        val ix = c1Index
+        for (e in ix.byK[old]) tot += c1At(i, j, p.cons1[e])
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) tot += c1At(i, j, p.cons1[e])
+        return tot
+    }
+
+    private fun c1At(i: Int, j: Int, c: C1): Long {
+        if (!p.canDo(i, c.shiftIdx)) return 0L   // [統一] 担当不可は対象外(チェッカーと一致)
+        var tot = 0L
+        val js0 = maxOf(0, j - c.day1 + 1); val js1 = minOf(T - c.day1, j)
+        if (useBits && c.day1 in 1..63 && c.shiftIdx in 0 until K) {
+            val row = bits[i][c.shiftIdx]; val win = if (c.day1 == 63) Long.MAX_VALUE else (1L shl c.day1) - 1
             var js = js0
             while (js <= js1) {
-                var z = 0; var l = 0
-                while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
-                if (z < c.day2) tot += 1   // [統一] #fire 計上。重みは soft 集約で×4
+                if (java.lang.Long.bitCount((row ushr js) and win) < c.day2) tot += 1
                 js++
             }
+            return tot
+        }
+        var js = js0
+        while (js <= js1) {
+            var z = 0; var l = 0
+            while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
+            if (z < c.day2) tot += 1   // [統一] #fire 計上。重みは soft 集約で×4
+            js++
         }
         return tot
     }
 
-    /** 制約の並びごとの「単一シフト連か」（[C3Run.isSingleShiftSeq]）を一度だけ求めて持つ。 */
-    private val singleShiftOf = java.util.IdentityHashMap<List<C3>, BooleanArray>()
-
-    private fun c3Local(i: Int, j: Int, list: List<C3>, fbd: Boolean): Long {
+    /** c3 族 [f]（0=c3, 1=c3n, 2=c3m, 3=c3mn）のうち old か nw を参照する規則の、セル (i,j) を含む窓の寄与。 */
+    private fun c3Local(i: Int, j: Int, f: Int, old: Int, nw: Int): Long {
+        val ix = c3Index[f]
         var sub = 0L
-        val single = singleShiftOf.getOrPut(list) { BooleanArray(list.size) { C3Run.isSingleShiftSeq(list[it].seq) } }
-        for (ci in list.indices) {
-            val seq = list[ci].seq; val D = seq.size
-            if (D == 0) continue
-            // [HF507] single-shift run: deficit is per-staff whole-row, not windowed.
-            // A move at (i,j) only affects staff i's row, so recompute row i's run deficit
-            // (before/after via the caller's swap captures the delta correctly).
-            if (!fbd && single[ci]) {
-                sub += if (useBits && seq[0] in 0 until K) rowDeficitBits(bits[i][seq[0]], D) else C3Run.rowDeficit(a, i, seq[0], D)
-                continue
+        for (e in ix.byK[old]) sub += c3At(i, j, f, e)
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) sub += c3At(i, j, f, e)
+        return sub
+    }
+
+    private fun c3At(i: Int, j: Int, f: Int, e: Int): Long {
+        val fbd = f == 1 || f == 3
+        val seq = c3Lists[f][e].seq; val D = seq.size
+        if (D == 0) return 0L
+        // [HF507] single-shift run: deficit is per-staff whole-row, not windowed.
+        // A move at (i,j) only affects staff i's row, so recompute row i's run deficit
+        // (before/after via the caller's swap captures the delta correctly).
+        if (!fbd && c3Single[f][e]) {
+            return if (useBits && seq[0] in 0 until K) rowDeficitBits(bits[i][seq[0]], D) else C3Run.rowDeficit(a, i, seq[0], D)
+        }
+        val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, j)
+        if (useBits && js0 <= js1 && c3InRange[f][e]) {
+            // 窓の開始日 js の集合をビットで持つ: first＝js がseq[0]、full＝js から seq 全体が一致。
+            val first = bits[i][seq[0]]
+            var full = first
+            for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
+            val range = ((-1L) ushr (63 - (js1 - js0))) shl js0
+            val nFull = java.lang.Long.bitCount(full and range)
+            return if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
+        }
+        var sub = 0L
+        var js = js0
+        while (js <= js1) {
+            if (a[i][js] == seq[0]) {
+                var z = 0; var l = 1
+                while (l < D) { if (a[i][js + l] == seq[l]) z++; l++ }
+                val fire = if (fbd) (z == D - 1) else (z < D - 1)
+                if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
             }
-            val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, j)
-            if (useBits && js0 <= js1 && seq.all { it in 0 until K }) {
-                // 窓の開始日 js の集合をビットで持つ: first＝js がseq[0]、full＝js から seq 全体が一致。
-                val first = bits[i][seq[0]]
-                var full = first
-                for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
-                val range = ((-1L) ushr (63 - (js1 - js0))) shl js0
-                val nFull = java.lang.Long.bitCount(full and range)
-                sub += if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
-                continue
-            }
-            var js = js0
-            while (js <= js1) {
-                if (a[i][js] == seq[0]) {
-                    var z = 0; var l = 1
-                    while (l < D) { if (a[i][js + l] == seq[l]) z++; l++ }
-                    val fire = if (fbd) (z == D - 1) else (z < D - 1)
-                    if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
-                }
-                js++
-            }
+            js++
         }
         return sub
     }
@@ -683,7 +711,8 @@ class DeltaEvaluator(private val p: Problem) {
     }
     private fun fairAll(): Long {
         var h = 0L
-        for (g in 0 until p.G) for (k in p.bucket[g]) h += fairDevAt(g, k, -1, 0)
+        java.util.Arrays.fill(fairCur, 0L)
+        for (g in 0 until p.G) for (k in p.bucket[g]) { val v = fairDevAt(g, k, -1, 0); fairCur[g * K + k] = v; h += v }
         return h
     }
 
