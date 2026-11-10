@@ -23,11 +23,15 @@ android {
         applicationId = "com.magi.app"
         minSdk = 36
         targetSdk = 36
-        versionCode = 1018
-        versionName = "3.727.49"
+        versionCode = 1020
+        versionName = "3.727.51"
         // [ネイティブ加速] minSdk 36（Android 16+）の実機は arm64 のみ対象で十分。
         //   .so が無い環境でも NativeBridge が false を返し Kotlin パスで全機能が動く。
         ndk { abiFilters += listOf("arm64-v8a") }
+        // [CP-SAT] OR-Tools を ABI ごとに組んだ置き場（<dir>/arm64-v8a）。CI の ortools-android.yml が作って渡す。無ければ CP-SAT なしで組む。
+        System.getenv("MAGI_ORTOOLS_ANDROID")?.takeIf { it.isNotBlank() && file(it).exists() }?.let { dir ->
+            externalNativeBuild { cmake { arguments += "-DMAGI_ORTOOLS_PREFIX=$dir/arm64-v8a" } }
+        }
     }
 
     externalNativeBuild {

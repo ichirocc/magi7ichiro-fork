@@ -100,7 +100,7 @@ object SeesawRelink {
         }
         val tradeoffs = pickTradeoffs(bestRep, pool)
         val logs = listOf(MirrorLog(level = "I", tag = "SeesawRelink",
-            message = "シーソーの Path Relinking: 案 ${alternatives.size}・採用 ${applied}・交換の候補 ${tradeoffs.size}（集めた ${pool.size}）・重み ${bestRep.weightedScore.toLong()}"))
+            message = "シーソーの Path Relinking: 案 ${alternatives.size}・最良の更新 ${applied}回・交換の候補 ${tradeoffs.size}（集めた ${pool.size}）・重み ${bestRep.weightedScore.toLong()}"))
         return Result(best, bestRep, applied, tradeoffs.map { it.first }, logs)
     }
 

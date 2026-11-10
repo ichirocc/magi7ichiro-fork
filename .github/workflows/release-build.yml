@@ -71,7 +71,8 @@ jobs:
   # [速度] 旧: needs: gate で直列（約 4.4 分＋2.8 分）。並列化し、配布側の job が両方を待つ。
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # [CP-SAT] OR-Tools のキャッシュが無い初回は Android 向けの組み立てに 1 時間前後かかる。
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -134,6 +135,29 @@ jobs:
             echo "::warning::MAGI_KEYSTORE_B64 が未設定のためデバッグ鍵で署名します（上書きインストール不可）"
             echo "## 署名: デバッグ鍵（上書きインストール不可。Secrets を設定してください）" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # [CP-SAT] OR-Tools（CP-SAT）を Android 向けに組んで APK の magi_native へ静的リンクする（docs/cpsat_formal.md）。
+      #   初回は 1 時間前後かかるのでキャッシュする（OR-Tools の版とビルド手順のハッシュで鍵）。無ければ CP-SAT なしで組む（安全側）。
+      - name: Install NDK for OR-Tools
+        run: sdkmanager "ndk;26.1.10909125"
+
+      - name: Cache OR-Tools (Android)
+        id: ortools-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/ortools-android
+          key: ortools-android-v9.12-${{ hashFiles('tools/native/build_ortools_android.sh') }}
+
+      - name: Build OR-Tools (Android, CP-SAT)
+        if: steps.ortools-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone -q --depth 1 --branch v9.12 https://github.com/google/or-tools.git /tmp/or-tools
+          bash tools/native/build_ortools_android.sh "$ANDROID_SDK_ROOT/ndk/26.1.10909125" /tmp/or-tools "$HOME/ortools-android/arm64-v8a" arm64-v8a
+          rm -rf /tmp/or-tools
+
+      - name: Use OR-Tools
+        run: echo "MAGI_ORTOOLS_ANDROID=$HOME/ortools-android" >> "$GITHUB_ENV"
 
       - name: Build release APK
         env:

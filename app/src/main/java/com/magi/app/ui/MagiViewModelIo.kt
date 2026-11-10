@@ -162,7 +162,7 @@ fun MagiViewModel.exportLogsJson(): String? {
     // [3.697.0] テキスト版の「操作の要約（迷いの指標）」と同じ数。
     o.put("hesitation", hesitation().let { h -> org.json.JSONObject().apply {
         put("manualChanges", h.manualChanges); put("undo", h.undo); put("redo", h.redo)
-        put("searches", h.searches); put("searchesWithResult", h.searchesWithResult); put("searchesEmpty", h.searchesEmpty)
+        put("searches", h.searches); put("searchesWithResult", h.searchesWithResult); put("searchesEmpty", h.searchesEmpty); put("autoSearches", h.autoSearches)
         put("applied", h.applied); put("notNow", h.notNow); put("consulted", h.consulted)
         put("autoRuns", h.autoRuns); put("drafts", h.drafts); put("draftsRightAfterResult", h.draftsRightAfterResult)
         put("closedWithoutApply", h.closedWithoutApply)

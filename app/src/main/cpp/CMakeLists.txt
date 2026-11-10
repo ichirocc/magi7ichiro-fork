@@ -23,3 +23,19 @@ target_link_libraries(magi_native ${log-lib})
 # 両ページ端末でロード可能にする（4KB 端末でも無害）。target_link_options は CMake 3.13+（本プロジェクト
 # 3.22.1）で利用可。
 target_link_options(magi_native PRIVATE "-Wl,-z,max-page-size=16384")
+
+# CP-SAT（OR-Tools）による下限・ギャップ・説明（docs/cpsat_formal.md）。この ABI 向けに組んだ OR-Tools の install prefix が
+#   渡されたときだけ組み込む（tools/native/build_ortools_android.sh、CI は ortools-android.yml）。無ければ従来どおり＝Kotlin 側は
+#   CpsatBridge.available=false で CP-SAT を使わない。
+set(MAGI_ORTOOLS_PREFIX "" CACHE PATH "OR-Tools install prefix for this ABI")
+if(MAGI_ORTOOLS_PREFIX AND EXISTS "${MAGI_ORTOOLS_PREFIX}/lib/cmake/ortools")
+  list(APPEND CMAKE_PREFIX_PATH "${MAGI_ORTOOLS_PREFIX}")
+  list(APPEND CMAKE_FIND_ROOT_PATH "${MAGI_ORTOOLS_PREFIX}")
+  find_package(ortools CONFIG REQUIRED)
+  target_compile_definitions(magi_native PRIVATE MAGI_WITH_CPSAT OR_PROTO_DLL=)
+  # OR-Tools（protobuf・abseil）のヘッダは RTTI と例外を前提にする＝この .so だけ有効にする（エンジンの戻り値設計は不変）。
+  target_compile_options(magi_native PRIVATE -frtti -fexceptions)
+  target_compile_features(magi_native PRIVATE cxx_std_17)
+  target_link_libraries(magi_native ortools::ortools)
+  message(STATUS "MAGI: CP-SAT enabled from ${MAGI_ORTOOLS_PREFIX}")
+endif()

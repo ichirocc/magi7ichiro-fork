@@ -21,6 +21,10 @@ const val MAX_OPTIMIZE_SEC = 300
 const val POST_RESERVE_SEC = 10
 /** 玉突き（パイプラインの深い探索）の取り分（秒）。後処理の後ろにさらに足す（3.659.0 利用者指示「探索60秒後処理10秒玉突き検索10秒」）。 */
 const val CHAIN_RESERVE_SEC = 10
+/** CP-SAT 併走のワーカー数（探索の 8 本と同時に走る。docs/cpsat_formal.md）。 */
+const val CPSAT_WORKERS = 2
+/** 下限とのギャップがこの割合以下なら予算の途中でも探索を終える（2026-11-10 ユーザー指示「差 1% 以下」＝HF77 明示数値）。 */
+const val CPSAT_GAP_STOP = 0.01
 
 /** [E0] 希望衝突の床での頭打ちの型（A/B 用）。 */
 enum class WishFloorMode { OFF, E0A, E0B }
@@ -101,7 +105,12 @@ object V6FinalPort {
         val capZero: CapZeroNotice? = null,
         /** 探索の終わり方（3.643.0）。背景実行の再開経路では null。 */
         val stop: StopSummary? = null,
+        /** CP-SAT の下限とギャップ（`docs/cpsat_formal.md`）。CP-SAT を使わなかった実行では null。 */
+        val bound: BoundSummary? = null,
     )
+
+    /** 採用した勤務表の根拠: 必須の件数の下限（証明済みか）と、重み（weightedScore）の下限・ギャップ。下限は fair を 0 とした緩和＝必ず実際の値以下。 */
+    data class BoundSummary(val hardBound: Long, val hardProven: Boolean, val weightedBound: Long, val adoptedWeighted: Double, val gap: Double?, val stoppedByGap: Boolean)
 
     /** 入口で個人上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。 */
     data class CapZeroNotice(val count: Int, val hardBefore: Int, val hardAfter: Int) {
@@ -713,6 +722,21 @@ object V6FinalPort {
             }
             return wishReachedCache.get().second
         }
+        // [CP-SAT 併走、docs/cpsat_formal.md] 下限・ギャップを得て、差が 1% 以下（必須は証明済みの最少と同じ件数）なら予算の途中でも止める。
+        val cpsat = if (config.cpsatCoRun && CpsatBridge.available) CpsatCoRun(state, baseProblem) else null
+        val cpsatLock = Any()
+        var cpsatPolledAt = 0L
+        var cpsatGapHit = false
+        fun cpsatGapReached(now: Long): Boolean = synchronized(cpsatLock) {
+            if (cpsat == null || cpsatGapHit || now - cpsatPolledAt < 1_000L) return@synchronized cpsatGapHit
+            cpsatPolledAt = now
+            val snap = cpsat.poll()
+            val best = wd.bestReport ?: return@synchronized false
+            if (!snap.hardProven || best.hard.toLong() != snap.hardBound) return@synchronized false
+            val g = CpsatCoRun.gap(best.weightedScore, snap.weightedBound) ?: return@synchronized false
+            if (g <= CPSAT_GAP_STOP) cpsatGapHit = true
+            cpsatGapHit
+        }
         val shouldStop = {
             val now = EngineClock.nowMs()
             val gen = wd.bestVersion.get()   // 判定の世代。発火はこの世代のままだった場合だけ確定する（§5.4）
@@ -733,6 +757,7 @@ object V6FinalPort {
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true
+                cpsatGapReached(now) -> true
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, wd.lastBestImproveMs.get(), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
                     val fired = synchronized(progressLock) {
@@ -754,6 +779,7 @@ object V6FinalPort {
         val e0bSkip = { wishFloorMode == WishFloorMode.E0B && wd.stagnationFired.get() && e0Fired.get() }
         val postShouldStop = { EngineClock.nowMs() >= hardDeadlineMs || !isActive || e0bSkip() }
 
+        val cpsatOn = cpsat?.start(cappedInput, ((searchDeadlineMs - EngineClock.nowMs()) / 1000.0).coerceAtLeast(1.0), CPSAT_WORKERS, optsR.seed) ?: false
         val tFirst0 = EngineClock.nowMs()
         val first = V6NativeOptimizer.optimize(state, schedule, optsR, shouldStop, progressWatch, stopIsFinal)
         val tFirst1 = EngineClock.nowMs()
@@ -764,6 +790,11 @@ object V6FinalPort {
             V6NativeOptimizer.optimize(state, first.schedule, optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = plan.alnsSec), shouldStop, progressWatch, stopIsFinal)
         } else first
         val tChain1 = EngineClock.nowMs()
+        // CP-SAT を止めて最良を読む。良ければ統合の起点にする（手動固定・希望固定を崩した盤面は使わない＝最終番兵と同じ多重防御）。
+        val cpsatSnap = if (cpsatOn) cpsat!!.finish() else null
+        val cpsatStage = cpsatSnap?.board?.let { b -> StageCandidate("CP-SAT", b, UnifiedViolationChecker.check(state, b)) }
+            ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
+        val searchRoot = cpsatStage?.takeIf { betterReport(it.report, chained.report) }?.sched ?: chained.schedule
         // [3.377.0/実機ログ起因] 停滞ウォッチドッグの遠隔測定は**探索フェーズの話**なのに、ログは
         //   `lastBestImproveMs` を出力時（後処理・追加精製のあと）に読んでいた。ExtraRefine(3.102.0)の
         //   改善も `progressWatch` を通るので lastBestImproveMs は tChain1 より後へ進み、
@@ -804,7 +835,7 @@ object V6FinalPort {
         }
         val integrated = EliteIntegrationPolish.apply(
             state = state,
-            rootSchedule = chained.schedule,
+            rootSchedule = searchRoot,
             elites = fusionElites,
             shouldStop = integrationStop,
             deadlineMs = integrationDeadline,
@@ -1034,7 +1065,7 @@ object V6FinalPort {
             StageCandidate("探索", chained.schedule, chained.report),
             StageCandidate("統合", integrated.schedule, integrated.report),
             StageCandidate("後処理", refSched, refReport),
-        )
+        ) + listOfNotNull(cpsatStage)
         val pinSafeStages = stages.filter { baseProblem.holdsManualPins(it.sched) }
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
@@ -1054,6 +1085,11 @@ object V6FinalPort {
         // [MAGI-021/022] 採否は必須の「件数」で比べる（docs/adoption.md）＝人員不足 1 を解いて禁止連続 1 を作る入れ替わりは件数では見えない。
         //   採否は変えず、入力に無かった必須違反（族・場所）と解消した必須違反をログに出す（画面の変更案の同一性検査と説明を揃える）。
         val identityLog = identitySwapLog(state, inputReport, finalReport)
+        val boundSummary = cpsatSnap?.takeIf { it.hardBound >= 0 }?.let { s ->
+            BoundSummary(s.hardBound, s.hardProven, s.weightedBound, finalReport.weightedScore,
+                CpsatCoRun.gap(finalReport.weightedScore, s.weightedBound).takeIf { finalReport.hard.toLong() == s.hardBound }, cpsatGapHit)
+        }
+        val cpsatLog = cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report))) } ?: emptyList()
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
         //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
         //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
@@ -1354,7 +1390,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + identityLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + identityLog + cpsatLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
@@ -1377,7 +1413,7 @@ object V6FinalPort {
             // 交換の候補を先に、空いた枠（最大 3）を探索の他の案で埋める（旧: 候補が 1 件でもあると他の案を全部置き換えていた）。
             alternatives = if (finalTradeoffs.isEmpty()) chained.alternatives
                 else (finalTradeoffs + chained.alternatives).filter { !it.contentDeepEquals(finalSched) }.distinctBy { BoardKey(it) }.take(SeesawRelink.MAX_TRADEOFFS),
-            capZero = capZero, stop = stopSummary)
+            capZero = capZero, stop = stopSummary, bound = boundSummary)
     }
 
     /**
@@ -1484,6 +1520,16 @@ object V6FinalPort {
         }
 
     /** 入力に無かった必須違反（族・場所）と解消した必須違反の 1 行。新しく生まれたものが無ければ空。 */
+    /** CP-SAT の結果の 1 行（下限・証明・ギャップ・CP-SAT の最良と探索の最良の比較）。 */
+    internal fun cpsatLogLine(s: CpsatCoRun.Snapshot, b: BoundSummary?, stage: StageCandidate?, searchBest: ViolationReport): String {
+        val hard = "必須の下限 ${s.hardBound}" + if (s.hardProven) "（最少と証明）" else "（未証明）"
+        val weight = if (s.weightedBound >= 0) "重みの下限 ${s.weightedBound}（fair を 0 とした緩和）" else "重みの下限なし"
+        val gap = b?.gap?.let { "採用した勤務表とのギャップ ${"%.1f".format(it * 100)}%" } ?: "ギャップ —（必須の件数が下限と違う）"
+        val own = stage?.let { "CP-SAT の最良 必須${it.report.hard}・重み${it.report.weightedScore.toLong()}（探索の最良 必須${searchBest.hard}・重み${searchBest.weightedScore.toLong()}" +
+            (if (betterReport(it.report, searchBest)) "より良い＝統合の起点に採用）" else "）") } ?: "CP-SAT の解なし"
+        return "$hard・$weight・$gap・$own" + if (b?.stoppedByGap == true) "・ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を早く終えた" else ""
+    }
+
     internal fun identitySwapLog(state: MagiState, input: ViolationReport, final: ViolationReport): List<MirrorLog> {
         val born = ViolationIdentity.newHard(input, final)
         if (born.isEmpty()) return emptyList()

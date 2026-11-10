@@ -17,6 +17,8 @@ data class EngineConfig(
     val membraneCellLns: Boolean = true,
     /** シーソーの Path Relinking（[PolishGate.seesawRelink] の写し。後処理の後、V6FinalPort が読む）。 */
     val seesawRelink: Boolean = false,
+    /** CP-SAT の併走（[PolishGate.cpsatCoRun] の写し）。 */
+    val cpsatCoRun: Boolean = true,
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
@@ -44,6 +46,7 @@ data class EngineConfig(
             countChainPolish = PolishGate.countChainPolish,
             membraneCellLns = PolishGate.membraneCellLns,
             seesawRelink = PolishGate.seesawRelink,
+            cpsatCoRun = PolishGate.cpsatCoRun,
             wideC3nBreakDays = PolishGate.wideC3nBreakDays,
             ejection = EjectionFlags(
                 c1Chain = PolishGate.c1EjectionChain,

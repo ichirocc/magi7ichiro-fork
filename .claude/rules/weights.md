@@ -12,7 +12,7 @@ paths:
 
 # 目的関数・重みを触るときの規約
 
-- 重みの単一の真実は `MirrorKeys.weights`。変えるときは HF77（業務担当者の明示数値指示＋1 件ずつ）が前提。
+- 重みの単一の真実は `MirrorKeys.weights`。必須の重みは CP-SAT モデル `app/src/main/cpp/magi_cpsat.h` の `HardW` も同じ値（変えたら揃える）。変えるときは HF77（業務担当者の明示数値指示＋1 件ずつ）が前提。
 - 同じコミットで揃える: `MirrorKeys.weights`・`Evaluator.fullEvalParts` のリテラル・`DeltaEvaluator` の集約式・
   **destroy-repair/polish系の重複リテラル**（`DestroyRepairMarginalCost.kt`・`RangePolish.kt`(2箇所)・
   `C1TemporalFlowPolish.kt`・`DayAssignmentPolish.kt`(2箇所、`45L * maxOf(...)` の**乗数が左**＝
