@@ -95,6 +95,7 @@ object C1DeltaPrefilter {
      * 共用するため internal 化（screenCell と同じ row-local 差分計算を DRY に保つ）。
      */
     internal fun staffC3nFires(p: Problem, row: IntArray): Int {
+        if (p.T in 1..63 && p.cons3n.all { c -> c.seq.all { it in 0 until p.K } }) return staffC3nFiresBits(p, row)
         var fires = 0
         for (c in p.cons3n) {
             val seq = c.seq
@@ -109,6 +110,22 @@ object C1DeltaPrefilter {
                 }
                 j++
             }
+        }
+        return fires
+    }
+
+    /** [staffC3nFires] のビット版: 行をシフトごとの日のビット集合にし、規則ごとに (bits[seq[l]] >> l) の AND で完全一致の窓を数える（C++ contribC3 と同じ）。 */
+    private fun staffC3nFiresBits(p: Problem, row: IntArray): Int {
+        val bits = LongArray(p.K)
+        for (j in 0 until p.T) { val k = row[j]; if (k in 0 until p.K) bits[k] = bits[k] or (1L shl j) }
+        var fires = 0
+        for (c in p.cons3n) {
+            val seq = c.seq
+            val d = seq.size
+            if (d == 0 || d > p.T) continue
+            var full = -1L
+            for (l in 0 until d) { val k = seq[l]; full = full and (if (k in 0 until p.K) bits[k] ushr l else 0L) }
+            fires += java.lang.Long.bitCount(full and ((1L shl (p.T - d + 1)) - 1))
         }
         return fires
     }

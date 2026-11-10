@@ -405,26 +405,31 @@ class Problem(val state: MagiState) {
      */
     fun makesForbiddenRun(schedule: Array<IntArray>, i: Int, j: Int, newK: Int): Boolean {
         if (c3wBanned(i, j, newK)) return true   // [3.542.0] 希望の前日に禁止（cons3w, HARD）も同じ枝刈りで避ける
-        for (c in cons3n) {
-            val seq = c.seq
+        // 窓が日 j を含み seq[j - s] == newK の窓だけが完全一致しうる＝newK が現れる (規則, 位置) の索引だけを見る（判定は全走査と同じ）。
+        val occ = c3nOccurrences.getOrNull(newK) ?: return false
+        val row = schedule[i]
+        var x = 0
+        while (x < occ.size) {
+            val seq = cons3n[occ[x]].seq; val l0 = occ[x + 1]; x += 2
             val d = seq.size
-            if (d == 0 || d > T) continue
-            val sLo = (j - d + 1).coerceAtLeast(0)
-            val sHi = j.coerceAtMost(T - d)
-            // 窓が日 j を含むので、seq[j - s] が newK の窓だけが完全一致しうる。残りの日は最初の不一致で打ち切る（判定は不変）。
-            var s = sLo
-            while (s <= sHi) {
-                if (seq[j - s] == newK) {
-                    var all = true
-                    for (l in 0 until d) {
-                        if (s + l != j && schedule[i][s + l] != seq[l]) { all = false; break }
-                    }
-                    if (all) return true
-                }
-                s++
+            val s = j - l0
+            if (s < 0 || s + d > T) continue
+            var all = true
+            for (l in 0 until d) {
+                if (l != l0 && row[s + l] != seq[l]) { all = false; break }
             }
+            if (all) return true
         }
         return false
+    }
+
+    /** [makesForbiddenRun] の索引: シフト k → k が現れる (cons3n の添字, 並びの位置) の組を平らに並べたもの。盤面に依らない。 */
+    private val c3nOccurrences: Array<IntArray> by lazy {
+        Array(K) { k ->
+            val out = ArrayList<Int>()
+            cons3n.forEachIndexed { e, c -> if (c.seq.size in 1..T) c.seq.forEachIndexed { l, v -> if (v == k) { out.add(e); out.add(l) } } }
+            out.toIntArray()
+        }
     }
 
     /** [3.542.0] セル (i,j) にシフト k を置くと「希望の前日に禁止」(cons3w) に当たるか。範囲外は false。 */

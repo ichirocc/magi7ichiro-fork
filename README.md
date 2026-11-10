@@ -49,6 +49,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-10（3.727.55: 後処理の検査の重複・禁止の並びの判定を索引とビットで）
 **最終更新**：2026-11-10（3.727.54: 膜の細胞 LNS を C++ へ・仕様書に並列処理の章）
 **最終更新**：2026-11-10（3.727.53: C++ のビット化・fair の見積もりの重複削減、仕様書 `docs/delta_cpp_unification.md`）
 **最終更新**：2026-11-10（3.727.52: 差分計算を主に＝C++ の取り消し記録・研磨の候補を差分で選別）

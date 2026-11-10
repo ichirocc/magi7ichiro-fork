@@ -758,6 +758,7 @@ internal object C1WindowPolish {
         }
 
         var beam = listOf(Beam(work0, before, 0))
+        val repCache = HashMap<BoardKey, ViolationReport>()
         // [3.340.0] 探索中に見つけた最良を保持する（最終ビームは観測列に含まれるので退化不能）。
         var bestEver: Beam? = null
         var stagnant = 0
@@ -775,7 +776,8 @@ internal object C1WindowPolish {
                     val x = p.cons1[ci].shiftIdx
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
                     if (b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
-                    val rep2 = UnifiedViolationChecker.check(state, w2)
+                    // ビームは同じ盤面を何度も作る（実データでチェッカー呼び出しの約 8 割）。チェッカーは盤面だけで決まるので、この呼び出しの中では前の結果を使う。
+                    val rep2 = repCache.getOrPut(BoardKey(w2)) { UnifiedViolationChecker.check(state, w2) }
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))
                     anyExpanded = true
