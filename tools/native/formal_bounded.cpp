@@ -53,6 +53,14 @@ static bool holds(const MagiProblem& p, const std::vector<int>& b, const magi_cp
 }
 #endif
 
+// 取り消し記録（SaChunk::rollbackMove）で戻した状態が、その盤面から作り直した状態と表まで同じか。
+static bool sameState(const SaChunk& x, const SaChunk& y) {
+    if (x.score != y.score || x.a != y.a || x.ssn != y.ssn || x.dsn != y.dsn || x.wd != y.wd || x.fairCur != y.fairCur) return false;
+    if (x.rowMask != y.rowMask || x.dayShiftMask != y.dayShiftMask || x.c1Cur != y.c1Cur) return false;
+    for (int f = 0; f < 4; f++) if (x.c3Cur[f] != y.c3Cur[f]) return false;
+    return x.d41Cur == y.d41Cur && x.d42Cur == y.d42Cur && x.d41sCur == y.d41sCur && x.d42sCur == y.d42sCur;
+}
+
 static bool nextBoard(std::vector<int>& b, int lo, int hi) {
     for (size_t x = 0; x < b.size(); x++) { if (b[x] < hi) { b[x]++; return true; } b[x] = lo; }
     return false;
@@ -60,7 +68,7 @@ static bool nextBoard(std::vector<int>& b, int lo, int hi) {
 
 int main(int argc, char** argv) {
     const int configs = argc > 1 ? atoi(argv[1]) : 200;
-    long long boards = 0, moves = 0, bad = 0, cpBoards = 0, cpBad = 0, exCases = 0, exBad = 0, exNotMin = 0, coreChecks = 0;
+    long long boards = 0, moves = 0, rollbacks = 0, bad = 0, cpBoards = 0, cpBad = 0, exCases = 0, exBad = 0, exNotMin = 0, coreChecks = 0;
     struct Shape { int S, T, K, G; };
     const Shape shapes[] = {{2, 4, 3, 2}, {3, 3, 3, 2}, {2, 5, 3, 1}};
     for (int c = 0; c < configs; c++) {
@@ -87,6 +95,17 @@ int main(int argc, char** argv) {
                     st.deltaApply(i, j, old);
                     if (st.score != base) { if (bad++ < 5) printf("REVERT MISMATCH config=%d cell=(%d,%d)\n", c, i, j); }
                 }
+            }
+            // 取り消し記録: このセルと次のセル（同じ行・同じ日を含む 2 マスの手）を当てて rollbackMove で戻す。
+            const SaChunk fresh(p, b.data(), 1);
+            for (int x = 0; x < n; x++) for (int v = lo; v < p.K; v++) {
+                const int y = (x + 1 + v + 1) % n;
+                st.beginMove();
+                st.deltaApply(x / p.T, x % p.T, v);
+                st.deltaApply(y / p.T, y % p.T, (b[y] - lo + 1) % (p.K - lo) + lo);
+                st.rollbackMove();
+                rollbacks++;
+                if (!sameState(st, fresh)) { if (bad++ < 5) printf("ROLLBACK MISMATCH config=%d cells=%d,%d\n", c, x, y); }
             }
         } while (nextBoard(b, lo, p.K - 1));
 #ifdef MAGI_WITH_CPSAT
@@ -158,7 +177,7 @@ int main(int argc, char** argv) {
         }
 #endif
     }
-    printf("BOUNDED: configs=%d boards=%lld moves=%lld delta-mismatch=%lld | cpsat boards=%lld cpsat-mismatch=%lld | explain cases=%lld cores=%lld mismatch=%lld not-minimal=%lld\n",
-           configs, boards, moves, bad, cpBoards, cpBad, exCases, coreChecks, exBad, exNotMin);
+    printf("BOUNDED: configs=%d boards=%lld moves=%lld rollbacks=%lld delta-mismatch=%lld | cpsat boards=%lld cpsat-mismatch=%lld | explain cases=%lld cores=%lld mismatch=%lld not-minimal=%lld\n",
+           configs, boards, moves, rollbacks, bad, cpBoards, cpBad, exCases, coreChecks, exBad, exNotMin);
     return (bad || cpBad || exBad) ? 1 : 0;
 }

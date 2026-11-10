@@ -21,6 +21,7 @@ import kotlin.math.max
  * 対象は下限からの余地が大きい順に最大 [Config.maxFocusStaff] 人（ログに「対象 N/M人」）。
  */
 internal object PersonalBalanceJointLnsPolish {
+
     data class Config(
         /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
         val wideC3nBreakDays: Boolean = false,
@@ -97,6 +98,7 @@ internal object PersonalBalanceJointLnsPolish {
         fun haltNow(): Boolean = shouldStop() || System.nanoTime() >= deadline   // 評価数上限を含まない（生成時に見る）
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootPersonal, rootFocus, emptyList(), 0)
+        val screen = DeltaScreen(p)
         var best = root
         var generated = 0
         var expanded = 0
@@ -139,7 +141,12 @@ internal object PersonalBalanceJointLnsPolish {
                     var from = 0
                     while (from < pending.size && !haltNow()) {
                         val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
-                        val evaluated = mapParallel(chunk) {
+                        // 候補の採点は差分（前の候補との違うセルだけ）。採る盤面は最後にチェッカーで確かめ直す。
+                        val evaluated = if (DeltaScreen.enabled) chunk.map { c ->
+                            val k = screen.key(c.schedule)
+                            (if (k != null) DeltaScreen.keyReport(k) else UnifiedViolationChecker.check(state, c.schedule)) to
+                                personalPenaltyByStaff(p, c.schedule)
+                        } else mapParallel(chunk) {
                             UnifiedViolationChecker.check(state, it.schedule) to personalPenaltyByStaff(p, it.schedule)
                         }
                         generated += chunk.size; evaluations += chunk.size

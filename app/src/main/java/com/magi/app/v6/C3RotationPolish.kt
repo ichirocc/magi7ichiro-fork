@@ -28,6 +28,7 @@ internal object C3RotationPolish {
         var bestRep = before
         var applied = 0
         var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数
+        val screen = DeltaScreen(p)
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
         //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
@@ -80,8 +81,8 @@ internal object C3RotationPolish {
                                 val postObjective = staffObjective(p, work, i) + staffObjective(p, work, i2)
                                 if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }; skipped++; continue }
                             }
-                            val rep = UnifiedViolationChecker.check(state, work)
-                            if (adoptionGate(p, workBeforeBlock, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
+                            val rep = screen.checkIfBetter(state, work, bestRep)
+                            if (rep != null && adoptionGate(p, workBeforeBlock, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                             else for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }   // 巻き戻し
                         }
                     }
