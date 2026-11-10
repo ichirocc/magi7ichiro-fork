@@ -158,6 +158,37 @@ prove("run 補助変数: 達成",
       z3.Implies(z3.And(*bools), z3.Exists([a3], z3.And(a3 >= 0, a3 <= 1, a3 <= xsv, *[a3 <= v for v in seg],
                                                         z3.If(z3.And(startb, z3.Not(allseg)), 1, 0) + a3 >= xsv - xpv))))
 
+# 強い形（3.727.x の改良）: ①複数シフト連 f >= x0 − r_l（各 l）②run の不足 y_t >= y_{t−1}・y_t >= start − x_{s+t}。
+for D in range(2, 7):
+    rs = z3.Ints(" ".join(f"q{l}" for l in range(1, D)))
+    bools = [z3.And(v >= 0, v <= 1) for v in [x0, *rs]]
+    allr = z3.And(*[r == 1 for r in rs])
+    min_encoding(f"c3 非forbidden 強い形 D={D}", z3.If(z3.And(x0 == 1, z3.Not(allr)), 1, 0),
+                 lambda yv: z3.And(yv >= 0, yv <= 1, *[yv + r >= x0 for r in rs]), f, bools)
+
+
+def run_strong_proof(Lr):
+    """連の始まり s の L−1 個の y_t の和の最小値 = Σ_t [start ∧ ¬(x_{s+1..s+t} 全 1)]。x の並び（s−1..s+L−1）は任意の 0/1。"""
+    xs_ = z3.Ints(" ".join(f"w{u}" for u in range(Lr + 1)))   # w0=x_{s−1}, w1=x_s, w2..=x_{s+1..}
+    ys_ = z3.Ints(" ".join(f"v{t}" for t in range(1, Lr)))
+    bools_ = [z3.And(v >= 0, v <= 1) for v in xs_]
+    start_ = xs_[1] - xs_[0]
+    def cond(yy):
+        cs = []
+        for t in range(1, Lr):
+            cs += [yy[t - 1] >= 0, yy[t - 1] <= 1, yy[t - 1] + xs_[1 + t] >= start_]
+            if t > 1: cs.append(yy[t - 1] >= yy[t - 2])
+        return z3.And(*cs)
+    st = z3.And(xs_[1] == 1, xs_[0] == 0)
+    want = z3.Sum([z3.If(z3.And(st, z3.Not(z3.And(*[xs_[1 + u] == 1 for u in range(1, t + 1)]))), 1, 0) for t in range(1, Lr)])
+    prove(f"run 強い形 L={Lr}: 健全", z3.ForAll(ys_, z3.Implies(z3.And(*bools_, cond(ys_)), z3.Sum(ys_) >= want)))
+    vals = [z3.If(z3.And(st, z3.Not(z3.And(*[xs_[1 + u] == 1 for u in range(1, t + 1)]))), 1, 0) for t in range(1, Lr)]
+    prove(f"run 強い形 L={Lr}: 達成", z3.Implies(z3.And(*bools_), cond(vals)))
+
+
+for Lr in range(2, 8):
+    run_strong_proof(Lr)
+
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} PROVED")
 sys.exit(1 if failed else 0)

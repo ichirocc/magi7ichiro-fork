@@ -2821,4 +2821,9 @@ Java_com_magi_app_v6_NativeBridge_nativeFullEval(JNIEnv* env, jclass, jlong hand
     env->SetLongArrayRegion(out, 0, 2 + kBreakdownCount, jv);
     return out;
 }
+
+// CP-SAT（OR-Tools）の JNI。ビルドに OR-Tools が渡されたときだけ（CMakeLists の MAGI_ORTOOLS_PREFIX）。
+#ifdef MAGI_WITH_CPSAT
+#include "magi_cpsat_jni.inc"
+#endif
 #endif  // MAGI_HOST_TEST

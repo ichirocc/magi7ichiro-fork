@@ -10,6 +10,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <functional>
 
 namespace magi_cpsat {
@@ -27,6 +28,9 @@ struct Options {
     long long hardCap = -1;
     // 解の更新ごとに呼ぶ（盤面・必須件数・重み付き）。false を返すと打ち切る。
     std::function<bool(const std::vector<int>&, long long, long long)> onSolution;
+    // 第 2 段の下限が上がるたびに呼ぶ（重み付きの下限）。第 1 段の結果（必須の件数・下限・証明済みか）は onHard。
+    std::function<void(long long)> onBound;
+    std::function<void(long long, long long, bool)> onHard;
     std::atomic<bool>* stop = nullptr;
     // 指定したセルを指定値に固定する（-1 は固定しない）。説明（直す代償）で使う。
     std::vector<int> force;
@@ -36,6 +40,12 @@ struct Options {
     bool keepInputValues = true;
     // 下限を上げる探索（線形緩和の強化・下限専用のワーカー）を使う。
     int linearizationLevel = 2;
+    // 使う探索役（空なら CP-SAT の既定の並び）。少ないワーカーでも下限を担う役（max_lp など）を必ず入れるため。
+    std::vector<std::string> subsolvers;
+    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage）。
+    unsigned families = ~0u;
+    // 第 1 段の持ち時間の上限（秒）。
+    double phase1MaxSeconds = 6.0;
 };
 
 struct Result {
@@ -57,7 +67,11 @@ public:
 
     void build(const std::vector<int>& hint, const Options& opt) {
         makeVars(hint, opt);
-        addC1(); addC2(); addC41(); addC42(); addC3All(); addCells(); addCounts(); addWeekly(); addCoverage();
+        const unsigned f = opt.families;
+        if (f & 1u) addC1(); if (f & 2u) addC2(); if (f & 4u) addC41(); if (f & 8u) addC42(); if (f & 16u) addC3All();
+        if (f & 32u) addCells();
+        addCountsMaybe(f & 64u);
+        if (f & 128u) addWeekly(); if (f & 256u) addCoverage();
     }
 
     const sat::LinearExpr& hardCount() const { return hardCount_; }
@@ -230,7 +244,7 @@ private:
                     cp_.AddGreaterOrEqual(f, m - (D - 1));
                     add(f);
                 } else {
-                    // fire＝先頭が一致し、残りのどれかが一致しない。f >= X0 − A、A <= 残りの各一致（最小化で A＝全一致）。
+                    // fire＝先頭が一致し、残りのどれかが一致しない。
                     sat::LinearExpr x0 = X(i, j, c.seq[0]);
                     bool restAll = true; std::vector<sat::LinearExpr> rest;
                     for (int l = 1; l < D; l++) { if (!mayBe(i, j + l, c.seq[l])) restAll = false; rest.push_back(X(i, j + l, c.seq[l])); }
@@ -241,44 +255,34 @@ private:
                     bool restConst = true; long long rmin = 1;
                     for (auto& r : rest) { long long rv; if (isConst(r, rv)) rmin = std::min(rmin, rv); else restConst = false; }
                     if (restConst) { if (isConst(x0, c0)) { if (c0 == 1 && rmin == 0) add(sat::LinearExpr(1)); } else if (rmin == 0) add(x0); continue; }
-                    auto a = cp_.NewBoolVar();
-                    for (auto& r : rest) cp_.AddLessOrEqual(a, r);
+                    // f >= x0 − r_l（各 l）。max_l(x0 − r_l) = x0 ∧ ¬全一致（補助変数を置かない＝線形緩和が強い）。
                     auto f = cp_.NewBoolVar();
-                    cp_.AddGreaterOrEqual(f + a, x0);
+                    for (auto& r : rest) cp_.AddGreaterOrEqual(f + r, x0);
                     add(f);
                 }
             }
         }
     }
-    // run の不足（C3Run.rowDeficit）: 長さ r<L の連ごとに L−r。連の始まり s ごとに Σ_{t=1}^{L-1} [連が s..s+t を覆わない]。
-    //   月末を越える日は「シフトでない」扱い（rowDeficit は j==T で連を閉じる）。
+    // run の不足（C3Run.rowDeficit）: 長さ r<L の連ごとに L−r。連の始まり s ごとに Σ_{t=1}^{L-1} y_t、y_t＝[始まり ∧ 連が s+t まで届かない]。
+    //   届かない(t) ＝ 届かない(t−1) ∨ x_{s+t}=0 なので y_t >= y_{t−1}・y_t >= start − x_{s+t}（補助の「全部 1」を置かない＝線形緩和が強い）。
+    //   月末を越える日・置けない日は x=0（rowDeficit は j==T で連を閉じる）。start は x_s − x_{s−1}（最小化の下側で十分）。
     template <typename Add> void addRunDeficit(int k, int L, Add add) {
         if (L <= 1) return;
         for (int i = 0; i < S; i++) for (int s = 0; s < T; s++) {
             if (!mayBe(i, s, k)) continue;
             sat::LinearExpr start = X(i, s, k);
             if (s > 0) start -= X(i, s - 1, k);
-            // start は x[s] ∧ ¬x[s-1] の下限（x[s]−x[s−1]）。最小化では y >= start − A_t で十分。
-            std::vector<sat::LinearExpr> seg{X(i, s, k)};
+            long long sv;
+            if (isConst(start, sv) && sv <= 0) continue;
+            sat::LinearExpr prev(0);
             for (int t = 1; t < L; t++) {
                 const int e = s + t;
-                long long sv;
-                if (e >= T || !mayBe(i, e, k)) {
-                    // s..s+t を覆えない＝t 以降は全部 1 ずつ。start が 1 なら L−t 件。
-                    if (isConst(start, sv)) { if (sv >= 1) add(sat::LinearExpr(L - t)); }
-                    else {
-                        auto y = cp_.NewBoolVar();
-                        cp_.AddGreaterOrEqual(y, start);
-                        add((long long)(L - t) * sat::LinearExpr(y));
-                    }
-                    break;
-                }
-                seg.push_back(X(i, e, k));
-                auto a = cp_.NewBoolVar();
-                for (auto& r : seg) cp_.AddLessOrEqual(a, r);
+                sat::LinearExpr xe = (e < T) ? X(i, e, k) : sat::LinearExpr(0);
                 auto y = cp_.NewBoolVar();
-                cp_.AddGreaterOrEqual(y + a, start);
+                cp_.AddGreaterOrEqual(y + xe, start);
+                if (t > 1) cp_.AddGreaterOrEqual(y, prev);
                 add(y);
+                prev = sat::LinearExpr(y);
             }
         }
     }
@@ -303,12 +307,13 @@ private:
         }
     }
 
-    void addCounts() {
+    void addCountsMaybe(bool penalties) {
         cnt_.assign((size_t)S * K, sat::LinearExpr(0));
         for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
             sat::LinearExpr n;
             for (int j = 0; j < T; j++) n += X(i, j, k);
             cnt_[(size_t)i * K + k] = n;
+            if (!penalties) continue;
             const int lo = p_.rangeLo[(size_t)i * K + k], hi = p_.rangeHi[(size_t)i * K + k], t = p_.apt[(size_t)i * K + k];
             long long cn; const bool cst = isConst(n, cn);
             if (lo != INT32_MIN && lo != 0 && p_.cd(i, k)) {
@@ -383,7 +388,16 @@ inline sat::SatParameters params(const Options& opt, double seconds) {
     prm.set_random_seed((int)opt.randomSeed);
     prm.set_log_search_progress(false);
     prm.set_linearization_level(opt.linearizationLevel);
+    for (const auto& name : opt.subsolvers) prm.add_subsolvers(name);
     return prm;
+}
+
+// 外からの停止を段ごとの停止に結ぶ。CP-SAT は解き終えると 1 つ目の停止フラグを自分で立てる＝段ごとに別のフラグを渡し、
+//   呼び出し側のフラグは 2 つ目（読むだけ）として登録する（共有すると第 2 段が始まった瞬間に止まっていた）。
+inline void linkStop(sat::Model& env, std::atomic<bool>& phaseStop, const Options& opt) {
+    auto* tl = env.GetOrCreate<operations_research::TimeLimit>();
+    tl->RegisterExternalBooleanAsLimit(&phaseStop);
+    if (opt.stop) tl->RegisterSecondaryExternalBooleanAsLimit(opt.stop);
 }
 
 // 2 段で解く: ①必須の件数を最小 ②その件数以下で重み付きを最小（今の採否＝必須の件数 → 重み と同じ順）。
@@ -392,14 +406,16 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     auto t0 = std::chrono::steady_clock::now();
     auto elapsed = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
     long long hardCap = opt.hardCap;
-    double phase1Share = 0.3;
+    // 第 1 段（必須の最少化）は短く切る: 証明できればそこで終わり、できなくても重みの段（下限・ギャップの本体）へ時間を残す。
+    const double phase1Seconds = std::min(opt.maxSeconds * 0.3, opt.phase1MaxSeconds);
     if (hardCap < 0) {
         Model m(p, hw);
         m.build(hint, opt);
         m.cp().Minimize(m.hardCount());
         sat::Model env;
-        env.Add(sat::NewSatParameters(params(opt, opt.maxSeconds * phase1Share)));
-        if (opt.stop) env.GetOrCreate<operations_research::TimeLimit>()->RegisterExternalBooleanAsLimit(opt.stop);
+        env.Add(sat::NewSatParameters(params(opt, phase1Seconds)));
+        std::atomic<bool> phaseStop{false};
+        linkStop(env, phaseStop, opt);
         auto r = sat::SolveCpModel(m.cp().Build(), &env);
         res.status = r.status();
         if (r.status() != sat::OPTIMAL && r.status() != sat::FEASIBLE) { res.wallSeconds = elapsed(); return res; }
@@ -408,6 +424,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
         res.hardProven = r.status() == sat::OPTIMAL;
         hardCap = res.hard;
         res.board = m.boardFrom(r);
+        if (opt.onHard) opt.onHard(res.hard, res.hardBound, res.hardProven);
     }
     Model m(p, hw);
     m.build(hint.empty() ? res.board : hint, opt);
@@ -415,17 +432,22 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     m.cp().Minimize(m.weighted());
     sat::Model env;
     env.Add(sat::NewSatParameters(params(opt, std::max(0.05, opt.maxSeconds - elapsed()))));
-    if (opt.stop) env.GetOrCreate<operations_research::TimeLimit>()->RegisterExternalBooleanAsLimit(opt.stop);
+    std::atomic<bool> phaseStop{false};
+    linkStop(env, phaseStop, opt);
+    if (opt.onBound) env.Add(sat::NewBestBoundCallback([&](double b) { opt.onBound((long long)std::ceil(b - 1e-6)); }));
     if (opt.onSolution) {
         env.Add(sat::NewFeasibleSolutionObserver([&](const sat::CpSolverResponse& r) {
             auto b = m.boardFrom(r);
             if (!opt.onSolution(b, (long long)std::llround(sat::SolutionIntegerValue(r, m.hardCount())), (long long)std::llround(r.objective_value()))) {
-                if (opt.stop) opt.stop->store(true);
+                phaseStop.store(true);
             }
         }));
     }
     auto r = sat::SolveCpModel(m.cp().Build(), &env);
     res.status = r.status();
+#ifdef MAGI_HOST_TEST
+    if (getenv("CPSAT_DEBUG")) fprintf(stderr, "phase2 status=%d wall=%.2f stop=%d info=%s\n", (int)r.status(), r.wall_time(), opt.stop ? (int)opt.stop->load() : -1, r.solution_info().c_str());
+#endif
     if (r.status() == sat::OPTIMAL || r.status() == sat::FEASIBLE) {
         res.board = m.boardFrom(r);
         res.weighted = (long long)std::llround(r.objective_value());
