@@ -40,6 +40,7 @@ internal object CyclicSwapWeeklyPolish {
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
+        val screen = DeltaScreen(p)
         var applied = 0
         // [監査で発見・3.270.0] p.wish[i][j]<0 は「希望が一切ない」判定で、実現不能な希望
         //   (canDo(i,wish)==false)まで動かせないと誤判定していた（3.183.0 LightMirrorOptimizer と
@@ -72,8 +73,8 @@ internal object CyclicSwapWeeklyPolish {
                         if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b), intArrayOf(sa, sb)) > 0) {
                             work[a][j] = sa; work[b][j] = sb; continue
                         }
-                        val rep = UnifiedViolationChecker.check(state, work)
-                        if (adoptionGate(p, workBeforeSwap2, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
+                        val rep = screen.checkIfBetter(state, work, bestRep)
+                        if (rep != null && adoptionGate(p, workBeforeSwap2, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                         else { work[a][j] = sa; work[b][j] = sb }
                     }
                 }
@@ -97,8 +98,8 @@ internal object CyclicSwapWeeklyPolish {
                                 if (HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b, c), intArrayOf(sa, sb, sc)) > 0) {
                                     work[a][j] = sa; work[b][j] = sb; work[c][j] = sc; continue
                                 }
-                                val rep = UnifiedViolationChecker.check(state, work)
-                                if (adoptionGate(p, workBeforeRotate3, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; continue }
+                                val rep = screen.checkIfBetter(state, work, bestRep)
+                                if (rep != null && adoptionGate(p, workBeforeRotate3, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; continue }
                                 work[a][j] = sa; work[b][j] = sb; work[c][j] = sc
                             }
                         }
@@ -119,8 +120,8 @@ internal object CyclicSwapWeeklyPolish {
                         if ((0 until k).any { p.extBanned(idx[it], j, vals[(it + 1) % k]) }) continue
                         val workBeforeRotateN = work.copy2D()
                         for (t in 0 until k) work[idx[t]][j] = vals[(t + 1) % k]
-                        val rep = UnifiedViolationChecker.check(state, work)
-                        if (adoptionGate(p, workBeforeRotateN, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
+                        val rep = screen.checkIfBetter(state, work, bestRep)
+                        if (rep != null && adoptionGate(p, workBeforeRotateN, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                         else for (t in 0 until k) work[idx[t]][j] = vals[t]
                     }
                 }
@@ -170,6 +171,7 @@ internal object CyclicSwapWeeklyPolish {
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
+        val screen = DeltaScreen(p)
         var applied = 0
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
         //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
@@ -234,8 +236,8 @@ internal object CyclicSwapWeeklyPolish {
                                 //   exactPinRegression ガードをここにも追加（3.256.0の retrofit 漏れ）。
                                 val workBeforeRect = work.copy2D()
                                 work[i][j1] = z; work[i][j2] = x; work[ip][j1] = x; work[ip][j2] = y
-                                val rep = UnifiedViolationChecker.check(state, work)
-                                if (adoptionGate(p, workBeforeRect, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
+                                val rep = screen.checkIfBetter(state, work, bestRep)
+                                if (rep != null && adoptionGate(p, workBeforeRect, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
                                 work[i][j1] = x; work[i][j2] = y; work[ip][j1] = z; work[ip][j2] = x
                             }
                         }

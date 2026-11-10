@@ -154,6 +154,7 @@ internal object RangePolish {
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
+        val screen = DeltaScreen(p)
         var applied = 0
         val rng = Random(seed)
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
@@ -253,8 +254,8 @@ internal object RangePolish {
                 if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
                 val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
-                val rep = UnifiedViolationChecker.check(state, work)
-                if (adoptionGate(p, workBeforeSwap, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
+                val rep = screen.checkIfBetter(state, work, bestRep)
+                if (rep != null && adoptionGate(p, workBeforeSwap, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
                 work[hi][j] = k; work[lo][j] = loK
             }
             return false

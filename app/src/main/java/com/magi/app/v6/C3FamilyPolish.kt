@@ -420,6 +420,7 @@ internal object C3FamilyPolish {
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
+        val screen = DeltaScreen(p)
         var applied = 0
         val rules = ArrayList<C3>()
         for (c in p.cons3) if (c.seq.size > 1 && !C3Run.isSingleShiftSeq(c.seq)) rules.add(c)
@@ -480,8 +481,8 @@ internal object C3FamilyPolish {
                     val workBeforePattern = work.copy2D()
                     work[i][j] = alt
                     if (!needsChain) {
-                        val rep = UnifiedViolationChecker.check(state, work)
-                        if (adoptionGate(p, workBeforePattern, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; done = true }
+                        val rep = screen.checkIfBetter(state, work, bestRep)
+                        if (rep != null && adoptionGate(p, workBeforePattern, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; done = true }
                         else work[i][j] = curK
                         continue
                     }

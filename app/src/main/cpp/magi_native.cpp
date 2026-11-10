@@ -8,6 +8,7 @@
 #include <cstring>
 #include <random>
 #include <vector>
+#include <array>
 
 // [ネイティブ加速 Stage2] Evaluator.kt の忠実な C++ 移植（fullEvalParts 相当）。
 // Kotlin 実装が常に「正」: 実行時に Kotlin Evaluator と同一盤面で hard/soft を照合し
@@ -616,6 +617,23 @@ struct SaChunk {
     std::vector<long long> c1Cur, c3Cur[4];            // S*件数（職員 i・規則 e）
     std::vector<long long> d41Cur, d42Cur, d41sCur, d42sCur;  // T*件数（日 j・規則 e）
     std::vector<long long> fairCur;   // G*K: contribFair の現在値
+    // 手 1 つぶんの取り消し記録（trail）。[beginMove] から [deltaApply] が書き換えた表の値と盤面のセルを覚え、
+    //   [rollbackMove] は覚えた元の値を書き戻すだけで戻す（旧: 逆向きの deltaApply で全部測り直していた＝採らない手が 2 倍の計算）。
+    //   表の値は盤面の関数なので、書き戻した状態は測り直した状態と同じ。
+    std::vector<std::pair<long long*, long long>> trail;
+    std::vector<std::array<int, 3>> cellTrail;
+    long long scoreMark = 0;
+    bool trailing = false;
+    inline void remember(long long& slot) { if (trailing) trail.emplace_back(&slot, slot); }
+    void beginMove() { trail.clear(); cellTrail.clear(); scoreMark = score; trailing = true; }
+    void commitMove() { trailing = false; }
+    void rollbackMove() {
+        trailing = false;
+        for (size_t x = trail.size(); x-- > 0;) *trail[x].first = trail[x].second;
+        for (size_t x = cellTrail.size(); x-- > 0;) setCellRaw(cellTrail[x][0], cellTrail[x][1], cellTrail[x][2]);
+        score = scoreMark;
+        trail.clear(); cellTrail.clear();
+    }
 
     SaChunk(const MagiProblem& prob, const int* cur, uint64_t seed)
         : p(prob), S(prob.S), T(prob.T), K(prob.K),
@@ -711,7 +729,7 @@ struct SaChunk {
         const size_t n1 = p.cons1.size();
         long long v = visit(ix1, n1, old, nw, [&](int e) {
             long long& c = c1Cur[(size_t)i * n1 + e];
-            if (fresh) c = contribC1(i, p.cons1[(size_t)e]);
+            if (fresh) { remember(c); c = contribC1(i, p.cons1[(size_t)e]); }
             return c; });
         for (int f = 0; f < 4; f++) {
             const auto& list = c3Fam(f); const size_t n = list.size();
@@ -719,7 +737,7 @@ struct SaChunk {
             auto& cache = c3Cur[f];
             v += visit(ix3[f], n, old, nw, [&](int e) {
                 long long& c = cache[(size_t)i * n + e];
-                if (fresh) c = contribC3(i, list[(size_t)e], fb, w);
+                if (fresh) { remember(c); c = contribC3(i, list[(size_t)e], fb, w); }
                 return c; });
         }
         return v;
@@ -729,14 +747,14 @@ struct SaChunk {
             const size_t n = list.size();
             return visit(x, n, old, nw, [&](int e) {
                 long long& c = cache[(size_t)j * n + e];
-                if (fresh) c = contribC41(j, list[(size_t)e], skill);
+                if (fresh) { remember(c); c = contribC41(j, list[(size_t)e], skill); }
                 return c; });
         };
         auto fam42 = [&](const ShiftIndex& x, const std::vector<C42r>& list, std::vector<long long>& cache, bool skill) {
             const size_t n = list.size();
             return visit(x, n, old, nw, [&](int e) {
                 long long& c = cache[(size_t)j * n + e];
-                if (fresh) c = contribC42(j, list[(size_t)e], skill);
+                if (fresh) { remember(c); c = contribC42(j, list[(size_t)e], skill); }
                 return c; });
         };
         return fam41(ix41, p.cons41, d41Cur, false) + fam42(ix42, p.cons42, d42Cur, false)
@@ -888,6 +906,24 @@ struct SaChunk {
         return (long long)p.covUCell(k, j, got) * M + (long long)p.covOCell(k, j, got) * p.w.covO;
     }
 
+    // セルの値と回数・ビット・曜日の数だけを書き換える（点数と規則の表は触らない）。deltaApply と rollbackMove が共有する。
+    void setCellRaw(int i, int j, int nw) {
+        const int old = a[(size_t)i * T + j];
+        const bool oldIn = old >= 0 && old < K, newIn = nw >= 0 && nw < K;
+        a[(size_t)i * T + j] = nw;
+        if (oldIn) { ssn[(size_t)i * K + old]--; dsn[(size_t)j * K + old]--; }
+        if (newIn) { ssn[(size_t)i * K + nw]++; dsn[(size_t)j * K + nw]++; }
+        if (useBits) {
+            uint64_t jb = 1ULL << j, ib = 1ULL << i;
+            if (oldIn) { rowMask[(size_t)i * K + old] &= ~jb; dayShiftMask[(size_t)j * K + old] &= ~ib; }
+            if (newIn) { rowMask[(size_t)i * K + nw] |= jb;  dayShiftMask[(size_t)j * K + nw] |= ib; }
+        }
+        // [3.345.0] weekly はシフト別＝old と nw の2バケットが動く（範囲外は該当側を触らない）。
+        const size_t b = (size_t)(p.dow0 + j) % 7;
+        if (oldIn) wd[((size_t)i * K + old) * 7 + b]--;
+        if (newIn) wd[((size_t)i * K + nw) * 7 + b]++;
+    }
+
     // セル(i,j)を nw へ差分適用（影響スライスの before/after 再計算で score を維持）。
     // [実データ対応・重要] 盤面には -1（未割当）が正当に現れる: normalizeSchedule（MirrorCore）は
     //   範囲外セルを -1 に写像し、その盤面が各ネイティブランナー（SA/LAHC/ALNS/Polish は全て本構造体を
@@ -913,24 +949,12 @@ struct SaChunk {
             + fairCached(g, old) + fairCached(g, nw)
             + contribWeeklyK(i, old) + contribWeeklyK(i, nw)
             + contribCov(old, j) + contribCov(nw, j);
-        a[(size_t)i * T + j] = nw;
-        if (oldIn) { ssn[(size_t)i * K + old]--; dsn[(size_t)j * K + old]--; }
-        if (newIn) { ssn[(size_t)i * K + nw]++; dsn[(size_t)j * K + nw]++; }
-        if (useBits) {
-            uint64_t jb = 1ULL << j, ib = 1ULL << i;
-            if (oldIn) { rowMask[(size_t)i * K + old] &= ~jb; dayShiftMask[(size_t)j * K + old] &= ~ib; }
-            if (newIn) { rowMask[(size_t)i * K + nw] |= jb;  dayShiftMask[(size_t)j * K + nw] |= ib; }
-        }
-        // [3.345.0] weekly はシフト別＝old と nw の2バケットが動く（範囲外は該当側を触らない）。
-        {
-            const size_t b = (size_t)(p.dow0 + j) % 7;
-            if (oldIn) wd[((size_t)i * K + old) * 7 + b]--;
-            if (newIn) wd[((size_t)i * K + nw) * 7 + b]++;
-        }
+        if (trailing) cellTrail.push_back({i, j, old});
+        setCellRaw(i, j, nw);
         const long long fairOld = contribFair(g, old), fairNw = contribFair(g, nw);
         if (g >= 0 && g < p.G) {
-            if (oldIn) fairCur[(size_t)g * K + old] = fairOld;
-            if (newIn) fairCur[(size_t)g * K + nw] = fairNw;
+            if (oldIn) { remember(fairCur[(size_t)g * K + old]); fairCur[(size_t)g * K + old] = fairOld; }
+            if (newIn) { remember(fairCur[(size_t)g * K + nw]); fairCur[(size_t)g * K + nw] = fairNw; }
         }
         long long after = rowContrib(i, lo, nw, true) + dayContrib(j, lo, nw, true)
             + contribC2Row(i)
@@ -973,17 +997,16 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
     long long iters = 0, tail = 0;
 
     const int cap = T + S + 16;
-    std::vector<int> bi(cap), bj(cap), bOld(cap);
     int bn = 0;
     bool banHit = false;   // 拡張希望の禁止を 1 セルでも置こうとした手は丸ごと捨てる
     auto applyCell = [&](int i, int j, int nw) {
         if (bn >= cap) return;
         if (p.extBanned(i, j, nw)) { banHit = true; return; }
-        bi[bn] = i; bj[bn] = j; bOld[bn] = st.a[(size_t)i * T + j]; bn++;
+        bn++;
         st.deltaApply(i, j, nw);
     };
     auto revert = [&]() {
-        for (int k = bn - 1; k >= 0; k--) st.deltaApply(bi[k], bj[k], bOld[k]);
+        st.rollbackMove();
         bn = 0;
     };
     auto randShiftFor = [&](int i) -> int {
@@ -1054,6 +1077,7 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
     for (double t = t0; t >= tf && iters < maxIters; t *= alpha) {
         for (int ls = 0; ls < chain && iters < maxIters; ls++) {
             bn = 0; banHit = false;
+            st.beginMove();
             pickOperator();
             if (banHit) { revert(); tail++; iters++; continue; }
             long long cand = st.score;
@@ -1067,6 +1091,7 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
                     tail = 0;
                 } else tail++;
                 bn = 0;
+                st.commitMove();
             } else { revert(); tail++; }
             iters++;
         }
@@ -1126,17 +1151,16 @@ void runLahcChunk(LahcState& s, int iters, long long out[5]) {
 
     // ---- runSaChunk と同一の undo バッファ＋4オペ（PhaseA/B 共通近傍）----
     const int cap = T + S + 16;
-    std::vector<int> bi(cap), bj(cap), bOld(cap);
     int bn = 0;
     bool banHit = false;   // 拡張希望の禁止を 1 セルでも置こうとした手は丸ごと捨てる
     auto applyCell = [&](int i, int j, int nw) {
         if (bn >= cap) return;
         if (p.extBanned(i, j, nw)) { banHit = true; return; }
-        bi[bn] = i; bj[bn] = j; bOld[bn] = st.a[(size_t)i * T + j]; bn++;
+        bn++;
         st.deltaApply(i, j, nw);
     };
     auto revert = [&]() {
-        for (int k = bn - 1; k >= 0; k--) st.deltaApply(bi[k], bj[k], bOld[k]);
+        st.rollbackMove();
         bn = 0;
     };
     auto randShiftFor = [&](int i) -> int {
@@ -1205,6 +1229,7 @@ void runLahcChunk(LahcState& s, int iters, long long out[5]) {
     const long long L = (long long)s.hist.size();
     for (int it = 0; it < iters; it++) {
         bn = 0; banHit = false;
+        st.beginMove();
         pickOperator();
         long long cand = st.score;
         long long candHard = cand / SCORE_HARD_UNIT;
@@ -1218,6 +1243,7 @@ void runLahcChunk(LahcState& s, int iters, long long out[5]) {
                 improved = true;
             }
             bn = 0;
+            st.commitMove();
         } else revert();
         size_t hi = (size_t)(s.bIt % L);
         if (curVal < s.hist[hi]) s.hist[hi] = curVal;
@@ -2098,11 +2124,11 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
         double reward = 0.2;
         bool armed = false;         // opScore/opCnt を更新するか（Kotlin: op0-2=常時 / op3-6=moved時のみ）
 
+        st.beginMove();
         if (op >= 3 && op <= 6) {
             bool moved = false;
             long long ns = curScore;
             double moveAug = 0.0;
-            int c0i = -1, c0j = -1, c0old = -1, c1i = -1, c1j = -1, c1old = -1;
             if (op == 3 && S > 0 && T >= 2) {           // swapWithinStaff
                 int i = rnInt(rng, S);
                 int ja = rnInt(rng, T), jb = rnInt(rng, T);
@@ -2111,7 +2137,6 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                     int ka = st.a[(size_t)i * T + ja], kb = st.a[(size_t)i * T + jb];
                     if (ka != kb && !p.extBanned(i, ja, kb) && !p.extBanned(i, jb, ka)) {
                         st.deltaApply(i, ja, kb); st.deltaApply(i, jb, ka);
-                        c0i = i; c0j = ja; c0old = ka; c1i = i; c1j = jb; c1old = kb;
                         moveAug = s.gls.moveAug(i, ja, ka, kb) + s.gls.moveAug(i, jb, kb, ka);
                         ns = st.score; moved = true;
                     }
@@ -2125,7 +2150,6 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                         int nw = allowed[rnInt(rng, (int)allowed.size())];
                         if (nw != oldK && !p.extBanned(i, j, nw)) {
                             st.deltaApply(i, j, nw);
-                            c0i = i; c0j = j; c0old = oldK;
                             moveAug = s.gls.moveAug(i, j, oldK, nw);
                             ns = st.score; moved = true;
                         }
@@ -2137,7 +2161,6 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                     int oldK = st.a[(size_t)fix.i * T + fix.j];
                     if (fix.k != oldK && !p.extBanned(fix.i, fix.j, fix.k)) {
                         st.deltaApply(fix.i, fix.j, fix.k);
-                        c0i = fix.i; c0j = fix.j; c0old = oldK;
                         moveAug = s.gls.moveAug(fix.i, fix.j, oldK, fix.k);
                         ns = st.score; moved = true;
                     }
@@ -2150,7 +2173,6 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                     int k1 = st.a[(size_t)i1 * T + j], k2 = st.a[(size_t)i2 * T + j];
                     if (k1 != k2 && p.pl(i1, k2) && p.pl(i2, k1) && !p.extBanned(i1, j, k2) && !p.extBanned(i2, j, k1)) {
                         st.deltaApply(i1, j, k2); st.deltaApply(i2, j, k1);
-                        c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2;
                         moveAug = s.gls.moveAug(i1, j, k1, k2) + s.gls.moveAug(i2, j, k2, k1);
                         ns = st.score; moved = true;
                     }
@@ -2171,10 +2193,7 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                         bestImproved = true;
                         reward = 4.0;
                     } else reward = improvedCur ? 2.0 : 1.0;
-                } else {
-                    if (c1i >= 0) st.deltaApply(c1i, c1j, c1old);
-                    st.deltaApply(c0i, c0j, c0old);
-                }
+                } else st.rollbackMove();
                 armed = true;
             }
         } else {
@@ -2219,14 +2238,10 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                     bestImproved = true;
                     reward = 4.0;
                 } else reward = improvedCur ? 2.0 : 1.0;
-            } else {
-                for (int d = nDiffs - 1; d >= 0; d--) {
-                    int f = s.diffFlat[d];
-                    st.deltaApply(f / T, f % T, s.diffOld[d]);
-                }
-            }
+            } else st.rollbackMove();
             armed = true;
         }
+        st.commitMove();
         if (armed) { s.opScore[op] += reward; s.opCnt[op]++; }
 
         // GLS キック（停滞 GLS_TRIGGER 超・50反復毎）＋ 256キック毎の減衰。
@@ -2321,9 +2336,9 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
         long long curHard = curScore / SCORE_HARD_UNIT;
         long long bestHard = s.bestScore / SCORE_HARD_UNIT;
         int op = rnInt(rng, 11);
+        st.beginMove();
         if (op <= 8) {
             // ── 単一/2セルの直接評価オペ（3..8 は targetedFix の6スロット＝Kotlin と同比率）──
-            int c0i = -1, c0j = -1, c0old = -1, c1i = -1, c1j = -1, c1old = -1;
             bool moved = false;
             if (op == 0 && S > 0 && T > 0) {            // random allowed single cell
                 int i = rnInt(rng, S), j = rnInt(rng, T);
@@ -2332,7 +2347,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                     if (!allowed.empty()) {
                         int oldK = st.a[(size_t)i * T + j];
                         int nw = allowed[rnInt(rng, (int)allowed.size())];
-                        if (nw != oldK && !p.extBanned(i, j, nw)) { st.deltaApply(i, j, nw); c0i = i; c0j = j; c0old = oldK; moved = true; }
+                        if (nw != oldK && !p.extBanned(i, j, nw)) { st.deltaApply(i, j, nw); moved = true; }
                     }
                 }
             } else if (op == 1 && S > 0 && T >= 2) {    // swap two days within one staff row
@@ -2343,7 +2358,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                     int ka = st.a[(size_t)i * T + ja], kb = st.a[(size_t)i * T + jb];
                     if (ka != kb && !p.extBanned(i, ja, kb) && !p.extBanned(i, jb, ka)) {
                         st.deltaApply(i, ja, kb); st.deltaApply(i, jb, ka);
-                        c0i = i; c0j = ja; c0old = ka; c1i = i; c1j = jb; c1old = kb; moved = true;
+                        moved = true;
                     }
                 }
             } else if (op == 2 && S >= 2 && T > 0) {    // swap two staff on same day (coverage-neutral)
@@ -2354,14 +2369,14 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                     int k1 = st.a[(size_t)i1 * T + j], k2 = st.a[(size_t)i2 * T + j];
                     if (k1 != k2 && p.pl(i1, k2) && p.pl(i2, k1) && !p.extBanned(i1, j, k2) && !p.extBanned(i2, j, k1)) {
                         st.deltaApply(i1, j, k2); st.deltaApply(i2, j, k1);
-                        c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2; moved = true;
+                        moved = true;
                     }
                 }
             } else if (op >= 3) {                        // targeted single-cell fix
                 Fix fix = findTargetedFixN(p, st, rng);
                 if (fix.ok()) {
                     int oldK = st.a[(size_t)fix.i * T + fix.j];
-                    if (fix.k != oldK && !p.extBanned(fix.i, fix.j, fix.k)) { st.deltaApply(fix.i, fix.j, fix.k); c0i = fix.i; c0j = fix.j; c0old = oldK; moved = true; }
+                    if (fix.k != oldK && !p.extBanned(fix.i, fix.j, fix.k)) { st.deltaApply(fix.i, fix.j, fix.k); moved = true; }
                 }
             }
             if (moved) {
@@ -2373,10 +2388,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                         s.bestScore = ns; bestImproved = true;
                         collectViolationCells(p, st.a.data(), s.vioCells);   // hint を新 best で更新（Kotlin の bestReport 更新と同鮮度）
                     }
-                } else {
-                    if (c1i >= 0) st.deltaApply(c1i, c1j, c1old);
-                    if (c0i >= 0) st.deltaApply(c0i, c0j, c0old);
-                }
+                } else st.rollbackMove();
             }
         } else {
             // ── copy系 op9-10: violations 50% / day 50%、hard>0 なら hf67（Kotlin と同一条件）──
@@ -2402,10 +2414,9 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                     s.bestScore = ns; bestImproved = true;
                     collectViolationCells(p, st.a.data(), s.vioCells);
                 }
-            } else {
-                for (int d = nDiffs - 1; d >= 0; d--) { int f = s.diffFlat[d]; st.deltaApply(f / T, f % T, s.diffOld[d]); }
-            }
+            } else st.rollbackMove();
         }
+        st.commitMove();
     }
 
     // ---- 番兵1層目: チャンク末尾の自己整合検査（差分スコア==フル再計算）----
