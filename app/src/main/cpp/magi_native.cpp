@@ -2464,6 +2464,83 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
     out[4] = iters;
 }
 
+// ============================================================================
+// 膜の細胞 LNS（Kotlin `MembraneCellLns.solveCell` の焼きなましを同じ手順で。docs/delta_cpp_unification.md 付録 C）。
+// 乱数は java.util.Random と同じ 48 ビット線形合同法（Kotlin `JavaLcg` と同じ列）。手・受理・最良の写し方は Kotlin と同じ順で、
+// 同じ種なら同じ盤面を返す（`runner_hash`・`MembraneNativeParityTest` で照合）。外側（細胞の選び方・チェッカーでの採否）は Kotlin。
+// ============================================================================
+struct JavaLcgN {
+    uint64_t s;   // 内部状態（下位 48 ビット）
+    static constexpr uint64_t MUL = 0x5DEECE66DULL, ADD = 0xBULL, MASK = (1ULL << 48) - 1;
+    int next(int bits) { s = (s * MUL + ADD) & MASK; return (int)(uint32_t)(s >> (48 - bits)); }
+    int nextInt(int bound) {
+        int r = next(31);
+        const int m = bound - 1;
+        if ((bound & m) == 0) return (int)(((int64_t)bound * (int64_t)r) >> 31);
+        for (int u = r; (int32_t)((uint32_t)u - (uint32_t)(r = u % bound) + (uint32_t)m) < 0; u = next(31)) {}
+        return r;
+    }
+    double nextDouble() { return (double)(((int64_t)next(26) << 27) + next(27)) * 0x1.0p-53; }
+};
+
+struct MembraneCellN {
+    const MagiProblem& p;
+    SaChunk st;
+    std::vector<int> cell, freeI, freeJ, best;
+    JavaLcgN rng;
+    double temp, cool;
+    long long cur, bestScore;
+    bool hasBest = false;
+    MembraneCellN(const MagiProblem& prob, const int* board, const int* cellIdx, int n, uint64_t rngState, double tempStart, double coolRate)
+        : p(prob), st(prob, board, 1), cell(cellIdx, cellIdx + n), rng{rngState & JavaLcgN::MASK}, temp(tempStart), cool(coolRate) {
+        for (int i : cell) for (int j = 0; j < p.T; j++) if (!wishLockedN(p, i, j)) { freeI.push_back(i); freeJ.push_back(j); }
+        cur = bestScore = st.score;
+    }
+    bool mayPlaceAt(int i, int j, int k) const { return p.pl(i, k) && !p.extBanned(i, j, k); }
+    bool accept(long long delta) {
+        if (delta <= 0) return true;
+        if (delta >= SCORE_HARD_UNIT) return false;   // 必須が増える手は取らない
+        return rng.nextDouble() < std::exp((double)(-delta) / temp);
+    }
+    // iters 反復を回す（Kotlin の 1 反復と同じ順で乱数を引く）。
+    void run(int iters) {
+        const int T = p.T, K = p.K, n = (int)cell.size(), nf = (int)freeI.size();
+        for (int it = 0; it < iters; it++) {
+            temp *= cool;
+            if (rng.nextInt(4) != 0) {
+                const int j = rng.nextInt(T);
+                const int a = cell[(size_t)rng.nextInt(n)], b = cell[(size_t)rng.nextInt(n)];
+                if (a == b || wishLockedN(p, a, j) || wishLockedN(p, b, j)) continue;
+                const int ka = st.a[(size_t)a * T + j], kb = st.a[(size_t)b * T + j];
+                if (ka == kb || !mayPlaceAt(a, j, kb) || !mayPlaceAt(b, j, ka)) continue;
+                st.beginMove();
+                st.deltaApply(a, j, kb); st.deltaApply(b, j, ka);
+                if (accept(st.score - cur)) { st.commitMove(); cur = st.score; }
+                else { st.rollbackMove(); cur = st.score; }
+            } else {
+                const int f = rng.nextInt(nf);
+                const int i = freeI[(size_t)f], j = freeJ[(size_t)f];
+                const int k = rng.nextInt(K), old = st.a[(size_t)i * T + j];
+                if (k == old || !mayPlaceAt(i, j, k)) continue;
+                st.beginMove();
+                st.deltaApply(i, j, k);
+                if (accept(st.score - cur)) { st.commitMove(); cur = st.score; }
+                else { st.rollbackMove(); cur = st.score; }
+            }
+            if (cur < bestScore) {
+                bestScore = cur;
+                if (!hasBest) { best = st.a; hasBest = true; }
+                else for (int i : cell) std::memcpy(&best[(size_t)i * T], &st.a[(size_t)i * T], sizeof(int) * (size_t)T);
+            }
+        }
+    }
+    // 1 段目の番兵: いまの盤面と最良の差分の点数が全体評価と同じか。
+    bool consistent() const {
+        if (fullEvalCombined(p, st.a.data()) != cur || cur != st.score) return false;
+        return !hasBest || fullEvalCombined(p, best.data()) == bestScore;
+    }
+};
+
 // ---- JNI 平坦データの読み取りヘルパ ----
 #ifndef MAGI_HOST_TEST
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
@@ -2479,7 +2556,50 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 10;   // 10＝nativeFullEval が族別の量も返す（MAGI-003）
+    return 11;   // 11＝膜の細胞 LNS（nativeMembrane*）。10＝nativeFullEval が族別の量も返す（MAGI-003）
+}
+
+// 膜の細胞 LNS の 1 細胞ぶん（Kotlin MembraneCellLns.solveCell）。cell＝細胞の職員、rngState＝JavaLcg の内部状態。0=失敗。
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeMembraneCreate(
+    JNIEnv* env, jclass, jlong problemHandle, jintArray boardArr, jintArray cellArr, jlong rngState, jdouble tempStart, jdouble cool) {
+    auto* p = reinterpret_cast<MagiProblem*>(problemHandle);
+    if (p == nullptr) return 0;
+    std::vector<int> board = readIntArray(env, boardArr), cell = readIntArray(env, cellArr);
+    if ((int)board.size() != p->S * p->T || cell.empty()) return 0;
+    for (int i : cell) if (i < 0 || i >= p->S) return 0;
+    auto* m = new MembraneCellN(*p, board.data(), cell.data(), (int)cell.size(), (uint64_t)rngState, tempStart, cool);
+    if (m->freeI.size() < 2) { delete m; return 0; }
+    return reinterpret_cast<jlong>(m);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeMembraneDestroy(JNIEnv*, jclass, jlong handle) {
+    delete reinterpret_cast<MembraneCellN*>(handle);
+}
+
+// iters 反復。戻り値 long[5]=[status(0=整合/1=不整合/3=引数), rngState, cur, bestScore, hasBest]。check=1 で末尾に 1 段目の番兵。
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeMembraneRun(JNIEnv* env, jclass, jlong handle, jint iters, jint check) {
+    jlongArray outArr = env->NewLongArray(5);
+    jlong jv[5] = {3, 0, -1, -1, 0};
+    auto* m = reinterpret_cast<MembraneCellN*>(handle);
+    if (m != nullptr && iters >= 0) {
+        m->run((int)iters);
+        jv[0] = (check != 0 && !m->consistent()) ? 1 : 0;
+        jv[1] = (jlong)m->rng.s; jv[2] = (jlong)m->cur; jv[3] = (jlong)m->bestScore; jv[4] = m->hasBest ? 1 : 0;
+    }
+    env->SetLongArrayRegion(outArr, 0, 5, jv);
+    return outArr;
+}
+
+// 最良の盤面（S*T）。最良が無ければ false。
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeMembraneRead(JNIEnv* env, jclass, jlong handle, jintArray outArr) {
+    auto* m = reinterpret_cast<MembraneCellN*>(handle);
+    if (m == nullptr || !m->hasBest || env->GetArrayLength(outArr) != (jsize)m->best.size()) return JNI_FALSE;
+    env->SetIntArrayRegion(outArr, 0, (jsize)m->best.size(), reinterpret_cast<const jint*>(m->best.data()));
+    return JNI_TRUE;
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。

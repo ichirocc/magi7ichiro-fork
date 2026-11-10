@@ -14,7 +14,7 @@ package com.magi.app.v6
  */
 object NativeBridge {
     /** Kotlin 側が期待する ABI バージョン。C++ 側と不一致ならネイティブ経路を使わない。 */
-    const val ABI_VERSION = 10
+    const val ABI_VERSION = 11
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
@@ -92,6 +92,14 @@ object NativeBridge {
     /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
     @JvmStatic
     external fun nativeLahcRead(handle: Long, which: Int, out: IntArray)
+
+    /** 膜の細胞 LNS の 1 細胞（`MembraneCellLns`）。rngState＝[JavaLcg.state]。0=失敗（置けるセルが 2 未満を含む）。 */
+    @JvmStatic external fun nativeMembraneCreate(problemHandle: Long, board: IntArray, cell: IntArray, rngState: Long, tempStart: Double, cool: Double): Long
+    @JvmStatic external fun nativeMembraneDestroy(handle: Long)
+    /** iters 反復。戻り値 [status, rngState, cur, bestScore, hasBest]。check!=0 で末尾に C++ の自己整合（status=1 が不整合）。 */
+    @JvmStatic external fun nativeMembraneRun(handle: Long, iters: Int, check: Int): LongArray
+    /** 最良の盤面（S*T）。無ければ false。 */
+    @JvmStatic external fun nativeMembraneRead(handle: Long, out: IntArray): Boolean
 }
 
 /**
