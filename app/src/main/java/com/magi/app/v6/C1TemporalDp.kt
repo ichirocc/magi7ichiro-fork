@@ -124,7 +124,7 @@ internal object C1TemporalDp {
         dp.offer(key(0L, 0, 0), 0L, 0L, 0, 0)
 
         for (day in 0 until t) {
-            val next = StateTable(maxOf(16, dp.size * 2))
+            val next = StateTable(dp.size)
             val oldBit = row[day] == targetShift
             for (slot in 0 until dp.capacity) {
                 if (!dp.used(slot)) continue
@@ -197,18 +197,17 @@ internal object C1TemporalDp {
      * （旧 `HashMap<Long, Record>` の更新と同じ規則）。鍵の箱詰めと Record の生成を避ける。
      */
     private class StateTable(expected: Int) {
-        var capacity = Integer.highestOneBit(maxOf(16, expected * 2) - 1) shl 1
+        var capacity = Integer.highestOneBit(maxOf(16, expected) * 2 - 1).coerceAtLeast(16)
             private set
         var size = 0
             private set
-        private var keys = LongArray(capacity)
-        private var filled = BooleanArray(capacity)
+        private var keys = LongArray(capacity).also { it.fill(EMPTY) }   // 鍵は 0 以上＝-1 を空きの印にする（別配列を持たない）
         private var cost = LongArray(capacity)
         private var bits = LongArray(capacity)
         private var fires = IntArray(capacity)
         private var changed = IntArray(capacity)
 
-        fun used(slot: Int) = filled[slot]
+        fun used(slot: Int) = keys[slot] != EMPTY
         fun keyAt(slot: Int) = keys[slot]
         fun costAt(slot: Int) = cost[slot]
         fun bitsAt(slot: Int) = bits[slot]
@@ -216,9 +215,9 @@ internal object C1TemporalDp {
         fun changedAt(slot: Int) = changed[slot]
 
         fun offer(k: Long, c: Long, b: Long, f: Int, ch: Int) {
-            if ((size + 1) * 2 > capacity) grow()
+            if ((size + 1) * 4 > capacity * 3) grow()   // 詰め率 3/4 まで
             var slot = mix(k) and (capacity - 1)
-            while (filled[slot]) {
+            while (keys[slot] != EMPTY) {
                 if (keys[slot] == k) {
                     if (c < cost[slot] || (c == cost[slot] && java.lang.Long.compareUnsigned(b, bits[slot]) < 0)) {
                         cost[slot] = c; bits[slot] = b; fires[slot] = f; changed[slot] = ch
@@ -227,16 +226,18 @@ internal object C1TemporalDp {
                 }
                 slot = (slot + 1) and (capacity - 1)
             }
-            filled[slot] = true; keys[slot] = k; cost[slot] = c; bits[slot] = b; fires[slot] = f; changed[slot] = ch; size++
+            keys[slot] = k; cost[slot] = c; bits[slot] = b; fires[slot] = f; changed[slot] = ch; size++
         }
 
         private fun grow() {
-            val oKeys = keys; val oFilled = filled; val oCost = cost; val oBits = bits; val oFires = fires; val oChanged = changed
+            val oKeys = keys; val oCost = cost; val oBits = bits; val oFires = fires; val oChanged = changed
             capacity *= 2; size = 0
-            keys = LongArray(capacity); filled = BooleanArray(capacity); cost = LongArray(capacity); bits = LongArray(capacity)
+            keys = LongArray(capacity).also { it.fill(EMPTY) }; cost = LongArray(capacity); bits = LongArray(capacity)
             fires = IntArray(capacity); changed = IntArray(capacity)
-            for (x in oKeys.indices) if (oFilled[x]) offer(oKeys[x], oCost[x], oBits[x], oFires[x], oChanged[x])
+            for (x in oKeys.indices) if (oKeys[x] != EMPTY) offer(oKeys[x], oCost[x], oBits[x], oFires[x], oChanged[x])
         }
+
+        private companion object { const val EMPTY = -1L }
 
         private fun mix(k: Long): Int {
             var z = k * -0x61c8864680b583ebL
