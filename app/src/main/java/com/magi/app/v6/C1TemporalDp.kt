@@ -118,13 +118,18 @@ internal object C1TemporalDp {
             return z and 511L
         }
 
-        var dp = HashMap<Long, Record>()
-        dp[key(0L, 0, 0)] = Record(0L, 0L, 0, 0)
+        // 状態の表は原始型の開番地法（[StateTable]）。採る状態は (費用, ビット列) の全順序で決まり、同じビット列なら違反数・変更数も同じ
+        //   ＝表の走査順に依らない（旧 HashMap と同じ結果）。
+        var dp = StateTable(16)
+        dp.offer(key(0L, 0, 0), 0L, 0L, 0, 0)
 
         for (day in 0 until t) {
-            val next = HashMap<Long, Record>(maxOf(16, dp.size * 2))
+            val next = StateTable(maxOf(16, dp.size * 2))
             val oldBit = row[day] == targetShift
-            for ((packed, rec) in dp) {
+            for (slot in 0 until dp.capacity) {
+                if (!dp.used(slot)) continue
+                val packed = dp.keyAt(slot)
+                val recCost = dp.costAt(slot); val recBits = dp.bitsAt(slot); val recFires = dp.firesAt(slot); val recChanged = dp.changedAt(slot)
                 val reloc = (packed and ((1L shl RELOC_BITS) - 1L)).toInt()
                 val count = ((packed ushr RELOC_BITS) and ((1L shl COUNT_BITS) - 1L)).toInt()
                 val mask = packed ushr LOW_BITS
@@ -148,22 +153,17 @@ internal object C1TemporalDp {
                         if (java.lang.Long.bitCount(full and rm) < rule.minimum) fireInc++
                     }
                     val changed = (bit == 1) != oldBit
-                    val changedCount = rec.changed + if (changed) 1 else 0
-                    val fires = rec.fires + fireInc
-                    val cost = rec.cost + fireInc.toLong() * FIRE_COST +
+                    val changedCount = recChanged + if (changed) 1 else 0
+                    val fires = recFires + fireInc
+                    val cost = recCost + fireInc.toLong() * FIRE_COST +
                         (if (changed) CHANGE_COST else 0L) + tie(day, changed)
                     val newMask = full and keepMask
                     val nk = key(newMask, newCount, newReloc)
-                    val bits = if (bit == 1) rec.bits or (1L shl day) else rec.bits
-                    val old = next[nk]
-                    if (old == null || cost < old.cost ||
-                        (cost == old.cost && java.lang.Long.compareUnsigned(bits, old.bits) < 0)
-                    ) {
-                        next[nk] = Record(cost, bits, fires, changedCount)
-                    }
+                    val bits = if (bit == 1) recBits or (1L shl day) else recBits
+                    next.offer(nk, cost, bits, fires, changedCount)
                 }
             }
-            if (next.isEmpty()) return null
+            if (next.size == 0) return null
             // [3.310.0] 状態爆発の安全弁。密DPでない＝窓長だけでは状態数を縛れないため、
             //   実際の到達状態数で打ち切る。諦めても後段は keep-best のまま（退化しない）。
             if (next.size > maxDpStates) return null
@@ -172,7 +172,10 @@ internal object C1TemporalDp {
 
         var best: Record? = null
         var bestRelocations = 0
-        for ((packed, rec) in dp) {
+        for (slot in 0 until dp.capacity) {
+            if (!dp.used(slot)) continue
+            val packed = dp.keyAt(slot)
+            val rec = Record(dp.costAt(slot), dp.bitsAt(slot), dp.firesAt(slot), dp.changedAt(slot))
             val reloc = (packed and ((1L shl RELOC_BITS) - 1L)).toInt()
             val count = ((packed ushr RELOC_BITS) and ((1L shl COUNT_BITS) - 1L)).toInt()
             if (count != originalCount || reloc <= 0 || rec.fires >= currentFires) continue
@@ -187,6 +190,59 @@ internal object C1TemporalDp {
         val chosen = best ?: return null
         val targetDays = List(t) { day -> ((chosen.bits ushr day) and 1L) != 0L }
         return Candidate(targetDays, chosen.fires, chosen.changed, bestRelocations)
+    }
+
+    /**
+     * DP の 1 日ぶんの状態表（鍵＝詰めた状態、値＝費用・ビット列・違反数・変更数）。[offer] は同じ鍵なら (費用, ビット列) が小さいほうを残す
+     * （旧 `HashMap<Long, Record>` の更新と同じ規則）。鍵の箱詰めと Record の生成を避ける。
+     */
+    private class StateTable(expected: Int) {
+        var capacity = Integer.highestOneBit(maxOf(16, expected * 2) - 1) shl 1
+            private set
+        var size = 0
+            private set
+        private var keys = LongArray(capacity)
+        private var filled = BooleanArray(capacity)
+        private var cost = LongArray(capacity)
+        private var bits = LongArray(capacity)
+        private var fires = IntArray(capacity)
+        private var changed = IntArray(capacity)
+
+        fun used(slot: Int) = filled[slot]
+        fun keyAt(slot: Int) = keys[slot]
+        fun costAt(slot: Int) = cost[slot]
+        fun bitsAt(slot: Int) = bits[slot]
+        fun firesAt(slot: Int) = fires[slot]
+        fun changedAt(slot: Int) = changed[slot]
+
+        fun offer(k: Long, c: Long, b: Long, f: Int, ch: Int) {
+            if ((size + 1) * 2 > capacity) grow()
+            var slot = mix(k) and (capacity - 1)
+            while (filled[slot]) {
+                if (keys[slot] == k) {
+                    if (c < cost[slot] || (c == cost[slot] && java.lang.Long.compareUnsigned(b, bits[slot]) < 0)) {
+                        cost[slot] = c; bits[slot] = b; fires[slot] = f; changed[slot] = ch
+                    }
+                    return
+                }
+                slot = (slot + 1) and (capacity - 1)
+            }
+            filled[slot] = true; keys[slot] = k; cost[slot] = c; bits[slot] = b; fires[slot] = f; changed[slot] = ch; size++
+        }
+
+        private fun grow() {
+            val oKeys = keys; val oFilled = filled; val oCost = cost; val oBits = bits; val oFires = fires; val oChanged = changed
+            capacity *= 2; size = 0
+            keys = LongArray(capacity); filled = BooleanArray(capacity); cost = LongArray(capacity); bits = LongArray(capacity)
+            fires = IntArray(capacity); changed = IntArray(capacity)
+            for (x in oKeys.indices) if (oFilled[x]) offer(oKeys[x], oCost[x], oBits[x], oFires[x], oChanged[x])
+        }
+
+        private fun mix(k: Long): Int {
+            var z = k * -0x61c8864680b583ebL
+            z = z xor (z ushr 29)
+            return z.toInt() xor (z ushr 32).toInt()
+        }
     }
 
     fun countFires(row: IntArray, targetShift: Int, rules: List<Rule>): Int {
