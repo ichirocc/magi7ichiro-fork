@@ -48,6 +48,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-10（記録: CP-SAT の S4 必須違反の原因 `docs/cpsat_formal.md`）
 **最終更新**：2026-11-10（3.727.51: CP-SAT の併走を入れたビルド `docs/cpsat_formal.md`）
 **最終更新**：2026-11-10（記録: CP-SAT モデル S1 と形式的な検証 `docs/cpsat_formal.md`）
 **最終更新**：2026-11-10（3.727.50: 操作の要約に自動の案の回数・方式切り替えで「前回と同じ結果」を消す）

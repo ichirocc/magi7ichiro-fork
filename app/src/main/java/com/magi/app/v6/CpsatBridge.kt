@@ -19,6 +19,48 @@ object CpsatBridge {
     @JvmStatic external fun nativeCpsatSolve(handle: Long, hint: IntArray, maxSeconds: Double, workers: Int, seed: Long, hardCap: Long): LongArray
     /** 戻り値 [version, hard, weighted, weightedBound, hardBound, hardProven]。version が [knownVersion] と違えば [out] に最良の盤面。 */
     @JvmStatic external fun nativeCpsatPoll(handle: Long, knownVersion: Long, out: IntArray): LongArray
+    /** 戻り値 [核の数, 各核: minimal, 件数, 件数×(kind, i, j, k, rule)]。[HardCauses.decode] で読む。 */
+    @JvmStatic external fun nativeCpsatExplain(
+        problemHandle: Long, input: IntArray, maxCores: Int, secondsPerSolve: Double, workers: Int, totalSeconds: Double,
+    ): IntArray
+}
+
+/**
+ * 必須違反の原因（S4、`magi_cpsat::HardExplainer`）。どの核も「この中の 1 件を緩めないと必須違反は消えない」の証明で、
+ * 核どうしは互いに素＝核の数は必須の件数の下限。[Core.minimal] はどの 1 件を外しても成り立つと確かめた核。
+ */
+object HardCauses {
+    enum class Kind { WISH, PIN, NEED, FORBIDDEN_SEQ, OUTSIDE }
+    /** [staff]・[day]・[shift] は無ければ -1。NEED の [rule] は必要人数、FORBIDDEN_SEQ の [rule] は禁止の並びの行。 */
+    data class Cause(val kind: Kind, val staff: Int, val day: Int, val shift: Int, val rule: Int)
+    data class Core(val causes: List<Cause>, val minimal: Boolean)
+
+    fun decode(flat: IntArray): List<Core> {
+        if (flat.isEmpty()) return emptyList()
+        val out = ArrayList<Core>(flat[0])
+        var x = 1
+        repeat(flat[0]) {
+            val minimal = flat[x++] == 1
+            val n = flat[x++]
+            val causes = List(n) {
+                val c = Cause(Kind.entries[flat[x]], flat[x + 1], flat[x + 2], flat[x + 3], flat[x + 4]); x += 5; c
+            }
+            out += Core(causes, minimal)
+        }
+        return out
+    }
+
+    /** [board] を入力の値として原因を探す。使えないビルドでは null。 */
+    fun explain(problem: Problem, board: Array<IntArray>, maxCores: Int = 10, totalSeconds: Double = 20.0): List<Core>? {
+        if (!CpsatBridge.available) return null
+        val handle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
+        if (handle == 0L) return null
+        try {
+            return decode(CpsatBridge.nativeCpsatExplain(handle, NativeEval.flatten(board), maxCores, 5.0, 2, totalSeconds))
+        } finally {
+            NativeBridge.nativeDestroyProblem(handle)
+        }
+    }
 }
 
 /**

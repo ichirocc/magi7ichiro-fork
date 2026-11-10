@@ -62,5 +62,16 @@ int main(int argc, char** argv) {
         long long ub = std::min(w0 + f0, w1 + f1);
         printf("GAP (best of input/cpsat incl. fair %lld vs bound %lld) = %.2f%%\n", ub, r.weightedBound, 100.0 * (ub - r.weightedBound) / std::max(1LL, ub));
     }
+    if (getenv("CPSAT_EXPLAIN")) {
+        magi_cpsat::HardExplainer ex(p, board);
+        auto cores = ex.explain(10, 10.0, workers);
+        static const char* kinds[] = {"希望", "手動固定", "必要人数", "禁止の並び", "担当外・禁止"};
+        printf("EXPLAIN %zu 個の核（互いに素）\n", cores.size());
+        for (size_t c = 0; c < cores.size(); c++) {
+            printf("  核%zu%s:", c + 1, cores[c].minimal ? "" : "（最小は未確認）");
+            for (auto& x : cores[c].causes) printf(" [%s i=%d j=%d k=%d r=%d]", kinds[x.kind], x.i, x.j, x.k, x.rule);
+            printf("\n");
+        }
+    }
     return 0;
 }
