@@ -29,11 +29,13 @@ object MembraneCellLns {
         fun out() = shouldStop() || (!params.deterministic && EngineClock.nowMs() - t0 >= params.maxMillis)
         var best = init.copy2D()
         var bestRep = UnifiedViolationChecker.check(state, best)
-        val rng = java.util.Random(params.seed)
-        val de = DeltaEvaluator(p)
+        val rng = JavaLcg(params.seed)
+        val kotlin = lazy { DeltaEvaluator(p) }   // C++ が使えない・番兵が閉じたときだけ作る
+        val handle = if (NativeGate.usable) runCatching { NativeEval.createHandle(p) }.getOrDefault(0L) else 0L
         var applied = 0; var tried = 0
         val logs = ArrayList<MirrorLog>()
         val startRep = bestRep
+        try {
 
         while (tried < params.maxCells && !out()) {
             val order = staffOrder(p, bestRep)
@@ -42,13 +44,16 @@ object MembraneCellLns {
                 if (tried >= params.maxCells || out()) break
                 tried++
                 val cell = cellOf(p, seedStaff, order, params.cellStaff)
-                val cand = solveCell(p, de, best, cell, params, rng, ::out) ?: continue
+                val cand = solveCell(p, handle, kotlin, best, cell, params, rng, ::out) ?: continue
                 if (exactPinRegression(p, best, cand)) continue
                 val rep = UnifiedViolationChecker.check(state, cand)
                 if (betterReport(rep, bestRep)) {
                     best = cand; bestRep = rep; applied++
                 }
             }
+        }
+        } finally {
+            if (handle != 0L) NativeBridge.nativeDestroyProblem(handle)
         }
         logs.add(MirrorLog(level = "I", tag = "MembraneCellLns",
             message = "膜の細胞 LNS: 必須 ${startRep.hard}->${bestRep.hard} 合計 ${startRep.total}->${bestRep.total} 重み ${startRep.weightedScore.toLong()}->${bestRep.weightedScore.toLong()} 採用${applied} 細胞${tried} ${EngineClock.nowMs() - t0}ms"))
@@ -74,7 +79,65 @@ object MembraneCellLns {
      * 細胞の中の焼きなまし。手は (a) 同じ日の細胞内 2 名の入れ替え（日の人数を保つ）、(b) 1 セルを置ける別のシフトへ。
      * 盤面の score（必須を桁上げした重み付き和、`DeltaEvaluator`）が下がった最良を返す。改善が無ければ null。
      */
-    private fun solveCell(p: Problem, de: DeltaEvaluator, board: Array<IntArray>, cell: IntArray, params: Params, rng: java.util.Random, out: () -> Boolean): Array<IntArray>? {
+    private fun solveCell(
+        p: Problem, handle: Long, kotlin: Lazy<DeltaEvaluator>, board: Array<IntArray>, cell: IntArray, params: Params, rng: JavaLcg, out: () -> Boolean,
+    ): Array<IntArray>? {
+        var freeCount = 0
+        for (i in cell) for (j in 0 until p.T) if (!p.wishLocked(i, j)) freeCount++
+        if (freeCount < 2) return null
+        val cool = Math.pow(params.tempEnd / params.tempStart, 1.0 / params.itersPerCell.coerceAtLeast(1))
+        if (handle != 0L && NativeGate.usable) {
+            val rngBefore = rng.state
+            when (val r = solveCellNative(p, handle, board, cell, params, cool, rng, out)) {
+                is NativeCell.Done -> return r.board
+                is NativeCell.Failed -> { NativeGate.disable(r.why); rng.state = rngBefore }
+            }
+        }
+        return solveCellKotlin(p, kotlin.value, board, cell, params, cool, rng, out)
+    }
+
+    private sealed class NativeCell {
+        class Done(val board: Array<IntArray>?) : NativeCell()
+        class Failed(val why: String) : NativeCell()
+    }
+
+    /**
+     * [solveCellKotlin] と同じ焼きなましを C++ で（`MembraneCellN`）。止める確認は Kotlin と同じく 1024 反復ごと。番兵は 2 段:
+     * C++ の自己整合（差分の点数＝全体評価）と、最良の盤面の Kotlin 全体評価との照合。崩れたら呼び出し側が同じ乱数状態から Kotlin でやり直す。
+     */
+    private fun solveCellNative(
+        p: Problem, handle: Long, board: Array<IntArray>, cell: IntArray, params: Params, cool: Double, rng: JavaLcg, out: () -> Boolean,
+    ): NativeCell {
+        val h = NativeBridge.nativeMembraneCreate(handle, NativeEval.flatten(board), cell, rng.state, params.tempStart, cool)
+        if (h == 0L) return NativeCell.Failed("膜の細胞の生成NG")
+        try {
+            val iters = params.itersPerCell
+            var it = 0
+            while (it < iters) {
+                if (out()) break
+                val n = minOf(CHECK_EVERY, iters - it)
+                val ret = NativeBridge.nativeMembraneRun(h, n, 0)
+                if (!NativeGate.chunkConsistent(ret, 5)) return NativeCell.Failed("膜の細胞の実行NG")
+                it += n
+            }
+            val fin = NativeBridge.nativeMembraneRun(h, 0, 1)
+            if (!NativeGate.chunkConsistent(fin, 5)) return NativeCell.Failed("膜の細胞の整合性NG(status=${fin.getOrNull(0)})")
+            rng.state = fin[1]
+            if (fin[4] != 1L) return NativeCell.Done(null)
+            val flat = IntArray(p.S * p.T)
+            if (!NativeBridge.nativeMembraneRead(h, flat)) return NativeCell.Failed("膜の細胞の読み出しNG")
+            val best = NativeEval.unflatten(flat, p.S, p.T)
+            val mismatch = NativeGate.parityMismatch(fin[3]) { Evaluator(p).fullEval(best) }
+            if (mismatch != null) return NativeCell.Failed("膜の細胞のKotlin照合NG(native=${fin[3]} kotlin=$mismatch)")
+            return NativeCell.Done(best)
+        } finally {
+            NativeBridge.nativeMembraneDestroy(h)
+        }
+    }
+
+    private fun solveCellKotlin(
+        p: Problem, de: DeltaEvaluator, board: Array<IntArray>, cell: IntArray, params: Params, cool: Double, rng: JavaLcg, out: () -> Boolean,
+    ): Array<IntArray>? {
         val T = p.T; val K = p.K
         val work = board.copy2D()
         de.reset(work)
@@ -84,13 +147,11 @@ object MembraneCellLns {
         var bestBoard: Array<IntArray>? = null
         val free = ArrayList<IntArray>()
         for (i in cell) for (j in 0 until T) if (!p.wishLocked(i, j)) free.add(intArrayOf(i, j))
-        if (free.size < 2) return null
         val unit = SCORE_HARD_UNIT
         val iters = params.itersPerCell
         var temp = params.tempStart
-        val cool = Math.pow(params.tempEnd / params.tempStart, 1.0 / iters.coerceAtLeast(1))
         for (it in 0 until iters) {
-            if ((it and 1023) == 0 && out()) break
+            if (it % CHECK_EVERY == 0 && out()) break
             temp *= cool
             if (rng.nextInt(4) != 0) {
                 val j = rng.nextInt(T)
@@ -119,7 +180,9 @@ object MembraneCellLns {
         return bestBoard
     }
 
-    private fun accept(delta: Long, temp: Double, unit: Long, rng: java.util.Random): Boolean {
+    private const val CHECK_EVERY = 1024
+
+    private fun accept(delta: Long, temp: Double, unit: Long, rng: JavaLcg): Boolean {
         if (delta <= 0) return true
         if (delta >= unit) return false   // 必須が増える手は取らない
         return rng.nextDouble() < Math.exp(-delta / temp)

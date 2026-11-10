@@ -531,6 +531,20 @@ static int runHf66FillTest() {
 
 // ALNS の copy 系が拡張希望の禁止で捨てた候補は、受理も学習（reward・lamUpdate・curAug）もしない（Kotlin の extBad と同じ）。
 //   1 セルだけの盤面に担当外の値を置き、置けるシフトを全部禁止にする＝入口修復は必ず禁止を置き、候補は必ず捨てられる。
+// 膜の細胞 LNS の乱数 JavaLcgN が java.util.Random と同じ列か（既知の値は Kotlin JavaLcgTest.knownValuesForTheNativePort と同じ）。
+static int runJavaLcgTest() {
+    JavaLcgN r{(12345ULL ^ JavaLcgN::MUL) & JavaLcgN::MASK};
+    const int want100[5] = {51, 80, 41, 28, 55}, want4[5] = {0, 1, 0, 0, 0};
+    int failures = 0;
+    for (int x = 0; x < 5; x++) if (r.nextInt(100) != want100[x]) failures++;
+    for (int x = 0; x < 5; x++) if (r.nextInt(4) != want4[x]) failures++;
+    double d = r.nextDouble(); long long bits; std::memcpy(&bits, &d, sizeof bits);
+    if (bits != 4599960723077926490LL) failures++;
+    if (r.nextInt(1000000007) != 962239390) failures++;
+    printf("JAVA-LCG: %s\n", failures ? "FAIL" : "OK");
+    return failures;
+}
+
 static int runAlnsBanDiscardTest() {
     MagiProblem p;
     p.S = 1; p.T = 1; p.K = 3; p.G = 1; p.restIdx = 0; p.dow0 = 0; p.use2 = false;
@@ -1074,6 +1088,6 @@ int main(int argc, char** argv) {
     printf("BENCH deltaApply (10x31 K6): scalar %.2f M moves/s, bit-op %.2f M moves/s, speedup x%.2f\n",
            scalar / 1e6, bits / 1e6, bits / scalar);
     int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest() + runExtBanTest()
-        + runHf66FillTest() + runAlnsBanDiscardTest();
+        + runHf66FillTest() + runAlnsBanDiscardTest() + runJavaLcgTest();
     return (mismatches == 0 && repairFail == 0) ? 0 : 1;
 }
