@@ -857,10 +857,26 @@ class FairDevResult(val total: Int, val perMember: List<Pair<Int, Int>>)
 fun Problem.fairDevOfBucket(g: Int, k: Int, members: Boolean = true, count: (Int) -> Int): FairDevResult {
     val all = groupMembers[g]
     // 回数は 1 人 1 回だけ数える（[count] は呼び出し側の表引き）。[members]＝偏差>0 の内訳を作るか（合計だけの呼び出しは作らない）。
-    val mem = IntArray(all.size); val cnt = IntArray(all.size); var n = 0
-    for (x in all) { val c = count(x); if (mayPlace(x, k) || c > 0) { mem[n] = x; cnt[n] = c; n++ } }
-    if (n < 2) return FairDevResult(0, emptyList())
-    val ach = DoubleArray(n); val scale = DoubleArray(n)
+    val sc = FairScratch(all.size)
+    for ((idx, x) in all.withIndex()) sc.counts[idx] = count(x)
+    return fairDevCore(g, k, members, sc)
+}
+
+/** [fairDevOfBucket] の作業領域（群の人数ぶん）。差分評価は 1 つを使い回して呼ぶたびの確保を省く（[fairDevTotal]）。 */
+internal class FairScratch(n: Int) {
+    val counts = IntArray(n); val mem = IntArray(n); val cnt = IntArray(n)
+    val ach = DoubleArray(n); val scale = DoubleArray(n); val order = IntArray(n)
+}
+
+/** [fairDevOfBucket] の合計だけを、[sc] の `counts`（`groupMembers[g]` の並びの回数、呼び出し側が書く）から出す。 */
+internal fun Problem.fairDevTotal(g: Int, k: Int, sc: FairScratch): Int = fairDevCore(g, k, false, sc).total
+
+private fun Problem.fairDevCore(g: Int, k: Int, members: Boolean, sc: FairScratch): FairDevResult {
+    val all = groupMembers[g]
+    val mem = sc.mem; val cnt = sc.cnt; var n = 0
+    for ((pos, x) in all.withIndex()) { val c = sc.counts[pos]; if (mayPlace(x, k) || c > 0) { mem[n] = x; cnt[n] = c; n++ } }
+    if (n < 2) return FAIR_ZERO
+    val ach = sc.ach; val scale = sc.scale
     for (idx in 0 until n) {
         val x = mem[idx]
         val lo = rangeLo[x][k]; val hi = rangeHi[x][k]; val c = cnt[idx]
@@ -876,14 +892,15 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, members: Boolean = true, count: (Int
     }
     var w = 0.0
     for (idx in 0 until n) w += scale[idx]
-    if (w <= 0.0) return FairDevResult(0, emptyList())
+    if (w <= 0.0) return FAIR_ZERO
     // 達成率の昇順・同値は添字順（安定）。n は群の人数なので挿入整列で足りる。
-    val order = IntArray(n) { it }
+    val order = sc.order
+    for (x in 0 until n) order[x] = x
     for (x in 1 until n) { val v = order[x]; var y = x - 1
         while (y >= 0 && ach[order[y]].compareTo(ach[v]) > 0) { order[y + 1] = order[y]; y-- }
         order[y + 1] = v }
     var acc = 0.0; var tgt = ach[order[n - 1]]
-    for (idx in order) { acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
+    for (oi in 0 until n) { val idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
     var total = 0
     val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
@@ -891,8 +908,10 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, members: Boolean = true, count: (Int
         total += dx
         if (dx > 0) perMember?.add(mem[idx] to dx)
     }
-    return FairDevResult(total, perMember ?: emptyList())
+    return if (perMember == null) FairDevResult(total, emptyList()) else FairDevResult(total, perMember)
 }
+
+private val FAIR_ZERO = FairDevResult(0, emptyList())
 
 /** `fairDevOfBucket` のフォールバック先＝生回数の round(平均) からの L1 偏差（母集団 mem[0 until n]）。 */
 private fun legacyFairDevOfBucket(mem: IntArray, cnt: IntArray, n: Int, members: Boolean): FairDevResult {
