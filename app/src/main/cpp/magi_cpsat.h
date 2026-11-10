@@ -458,4 +458,148 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     return res;
 }
 
+// 必須違反の原因（S4、docs/cpsat_formal.md）。希望・手動固定・必要人数・禁止の並びの規則を 1 件ずつ「守る」仮定にして、
+//   必須 0 が成り立たない最小の組（矛盾の核）を CP-SAT の仮定の核で求め、削って最小化し、外して繰り返す（互いに素な核）。
+//   どの核も「この中の 1 件を緩めないと必須違反は消えない」の証明。核の数は必須件数の下限にもなる。
+struct Cause { int kind; int i, j, k, rule; };   // kind: 0 希望 1 手動固定 2 必要人数 3 禁止の並び 4 担当外・拡張希望の禁止（職員 i）
+struct Core { std::vector<Cause> causes; bool minimal; };   // minimal: どの 1 件を外しても成り立つと確かめた
+enum CauseKind { kWish = 0, kPin = 1, kNeed = 2, kForbidden = 3, kOutside = 4 };
+
+class HardExplainer {
+public:
+    // 置ける値は最適化のモデルと同じ（担当できるシフト＋入力の値＋希望・手動固定）。担当外・拡張希望の禁止の値は職員ごとの仮定で止める。
+    HardExplainer(const MagiProblem& p, const std::vector<int>& input) : p_(p), S(p.S), T(p.T), K(p.K) { build(input); }
+
+    // 互いに素な核を最大 maxCores 個、全体で totalSeconds まで。各核は最小（どれか 1 件を外すと成り立つ）。
+    std::vector<Core> explain(int maxCores, double secondsPerSolve, int workers, double totalSeconds = 1e9) {
+        std::vector<Core> cores;
+        const auto t0 = std::chrono::steady_clock::now();
+        auto left = [&] {
+            return totalSeconds - std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        };
+        std::vector<int> active(lits_.size());
+        for (size_t a = 0; a < lits_.size(); a++) active[a] = (int)a;
+        for (int round = 0; round < maxCores; round++) {
+            std::vector<int> core;
+            if (left() <= 0 || check(active, std::min(secondsPerSolve, left()), workers, &core) != kInfeasible || core.empty()) break;
+            // 削って最小化: 1 件ずつ外して、まだ成り立たないなら外したままにする。外すと成り立つ（解が見つかる）と確かめられた
+            //   件だけが残れば最小。時間切れで分からなかった件が残れば minimal=false。
+            bool minimal = true;
+            for (size_t x = 0; x < core.size();) {
+                std::vector<int> trial = core; trial.erase(trial.begin() + (long)x);
+                const int v = trial.empty() ? kFeasible
+                            : left() <= 0 ? kUnknown : check(trial, std::min(secondsPerSolve, left()), workers, nullptr);
+                if (v == kInfeasible) { core = trial; continue; }
+                if (v == kUnknown) minimal = false;
+                x++;
+            }
+            Core out{{}, minimal};
+            for (int a : core) out.causes.push_back(desc_[(size_t)a]);
+            cores.push_back(out);
+            std::vector<int> next;
+            for (int a : active) if (std::find(core.begin(), core.end(), a) == core.end()) next.push_back(a);
+            active.swap(next);
+        }
+        return cores;
+    }
+
+private:
+    const MagiProblem& p_;
+    const int S, T, K;
+    sat::CpModelBuilder cp_;
+    std::vector<std::vector<std::pair<int, sat::BoolVar>>> vars_;
+    std::vector<sat::BoolVar> lits_;
+    std::vector<Cause> desc_;
+    std::vector<int> wishLit_;   // S*T: 希望の仮定の添字（無ければ -1）
+
+    sat::LinearExpr X(int i, int j, int k) const {
+        for (const auto& kv : vars_[(size_t)i * T + j]) if (kv.first == k) return sat::LinearExpr(kv.second);
+        return sat::LinearExpr(0);
+    }
+    int addLit(Cause c) { lits_.push_back(cp_.NewBoolVar()); desc_.push_back(c); return (int)lits_.size() - 1; }
+
+    void build(const std::vector<int>& input) {
+        vars_.assign((size_t)S * T, {});
+        wishLit_.assign((size_t)S * T, -1);
+        std::vector<int> outsideLit(S, -1);
+        for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
+            const size_t c = (size_t)i * T + j;
+            std::vector<int> dom;
+            for (int k : p_.allowed[i]) if (!p_.extBanned(i, j, k)) dom.push_back(k);
+            const int w = p_.wish[c], pin = p_.pin.empty() ? -1 : p_.pin[c];
+            const int h = input.empty() ? -1 : input[c];
+            for (int extra : {w, pin, h}) if (extra >= 0 && extra < K && std::find(dom.begin(), dom.end(), extra) == dom.end()) dom.push_back(extra);
+            if (dom.empty()) dom.push_back(p_.restIdx);
+            std::vector<sat::BoolVar> one;
+            for (int k : dom) { auto v = cp_.NewBoolVar(); vars_[c].push_back({k, v}); one.push_back(v); }
+            cp_.AddExactlyOne(one);
+            // 担当できないシフト・拡張希望の禁止（評価器と同じく表どおり。希望の日は表を作るときに除かれる）は置かない。
+            for (int k : dom) if (!p_.cd(i, k) || p_.extBanned(i, j, k)) {
+                if (outsideLit[i] < 0) outsideLit[i] = addLit({kOutside, i, -1, -1, -1});
+                cp_.AddEquality(X(i, j, k), 0).OnlyEnforceIf(lits_[(size_t)outsideLit[i]]);
+            }
+            if (w >= 0 && p_.cd(i, w)) {
+                const int a = addLit({kWish, i, j, w, -1});
+                wishLit_[c] = a;
+                cp_.AddEquality(X(i, j, w), 1).OnlyEnforceIf(lits_[(size_t)a]);
+            }
+            if (pin >= 0) {
+                const int a = addLit({kPin, i, j, pin, -1});
+                cp_.AddEquality(X(i, j, pin), 1).OnlyEnforceIf(lits_[(size_t)a]);
+            }
+        }
+        // 希望の前日に禁止（c3w）: 翌日の希望を守るなら前日に禁止のシフトを置かない。
+        for (const auto& r : p_.cons3w) for (int i = 0; i < S; i++) for (int j = 0; j + 1 < T; j++) {
+            const int a = wishLit_[(size_t)i * T + j + 1];
+            if (a < 0 || p_.wish[(size_t)i * T + j + 1] != r.wishK) continue;
+            cp_.AddEquality(X(i, j, r.prevK), 0).OnlyEnforceIf(lits_[(size_t)a]);
+        }
+        // 禁止の並び（c3n）: 規則ごとに 1 つの仮定。
+        for (size_t e = 0; e < p_.cons3n.size(); e++) {
+            const auto& seq = p_.cons3n[e].seq; const int D = (int)seq.size();
+            if (D == 0) continue;
+            const int a = addLit({kForbidden, -1, -1, -1, (int)e});
+            for (int i = 0; i < S; i++) for (int j = 0; j + D <= T; j++) {
+                sat::LinearExpr m;
+                for (int l = 0; l < D; l++) m += X(i, j + l, seq[(size_t)l]);
+                cp_.AddLessOrEqual(m, D - 1).OnlyEnforceIf(lits_[(size_t)a]);
+            }
+        }
+        // 必要人数（covU）: 日×シフトごとの仮定。
+        for (int k = 0; k < K; k++) for (int j = 0; j < T; j++) {
+            const int lo1 = p_.need1[(size_t)k * T + j];
+            const int lo2 = p_.use2 ? p_.need2[(size_t)k * T + j] : -1;
+            if (lo1 < 0 && lo2 < 0) continue;
+            const int lmin = (lo1 >= 0 && lo2 >= 0) ? std::min(lo1, lo2) : (lo1 >= 0 ? lo1 : lo2);
+            if (lmin <= 0) continue;
+            sat::LinearExpr got;
+            for (int i = 0; i < S; i++) got += X(i, j, k);
+            const int a = addLit({kNeed, -1, j, k, lmin});
+            cp_.AddGreaterOrEqual(got, lmin).OnlyEnforceIf(lits_[(size_t)a]);
+        }
+    }
+
+    enum { kFeasible, kInfeasible, kUnknown };
+    // 仮定 [assume] をすべて守ると成り立つか。成り立たなければ core に CP-SAT の核（仮定の添字）を入れる。
+    int check(const std::vector<int>& assume, double seconds, int workers, std::vector<int>* core) {
+        cp_.ClearAssumptions();
+        std::vector<sat::BoolVar> as;
+        for (int a : assume) as.push_back(lits_[(size_t)a]);
+        cp_.AddAssumptions(as);
+        sat::SatParameters prm;
+        prm.set_num_workers(std::max(1, workers));
+        prm.set_max_time_in_seconds(seconds);
+        auto r = sat::SolveWithParameters(cp_.Build(), prm);
+        if (r.status() == sat::FEASIBLE || r.status() == sat::OPTIMAL) return kFeasible;
+        if (r.status() != sat::INFEASIBLE) return kUnknown;
+        if (core) {
+            core->clear();
+            for (int ref : r.sufficient_assumptions_for_infeasibility()) {
+                for (size_t a = 0; a < lits_.size(); a++) if (lits_[a].index() == ref) { core->push_back((int)a); break; }
+            }
+        }
+        return kInfeasible;
+    }
+};
+
 }  // namespace magi_cpsat

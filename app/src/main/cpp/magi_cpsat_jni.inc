@@ -90,5 +90,28 @@ Java_com_magi_app_v6_CpsatBridge_nativeCpsatPoll(JNIEnv* env, jclass, jlong h, j
     return out;
 }
 
+// 必須違反の原因（S4）。戻り値 [核の数, 各核: minimal(0/1), 件数, 件数×(kind, i, j, k, rule)]。
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_magi_app_v6_CpsatBridge_nativeCpsatExplain(JNIEnv* env, jclass, jlong problemHandle, jintArray inputArr,
+                                                   jint maxCores, jdouble secondsPerSolve, jint workers, jdouble totalSeconds) {
+    std::vector<jint> flat{0};
+    if (problemHandle != 0) {
+        const MagiProblem& p = *reinterpret_cast<MagiProblem*>(problemHandle);
+        std::vector<int> input((size_t)p.S * p.T, -1);
+        if (inputArr != nullptr && env->GetArrayLength(inputArr) == (jsize)input.size())
+            env->GetIntArrayRegion(inputArr, 0, (jsize)input.size(), input.data());
+        magi_cpsat::HardExplainer ex(p, input);
+        const auto cores = ex.explain(maxCores, secondsPerSolve, workers, totalSeconds);
+        flat[0] = (jint)cores.size();
+        for (const auto& c : cores) {
+            flat.push_back(c.minimal ? 1 : 0); flat.push_back((jint)c.causes.size());
+            for (const auto& x : c.causes) { flat.push_back(x.kind); flat.push_back(x.i); flat.push_back(x.j); flat.push_back(x.k); flat.push_back(x.rule); }
+        }
+    }
+    jintArray out = env->NewIntArray((jsize)flat.size());
+    if (out != nullptr) env->SetIntArrayRegion(out, 0, (jsize)flat.size(), flat.data());
+    return out;
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_magi_app_v6_CpsatBridge_nativeCpsatAvailable(JNIEnv*, jclass) { return JNI_TRUE; }
