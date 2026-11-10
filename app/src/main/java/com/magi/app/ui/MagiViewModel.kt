@@ -1384,7 +1384,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (st == null || p.stateKey != stateKey(st)) null
             else PreDraftBoard(p.board, p.stateKey, p.hard, com.magi.app.v6.UnifiedViolationChecker.check(st, p.board).weightedScore, p.total, p.hardWord)
         }
-        _ui.update { it.copy(preDraftNotice = null) }
+        // 「前回と同じ結果」は前の方式での話＝採点が変われば今の盤面からでも同じ谷へ戻るとは限らない（下書きから作り直さない）。
+        lastRunKeys = null
+        _ui.update { it.copy(preDraftNotice = null, sameResult = null) }
         logOp("I", "設定変更: 直す順番 → ${objectiveMethodLabel(m)}")
         refreshCheck()
     }

@@ -131,7 +131,7 @@ internal object OpLogText {
     /** 操作ログの行から数えた迷いの指標。[lines] は `OpLogEntry.message`（時刻・レベルの接頭辞なし）、[times] は同じ添字の時刻。順は問わない。 */
     data class Hesitation(
         val manualChanges: Int, val undo: Int, val redo: Int,
-        val searches: Int, val searchesWithResult: Int, val searchesEmpty: Int, val applied: Int, val notNow: Int, val consulted: Int,
+        val searches: Int, val searchesWithResult: Int, val searchesEmpty: Int, val autoSearches: Int, val applied: Int, val notNow: Int, val consulted: Int,
         val autoRuns: Int, val drafts: Int, val draftsRightAfterResult: Int,
         val closedWithoutApply: Int,
         val longestGapMs: Long?, val longestGapFromMs: Long, val longestGapToMs: Long,
@@ -141,7 +141,7 @@ internal object OpLogText {
             val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.JAPAN)
             return listOf(
                 "手で変更 ${manualChanges}回${SEP}元に戻す ${undo}回${SEP}やり直し ${redo}回",
-                "案を探した ${searches}回（案あり ${searchesWithResult}・なし ${searchesEmpty}）${SEP}適用 ${applied}回${SEP}今は変更しない ${notNow}回${SEP}相談に残す ${consulted}回",
+                "案を探した ${searches}回（案あり ${searchesWithResult}・なし ${searchesEmpty}・ほかに自動 ${autoSearches}回）${SEP}適用 ${applied}回${SEP}今は変更しない ${notNow}回${SEP}相談に残す ${consulted}回",
                 "自動作成 ${autoRuns}回${SEP}下書き ${drafts}回（結果の直後 ${draftsRightAfterResult}回）",
                 "確認の画面を閉じた（適用なし）${closedWithoutApply}回",
                 if (longestGapMs == null) "最長の空白 $NONE"
@@ -174,7 +174,7 @@ internal object OpLogText {
         fun n(prefix: String) = msgs.count { it.startsWith(prefix) }
         return Hesitation(
             manualChanges = n("手で変更:"), undo = n("元に戻す"), redo = n("やり直し"),
-            searches = n("案を探す:"), searchesWithResult = n("案: ") - n("案: なし"), searchesEmpty = n("案: なし"),
+            searches = n("案を探す:"), searchesWithResult = n("案: ") - n("案: なし"), searchesEmpty = n("案: なし"), autoSearches = n("案を探す（自動）:"),
             applied = n("改善手を適用:"), notNow = n("変更の確認: 今は変更しない"), consulted = n("相談に残す:"),
             autoRuns = n("最適化 開始"), drafts = n("下書きで置き換え（確認済み）"), draftsRightAfterResult = rightAfter,
             closedWithoutApply = n("人員不足の手伝い: 閉じる") + n("作成前の確認: 閉じる") + n("配布前の確認: 戻る"),

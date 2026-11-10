@@ -88,7 +88,7 @@ class Review3697Test {
         val lines = OpLogText.hesitationSummary(rev.map { it.second }, rev.map { base + it.first })
         assertEquals(6, lines.size)
         assertEquals("手で変更 1回 ・ 元に戻す 1回 ・ やり直し 1回", lines[0])
-        assertEquals("案を探した 2回（案あり 1・なし 1） ・ 適用 3回 ・ 今は変更しない 1回 ・ 相談に残す 1回", lines[1])
+        assertEquals("案を探した 2回（案あり 1・なし 1・ほかに自動 0回） ・ 適用 3回 ・ 今は変更しない 1回 ・ 相談に残す 1回", lines[1])
         assertEquals("自動作成 2回 ・ 下書き 2回（結果の直後 1回）", lines[2])
         assertEquals("確認の画面を閉じた（適用なし）3回", lines[3])
         val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.JAPAN)
@@ -97,10 +97,17 @@ class Review3697Test {
         assertEquals(lines, OpLogText.hesitationSummary(log.map { it.second }, log.map { base + it.first }))
     }
 
+    /** 自動で探した回数は手で探した回数と分けて数える（実機ログで「案を探した 1回」なのに自動の案が 8 件出ていた）。 */
+    @Test fun hesitationSummaryCountsAutoSearchesSeparately() {
+        val msgs = listOf("案を探す（自動）: 全体", "案（自動）: 8件（8秒）", "案を探す（自動）: 全体", "案を探す: 全体", "案: なし（8秒）")
+        val lines = OpLogText.hesitationSummary(msgs, msgs.indices.map { it * 1000L })
+        assertEquals("案を探した 1回（案あり 0・なし 1・ほかに自動 2回） ・ 適用 0回 ・ 今は変更しない 0回 ・ 相談に残す 0回", lines[1])
+    }
+
     @Test fun hesitationSummaryWithoutDataSaysDash() {
         val lines = OpLogText.hesitationSummary(emptyList(), emptyList())
         assertEquals("手で変更 0回 ・ 元に戻す 0回 ・ やり直し 0回", lines[0])
-        assertEquals("案を探した 0回（案あり 0・なし 0） ・ 適用 0回 ・ 今は変更しない 0回 ・ 相談に残す 0回", lines[1])
+        assertEquals("案を探した 0回（案あり 0・なし 0・ほかに自動 0回） ・ 適用 0回 ・ 今は変更しない 0回 ・ 相談に残す 0回", lines[1])
         assertEquals("自動作成 0回 ・ 下書き 0回（結果の直後 0回）", lines[2])
         assertEquals("確認の画面を閉じた（適用なし）0回", lines[3])
         assertEquals("最長の空白 —", lines[4])
