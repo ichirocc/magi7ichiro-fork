@@ -30,6 +30,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
 | [`docs/weightless_objective.md`](./docs/weightless_objective.md) | **重みを使わない目的関数の設計書**（設計のみ・未実装、2026-11-01。優先順位の段 T0〜T3＋件数の許容ライン、段の鍵の比較器、公平の leximin、段の順に解く探索と利用者に見せない動的な重み、画面・移行・測り方・段階 P0〜P5・決定事項 Q1〜Q22、文献の根拠と取り入れた概念 C1〜C11（職員ごとのライン・受容度の帯・leximax・NuWLS 型の重み更新・見込み表示）、§3.2 取り入れる根拠（強さ A〜D・取り下げる条件）、§3.3 外部提案の照合（許容スラック・職員ごとの不満の leximax・案の保持を採用、競合グラフ破壊と GLS は既存と重なり不採用）、§3.4 実機ログ 3.727.14 の頭打ち盤面の照合と §7.3b 存在の判定） |
 | [`docs/cpsat_formal.md`](./docs/cpsat_formal.md) | **CP-SAT による根拠ある最適化（下限・ギャップ・説明）と形式的な検証**（Z3 の証明・有界の全数検証、2026-11-10） |
+| [`docs/delta_cpp_unification.md`](./docs/delta_cpp_unification.md) | **差分計算の C++ 一本化・高速化**（仕様＝ユーザー提示の方針 5 点・変えてはならないもの、現行コードの対応・残りの段・テスト、2026-11-10） |
 | [`docs/seesaw.md`](./docs/seesaw.md) | **シーソー（族のあいだの違反の移動）の見分け方と扱い方の仕様**（他社 AI 向けに書き直し、2026-11-03、照合 `eb57f18`。DEFAULT／TOOL／PROPOSAL の分離、優越・前線・支持解・競合/調和/独立の定義、揺れ→見かけ→本物の判定手順、今ある道具の入出力、地図・前線・Path Relinking・膝点の提案、不変条件 I1〜I6、実装の罠（重みが定数なので腕ごとにビルドが要る）、チェックリスト、論文の確認範囲。2026-11-03 に 2020 年代以降の論文で見直し＝§11 の R1〜R8、同日のドッグフーディング検証＝§13 の D1〜D15 と high×2 の実測、2026-11-04 の S2b の実地＝§13.4、weekly の取り逃しの原因＝§13.5、区間の部分問題の予算＝§13.6） |
 | [`docs/membrane_search.md`](./docs/membrane_search.md) | **膜計算（組織様 P システム）を改良拡張した頭打ち盤面の探索の設計書**（2026-11-01 設計、M0 は 13/13 で改善、3.727.19 で `MembraneCellLns`、3.727.20 で既定 ON。設計時の要点:細胞＝残る違反から作る職員×日の部分問題、通信＝ずらせる余裕を透過性にした交換・移動、阻んだ必須の位置で融合・分裂、細胞の中は厳密解、「この範囲では減らせない」の記録、M0 の測定で採否） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
@@ -48,6 +49,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-10（3.727.53: C++ のビット化・fair の見積もりの重複削減、仕様書 `docs/delta_cpp_unification.md`）
 **最終更新**：2026-11-10（3.727.52: 差分計算を主に＝C++ の取り消し記録・研磨の候補を差分で選別）
 **最終更新**：2026-11-10（記録: CP-SAT の S4 必須違反の原因 `docs/cpsat_formal.md`）
 **最終更新**：2026-11-10（3.727.51: CP-SAT の併走を入れたビルド `docs/cpsat_formal.md`）

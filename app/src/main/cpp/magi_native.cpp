@@ -9,6 +9,7 @@
 #include <random>
 #include <vector>
 #include <array>
+#include <climits>
 
 // [ネイティブ加速 Stage2] Evaluator.kt の忠実な C++ 移植（fullEvalParts 相当）。
 // Kotlin 実装が常に「正」: 実行時に Kotlin Evaluator と同一盤面で hard/soft を照合し
@@ -325,6 +326,20 @@ inline long long rowDeficit(const int* row, int T, int k, int L) {
     return sub;
 }
 
+// rowDeficit のビット版（Kotlin DeltaEvaluator.rowDeficitBits と同じ）: 日のビット集合 m の連（続く 1）ごとに長さ r<L なら L−r。
+inline long long rowDeficitBitsN(uint64_t m, int L) {
+    long long sub = 0;
+    while (m != 0) {
+        const int start = __builtin_ctzll(m);
+        const uint64_t rest = ~(m >> start);
+        const int len = rest == 0 ? 64 - start : __builtin_ctzll(rest);
+        if (len < L) sub += L - len;
+        const int end = start + len;
+        m = end >= 64 ? 0 : (m & ~((1ULL << end) - 1ULL));
+    }
+    return sub;
+}
+
 // Evaluator.c3check と同式（forbidden=窓マッチ#fire / 非forbidden単一連=run-deficit）。
 long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& list, bool forbidden) {
     long long sub = 0;
@@ -613,6 +628,7 @@ struct SaChunk {
     //   参照しない規則は (i,j) の old→nw 書換えで寄与が変わらない＝差分 0 なので、測らなくてもスコアは同じ。
     struct ShiftIndex { std::vector<std::vector<int>> byK; std::vector<uint8_t> has; };
     ShiftIndex ix3[4], ix1, ix41, ix42, ix41s, ix42s;
+    std::vector<uint8_t> c3SeqOk[4];   // 規則の並びが全部 [0,K) か（ビット経路の可否。盤面非依存なので 1 回だけ数える）
     // 規則ごとの現在の寄与（resetBoard が全件、deltaApply が書き換えた行・日の該当規則を更新）。変更前の値を測り直さないため。
     std::vector<long long> c1Cur, c3Cur[4];            // S*件数（職員 i・規則 e）
     std::vector<long long> d41Cur, d42Cur, d41sCur, d42sCur;  // T*件数（日 j・規則 e）
@@ -654,6 +670,9 @@ struct SaChunk {
         for (int f = 0; f < 4; f++) {
             indexInit(ix3[f], fams[f]->size());
             for (size_t e = 0; e < fams[f]->size(); e++) for (int v : (*fams[f])[e].seq) indexAdd(ix3[f], (int)e, v);
+            c3SeqOk[f].assign(fams[f]->size(), 1);
+            for (size_t e = 0; e < fams[f]->size(); e++)
+                for (int v : (*fams[f])[e].seq) if (v < 0 || v >= K) c3SeqOk[f][e] = 0;
         }
         indexInit(ix1, p.cons1.size());
         for (size_t e = 0; e < p.cons1.size(); e++) indexAdd(ix1, (int)e, p.cons1[e].si);
@@ -737,7 +756,7 @@ struct SaChunk {
             auto& cache = c3Cur[f];
             v += visit(ix3[f], n, old, nw, [&](int e) {
                 long long& c = cache[(size_t)i * n + e];
-                if (fresh) { remember(c); c = contribC3(i, list[(size_t)e], fb, w); }
+                if (fresh) { remember(c); c = contribC3(i, list[(size_t)e], fb, w, c3SeqOk[f][(size_t)e] != 0); }
                 return c; });
         }
         return v;
@@ -796,22 +815,23 @@ struct SaChunk {
         }
         return v;
     }
-    long long contribC3(int i, const C3r& c, bool forbidden, long long w) const {
+    long long contribC3(int i, const C3r& c, bool forbidden, long long w, bool seqOk) const {
         long long v = 0;
         const int* row = a.data() + (size_t)i * T;
         const int D = (int)c.seq.size();
         if (D == 0) return 0;
         const int first = c.seq[0];
-        // 非forbidden単一シフト連は run-deficit（run長ベース＝popcount化困難。3.172.0 の対象外方針を踏襲）。
-        if (!forbidden && c.singleRun) return rowDeficit(row, T, first, D) * w;
+        // 非forbidden単一シフト連は run-deficit（連の長さ。ビット経路は連を ctz で数える＝rowDeficitBitsN）。
+        if (!forbidden && c.singleRun) {
+            if (useBits && seqOk) return rowDeficitBitsN(rowMask[(size_t)i * K + first], D) * w;
+            return rowDeficit(row, T, first, D) * w;
+        }
         // [ビット化] 窓マッチ（forbidden 完全一致 / 非forbidden 多シフト部分不一致）を popcount で。
         //   rowMask[i*K+k]=職員 i がシフト k を持つ日ビット集合（deltaApply が維持済＝新規マスク不要）。
         //   (rowMask[seq[l]] >> l) の bit j = (row[j+l]==seq[l])。AND で「窓開始 j に完全一致」の集合を得る。
         //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=先頭一致−完全一致（z<D-1）。
         //   マスク索引の安全のため seq が全て [0,K) のときのみ（範囲外は理論上到達不能だが scalar へ退避）。
         if (useBits && D <= T) {
-            bool seqOk = first >= 0 && first < K;
-            for (int l = 1; seqOk && l < D; l++) if (c.seq[l] < 0 || c.seq[l] >= K) seqOk = false;
             if (seqOk) {
                 uint64_t full = rowMask[(size_t)i * K + first];
                 for (int l = 1; l < D; l++) full &= (rowMask[(size_t)i * K + c.seq[l]] >> l);
@@ -1463,7 +1483,10 @@ inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK
 
 // [3.538.0] counts(S*K) は一時的に書き換えて必ず戻す（Kotlin fairMarginalAt と同じ手）。fairDevOfBucket
 // は合計でなく個々人の回数が要るため、旧実装が使っていたG*K群合計grpTotalは不要になった。
-inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, std::vector<int>& counts) {
+// beforeMemo（G*K、未計算は LLONG_MIN）: counts が変わらない間の「変える前の偏差」は (群,シフト) ごとに同じ＝候補を並べる間は
+//   1 回だけ数える。counts を書き換えた呼び出し側は動いた (群,シフト) を LLONG_MIN へ戻す。
+inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, std::vector<int>& counts,
+                               long long* beforeMemo = nullptr) {
     const int K = p.K;
     if (delta == 0 || k < 0 || k >= K) return 0;
     int g = p.sgrp[i];
@@ -1471,7 +1494,9 @@ inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, st
     if (!p.bucketHas[(size_t)g * K + k]) return 0;
     if (p.members[g].size() < 2) return 0;
     auto countAt = [&](int x) { return counts[(size_t)x * K + k]; };
-    long long before = fairDevOfBucket(p, g, k, countAt);
+    long long before;
+    if (beforeMemo != nullptr && beforeMemo[(size_t)g * K + k] != LLONG_MIN) before = beforeMemo[(size_t)g * K + k];
+    else { before = fairDevOfBucket(p, g, k, countAt); if (beforeMemo != nullptr) beforeMemo[(size_t)g * K + k] = before; }
     counts[(size_t)i * K + k] += delta;
     long long after = fairDevOfBucket(p, g, k, countAt);
     counts[(size_t)i * K + k] -= delta;
@@ -1557,6 +1582,7 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
         if (k2 >= 0 && k2 < K) wd[((size_t)i * K + k2) * 7 + (size_t)((p.dow0 + jj) % 7)]++;
     }
     const int bucket = (p.dow0 + j) % 7;
+    std::vector<long long> fairBefore((size_t)(p.G > 0 ? p.G : 0) * K, LLONG_MIN);
     for (int k = 0; k < K; k++) {
         if (k == rest) continue;
         // [3.409.22] 旧: `need1<=0 → continue` で **need2 単独定義の需要を丸ごと素通り**していた
@@ -1572,14 +1598,17 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
                 long long delta = staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k] + 1)
                     - staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k]) + c41DayMarg(p.sgrp[i], k)
                     + weeklyMarginalN(&wd[((size_t)i * K) * 7], K, bucket, rest, k, p.w.weekly)
-                    + fairMarginalN(p, i, rest, -1, cnt)
-                    + fairMarginalN(p, i, k, 1, cnt);
+                    + fairMarginalN(p, i, rest, -1, cnt, fairBefore.data())
+                    + fairMarginalN(p, i, k, 1, cnt, fairBefore.data());
                 if (delta < bestDelta) { bestDelta = delta; bestI = i; tied = 1; }
                 else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestI = i; }
             }
             if (bestI < 0) break;
             a[(size_t)bestI * T + j] = k;
             cnt[(size_t)bestI * K + k]++; cnt[(size_t)bestI * K + rest]--;
+            if (const int gb = p.sgrp[bestI]; gb >= 0 && gb < p.G) {
+                fairBefore[(size_t)gb * K + k] = LLONG_MIN; fairBefore[(size_t)gb * K + rest] = LLONG_MIN;
+            }
             covJ[k]++; miss--;
             if (hasC41) grpCnt[(size_t)p.sgrp[bestI] * K + k]++;
             wd[((size_t)bestI * K + rest) * 7 + (size_t)bucket]--;
@@ -1624,6 +1653,7 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
         const int bucket = (p.dow0 + j) % 7;
         int bestK = -1, tied = 0;
         long long bestDelta = INT64_MAX;
+        long long fairRest = LLONG_MIN;   // 休を 1 つ減らす分は候補のシフトに依らない＝この日の候補で 1 回だけ数える
         for (int k = 0; k < K; k++) {
             if (k == rest || !p.pl(i, k) || p.extBanned(i, j, k)) continue;
             // [3.409.22] 同上（Kotlin destroyRepairStaffAt は 3.379.0 で covUCell へ委譲済み）。
@@ -1631,7 +1661,7 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
             if (p.covUCell(k, j, cov[(size_t)j * K + k]) <= 0) continue;
             long long delta = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k])
                 + weeklyMarginalN(wd.data(), K, bucket, rest, k, p.w.weekly)
-                + fairMarginalN(p, i, rest, -1, counts)
+                + (fairRest != LLONG_MIN ? fairRest : (fairRest = fairMarginalN(p, i, rest, -1, counts)))
                 + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
             else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestK = k; }
@@ -1678,14 +1708,16 @@ void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<in
         int bestK = old;
         long long bestDelta = INT64_MAX;
         int tied = 0;
+        // 元のシフトを 1 つ減らす分（個人回数・fair）は候補のシフトに依らない＝ループの外で 1 回だけ数える。
+        const long long dOld = (old >= 0 && old < K)
+            ? staffCountPenaltyAtN(p, i, old, cntI[old] - 1) - staffCountPenaltyAtN(p, i, old, cntI[old]) : 0;
+        const long long fairOld = (old >= 0 && old < K) ? fairMarginalN(p, i, old, -1, counts) : 0;
         for (int k : allowed) {
             if (k == old || p.extBanned(i, j, k)) continue;
-            long long dOld = (old >= 0 && old < K)
-                ? staffCountPenaltyAtN(p, i, old, cntI[old] - 1) - staffCountPenaltyAtN(p, i, old, cntI[old]) : 0;
             long long dK = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k]);
             long long delta = dOld + dK
                 + weeklyMarginalN(wd.data(), K, bucket, old, k, p.w.weekly)
-                + ((old >= 0 && old < K) ? fairMarginalN(p, i, old, -1, counts) : 0)
+                + fairOld
                 + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
             else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestK = k; }
