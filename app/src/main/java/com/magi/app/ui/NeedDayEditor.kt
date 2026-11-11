@@ -357,7 +357,7 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
                         GroupedDeleteButton(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }
                     }
                 }
-            })
+            }, inCard = true)
         }
     }
 }

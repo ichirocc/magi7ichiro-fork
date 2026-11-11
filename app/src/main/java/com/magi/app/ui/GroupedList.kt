@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -28,8 +31,20 @@ import androidx.compose.ui.unit.dp
  * 入れ物・見出し・注記は既存の [MagiGroup] と同じ（設定の一覧と同じ見た目）。行の間に細い区切り線を入れる。
  */
 @Composable
-internal fun GroupedSection(header: String?, footer: String? = null, rows: List<@Composable () -> Unit>) {
+internal fun GroupedSection(header: String?, footer: String? = null, rows: List<@Composable () -> Unit>, inCard: Boolean = false) {
     val cs = MaterialTheme.colorScheme
+    // カードの中では入れ物を重ねない（箱の中の箱・字下げの二重を避ける）＝行と区切り線だけ、行の左右の余白はカードの余白に任せる。
+    if (inCard) {
+        CompositionLocalProvider(LocalGroupedInset provides 0.dp) {
+            Column(Modifier.fillMaxWidth()) {
+                rows.forEachIndexed { i, row ->
+                    if (i > 0) HorizontalDivider(color = cs.outlineVariant)
+                    row()
+                }
+            }
+        }
+        return
+    }
     MagiGroup(header?.takeIf { it.isNotBlank() }, footer?.takeIf { it.isNotBlank() }) {
         rows.forEachIndexed { i, row ->
             if (i > 0) HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
@@ -37,6 +52,9 @@ internal fun GroupedSection(header: String?, footer: String? = null, rows: List<
         }
     }
 }
+
+/** 島の行の左の余白（島の中は 16dp、カードの中は 0＝カードの余白と重ねない）。 */
+internal val LocalGroupedInset = staticCompositionLocalOf { 16.dp }
 
 /**
  * 島の 1 行。[onClick] があれば行全体（[trailing] を除く）が押せて、右端に「›」（このアプリの「押せる」の印）。
@@ -49,7 +67,7 @@ internal fun GroupedRow(text: String, enabled: Boolean, onClick: (() -> Unit)?, 
         Row(
             Modifier.weight(1f).heightIn(min = 48.dp)
                 .then(if (onClick != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick) else Modifier)
-                .padding(start = 16.dp, end = 8.dp),
+                .padding(start = LocalGroupedInset.current, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text, style = MaterialTheme.typography.bodyMedium,
@@ -71,7 +89,7 @@ internal fun GroupedAddRow(text: String, enabled: Boolean, onClick: () -> Unit) 
     val cs = MaterialTheme.colorScheme
     val tint = if (enabled) cs.primary else cs.onSurface.copy(alpha = 0.38f)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onClick).padding(horizontal = LocalGroupedInset.current),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Add, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))

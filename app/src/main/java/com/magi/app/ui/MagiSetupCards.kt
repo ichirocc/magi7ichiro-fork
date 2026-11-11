@@ -771,8 +771,9 @@ internal fun AdvancedSettingsSection(
 internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val hasAny = ui.opLog.isNotEmpty() || ui.logs.isNotEmpty()
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // 詳細設定の島の中に置く＝カードを重ねない（箱の中の箱を避ける。余白は島の側）。
+    Column(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("ログ", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("テキストで書き出す") }
             OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("JSONで書き出す") }
