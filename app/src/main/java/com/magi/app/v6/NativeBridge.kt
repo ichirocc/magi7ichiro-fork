@@ -18,11 +18,20 @@ object NativeBridge {
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
-        runCatching {
+        try {
             System.loadLibrary("magi_native")
-            nativeAbiVersion() == ABI_VERSION
-        }.getOrDefault(false)
+            val v = nativeAbiVersion()
+            if (v != ABI_VERSION) loadError = "ABI 不一致（.so=$v・アプリ=$ABI_VERSION）"
+            v == ABI_VERSION
+        } catch (t: Throwable) {
+            loadError = "${t.javaClass.simpleName}: ${t.message}".take(240)
+            false
+        }
     }
+
+    /** 読み込めなかった理由（[available] が false のとき。ログに出して原因を読めるようにする＝3.727.51 の実機ログは「未ロード」としか出なかった）。 */
+    @Volatile var loadError: String? = null
+        private set
 
     @JvmStatic
     private external fun nativeAbiVersion(): Int

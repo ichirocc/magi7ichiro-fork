@@ -74,7 +74,7 @@ private fun MagiViewModel.environmentLine(): String {
     val cores = Runtime.getRuntime().availableProcessors()
     val nat = if (com.magi.app.v6.NativeBridge.available) {
         "有効(ABI${com.magi.app.v6.NativeBridge.ABI_VERSION})"
-    } else "無効(.so未ロード)"
+    } else "無効(.so未ロード" + (com.magi.app.v6.NativeBridge.loadError?.let { ": $it" } ?: "") + ")"
     return "版: $ver ・ ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}" +
         " ・ Android ${android.os.Build.VERSION.RELEASE}(SDK ${android.os.Build.VERSION.SDK_INT})" +
         " ・ CPU ${cores}コア(いまの並列ワーカー設定=${_ui.value.workers}) ・ ネイティブ=$nat"
