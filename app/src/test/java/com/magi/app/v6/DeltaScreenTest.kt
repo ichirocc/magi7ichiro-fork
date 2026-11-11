@@ -67,4 +67,26 @@ class DeltaScreenTest {
         }
         assertEquals(fixtures.size * ObjectiveMethod.entries.size, compared)
     }
+
+    @Test fun c1BeamReturnsTheSameBoardWithAndWithoutTheScreen() {
+        fun noMs(logs: List<MirrorLog>) = logs.map { it.message.replace(Regex("/\\d+ms"), "/_ms") }
+        for (m in ObjectiveMethod.entries) withMethod(m) {
+            for (f in fixtures) {
+                val st = load(f)
+                val sched = st.schedule.toIntArray2D()
+                val saved = DeltaScreen.enabled
+                try {
+                    DeltaScreen.enabled = false
+                    val full = C1WindowPolish.applyC1BeamPolish(st, sched, maxSteps = 12)
+                    DeltaScreen.enabled = true
+                    val delta = C1WindowPolish.applyC1BeamPolish(st, sched, maxSteps = 12)
+                    assertTrue("$f $m", AdaptiveEliteArchive.sameSchedule(full.newSchedule, delta.newSchedule))
+                    assertEquals("$f $m", full.report?.breakdown, delta.report?.breakdown)
+                    assertEquals("$f $m", noMs(full.logs), noMs(delta.logs))
+                } finally {
+                    DeltaScreen.enabled = saved
+                }
+            }
+        }
+    }
 }

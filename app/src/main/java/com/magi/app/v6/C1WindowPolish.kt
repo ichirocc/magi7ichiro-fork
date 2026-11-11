@@ -761,6 +761,7 @@ internal object C1WindowPolish {
 
         var beam = listOf(Beam(work0, before, 0))
         val repCache = HashMap<BoardKey, ViolationReport>()
+        val screen = DeltaScreen(p)
         // [3.340.0] 探索中に見つけた最良を保持する（最終ビームは観測列に含まれるので退化不能）。
         var bestEver: Beam? = null
         var stagnant = 0
@@ -778,9 +779,12 @@ internal object C1WindowPolish {
                     val x = p.cons1[ci].shiftIdx
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
                     if (b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
-                    // ビームは同じ盤面を何度も作る（実データでチェッカー呼び出しの約 8 割）。チェッカーは盤面だけで決まるので、この呼び出しの中では前の結果を使う。
+                    // 候補は差分の比較キー（必須件数・重み・合計＝ビームが比べる 3 つ）で採点し、採った盤面だけ最後にチェッカーで確かめる。
+                    //   ビームは同じ盤面を何度も作る（実データで約 8 割）ので、この呼び出しの中では前の結果を使う。
                     if (repCache.size >= REP_CACHE_MAX) repCache.clear()   // 結果は盤面だけで決まる＝捨てても答えは同じ（メモリの上限）
-                    val rep2 = repCache.getOrPut(BoardKey(w2)) { UnifiedViolationChecker.check(state, w2) }
+                    val rep2 = repCache.getOrPut(BoardKey(w2)) {
+                        screen.key(w2)?.let { DeltaScreen.keyReport(it) } ?: UnifiedViolationChecker.check(state, w2)
+                    }
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))
                     anyExpanded = true
@@ -823,7 +827,8 @@ internal object C1WindowPolish {
             ?: Beam(work0, before, 0)
         // [厳密ピン保護] ビーム探索の手A/玉突きも i の自身のシフト回数を変えうるため、根(work0)と比較し
         //   staffRange厳密ピン(lo==hi)を崩す最終候補は不採用にする（keep-best/重みは不変・追加ガードのみ）。
-        val best = if (adoptionGate(p, work0, candidate.work, candidate.rep, before, pinBlocks).accepted) candidate else Beam(work0, before, 0)
+        val adopted = adoptionGate(p, work0, candidate.work, candidate.rep, before, pinBlocks).accepted
+        val best = if (adopted) candidate.copy(rep = UnifiedViolationChecker.check(state, candidate.work)) else Beam(work0, before, 0)
         val logs = listOf(MirrorLog(tag = "C1BeamPolish",
             message = "期間要件(c1)研磨[ビーム K=$beamWidth steps=$step/${EngineClock.nowMs() - beamT0}ms" +
                 (if (stagnant >= patience) "/最良が${patience}手更新されず打ち切り" else "") + "]: " +
