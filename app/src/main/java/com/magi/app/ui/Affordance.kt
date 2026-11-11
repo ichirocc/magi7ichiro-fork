@@ -28,6 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 
 // [校正] テキストリンク状の操作を「用途別に強調を最適化したボタン」へ統一する共有部品。
 //   追加=外枠＋＋アイコン / 編集=トーナル塗り / 削除=外枠(エラー) /
@@ -44,6 +48,27 @@ fun AddRowButton(text: String, onClick: () -> Unit, enabled: Boolean = true, mod
     }
     if (filled) Button(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), content = content)
     else OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), content = content)
+}
+
+/**
+ * 消せる札（本体のタップ＝開く・変更、× ＝消す）。高さ 48dp の枠の中でラベルと × を縦の中央にそろえる。
+ * 旧: 32dp の InputChip の trailingIcon に 48dp の IconButton を入れ、札が引き伸ばされてラベルだけ上に寄っていた（2026-11-11 実機）。
+ */
+@Composable
+fun RemovableChip(label: String, enabled: Boolean, onClick: () -> Unit, onRemove: () -> Unit, removeDescription: String) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.heightIn(min = 48.dp).clip(MagiCorners.capsule).border(1.dp, cs.outline, MagiCorners.capsule),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onClick).padding(start = 16.dp, end = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (enabled) cs.onSurface else cs.onSurface.copy(alpha = 0.38f)) }
+        IconButton(onClick = onRemove, enabled = enabled) {
+            Icon(Icons.Filled.Close, contentDescription = removeDescription, modifier = Modifier.size(18.dp))
+        }
+    }
 }
 
 /** 一覧行の「編集」: トーナル塗りで控えめだが明確に押せる。 */

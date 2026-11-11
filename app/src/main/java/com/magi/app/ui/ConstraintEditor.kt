@@ -1,6 +1,5 @@
 package com.magi.app.ui
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -146,22 +144,8 @@ private fun SeqFamilyGrouped(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (idx in pairIdxs) {
                     val next = pats[idx][1]
-                    // 高さ 48dp の枠の中でラベルと × を縦の中央にそろえる（旧: 32dp の InputChip に 48dp の × ボタンを入れ、
-                    //   チップが引き伸ばされてラベルだけ上に寄っていた＝2026-11-11 実機のスクリーンショット）。
-                    Row(
-                        Modifier.heightIn(min = 48.dp).clip(MagiCorners.capsule)
-                            .border(1.dp, cs.outline, MagiCorners.capsule),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // [a11y] 本体のタップは変更、× は削除（行操作と同じ 2 操作を保つ）。
-                        Box(
-                            Modifier.heightIn(min = 48.dp).clickable(enabled = enabled) { onEdit(idx) }.padding(start = 16.dp, end = 4.dp),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(next, style = MaterialTheme.typography.labelLarge, color = cs.onSurface) }
-                        IconButton(onClick = { onDelete(idx) }, enabled = enabled) {
-                            Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除", modifier = Modifier.size(18.dp))
-                        }
-                    }
+                    // [a11y] 本体のタップは変更、× は削除（行操作と同じ 2 操作を保つ）。
+                    RemovableChip(next, enabled, onClick = { onEdit(idx) }, onRemove = { onDelete(idx) }, removeDescription = "$first→$next を削除")
                 }
             }
         }
