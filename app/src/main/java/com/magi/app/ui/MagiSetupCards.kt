@@ -646,20 +646,15 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean 
 @Composable
 internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.reviewMemos.isEmpty()) return
-    val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            ui.reviewMemos.forEachIndexed { idx, memo ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    DeleteRowButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, text = "済みにする")
+    // [島（3.727.69）] メモは一覧＝島の行。右端の「済みにする」で消す（確認なしは従来どおり）。
+    GroupedSection("見直し候補（${ui.reviewMemos.size}件）", footer = "修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
+        rows = ui.reviewMemos.mapIndexed { idx, memo ->
+            @Composable {
+                GroupedRow(memo, enabled = true, onClick = null) {
+                    MagiTextButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("済みにする") }
                 }
             }
-        }
-    }
+        })
 }
 
 

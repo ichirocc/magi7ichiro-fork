@@ -145,14 +145,9 @@ internal fun ShiftColorCard(
     shifts: List<ShiftColorView>,
     onEvent: (MagiEvent) -> Unit, bare: Boolean = false) {
     var target by remember { mutableStateOf<String?>(null) }
-    MagiCardOrPlain(bare) { pad ->
-        Column(Modifier.padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("シフトの表示色", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "シフトを押すと色を変えられます。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    // [島（3.727.69）] 隣の「違反種別の色」（SectionSegment＝島）と同じ入れ物。見出しは外の上、説明は外の下。
+    MagiGroup("シフトの表示色", footer = "シフトを押すと色を変えられます。") {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (shifts.isEmpty()) {
                 Text(
                     "データを読み込むと、ここでシフトの色を変えられます",
