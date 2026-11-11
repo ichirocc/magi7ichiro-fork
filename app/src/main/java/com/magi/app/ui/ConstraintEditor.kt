@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -29,7 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.InputChip
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -143,20 +143,25 @@ private fun SeqFamilyGrouped(
             Text("それぞれ別に数えます（どれか1つでよい、ではありません）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         if (pairIdxs.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (idx in pairIdxs) {
                     val next = pats[idx][1]
-                    InputChip(shape = MagiCorners.capsule,
-                        selected = false, enabled = enabled,
-                        onClick = { onEdit(idx) },
-                        label = { Text(next) },
-                        trailingIcon = {
-                            // [a11y] 削除は × の onClick で。チップ本体のタップは変更（行操作と同じ2操作を保つ）。
-                            IconButton(onClick = { onDelete(idx) }, enabled = enabled) {
-                                Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除", modifier = Modifier.size(18.dp))
-                            }
-                        },
-                    )
+                    // 高さ 48dp の枠の中でラベルと × を縦の中央にそろえる（旧: 32dp の InputChip に 48dp の × ボタンを入れ、
+                    //   チップが引き伸ばされてラベルだけ上に寄っていた＝2026-11-11 実機のスクリーンショット）。
+                    Row(
+                        Modifier.heightIn(min = 48.dp).clip(MagiCorners.capsule)
+                            .border(1.dp, cs.outline, MagiCorners.capsule),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // [a11y] 本体のタップは変更、× は削除（行操作と同じ 2 操作を保つ）。
+                        Box(
+                            Modifier.heightIn(min = 48.dp).clickable(enabled = enabled) { onEdit(idx) }.padding(start = 16.dp, end = 4.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(next, style = MaterialTheme.typography.labelLarge, color = cs.onSurface) }
+                        IconButton(onClick = { onDelete(idx) }, enabled = enabled) {
+                            Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除", modifier = Modifier.size(18.dp))
+                        }
+                    }
                 }
             }
         }
@@ -214,7 +219,8 @@ private fun ConstraintHelpExpander(families: List<ConstraintFamilyView>) {
  */
 @Composable
 private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit, editable: Boolean = true) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // 上下 2dp＝続く行の「編集」「削除」が接してつながって見えない（2026-11-11 実機のスクリーンショット）。
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         // [3.427.0] 旧 sub（3.409.18 の読み下し文）は撤去。ペア禁止系の行タイトル自体を
         //   「吉の休 ✕ 古の休」（の形）にしたため、行下の文はタイトルと見出し（同じ日に不可）の
         //   完全な重複だった。全体の意味は ⓘ詳しい説明（constraintHelp）が持つ。

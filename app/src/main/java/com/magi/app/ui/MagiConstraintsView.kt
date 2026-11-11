@@ -146,7 +146,7 @@ internal data class ConstraintsView(
 
 internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
     if (st == null) return ConstraintsView()
-    fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
+    fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" → ").ifEmpty { "(空)" }
     return ConstraintsView(
         // 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
         //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。
