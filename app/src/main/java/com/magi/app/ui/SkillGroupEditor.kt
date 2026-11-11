@@ -6,16 +6,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -29,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -47,44 +42,26 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
     // [破壊操作ガード] スキル群削除は所属職員を未所属(-1)へ戻す高影響操作。確認を挟む。
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // [3.409.18] 開発者語「参照します」をやめ、状態依存の1行を足す（3.301.0 の検算と同じ型）。
-            //   スキルは勤務グループとは別の独立した分類（ユーザー確認済み）＝分類を置いておくこと
-            //   自体は正しい。ただし「いま効いているか」は画面が言わないと分からない（実機で
-            //   「グループ分けは正しいか?」と聞き返された＝ルール0本で何にも効いていない状態が不可視だった）。
-            Text("担当シフトとは別の分類です（1人1スキル）。スキルグループのルールだけが使います。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            if (skills.isNotEmpty()) {
-                val skillRules = skillRuleCount
-                if (skillRules == 0) {
-                    Text("ルールが無いので、この分類は勤務表に影響しません。ルールはこの下の欄で作れます。",
-                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                } else {
-                    Text("スキルグループのルール ${skillRules}件がこの分類を使っています。",
-                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
-            }
-
-            skills.forEachIndexed { g, sg ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${sg.kigou}  ${sg.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    EditRowButton(onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) }, enabled = !ui.running)
-                    Spacer(Modifier.width(12.dp))
-                    DeleteRowButton(onClick = { confirmDelete = g }, enabled = !ui.running)
-                }
-            }
-            AddRowButton("スキルグループを追加する", onClick = { dialog = SkillDlg.Add }, enabled = !ui.running)
-
-            if (skills.isNotEmpty()) {
-                HorizontalDivider()
-                // [3.482.0 編集タブ簡素化] 旧「職員のスキル割当」（職員ごとの ▼ 一覧＝職員管理ドアの ▼ と同じ
-                //   vm.setStaffSkill）は撤去。同じ操作が編集タブ内の2か所にあった。ここは分類の定義だけ。
-                val assigned = staff.count { it.skillIdx in skills.indices }
-                Text("職員へのスキル割当は「職員管理」の各職員の ▼ で設定します（割当済み ${assigned}/${staff.size}名）。",
-                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // [3.409.18] 状態依存の1行（ルール0本で何にも効いていない状態を見せる。スキルは勤務グループとは別の独立した分類）。
+        Text("担当シフトとは別の分類です（1人1スキル）。スキルグループのルールだけが使います。",
+            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+        if (skills.isNotEmpty()) {
+            Text(if (skillRuleCount == 0) "ルールが無いので、この分類は勤務表に影響しません。ルールはこの下の欄で作れます。"
+                else "スキルグループのルール ${skillRuleCount}件がこの分類を使っています。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
         }
+        val enabled = !ui.running
+        val rows = ArrayList<@Composable () -> Unit>()
+        skills.forEachIndexed { g, sg ->
+            rows += { GroupedRow("${sg.kigou}  ${sg.name}", enabled = enabled, onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) }) {
+                GroupedDeleteButton(enabled = enabled) { confirmDelete = g } } }
+        }
+        rows += { GroupedAddRow("スキルグループを追加する", enabled = enabled) { dialog = SkillDlg.Add } }
+        // [3.482.0] 職員ごとの割当は「職員管理」の ▼ に一本化（ここは分類の定義だけ）。
+        val footer = if (skills.isEmpty()) null else
+            "職員へのスキル割当は「職員管理」の各職員の ▼ で設定します（割当済み ${staff.count { it.skillIdx in skills.indices }}/${staff.size}名）。"
+        GroupedSection(null, footer = footer, rows = rows)
     }
 
     when (val d = dialog) {

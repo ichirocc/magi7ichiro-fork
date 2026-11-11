@@ -1,8 +1,6 @@
 package com.magi.app.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.HorizontalDivider
@@ -22,33 +19,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 
 /**
- * 島（Apple の inset grouped list の配置を借りたもの、2026-11-11 ユーザー「アップル社の最新のアプリのインターフェースやデザインを借りる」
- * → 配置と構造だけ・色は UD トークンのまま）。角の丸い面に行を並べ、行の間は細い区切り線。見出しは島の外の上（小さく控えめ）、
- * 説明は外の下。角はカードと同じ [CornerMetrics.CARD_DP]。押せる大きさは 48dp のまま（片手一本指）。
+ * 島（inset grouped list、2026-11-11「アップル社の最新のアプリのインターフェースやデザインを借りる」→ 配置と構造だけ・色は UD のまま）。
+ * 入れ物・見出し・注記は既存の [MagiGroup] と同じ（設定の一覧と同じ見た目）。行の間に細い区切り線を入れる。
  */
 @Composable
 internal fun GroupedSection(header: String?, footer: String? = null, rows: List<@Composable () -> Unit>) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth()) {
-        if (!header.isNullOrBlank()) {
-            Text(header, style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp).semantics { heading() })
-        }
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(CornerMetrics.CARD_DP.dp)).background(cs.surface)) {
-            rows.forEachIndexed { i, row ->
-                if (i > 0) HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 1.dp, color = cs.outlineVariant)
-                row()
-            }
-        }
-        if (!footer.isNullOrBlank()) {
-            Text(footer, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    MagiGroup(header?.takeIf { it.isNotBlank() }, footer?.takeIf { it.isNotBlank() }) {
+        rows.forEachIndexed { i, row ->
+            if (i > 0) HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
+            row()
         }
     }
 }
@@ -63,14 +48,14 @@ internal fun GroupedRow(text: String, enabled: Boolean, onClick: (() -> Unit)?, 
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.weight(1f).heightIn(min = 48.dp)
-                .then(if (onClick != null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier)
+                .then(if (onClick != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick) else Modifier)
                 .padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text, style = MaterialTheme.typography.bodyMedium,
-                color = if (onClick == null) cs.onSurfaceVariant else cs.onSurface,
+                color = if (enabled) cs.onSurface else cs.onSurfaceVariant,
                 modifier = Modifier.weight(1f).padding(vertical = 12.dp))
-            if (onClick != null) Text("›", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
+            if (onClick != null) Text("›", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
         }
         if (trailing != null) {
             Spacer(Modifier.width(12.dp))

@@ -38,10 +38,10 @@
    勤務表のセル地が surface と 1.5:1 未満（白いシフト色など）なら、設定に関係なく 1dp の輪郭を引く（`lowContrastOutline`）。
 6. **一目性 > 密度、ただし数値は最大**：見出しは静か、数値（件数・回数）は大きく。
 7. **スコアリング不変**：デザイン変更は表示のみ。重み/データ/目的関数に触れない（HF77）。
-8. **一覧は島で組む**（3.727.62、Apple の inset grouped list の配置だけを借りる。色は UD トークンのまま＝D8）：見出しは島の外の上（`titleSmall`・`onSurfaceVariant`）、
-   島は角 `CornerMetrics.CARD_DP` の `surface`、行の間は左 16dp を空けた細い区切り線、行は 48dp 以上。行全体のタップ＝開く（右端「›」）、
+8. **一覧は島で組む**（3.727.62、Apple の inset grouped list の配置だけを借りる。色は UD トークンのまま＝D8）：見出しは島の外の上、
+   島は既存の `MagiGroup`（設定の一覧と同じ入れ物）、行の間は左 16dp を空けた細い区切り線、行は 48dp 以上。行全体のタップ＝開く（右端「›」）、
    削除は右端の赤い文字、追加は島のいちばん下の「＋ ○○」。部品は `GroupedList.kt`（`GroupedSection`/`GroupedRow`/`GroupedAddRow`/`GroupedDeleteButton`）。
-   適用済み：編集タブ ④人数と組み合わせ・⑤並び・期間の制約。
+   適用済み：編集タブ ②スキルグループ・④人数と組み合わせ・⑤並び・期間の制約、日別の必要人数（例外）一覧。
 
 ## 3. トークン参照
 ### 3.1 色（`MainActivity.MagiTheme` = Material3 colorScheme）
