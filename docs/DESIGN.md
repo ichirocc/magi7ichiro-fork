@@ -41,7 +41,7 @@
 8. **一覧は島で組む**（3.727.62、Apple の inset grouped list の配置だけを借りる。色は UD トークンのまま＝D8）：見出しは島の外の上、
    島は既存の `MagiGroup`（設定の一覧と同じ入れ物）、行の間は左 16dp を空けた細い区切り線、行は 48dp 以上。行全体のタップ＝開く（右端「›」）、
    削除は右端の赤い文字、追加は島のいちばん下の「＋ ○○」。部品は `GroupedList.kt`（`GroupedSection`/`GroupedRow`/`GroupedAddRow`/`GroupedDeleteButton`）。
-   適用済み：編集タブ ②スキルグループ・④人数と組み合わせ・⑤並び・期間の制約、日別の必要人数（例外）一覧。
+   適用済み：編集タブ ①期間・シフト種別・グループ、②スキルグループ・④人数と組み合わせ・⑤並び・期間の制約、日別の必要人数（例外）一覧。
 
 ## 3. トークン参照
 ### 3.1 色（`MainActivity.MagiTheme` = Material3 colorScheme）
