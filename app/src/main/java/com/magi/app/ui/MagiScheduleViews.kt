@@ -1115,6 +1115,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     val shortBg = critC.copy(alpha = 0.45f)
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
+    // 目安の回数（適切回数）との差は同じ色相を淡く＋白抜きの ▽△（個人の下限割れ・上限超過と見分ける）。
+    val shortSoftBg = critC.copy(alpha = 0.20f)
+    val overSoftBg = overBg.copy(alpha = 0.22f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定は展開。3.648.0 で一度折りたたみにしたが、3.650.0 で戻した
     //   （2026-10-09 利用者「推奨で」＝外部レビューの撤回）。開閉トグル自体は残す。開閉は回転/復元でも保持。
@@ -1183,12 +1186,11 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 val vio = ui.countViolations["$i,$kk"]?.takeIf { vioVisible(it, vioEnabled) }
                                 // [レイアウト/実機指摘] 0セルは旧 cs.surface(UDで真っ白)＝表に白い穴が空いて見えた。
                                 //   淡い同系色に沈めて「数字のあるセルが浮かぶ」市松を解消。
-                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
-                                // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
-                                val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
+                                val cbg = when (vio) { "vio-low" -> shortBg; "vio-aptLow" -> shortSoftBg; "vio-high" -> overBg; "vio-aptHigh" -> overSoftBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
+                                // [M3 色覚安全] 向きと種類を数字に前置＝色に依らず判る（▼▲＝個人の下限・上限、▽△＝目安の回数との差）。
+                                val glyph = tallyCountGlyph(vio)
                                 val cellCd = if (vio != null) {
-                                    val dir = if (isUnderCountClass(vio)) "不足" else "超過"
-                                    "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 $dir・タップで詳細"
+                                    "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 ${tallyCountWord(vio)}・タップで詳細"
                                 } else null
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(cv, ui, i, kk, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)

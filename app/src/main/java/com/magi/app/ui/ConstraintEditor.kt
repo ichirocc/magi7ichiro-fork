@@ -110,7 +110,7 @@ internal fun ConstraintsCard(
  * - 2連（起点→次）はチップ。タップ=変更、× =削除（どちらも従来の行操作と同じ vm API）。
  * - 3連以上の並びは従来の行表示のまま（チップで表せない）。起点の見出しの下に並べる。
  * - 1つだけの並びは起点の見出しに入れず「X（1つだけ）」の行で先頭に並べる。
- * - 「＋ ○○の次を追加」は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
+ * - 「○○の次を追加」（＋ はボタンのアイコン）は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
  * データは `C3Row` のまま（表示の集約だけ）。族の見出し・詳しい説明・削除確認の意味論も不変。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -163,7 +163,7 @@ private fun SeqFamilyGrouped(
         for (idx in otherIdxs) {
             ConstraintRow(fam.rows[idx], enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
         }
-        AddRowButton("＋ $first の次を追加", onClick = { onAddWith(first) }, enabled = enabled)
+        AddRowButton("$first の次を追加", onClick = { onAddWith(first) }, enabled = enabled)
     }
 }
 
