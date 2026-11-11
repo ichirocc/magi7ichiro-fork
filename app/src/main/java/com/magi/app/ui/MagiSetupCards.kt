@@ -29,7 +29,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -230,7 +229,7 @@ private val BUDGET_TILE_SECS = setOf(10, 60, 120, 180, 240, MAX_BUDGET_SEC)
 /** 設定タブの保存失敗の帯（3.706.0 S4＋F-3）。1 文と塗りの［もう一度保存する］。 */
 @Composable
 internal fun SettingsSaveFailedBanner(onRetry: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(HOME_SAVE_FAILED_LINE, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
@@ -518,7 +517,7 @@ internal fun EditHeaderCard(
     var issuesAll by rememberSaveable { mutableStateOf(false) }
     val fixList = com.magi.app.v6.fixItems(ui.settingIssues)
     val issues = fixList.size
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             inner?.invoke()
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
@@ -648,7 +647,7 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean 
 internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.reviewMemos.isEmpty()) return
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
             Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",

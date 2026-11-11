@@ -475,7 +475,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                          answerOf: (ConsultItem) -> ConsultAnswer = { it.answer }, onCycleAnswer: (ConsultItem) -> Unit = {}) {
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val heldN = ui.consults.count { it.held }
             Text("相談中（${ui.consults.size - heldN}件）" + (if (heldN > 0) "・保留（${heldN}件）" else ""), style = MaterialTheme.typography.titleMedium)
@@ -1012,7 +1012,7 @@ internal fun CopilotCard(
     val cs = MaterialTheme.colorScheme
     val show = ui.copilotHint != null || (ui.polishExhausted && !ui.running)
     if (!show) return
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // ガチャ操作の助言＋修正導線（NextActionBar相当）
             ui.copilotHint?.let {
@@ -1049,7 +1049,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
     var allShortfalls by remember { mutableStateOf(false) }
     var allSurpluses by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (diag.hasShortage) {
                 Text("人員不足", style = MaterialTheme.typography.titleMedium)
@@ -1158,7 +1158,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     var allRuns by remember { mutableStateOf(false) }
     var confirmRule by remember { mutableStateOf<Pair<String, Int>?>(null) }   // 並びと、その崩せない件数
     var details by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("禁止の並びがなぜ崩せないか", style = MaterialTheme.typography.titleMedium)
             val headline = if (diag.allBlocked) {
@@ -1270,7 +1270,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
     //   別の窓を直して観測分だけ消えた、などで起こる。ここで理由を語ると観測していないことを語ることに
     //   なるので、「原因未確定」と明示して次の一手だけ示す。
     if (diag.causeUnknown) {
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("期間の制約が残っています（原因未確定）", style = MaterialTheme.typography.titleMedium)
                 Text("残り ${diag.remainingC1} 件。今回の整えでは、この残りについて直し方を試した記録が" +
@@ -1283,7 +1283,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
     if (!diag.hasEntries) return
     var detailOpen by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("期間の制約がなぜ直せなかったか", style = MaterialTheme.typography.titleMedium)
             // [3.480.0 ホームAIリデザイン] 旧: この注記は常時表示だった。grilling決定#1どおり
@@ -1365,7 +1365,7 @@ internal fun PinFixedImpactCard(
     val cs = MaterialTheme.colorScheme
     var detailOpen by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("回数の固定が最適化に与えた影響", style = MaterialTheme.typography.titleMedium)
             Text("回数を固定していることだけが理由で見送られた試行が、少なくとも $attempts 回ありました。" +
@@ -1446,7 +1446,7 @@ internal fun SettingIssuesCard(
     var confirmClear by remember { mutableStateOf(false) }
     // 分析タブの同じ項目と同じ要調整の色（赤は必須違反だけ）。
     val (warnBg, warnFg) = magiWarnColors()
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
             DiagDetailToggle(
@@ -1515,7 +1515,7 @@ internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
 @Composable
 internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = emptyMap()) {
     if (v6 == null) return
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text("1ヶ月の俯瞰（生指標）", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -1590,7 +1590,7 @@ internal fun WeightTableCard(method: ObjectiveMethod = ObjectiveMethod.WEIGHTS) 
     val sorted = ObjectiveWeights.table(method).entries.sortedByDescending { it.value }
     val hard = sorted.filter { it.value >= 1000.0 }
     val soft = sorted.filter { it.value < 1000.0 }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // [3.396.0] 旧: 「重み表（最適化器と一致）」＋「スコアの内部重み。大きいほど…」＝
             //   初見の人は「重み？ 最適化器？」と聞き返す。見出しと**並び順そのもの**（上から重い順）が
@@ -1851,7 +1851,7 @@ internal fun AnalysisTriageCard(
     val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.engineRan) { analysisTriage(ui) }
     val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     var showSummary by rememberSaveable { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // 状態の段: 一文・3 点まで・主ボタン 1 つ（[analysisSummary]）。
             Text(summary.sentence, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
@@ -2032,7 +2032,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
         if (ui.hasResult && ui.bestHard > 0L && !ui.running && !ui.fixSearching &&
             ui.fixSuggestions.isEmpty() && !ui.fixSearched && ui.fixFocusName.isBlank()) onSearch()
     }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val title = "改善の提案" + if (ui.fixFocusName.isNotBlank()) "：${ui.fixFocusName} 関連" else ""
@@ -2094,7 +2094,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     var open by remember(ui.alternatives) { mutableStateOf(!allWorse) }
     var confirm by remember(ui.alternatives) { mutableStateOf<Int?>(null) }
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -2149,7 +2149,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
 @Composable
 internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit) {
     if (!ui.loaded) return
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("希望シフト（反映は登録済みの希望を勤務表へ上書きします。元に戻せます）",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

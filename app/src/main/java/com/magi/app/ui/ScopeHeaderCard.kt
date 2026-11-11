@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun ScopeHeaderCard(plan: EditHeaderPlan, onPrimary: (() -> Unit)? = null, inner: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
             Text(plan.subtitle, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)

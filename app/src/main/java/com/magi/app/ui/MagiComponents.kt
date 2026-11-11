@@ -17,6 +17,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -190,8 +192,15 @@ internal fun MagiTextButton(
 @Composable
 internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues) -> Unit) {
     if (bare) content(PaddingValues(0.dp))
-    else Card(Modifier.fillMaxWidth()) { content(PaddingValues(16.dp)) }
+    else Card(Modifier.fillMaxWidth(), colors = magiCardColors()) { content(PaddingValues(16.dp)) }
 }
+
+/**
+ * カードの地（3.727.68）。島（[MagiGroup]）と同じ surfaceContainer＝Apple の grouped の入れ物は 1 色（旧: Material の既定
+ * surfaceContainerHighest で、カードと島が別の灰色に見えた）。カードの色を写す所（集計の固定見出しなど）もこれを読む。
+ */
+@Composable
+internal fun magiCardColors(): CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
 
 /**
  * iOS の設定アプリの一覧の形（2026-10-23）: 入れ物の外に小さな見出し、入れ物の中は同じ高さの行を細い線で区切る、下に注記。

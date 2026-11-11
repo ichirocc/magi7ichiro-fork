@@ -42,6 +42,7 @@
    島は既存の `MagiGroup`（設定の一覧と同じ入れ物）、行の間は左 16dp を空けた細い区切り線、行は 48dp 以上。行全体のタップ＝開く（右端「›」）、
    削除は右端の赤い文字、追加は島のいちばん下の「＋ ○○」。部品は `GroupedList.kt`（`GroupedSection`/`GroupedRow`/`GroupedAddRow`/`GroupedDeleteButton`）。
    1 つを選ぶ設定は、2〜3 択の短い語＝`MagiSegmentedControl`、4 択以上か語が長い＝`ChoiceRows`（選んだ行の右端に ✓）。スイッチは行の右端。
+   カードの地は島と同じ（`magiCardColors()`＝surfaceContainer。意味の色を持つカードだけ別）。
    カードの中に島、島の中にカードを置かない（箱の中の箱）。カードの中の一覧は `GroupedSection(inCard = true)`＝行と区切り線だけ。
    適用済み：編集タブ ①期間・シフト種別・グループ、②スキルグループ・③グループ一括設定・④人数と組み合わせ・⑤並び・期間の制約、日別の必要人数（例外）一覧。
 

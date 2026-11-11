@@ -35,7 +35,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -1521,7 +1520,7 @@ internal fun MagiBottomNav(selected: Int, collapsed: Boolean = false, onExpand: 
 internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -> Unit) {
     if (!ui.interruptedRun || ui.running) return
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(INTERRUPTED_TITLE, style = MaterialTheme.typography.titleMedium)
             Text(ui.interruptedInfo ?: "入力は自動保存済みです。再作成できます。",
@@ -1542,7 +1541,7 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
  *  始まる（意図的、3.320.0系）ため、そのまま最適化すると実運用と違う自由度になる。 */
 @Composable
 internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, onDismiss: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("取込が完了しました（職員 ${staff}名・${days}日）", style = MaterialTheme.typography.titleMedium)
             Text("担当はすべて可、必要人数と制約は未設定で取り込みました。年間マスターで決めてください。",

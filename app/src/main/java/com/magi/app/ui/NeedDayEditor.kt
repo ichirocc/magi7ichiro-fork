@@ -149,7 +149,7 @@ internal fun NeedCalendarCard(
     val individualDays = cv.needDayOverrides.filter { it.k == k }.map { it.j }.toSet()
     val baseLabel = needBaseLabel(shift.need1, shift.need2, v.use2)
     Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
-        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
+        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // [1行に統合] タイトル＋「シフト▼ ・ 標準 N人」。説明文/設定済・未設定の凡例は撤去。
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
