@@ -1052,7 +1052,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (diag.hasShortage) {
-                Text("人員不足", style = MaterialTheme.typography.titleMedium)
+                TileTitle("人員不足", hard = true)
                 Text(shortageCardLine(diag.shortfalls.map { it.dayIndex }.distinct().size, diag.shortfalls.any { it.verdict != CoverageVerdict.INFEASIBLE && !it.blockedNow }),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 // [3.344.0] 「充足可能N枠」と言いながら各枠の説明が「いまの希望のままでは解消できません」
@@ -1114,7 +1114,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 }
             }
             if (diag.hasSurplus) {
-                Text("人員過剰がなぜ減らないか", style = MaterialTheme.typography.titleMedium)
+                TileTitle("人員過剰がなぜ減らないか")
                 Text("過剰 ${diag.totalSurplus} 人", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownSurpluses = if (allSurpluses) diag.surpluses else diag.surpluses.take(6)
                 for (s in shownSurpluses) {
@@ -1160,7 +1160,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
     var details by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("禁止の並びがなぜ崩せないか", style = MaterialTheme.typography.titleMedium)
+            TileTitle("禁止の並びがなぜ崩せないか", hard = true)
             val headline = if (diag.allBlocked) {
                 "残り ${diag.totalRuns} 件は全て塞がっています。今の希望・担当のままでは崩せません。"
             } else {
@@ -1272,7 +1272,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
     if (diag.causeUnknown) {
         Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("期間の制約が残っています（原因未確定）", style = MaterialTheme.typography.titleMedium)
+                TileTitle("期間の制約が残っています（原因未確定）")
                 Text("残り ${diag.remainingC1} 件。今回の整えでは、この残りについて直し方を試した記録が" +
                     "残っていません。原因は特定できていません。再作成すると記録が取れる場合があります。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -1285,7 +1285,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
     var showAll by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("期間の制約がなぜ直せなかったか", style = MaterialTheme.typography.titleMedium)
+            TileTitle("期間の制約がなぜ直せなかったか")
             // [3.480.0 ホームAIリデザイン] 旧: この注記は常時表示だった。grilling決定#1どおり
             // 文言は変えず、既定折りたたみへ移す（内容は下の DiagDetailToggle 展開時のみ表示）。
             if (detailOpen) {
@@ -1367,7 +1367,7 @@ internal fun PinFixedImpactCard(
     var showAll by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("回数の固定が最適化に与えた影響", style = MaterialTheme.typography.titleMedium)
+            TileTitle("回数の固定が最適化に与えた影響")
             Text("回数を固定していることだけが理由で見送られた試行が、少なくとも $attempts 回ありました。" +
                 "これらは他の条件では採用できる手でした。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -1448,7 +1448,7 @@ internal fun SettingIssuesCard(
     val (warnBg, warnFg) = magiWarnColors()
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
+            TileTitle("設定の見直し（${issues.size}件）")
             DiagDetailToggle(
                 detailOpen, onToggle = { detailOpen = !detailOpen },
                 closedText = "ⓘ 一覧を見る（${issues.size}件）", openText = "ⓘ 一覧を閉じる",
@@ -1517,7 +1517,7 @@ internal fun V6DashboardCard(v6: V6PortReport?, breakdown: Map<String, Int> = em
     if (v6 == null) return
     Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp)) {
-            Text("1ヶ月の俯瞰（生指標）", style = MaterialTheme.typography.titleMedium)
+            TileTitle("1ヶ月の俯瞰（生指標）")
             Text(
                 "人員の穴・負荷の偏り・入力ミスを勤務表から直接集計します。",
                 style = MaterialTheme.typography.bodySmall,
@@ -2036,7 +2036,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val title = "改善の提案" + if (ui.fixFocusName.isNotBlank()) "：${ui.fixFocusName} 関連" else ""
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                TileTitle(title, modifier = Modifier.weight(1f))
                 if (ui.fixSearching) {
                     Text("探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
@@ -2098,7 +2098,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
+                    TileTitle("他の案（${ui.alternatives.size}）")
                     if (allWorse) Text(ALTERNATIVES_ALL_WORSE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 DisclosureText(if (open) "閉じる" else "開く", open, color = cs.primary, style = MaterialTheme.typography.bodyMedium)

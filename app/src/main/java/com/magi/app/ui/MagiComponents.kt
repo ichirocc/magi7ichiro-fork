@@ -196,6 +196,17 @@ internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues)
 }
 
 /**
+ * まとめの札の見出し（Apple のヘルスケアのまとめの形、3.727.70）: 小さめの太字・意味の色（必須＝error、他＝primary）。
+ * 大きな見出しで札ごとに主張し合うのをやめ、本文（数・理由）を主役にする。読み上げは見出し。
+ */
+@Composable
+internal fun TileTitle(text: String, modifier: Modifier = Modifier, hard: Boolean = false) {
+    val cs = MaterialTheme.colorScheme
+    Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+        color = if (hard) cs.error else cs.primary, modifier = modifier.semantics { heading() })
+}
+
+/**
  * カードの地（3.727.68）。島（[MagiGroup]）と同じ surfaceContainer＝Apple の grouped の入れ物は 1 色（旧: Material の既定
  * surfaceContainerHighest で、カードと島が別の灰色に見えた）。カードの色を写す所（集計の固定見出しなど）もこれを読む。
  */
