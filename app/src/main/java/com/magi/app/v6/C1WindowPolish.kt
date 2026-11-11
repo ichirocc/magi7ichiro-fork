@@ -47,6 +47,8 @@ internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
  * [V6HotfixPasses.CyclicSwapResult] を戻り値型として使う（元のオブジェクトに残置・完全修飾で参照）。
  */
 internal object C1WindowPolish {
+    /** 広域ビームの検査の使い回しの上限（盤面 1 つぶんの報告を持つ＝メモリを抑える）。 */
+    private const val REP_CACHE_MAX = 512
     /**
      * [A1+A2+A3, 3.273.0] C1厳密窓修復パス。C1RepairAnalysis の窓スコープ厳密探索（coverage保存
      * permutation の分枝限定）で、局所/ビーム系が届かない多日多職員連動手を拾う。
@@ -777,6 +779,7 @@ internal object C1WindowPolish {
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
                     if (b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
                     // ビームは同じ盤面を何度も作る（実データでチェッカー呼び出しの約 8 割）。チェッカーは盤面だけで決まるので、この呼び出しの中では前の結果を使う。
+                    if (repCache.size >= REP_CACHE_MAX) repCache.clear()   // 結果は盤面だけで決まる＝捨てても答えは同じ（メモリの上限）
                     val rep2 = repCache.getOrPut(BoardKey(w2)) { UnifiedViolationChecker.check(state, w2) }
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))
