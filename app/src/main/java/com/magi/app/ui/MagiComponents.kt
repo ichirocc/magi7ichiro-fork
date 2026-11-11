@@ -63,6 +63,7 @@ fun MagiSegmentedControl(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
@@ -78,11 +79,12 @@ fun MagiSegmentedControl(
                 val active = i == selected
                 Surface(
                     onClick = { onSelect(i) },
+                    enabled = enabled,
                     // [a11y/touch] Surface(onClick) は 48dp 自動補完が無いため明示。選択状態を読み上げに公開。
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { this.selected = active },
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
-                    contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                    contentColor = (if (active) cs.onPrimaryContainer else cs.onSurfaceVariant).let { if (enabled) it else it.copy(alpha = 0.38f) },
                     shape = MagiCorners.capsule,
                     tonalElevation = 0.dp,
                 ) {
