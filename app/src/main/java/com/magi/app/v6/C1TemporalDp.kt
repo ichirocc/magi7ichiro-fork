@@ -120,12 +120,17 @@ internal object C1TemporalDp {
 
         // 状態の表は原始型の開番地法（[StateTable]）。採る状態は (費用, ビット列) の全順序で決まり、同じビット列なら違反数・変更数も同じ
         //   ＝表の走査順に依らない（旧 HashMap と同じ結果）。
+        val fireTable = if (maxWindow <= FIRE_TABLE_MAX_WINDOW) fireTableFor(validRules, maxWindow) else null
         var dp = StateTable(16)
         dp.offer(key(0L, 0, 0), 0L, 0L, 0, 0)
 
         for (day in 0 until t) {
             val next = StateTable(dp.size)
             val oldBit = row[day] == targetShift
+            val tieChanged = tie(day, true)
+            val bitLo = if (locked[day]) (if (oldBit) 1 else 0) else 0
+            val bitHi = if (locked[day]) bitLo else 1
+            val steady = fireTable != null && day + 1 >= maxWindow   // 全規則の窓がそろった日＝窓のビット模様だけで違反の増分が決まる
             for (slot in 0 until dp.capacity) {
                 if (!dp.used(slot)) continue
                 val packed = dp.keyAt(slot)
@@ -133,12 +138,7 @@ internal object C1TemporalDp {
                 val reloc = (packed and ((1L shl RELOC_BITS) - 1L)).toInt()
                 val count = ((packed ushr RELOC_BITS) and ((1L shl COUNT_BITS) - 1L)).toInt()
                 val mask = packed ushr LOW_BITS
-                val choices = if (locked[day]) {
-                    if (oldBit) intArrayOf(1) else intArrayOf(0)
-                } else {
-                    intArrayOf(0, 1)
-                }
-                for (bit in choices) {
+                for (bit in bitLo..bitHi) {
                     val newCount = count + bit
                     if (newCount > originalCount) continue
                     val added = bit == 1 && !oldBit
@@ -147,7 +147,8 @@ internal object C1TemporalDp {
 
                     val full = (mask shl 1) or bit.toLong()
                     var fireInc = 0
-                    for (rule in validRules) {
+                    if (steady) fireInc = fireTable!![full.toInt()].toInt()
+                    else for (rule in validRules) {
                         if (day + 1 < rule.days) continue
                         val rm = (1L shl rule.days) - 1L
                         if (java.lang.Long.bitCount(full and rm) < rule.minimum) fireInc++
@@ -156,7 +157,7 @@ internal object C1TemporalDp {
                     val changedCount = recChanged + if (changed) 1 else 0
                     val fires = recFires + fireInc
                     val cost = recCost + fireInc.toLong() * FIRE_COST +
-                        (if (changed) CHANGE_COST else 0L) + tie(day, changed)
+                        (if (changed) CHANGE_COST + tieChanged else 0L)
                     val newMask = full and keepMask
                     val nk = key(newMask, newCount, newReloc)
                     val bits = if (bit == 1) recBits or (1L shl day) else recBits
@@ -243,6 +244,19 @@ internal object C1TemporalDp {
             var z = k * -0x61c8864680b583ebL
             z = z xor (z ushr 29)
             return z.toInt() xor (z ushr 32).toInt()
+        }
+    }
+
+    /** 窓がこの長さ以下なら、窓のビット模様 → 違反の増分の表を引く（2^16＝64KB まで）。 */
+    private const val FIRE_TABLE_MAX_WINDOW = 16
+    private val fireTables = java.util.concurrent.ConcurrentHashMap<List<Rule>, ByteArray>()
+
+    /** 全規則の窓がそろった日の違反の増分（`rules` ごとに 1 回作って使い回す。規則の組は職員・シフトをまたいで同じことが多い）。 */
+    private fun fireTableFor(rules: List<Rule>, window: Int): ByteArray = fireTables.getOrPut(rules) {
+        ByteArray(1 shl window) { m ->
+            var inc = 0
+            for (rule in rules) if (Integer.bitCount(m and ((1 shl rule.days) - 1)) < rule.minimum) inc++
+            inc.toByte()
         }
     }
 
