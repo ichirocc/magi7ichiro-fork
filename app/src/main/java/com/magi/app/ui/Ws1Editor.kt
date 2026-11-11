@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -52,6 +51,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -77,109 +78,84 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
     var dialog by remember { mutableStateOf<Ws1Dialog?>(null) }
     var daysText by remember(v.days) { mutableStateOf(v.days.toString()) }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+    val cs = MaterialTheme.colorScheme
+    // [島（3.727.65）] 期間・シフト種別・グループをそれぞれ島に（見出しは島の外の上、説明は島の下、追加は島の最下行）。
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
 
             // --- period ---
-            Spacer(Modifier.height(8.dp))
-            // [3.483.0 E-5] 旧「期間／対象月」＝対象の月は月次条件の「対象の月」で選ぶため、ここは日数だけ。
-            SectionHeader("期間の日数（月単位以外の特殊な期間用）")
-            Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (v.days > 0) Text(DayText.range(v.startDate, 0, v.days - 1), style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // 範囲外は黙って丸めず断る。縮めると後ろの日の希望・日別の必要人数が消えるので確認を挟む。
-            val newDays = daysText.toIntOrNull()
-            val okDays = newDays != null && newDays in 1..31
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                W1Field("日数(1-31)", daysText, Modifier.width(130.dp), isError = !okDays) { daysText = it }
-                EditRowButton(onClick = {
-                    if (newDays != null && newDays < v.days) dialog = Ws1Dialog.ConfirmShrink(newDays)
-                    else if (newDays != null) onEvent(MagiEvent.Structure.ResizeDays(newDays))
-                }, enabled = !ui.running && okDays && newDays != v.days, text = "日数を変える")
+            // [3.483.0 E-5] 対象の月は月次条件の「対象の月」で選ぶため、ここは日数だけ。
+            MagiGroup("期間の日数（月単位以外の特殊な期間用）", footer = "対象の月は「月次条件」の『対象の月』で選びます。") {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (v.days > 0) Text(DayText.range(v.startDate, 0, v.days - 1), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    // 範囲外は黙って丸めず断る。縮めると後ろの日の希望・日別の必要人数が消えるので確認を挟む。
+                    val newDays = daysText.toIntOrNull()
+                    val okDays = newDays != null && newDays in 1..31
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        W1Field("日数(1-31)", daysText, Modifier.width(130.dp), isError = !okDays) { daysText = it }
+                        EditRowButton(onClick = {
+                            if (newDays != null && newDays < v.days) dialog = Ws1Dialog.ConfirmShrink(newDays)
+                            else if (newDays != null) onEvent(MagiEvent.Structure.ResizeDays(newDays))
+                        }, enabled = !ui.running && okDays && newDays != v.days, text = "日数を変える")
+                    }
+                    if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = cs.error)
+                }
             }
-            if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-
             // use2 は画面に出さない（保存値はそのまま）
-            HorizontalDivider()
 
             // --- shifts ---
-            Spacer(Modifier.height(8.dp))
-            SectionHeader("シフト種別 (${v.shifts.size})")
-            Text("タップで編集、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。必要人数を変更（勤務表と制約にも反映）。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [3.515.6/ドラッグ&ドロップ・ユーザー指示] ▲/▼(3.515.3)から並び替えを行内ドラッグへ変更。
-            //   削除は行から編集シートの中へ移した（行はタップ＝編集・ハンドル長押し＝並び替えの2導線に整理）。
-            ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveShift(from, to)) }) { k, s, dragHandle ->
-                // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
-                //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2, k == v.restIdx) },
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
-                    // [3.483.0 E-6] 旧「(最低 -人 / 上限 -人)」＝未設定でも括弧が並び1行が長かった。設定時だけ短く添える。
+            // [3.515.6] 行はタップ＝編集・ハンドル長押し＝並び替えの2導線。削除は編集シートの中。
+            MagiGroup("シフト種別 (${v.shifts.size})", footer = "タップで編集、${DRAG_HANDLE_GLYPH}を長押しで並び替え。必要人数を変更（勤務表と制約にも反映）。") {
+                ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveShift(from, to)) }) { k, s, dragHandle ->
+                    // [3.483.0 E-6] 必要人数は設定時だけ短く添える。
                     val needLabel = when {
                         s.need1.isBlank() && s.need2.isBlank() -> ""
                         s.need2.isBlank() -> "  必要 ${s.need1}人"
                         else -> "  必要 ${s.need1.ifBlank { "-" }}〜${s.need2}人"
                     }
-                    Text("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel",
-                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ReorderableListRow("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel", enabled = !ui.running, dragHandle = dragHandle) {
+                        dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2, k == v.restIdx)
+                    }
                 }
+                GroupedAddRow("シフトを追加する", enabled = !ui.running) { dialog = Ws1Dialog.AddShift }
+                HorizontalDivider(Modifier.padding(start = 16.dp), color = cs.outlineVariant)
+                GroupedAddRow("まとめて追加する", enabled = !ui.running) { dialog = Ws1Dialog.BulkAddShift }   // [⛏12]
             }
-            AddRowButton("シフトを追加する", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
-            AddRowButton("まとめて追加する", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
-            HorizontalDivider()
 
             // --- groups ---
-            Spacer(Modifier.height(8.dp))
-            SectionHeader("グループ (${v.groups.size})")
-            Text("タップで改名、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。削除すると所属者は先頭グループへ移動。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveGroup(from, to)) }) { g, gr, dragHandle ->
-                // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
-                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            MagiGroup("グループ (${v.groups.size})", footer = "タップで改名、${DRAG_HANDLE_GLYPH}を長押しで並び替え。削除すると所属者は先頭グループへ移動。") {
+                ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveGroup(from, to)) }) { g, gr, dragHandle ->
+                    ReorderableListRow("${toHankakuKigou(gr.kigou)}  ${gr.name}", enabled = !ui.running, dragHandle = dragHandle) {
+                        dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou)
+                    }
                 }
+                GroupedAddRow("グループを追加する", enabled = !ui.running) { dialog = Ws1Dialog.AddGroup }
             }
-            AddRowButton("グループを追加する", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
-            HorizontalDivider()
 
-            // [3.482.0 編集タブ簡素化] 旧「職員」節（氏名/所属の一覧・追加・一括追加・削除）は撤去し、
-            //   職員管理ドア（StaffManageCard）へ一本化した。3.114.0 は「同一 vm API の別ビュー・併存」を選び
-            //   3.286.0 も「維持」と判断していたが、実機スクショで「同じ画面が2か所」と指摘され、grilling で
-            //   一本化を選択。一括追加（BulkAddDialog）は職員管理側へ移設。年間マスター①はシフト・グループ・
-            //   担当可否の「土台」だけを扱う。
+            // [3.482.0 編集タブ簡素化] 職員の一覧・追加・一括追加・削除は職員管理ドア（StaffManageCard）へ一本化。
 
             // --- groupShift bucket ---
-            Spacer(Modifier.height(8.dp))
-            SectionHeader("担当可否（グループ × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
-            val lockNote = v.shifts.getOrNull(v.restIdx)?.let { "「${toHankakuKigou(it.kigou)}」は休みのシフトのため外せません（錠の印）。" } ?: ""
-            Text("セルをタップで担当ON/OFF（✓＝担当できる）。グループ名をタップでそのグループを一括、シフト名をタップで全グループへ一括。$lockNote",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(4.dp))
-            // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
-            //   対応が縦に並ばず一目で比較できなかった。行=群・列=シフトの2次元マトリクスへ。左列（群名）は固定、
-            //   右側（シフト名ヘッダ＋セル）だけ横スクロール。セル全面がタップ標的（48dp）。行/列ヘッダのタップで一括。
-            GroupShiftMatrix(
-                groups = v.groups, shifts = v.shifts, groupShift = v.groupShift, restIdx = v.restIdx,
-                enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
-                onCell = { g, k, on -> onEvent(MagiEvent.Structure.SetGroupShift(g, k, on)) },
-                onRow = { g, on -> onEvent(MagiEvent.Structure.SetGroupShiftRow(g, on)) },
-                onColumn = { k, on -> onEvent(MagiEvent.Structure.SetGroupShiftColumn(k, on)) },
-            )
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                SectionHeader("担当可否（グループ × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
+                val lockNote = v.shifts.getOrNull(v.restIdx)?.let { "「${toHankakuKigou(it.kigou)}」は休みのシフトのため外せません（錠の印）。" } ?: ""
+                Text("セルをタップで担当ON/OFF（✓＝担当できる）。グループ名をタップでそのグループを一括、シフト名をタップで全グループへ一括。$lockNote",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
+                //   対応が縦に並ばず一目で比較できなかった。行=群・列=シフトの2次元マトリクスへ。左列（群名）は固定、
+                //   右側（シフト名ヘッダ＋セル）だけ横スクロール。セル全面がタップ標的（48dp）。行/列ヘッダのタップで一括。
+                GroupShiftMatrix(
+                    groups = v.groups, shifts = v.shifts, groupShift = v.groupShift, restIdx = v.restIdx,
+                    enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
+                    onCell = { g, k, on -> onEvent(MagiEvent.Structure.SetGroupShift(g, k, on)) },
+                    onRow = { g, on -> onEvent(MagiEvent.Structure.SetGroupShiftRow(g, on)) },
+                    onColumn = { k, on -> onEvent(MagiEvent.Structure.SetGroupShiftColumn(k, on)) },
+                )
+            }
 
             // [③回数へ移動] 適切回数(apt)の編集は「回数（1人あたり）」節の StaffShiftMatrixCard（職員×シフト
             //   マトリクスのセルタップシート）へ統合済み（旧 AptSection は撤去、StaffShiftMatrix.kt 参照）。
-
-        }
     }
 
     when (val d = dialog) {
@@ -291,9 +267,27 @@ internal fun <T> ReorderableRows(
                 Modifier.fillMaxWidth()
                     .onGloballyPositioned { c -> if (rowHeightPx == 0f) rowHeightPx = c.size.height.toFloat() }
                     .graphicsLayer { translationY = if (dragging) dragOffsetPx else 0f }
-                    .zIndex(if (dragging) 1f else 0f),
+                    .zIndex(if (dragging) 1f else 0f)
+                    // 掴んだ行は下の行の文字と重ならないよう地を塗る（島の地は透けない）。
+                    .then(if (dragging) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
             ) { row(idx, item, dragHandle) }
         }
+    }
+}
+
+/** 並び替えできる島の 1 行（ハンドル・本文・「›」）。下に細線＝最後の行の下は続く追加行との区切り（どの行も同じ高さ＝並び替えの目標位置の計算が狂わない）。 */
+@Composable
+private fun ReorderableListRow(text: String, enabled: Boolean, dragHandle: Modifier, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = cs.onSurfaceVariant,
+                modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
+            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("›", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics { })
+        }
+        HorizontalDivider(Modifier.padding(start = 48.dp), color = cs.outlineVariant)
     }
 }
 

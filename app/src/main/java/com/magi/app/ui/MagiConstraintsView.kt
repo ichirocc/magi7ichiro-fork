@@ -146,15 +146,15 @@ internal data class ConstraintsView(
 
 internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
     if (st == null) return ConstraintsView()
-    fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
+    fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" → ").ifEmpty { "(空)" }
     return ConstraintsView(
         // 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
         //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。
         families = listOf(
             ConstraintFamilyView("cons1", "期間の制約（○日間で○回など）",
-                st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
+                st.cons1.map { "${it.shiftKigou}：${it.day1}日で${it.day2}回以上" }),
             ConstraintFamilyView("cons2", "個人の合計（回数）",
-                st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
+                st.cons2.map { "${it.shiftKigou}：合計${it.count}回以上" }),
             ConstraintFamilyView("cons3", "守るとよい並び", st.cons3.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
@@ -162,13 +162,13 @@ internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
             ConstraintFamilyView("cons3w", "希望の前日に禁止（必ず守る）",
                 st.cons3w.map { "${it.wishKigou} の希望の前日は ${it.prevKigou} 禁止" }),
             ConstraintFamilyView("cons41", "グループのレンジ（1日の人数の下限〜上限）",
-                st.cons41.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
+                st.cons41.map { "${it.groupKigou}・${it.shiftKigou}：${boundLabel(it.l, it.u)}" }),
             ConstraintFamilyView("cons42", "グループペア禁止（同じ日に不可・できるだけ守る）",
                 st.cons42.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
         ),
         skillFamilies = listOf(
             ConstraintFamilyView("cons41s", "スキルグループのレンジ（1日の人数の下限〜上限）",
-                st.cons41s.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
+                st.cons41s.map { "${it.groupKigou}・${it.shiftKigou}：${boundLabel(it.l, it.u)}" }),
             ConstraintFamilyView("cons42s", "スキルグループペア禁止（同じ日に不可・できるだけ守る）",
                 st.cons42s.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
         ),

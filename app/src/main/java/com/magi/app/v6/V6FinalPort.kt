@@ -727,10 +727,16 @@ object V6FinalPort {
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
+        // CP-SAT が良い勤務表を出した最後の時刻。停滞は探索と CP-SAT の両方が改善しなくなってから（3.727.63）。
+        val cpsatImprovedAt = java.util.concurrent.atomic.AtomicLong(0L)
+        var cpsatSeenHard = Long.MAX_VALUE; var cpsatSeenWeighted = Long.MAX_VALUE
         fun cpsatGapReached(now: Long): Boolean = synchronized(cpsatLock) {
             if (cpsat == null || cpsatGapHit || now - cpsatPolledAt < 1_000L) return@synchronized cpsatGapHit
             cpsatPolledAt = now
             val snap = cpsat.poll()
+            if (snap.hard >= 0 && (snap.hard < cpsatSeenHard || (snap.hard == cpsatSeenHard && snap.weighted < cpsatSeenWeighted))) {
+                cpsatSeenHard = snap.hard; cpsatSeenWeighted = snap.weighted; cpsatImprovedAt.set(now)
+            }
             val best = wd.bestReport ?: return@synchronized false
             if (!snap.hardProven || best.hard.toLong() != snap.hardBound) return@synchronized false
             val g = CpsatCoRun.gap(best.weightedScore, snap.weightedBound) ?: return@synchronized false
@@ -758,7 +764,8 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 cpsatGapReached(now) -> true
-                watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, wd.lastBestImproveMs.get(), effStall) -> {
+                watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs,
+                    maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
                     val fired = synchronized(progressLock) {
                         wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = false)
@@ -1136,7 +1143,7 @@ object V6FinalPort {
                 tag = "NativeBridge",
                 message = when {
                     parityOff -> "ネイティブ加速: Kotlin照合OFF＝純ネイティブ（検証/ベンチ用・誤結果の可能性）・ネイティブ探索=$searchState$gate"
-                    parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
+                    parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）" + (NativeBridge.loadError?.let { "・理由: $it" } ?: "")
                     parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs=単発・JNI往復込みの参考値)・ネイティブ探索=$searchState$gate"
                     // [3.358.0/外部レポート起因] 旧文言は両方の値を並べるだけで、読者は
                     //   「ソースの乖離」と「.so が古い」を区別できなかった（実際そのレポートは

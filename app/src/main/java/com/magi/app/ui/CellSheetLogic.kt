@@ -1663,7 +1663,21 @@ internal const val STAFF_OTHER_FIXES_LABEL = "この職員のほかの変更案"
 internal fun staffSheetPreselect(shiftIdxs: List<Int>): Int? = shiftIdxs.filter { it >= 0 }.distinct().singleOrNull()
 
 internal const val PICK_MARKS_LEGEND = "●＝必須違反が減る　⚠＝必須違反が増える"
-internal const val TALLY_LEGEND_TEXT = "▼不足・▲超過（職員・日の欄の数字＝今の回数・人数、計（期間）の ▼2＝不足の日が 2日）"
+internal const val TALLY_LEGEND_TEXT = "職員別 ▼下限割れ・▲上限超過・▽△目安の回数との差／日別 ▼人員不足・▲過剰（数字＝今の回数・人数、計（期間）の ▼2＝不足の日が 2日）"
+
+/**
+ * シフト集計の職員別セルの印。▼▲＝個人の下限割れ・上限超過、▽△＝グループの目安の回数（適切回数）との差。
+ * 旧: 目安との差も ▼▲ で塗っていたため、集計の ▼ の数が分析の「下限割れ」の数より多く見えた（2026-11-11 利用者）。
+ */
+internal fun tallyCountGlyph(cls: String?): String = when (cls) {
+    "vio-low" -> "▼"; "vio-high" -> "▲"; "vio-aptLow" -> "▽"; "vio-aptHigh" -> "△"; else -> ""
+}
+
+/** 職員別セルの読み上げ・詳細の言葉（分析の族名と同じ: 下限割れ・上限超過・目安の回数との差）。 */
+internal fun tallyCountWord(cls: String): String = when (cls) {
+    "vio-low" -> "下限割れ"; "vio-high" -> "上限超過"; "vio-aptLow" -> "目安の回数より少ない"; "vio-aptHigh" -> "目安の回数より多い"
+    else -> if (isUnderCountClass(cls)) "不足" else "超過"
+}
 
 /** 自動作成の直後に主カードの上端へ出す 2 行の材料。[next]＝次に確認する問題（主カードと同じ対象）。 */
 internal data class CreationTop(val next: String?, val onOthers: () -> Unit, val onRetrySave: () -> Unit, val kept: Boolean = false)

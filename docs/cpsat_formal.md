@@ -38,6 +38,7 @@ CBMC（C の有界モデル検査）はエンジンの C++（標準ライブラ�
   下限が弱い（連続・曜日の項の線形緩和が弱い）→ 下限を上げる工夫は S1 の続き。
 
 ## アプリへの組み込み（S2・S3、2026-11-10）
+- 3.727.51〜57 は端末で `libmagi_native.so` が読み込めていなかった（OR-Tools の依存物 abseil・protobuf が共有ライブラリで、APK に入らない）。3.727.58 で静的に組み、APK の要求ライブラリを CI で検査する（`tools/check_apk_native_libs.py`）。
 - JNI: `app/src/main/cpp/magi_cpsat_jni.inc`（作成→解く→別スレッドから最良・下限を読む→止める→破棄）。Kotlin `CpsatBridge`／`CpsatCoRun`。
   OR-Tools を渡したビルドだけ（CMake の `MAGI_ORTOOLS_PREFIX`、Gradle は環境変数 `MAGI_ORTOOLS_ANDROID`）。無ければ従来どおり。
 - `handleOptimize`: 探索の開始で CP-SAT を 2 ワーカーで走らせ（ヒント＝入力）、探索の終わりで止める。必須が証明済みの最少と同じで

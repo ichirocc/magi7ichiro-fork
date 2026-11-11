@@ -18,6 +18,15 @@ for rel, tgt in [("ortools/linear_solver/CMakeLists.txt", "solve"), ("ortools/pa
     i = s.index(f"install(TARGETS {tgt}"); j = s.index(")", i) + 1
     s = s[:j] + "\nendif() # MAGI_SKIP_" + tgt + s[j:]
     p.write_text(s)
+# 依存物（abseil・protobuf ほか）は OR-Tools の cmake/dependencies が共有ライブラリを強制する（BUILD_SHARED_LIBS ON・
+#   protobuf_BUILD_SHARED_LIBS ON）。そのままだと libmagi_native.so が libabsl_*.so・libprotobuf.so を要求し、APK には入らないので
+#   端末で読み込みに失敗する（3.727.51 の実機ログ「.so 未ロード」）。Android 向けでは静的にする（何度走らせても同じ結果）。
+dep = src / "cmake/dependencies/CMakeLists.txt"
+s = dep.read_text()
+if "MAGI_STATIC_DEPS" not in s:
+    s = s.replace("set(BUILD_SHARED_LIBS ON)\n", "set(BUILD_SHARED_LIBS OFF) # MAGI_STATIC_DEPS\n")
+    s = s.replace("set(protobuf_BUILD_SHARED_LIBS ON)", "set(protobuf_BUILD_SHARED_LIBS OFF) # MAGI_STATIC_DEPS")
+    dep.write_text(s)
 PY
 cmake -S "$SRC" -B "$BUILD" -G "Unix Makefiles" \
   -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-34 \

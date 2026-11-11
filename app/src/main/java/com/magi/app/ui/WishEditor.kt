@@ -21,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,7 +30,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -147,19 +145,11 @@ internal fun WishCard(
             )
             if (myExt.isNotEmpty()) {
                 Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.titleSmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     myExt.forEach { e ->
-                        InputChip(shape = MagiCorners.capsule,
-                            selected = false,
-                            enabled = !ui.running,
-                            onClick = { onDaysSel(e.days.toSet()) },
-                            label = { Text("${e.days.joinToString(",")}日 ${e.kigou.joinToString("・")}以外") },
-                            trailingIcon = {
-                                IconButton(onClick = { onEvent(MagiEvent.Condition.RemoveExtWish(e.index)) }, enabled = !ui.running) {
-                                    Icon(Icons.Filled.Close, contentDescription = "拡張希望を削除", modifier = Modifier.size(18.dp))
-                                }
-                            },
-                        )
+                        RemovableChip("${e.days.joinToString(",")}日 ${e.kigou.joinToString("・")}以外", enabled = !ui.running,
+                            onClick = { onDaysSel(e.days.toSet()) }, onRemove = { onEvent(MagiEvent.Condition.RemoveExtWish(e.index)) },
+                            removeDescription = "拡張希望を削除")
                     }
                 }
             }
@@ -174,19 +164,11 @@ internal fun WishCard(
                 Text("登録済み希望（全職員）", style = MaterialTheme.typography.titleSmall)
                 rows.groupBy { it.i }.forEach { (_, list) ->
                     Text(list.first().staffName, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         list.forEach { r ->
-                            InputChip(shape = MagiCorners.capsule,
-                                selected = false,
-                                enabled = !ui.running,
-                                onClick = { onStaffSel(r.i); onDaysSel(emptySet()) },
-                                label = { Text("${r.day}日 ${r.kigou}") },
-                                trailingIcon = {
-                                    IconButton(onClick = { onEvent(MagiEvent.Condition.RemoveWish(r.i, r.j)) }, enabled = !ui.running) {
-                                        Icon(Icons.Filled.Close, contentDescription = "削除", modifier = Modifier.size(18.dp))
-                                    }
-                                },
-                            )
+                            RemovableChip("${r.day}日 ${r.kigou}", enabled = !ui.running,
+                                onClick = { onStaffSel(r.i); onDaysSel(emptySet()) }, onRemove = { onEvent(MagiEvent.Condition.RemoveWish(r.i, r.j)) },
+                                removeDescription = "削除")
                         }
                     }
                 }

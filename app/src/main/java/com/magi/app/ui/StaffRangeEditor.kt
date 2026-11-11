@@ -19,13 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.InputChip
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -95,7 +93,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                         Text(groupName, style = MaterialTheme.typography.titleSmall)
                         DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "すべて解除する")
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         rows.forEach { gr ->
                             val rangeLab = when {
                                 gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
@@ -103,17 +101,9 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                                 gr.lo.isNotBlank() -> "≥${gr.lo}"
                                 else -> ""
                             }
-                            InputChip(shape = MagiCorners.capsule,
-                                selected = false,
-                                enabled = !ui.running,
-                                onClick = { dialogInit = gr; dialog = true },
-                                label = { Text("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
-                                trailingIcon = {
-                                    IconButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }, enabled = !ui.running) {
-                                        Icon(Icons.Filled.Close, contentDescription = "削除", modifier = Modifier.size(18.dp))
-                                    }
-                                },
-                            )
+                            RemovableChip("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）",
+                                enabled = !ui.running, onClick = { dialogInit = gr; dialog = true },
+                                onRemove = { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }, removeDescription = "削除")
                         }
                     }
                 }

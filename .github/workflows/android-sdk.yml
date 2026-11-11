@@ -109,6 +109,12 @@ jobs:
           #   終了コードを出力にして後段の条件に使う（-MAGI_PC 側 2026-09-04 の修正と同じ）。
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
+      # [3.727.58] APK の libmagi_native.so が端末に無いライブラリを要求していないか（OR-Tools の依存物を共有で組むと
+      #   端末で読み込めずネイティブ加速も CP-SAT も黙って無効になる＝3.727.51 の実機ログ）。整列・非圧縮も同じ検査で見る。
+      - name: Check APK native libs (deps + stored + 16KiB aligned)
+        if: ${{ steps.build.outputs.code == '0' }}
+        run: python3 tools/check_apk_native_libs.py app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk
+
       # [レビュー指摘 2026-09-04] Android Lint が CI で一度も走っていなかった（build.gradle.kts は
       #   abortOnError=false・checkReleaseBuilds=false のため assemble では実行されず、下の
       #   「Upload lint reports」は生成元の無い空振り）。ビルドと独立に lintDebug を走らせて報告だけ残す

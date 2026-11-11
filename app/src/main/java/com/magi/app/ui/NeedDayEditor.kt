@@ -350,16 +350,14 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            overrides.forEach { o ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${o.kigou}  ${DayText.full(ui.startDate, o.j)}  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }, enabled = !ui.running)
+            GroupedSection(null, rows = overrides.map { o ->
+                @Composable {
+                    GroupedRow("${o.kigou}  ${DayText.full(ui.startDate, o.j)}  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
+                        enabled = !ui.running, onClick = null) {
+                        GroupedDeleteButton(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }
+                    }
                 }
-            }
+            }, inCard = true)
         }
     }
 }

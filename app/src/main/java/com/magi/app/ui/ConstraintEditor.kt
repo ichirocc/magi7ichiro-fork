@@ -8,34 +8,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.InputChip
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,34 +58,31 @@ internal fun ConstraintsCard(
     // [発見性] keys 指定時はその family だけ描画。群の C41/C42 を専用節に分けて見つけやすくするため。
     val families = cv.families.let { all -> if (keys == null) all else all.filter { it.key in keys } }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.titleMedium)
-            ConstraintHelpExpander(families)
-            families.forEachIndexed { fi, fam ->
-                if (fi > 0) Spacer(Modifier.height(8.dp))
-                Spacer(Modifier.height(8.dp))
-                Text(fam.title, style = MaterialTheme.typography.titleSmall)
-                if (fam.rows.isEmpty()) {
-                    Text("(なし)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else if (fam.key.startsWith("cons3") && fam.key != "cons3w") {
-                    // [3.482.0 編集タブ簡素化] 並び4族は「起点シフトごとのチップ」に集約（見本データは禁止11行のうち
-                    //   Dﾃ起点が7行＝1行ずつの縦積みでは重複に気づけなかった）。データは従来の C3Row のまま＝表示の集約のみ。
-                    SeqFamilyGrouped(fam, cv, enabled = !ui.running,
-                        onEdit = { idx -> editTarget = fam.key to idx },
-                        onDelete = { idx -> onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) },
-                        onAddWith = { first -> addTarget = fam.key to first })
-                } else {
-                    fam.rows.forEachIndexed { idx, row ->
-                        ConstraintRow(row, enabled = !ui.running,
-                            onEdit = { editTarget = fam.key to idx },
-                            onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) })
-                    }
+    // [Apple の配置] 族ごとに島（見出しは島の外の上、行の間は細い区切り線、いちばん下に「＋ 追加」）。色は UD トークンのまま。
+    Column(Modifier.fillMaxWidth()) {
+        if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+        Box(Modifier.padding(horizontal = 16.dp)) { ConstraintHelpExpander(families) }
+        families.forEach { fam ->
+            val enabled = !ui.running
+            val seq = fam.key.startsWith("cons3") && fam.key != "cons3w"
+            val rows = ArrayList<@Composable () -> Unit>()
+            if (fam.rows.isEmpty()) {
+                rows += { GroupedRow("(なし)", enabled = false, onClick = null) }
+            } else if (seq) {
+                // [3.482.0 編集タブ簡素化] 並び4族は「起点シフトごとのチップ」に集約（データは C3Row のまま＝表示の集約のみ）。
+                rows += seqFamilyRows(fam, cv, enabled,
+                    onEdit = { idx -> editTarget = fam.key to idx },
+                    onDelete = { idx -> onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) },
+                    onAddWith = { first -> addTarget = fam.key to first })
+            } else {
+                fam.rows.forEachIndexed { idx, row ->
+                    rows += { ConstraintRow(row, enabled = enabled, onEdit = { editTarget = fam.key to idx },
+                        onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) }) }
                 }
-                // [3.483.0 E-10] 並び系は起点チップごとに「＋」があるため、末尾の「追加」は「新しい起点で追加」と区別。
-                AddRowButton(if (fam.key.startsWith("cons3") && fam.key != "cons3w") "新しい起点で追加する" else "追加する", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
-                HorizontalDivider()
             }
+            // [3.483.0 E-10] 並び系は起点ごとに「＋」があるため、末尾の追加は「新しい起点で追加」と区別。
+            rows += { GroupedAddRow(if (seq) "新しい起点で追加する" else "追加する", enabled = enabled) { addTarget = fam.key to null } }
+            GroupedSection(fam.title, rows = rows)
         }
     }
 
@@ -110,61 +96,58 @@ internal fun ConstraintsCard(
  * - 2連（起点→次）はチップ。タップ=変更、× =削除（どちらも従来の行操作と同じ vm API）。
  * - 3連以上の並びは従来の行表示のまま（チップで表せない）。起点の見出しの下に並べる。
  * - 1つだけの並びは起点の見出しに入れず「X（1つだけ）」の行で先頭に並べる。
- * - 「＋ ○○の次を追加」は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
+ * - 「○○の次を追加」（＋ はボタンのアイコン）は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
  * データは `C3Row` のまま（表示の集約だけ）。族の見出し・詳しい説明・削除確認の意味論も不変。
  */
 @OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SeqFamilyGrouped(
+private fun seqFamilyRows(
     fam: ConstraintFamilyView, cv: ConstraintsView, enabled: Boolean,
     onEdit: (Int) -> Unit, onDelete: (Int) -> Unit, onAddWith: (String) -> Unit,
-) {
-    val cs = MaterialTheme.colorScheme
+): List<@Composable () -> Unit> {
+    val out = ArrayList<@Composable () -> Unit>()
     // 行の生パターン（追加ダイアログと同じ正規化=先頭から最初の空白まで・最大5）。
     val pats = fam.rows.indices.map { idx -> normalizeSeq(cv.rowValues(fam.key, idx) ?: emptyList()) }
     // 1つだけの行は「X の次の日」の見出しに入れない（X→X と読めてしまう）。
     for (idx in pats.indices.filter { pats[it].size == 1 }) {
-        ConstraintRow("${pats[idx][0]}（1つだけ）", enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
-        if (fam.key == "cons3n") {
-            Text(singleForbiddenNote(pats[idx][0]), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        out += {
+            Column {
+                ConstraintRow("${pats[idx][0]}（1つだけ）", enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
+                if (fam.key == "cons3n") Text(singleForbiddenNote(pats[idx][0]), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
+            }
         }
     }
     val firsts = pats.filter { it.size >= 2 }.map { it[0] }.distinct()
     for (first in firsts) {
-        Spacer(Modifier.height(4.dp))
-        // [3.483.0 E-11] 見出しに族の意味（禁止/必須/推奨/回避）を含める。旧「【X の次の日】」は4族で同文だった。
-        // [3.515.4] 族見出し(titleSmall)の下位＝本文サイズの太字。label 層は部品ラベル/チップ用（DESIGN.md §3.3）。
-        Text(seqStartHeading(fam.key, first), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
         val idxs = pats.indices.filter { pats[it].size >= 2 && pats[it][0] == first }
         val pairIdxs = idxs.filter { pats[it].size == 2 }
         val otherIdxs = idxs.filter { pats[it].size != 2 }
-        // 守る/推奨は行ごとに別に数える＝同じ起点に2本あると、どちらかは必ず崩れる。
-        if (pairIdxs.size >= 2 && (fam.key == "cons3" || fam.key == "cons3m")) {
-            Text("それぞれ別に数えます（どれか1つでよい、ではありません）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-        }
-        if (pairIdxs.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (idx in pairIdxs) {
-                    val next = pats[idx][1]
-                    InputChip(shape = MagiCorners.capsule,
-                        selected = false, enabled = enabled,
-                        onClick = { onEdit(idx) },
-                        label = { Text(next) },
-                        trailingIcon = {
-                            // [a11y] 削除は × の onClick で。チップ本体のタップは変更（行操作と同じ2操作を保つ）。
-                            IconButton(onClick = { onDelete(idx) }, enabled = enabled) {
-                                Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除", modifier = Modifier.size(18.dp))
-                            }
-                        },
-                    )
+        out += {
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // [3.483.0 E-11] 見出しに族の意味（禁止/必須/推奨/回避）を含める。[3.515.4] 本文サイズの太字（DESIGN.md §3.3）。
+                Text(seqStartHeading(fam.key, first), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface)
+                // 守る/推奨は行ごとに別に数える＝同じ起点に2本あると、どちらかは必ず崩れる。
+                if (pairIdxs.size >= 2 && (fam.key == "cons3" || fam.key == "cons3m")) {
+                    Text("それぞれ別に数えます（どれか1つでよい、ではありません）", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (pairIdxs.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (idx in pairIdxs) {
+                            val next = pats[idx][1]
+                            // [a11y] 本体のタップは変更、× は削除（行操作と同じ 2 操作を保つ）。
+                            RemovableChip(next, enabled, onClick = { onEdit(idx) }, onRemove = { onDelete(idx) }, removeDescription = "$first→$next を削除")
+                        }
+                    }
                 }
             }
         }
-        for (idx in otherIdxs) {
-            ConstraintRow(fam.rows[idx], enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
-        }
-        AddRowButton("＋ $first の次を追加", onClick = { onAddWith(first) }, enabled = enabled)
+        for (idx in otherIdxs) out += { ConstraintRow(fam.rows[idx], enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) }) }
+        out += { GroupedAddRow("$first の次を追加", enabled = enabled) { onAddWith(first) } }
     }
+    return out
 }
 
 /**
@@ -204,36 +187,12 @@ private fun ConstraintHelpExpander(families: List<ConstraintFamilyView>) {
 }
 
 /**
- * 制約1行: 本文タップ=変更、右端に「編集」「削除」。
- *
- * [3.396.0] 旧実装は本文が 12sp の素のテキストで、KDoc も「タップ可能に見えるよう最小高44dpを確保」と
- * 書いていた——だが **44dp は触れる大きさであって見た目の手がかりではない**。だからカードの上に
- * 「行をタップすると変更できます」という貼り紙が要り、それでも実機で「登録した制約の変更ができない」と
- * 報告された（3.130.0）。職員一覧（`StaffManageCard`）は同じ「行を編集する」操作を**編集ボタン**で
- * 表しているので、同じ操作は同じ形にする。貼り紙は剥がした。
+ * 制約1行: 行のタップ=変更（右端の「›」）、右端の赤い「削除」。[3.396.0] 触れる大きさだけでは押せると読めない
+ * （貼り紙が要った・3.130.0「変更ができない」）→ 押せる印を形で示す。旧「編集」「削除」の 2 ボタンは続く行で上下に接した。
  */
 @Composable
 private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit, editable: Boolean = true) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // [3.427.0] 旧 sub（3.409.18 の読み下し文）は撤去。ペア禁止系の行タイトル自体を
-        //   「吉の休 ✕ 古の休」（の形）にしたため、行下の文はタイトルと見出し（同じ日に不可）の
-        //   完全な重複だった。全体の意味は ⓘ詳しい説明（constraintHelp）が持つ。
-        Column(Modifier
-            .weight(1f)
-            .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled && editable, onClick = onEdit)
-            .heightIn(min = 48.dp)
-            .wrapContentHeight(Alignment.CenterVertically)
-            .padding(horizontal = 4.dp)) {
-            Text(row, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (editable) {
-            EditRowButton(onClick = onEdit, enabled = enabled)
-            // 削除は確認なしで即時＝隣の「編集」と取り違えない間隔（ux_test_checklist A3 は 8dp 以上）。
-            Spacer(Modifier.width(12.dp))
-        }
-        DeleteRowButton(onClick = onDelete, enabled = enabled)
-    }
+    GroupedRow(row, enabled = enabled, onClick = if (editable) onEdit else null) { GroupedDeleteButton(enabled = enabled, onClick = onDelete) }
 }
 
 /** [校正] スキルグループの C41/C42（cons41s/cons42s）をスキルグループ定義の直下に co-locate。
@@ -243,47 +202,38 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
     var addFamily by remember { mutableStateOf<String?>(null) }
     var editTarget by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val families = cv.skillFamilies
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            // [3.427.0] 旧文は続けて「スキル群のレンジ（…）と、スキル群ペア禁止（…）を設定します」と
-            //   列挙していたが、直下の族見出し2行と完全な重複＝カードの識別に要る1文だけ残す。
-            Text("上の「スキルグループ」に対する専用ルールです。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (cv.skillGroupKigou.isEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("先に上で「スキルグループ」を追加すると設定できます。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                // スキルグループが無くても行は残る（未評価・設定の見直しが削除を促す）＝削除だけできるように出す。
-                val orphans = families.filter { it.rows.isNotEmpty() }
-                if (orphans.isNotEmpty()) {
-                    Text("スキルグループが無いため、次のルール${orphans.sumOf { it.rows.size }}件は使われていません。要らなければ削除できます。",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    orphans.forEach { fam ->
-                        Text(fam.title, style = MaterialTheme.typography.titleSmall)
-                        fam.rows.forEachIndexed { idx, row ->
-                            ConstraintRow(row, enabled = !ui.running, onEdit = {}, editable = false,
-                                onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) })
-                        }
-                    }
+    val enabled = !ui.running
+    Column(Modifier.fillMaxWidth()) {
+        // [3.427.0] カードの識別に要る1文だけ（族の列挙は直下の見出しと重複）。
+        Text("上の「スキルグループ」に対する専用ルールです。", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+        if (cv.skillGroupKigou.isEmpty()) {
+            Text("先に上で「スキルグループ」を追加すると設定できます。", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+            // スキルグループが無くても行は残る（未評価・設定の見直しが削除を促す）＝削除だけできるように出す。
+            val orphans = families.filter { it.rows.isNotEmpty() }
+            if (orphans.isNotEmpty()) {
+                Text("スキルグループが無いため、次のルール${orphans.sumOf { it.rows.size }}件は使われていません。要らなければ削除できます。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+                orphans.forEach { fam ->
+                    GroupedSection(fam.title, rows = fam.rows.mapIndexed { idx, row ->
+                        @Composable { ConstraintRow(row, enabled = enabled, onEdit = {}, editable = false,
+                            onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) }) }
+                    })
                 }
-            } else {
-                ConstraintHelpExpander(families)
-                families.forEachIndexed { fi, fam ->
-                    if (fi > 0) Spacer(Modifier.height(8.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text(fam.title, style = MaterialTheme.typography.titleSmall)
-                    if (fam.rows.isEmpty()) {
-                        Text("(なし)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        fam.rows.forEachIndexed { idx, row ->
-                            ConstraintRow(row, enabled = !ui.running,
-                                onEdit = { editTarget = fam.key to idx },
-                                onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) })
-                        }
-                    }
-                    AddRowButton("追加する", onClick = { addFamily = fam.key }, enabled = !ui.running)
-                    HorizontalDivider()
+            }
+        } else {
+            Box(Modifier.padding(horizontal = 16.dp)) { ConstraintHelpExpander(families) }
+            families.forEach { fam ->
+                val rows = ArrayList<@Composable () -> Unit>()
+                if (fam.rows.isEmpty()) rows += { GroupedRow("(なし)", enabled = false, onClick = null) }
+                fam.rows.forEachIndexed { idx, row ->
+                    rows += { ConstraintRow(row, enabled = enabled, onEdit = { editTarget = fam.key to idx },
+                        onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) }) }
                 }
+                rows += { GroupedAddRow("追加する", enabled = enabled) { addFamily = fam.key } }
+                GroupedSection(fam.title, rows = rows)
             }
         }
     }
