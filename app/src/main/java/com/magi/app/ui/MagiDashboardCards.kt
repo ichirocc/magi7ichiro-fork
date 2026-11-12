@@ -922,6 +922,7 @@ internal fun OperatorNextActionCard(
                     if (savedLine != null && savedLine !in statusLines) Text(savedLine, style = body, color = plan.fg)
                     // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質）。内部名は出さない（StopExplanation）。次の一手は主ボタンが言う。
                     if (ui.hasResult) ui.stopSummary?.let { s -> stopExplanationOf(s, ui.breakdown)?.let { e -> Text(e.line, style = MaterialTheme.typography.bodySmall, color = plan.fg) } }
+                    if (ui.hasResult) boundLineOf(ui.boundSummary, ui.bestHard.toInt())?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
                     if (ui.relaxSearching) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))

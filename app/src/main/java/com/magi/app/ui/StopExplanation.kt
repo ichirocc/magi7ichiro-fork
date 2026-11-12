@@ -40,3 +40,15 @@ internal fun stopNextLabel(n: StopNext): String? = when (n) {
     StopNext.REVIEW_WISHES -> "編集タブの「月次条件」で希望を見直す"
     StopNext.FIND_FIX -> "分析タブで直し方を探す"
 }
+
+/**
+ * 採用した勤務表の根拠の一行（3.727.72、CP-SAT の S5）。必須の件数が証明済みの最少と同じなら「これ以上減らせない」、重みのギャップがあれば
+ * 「最良との差は多くても X%」。下限は fair を 0 とした緩和＝ギャップは実際より大きく出る（「多くても」）。言えることが無ければ null。
+ */
+internal fun boundLineOf(b: V6FinalPort.BoundSummary?, hard: Int): String? {
+    if (b == null) return null
+    val parts = ArrayList<String>(2)
+    if (b.hardProven && b.hardBound == hard.toLong()) parts += if (hard == 0) "必須違反なし" else "必須違反 $hard 件はこれ以上減らせないと証明済み"
+    b.gap?.let { g -> parts += if (g <= 0.01) "最良との差は 1% 以下" else "最良との差は多くても ${String.format(java.util.Locale.ROOT, "%.1f", g * 100)}%" }
+    return if (parts.isEmpty()) null else "根拠: " + parts.joinToString("・")
+}
