@@ -437,7 +437,7 @@ object UnifiedViolationChecker {
         }
 
         // [統一fair/3.538.0] グループ内公平化: 群×担当ONシフトごと、`Problem.fairDevOfBucket`（達成率モード、
-        // 全員に基準が無ければ従来の生回数round(平均)方式）からのL1偏差和。SOFT・重み2。最適化器(Evaluator/Delta)
+        // 1 人でも基準が無ければ従来の生回数round(平均)方式）からのL1偏差和。SOFT（重みは ObjectiveWeights）。最適化器(Evaluator/Delta)
         // と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
         // [場所表示] 偏っているメンバー(x,k,dev)を収集（内訳パネル用・グリッドには出さない）。
         val fairLocs = ArrayList<List<Int>>()
