@@ -46,6 +46,8 @@ struct Options {
     unsigned families = ~0u;
     // 第 1 段の持ち時間の上限（秒）。
     double phase1MaxSeconds = 6.0;
+    // 第 1.5 段（最上段の最少化、優先順位方式のときだけ）の持ち時間の上限（秒）。残り時間の 3 割まで。
+    double tierPhaseMaxSeconds = 20.0;
 };
 
 struct Result {
@@ -76,6 +78,9 @@ public:
 
     const sat::LinearExpr& hardCount() const { return hardCount_; }
     const sat::LinearExpr& weighted() const { return weighted_; }
+    // 最上段（優先順位方式の T1＝low・c1・high・c3mn）の件数の和。優先順位方式でないときは空（[tierPhase] が false）。
+    const sat::LinearExpr& topTier() const { return top_; }
+    bool tierPhase() const { return topW_ > 0; }
     sat::CpModelBuilder& cp() { return cp_; }
 
     std::vector<int> boardFrom(const sat::CpSolverResponse& r) const {
@@ -96,7 +101,9 @@ private:
     // セルごとの (k, 変数)。変数が 1 つだけのセルは fixed_ に値を置き、変数は作らない。
     std::vector<std::vector<std::pair<int, sat::BoolVar>>> vars_;
     std::vector<int> fixed_;
-    sat::LinearExpr hardCount_, weighted_;
+    sat::LinearExpr hardCount_, weighted_, top_;
+    // 優先順位方式（T1 の 4 族が同じ重み）のときだけ最上段の重み、それ以外は 0。
+    const long long topW_ = (p_.w.c1 == p_.w.low && p_.w.c1 == p_.w.high && p_.w.c1 == p_.w.c3mn) ? p_.w.c1 : 0;
     std::vector<sat::LinearExpr> cnt_;   // S*K: 回数
 
     // セル (i,j) がシフト k か（定数 0/1 または変数）。
@@ -118,7 +125,7 @@ private:
         v = e.constant(); return true;
     }
     void addHard(const sat::LinearExpr& e, long long w) { hardCount_ += e; weighted_ += w * e; }
-    void addSoft(const sat::LinearExpr& e, long long w) { if (w != 0) weighted_ += w * e; }
+    void addSoft(const sat::LinearExpr& e, long long w) { if (w != 0) { weighted_ += w * e; if (w == topW_) top_ += e; } }
 
     void makeVars(const std::vector<int>& hint, const Options& opt) {
         vars_.assign((size_t)S * T, {});
@@ -426,8 +433,26 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
         res.board = m.boardFrom(r);
         if (opt.onHard) opt.onHard(res.hard, res.hardBound, res.hardProven);
     }
+    // 第 1.5 段（優先順位方式のときだけ）: 必須の件数以下で最上段（T1）の件数を最小にし、その盤面を第 2 段の開始解にする。
+    //   重み付きを一度に最小にすると最上段だけを詰める解へ届かないことがある（実データ: 探索の最終 c1 22 に対し、必須 4・下限 0・上限 16 のまま
+    //   c1 18 が存在し重みも良い）。探索の向きだけを変える＝採点・採否は第 2 段とチェッカーのまま。
+    std::vector<int> hint2 = hint.empty() ? res.board : hint;
+    {
+        Model mt(p, hw);
+        if (mt.tierPhase()) {
+            mt.build(hint2, opt);
+            mt.cp().AddLessOrEqual(mt.hardCount(), hardCap);
+            mt.cp().Minimize(mt.topTier());
+            sat::Model env;
+            env.Add(sat::NewSatParameters(params(opt, std::min(opt.tierPhaseMaxSeconds, std::max(0.05, (opt.maxSeconds - elapsed()) * 0.3)))));
+            std::atomic<bool> phaseStop{false};
+            linkStop(env, phaseStop, opt);
+            auto r = sat::SolveCpModel(mt.cp().Build(), &env);
+            if (r.status() == sat::OPTIMAL || r.status() == sat::FEASIBLE) hint2 = mt.boardFrom(r);
+        }
+    }
     Model m(p, hw);
-    m.build(hint.empty() ? res.board : hint, opt);
+    m.build(hint2, opt);
     m.cp().AddLessOrEqual(m.hardCount(), hardCap);
     m.cp().Minimize(m.weighted());
     sat::Model env;
