@@ -901,14 +901,16 @@ private fun Problem.fairDevCore(g: Int, k: Int, members: Boolean, sc: FairScratc
         order[y + 1] = v }
     var acc = 0.0; var tgt = ach[order[n - 1]]
     for (oi in 0 until n) { val idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
-    var total = 0
+    var total = 0; var worst = 0
     val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
         val dx = Math.round(kotlin.math.abs(ach[idx] - tgt) * scale[idx]).toInt()
         total += dx
+        if (dx > worst) worst = dx
         if (dx > 0) perMember?.add(mem[idx] to dx)
     }
-    return if (perMember == null) FairDevResult(total, emptyList()) else FairDevResult(total, perMember)
+    // [3.727.77] 偏差の和（MinDev）に最大の偏差（MinMax）を足す＝1 人への押しつけを重くする（Martin ら 2013 の組み合わせ）。
+    return if (perMember == null) FairDevResult(total + worst, emptyList()) else FairDevResult(total + worst, perMember)
 }
 
 private val FAIR_ZERO = FairDevResult(0, emptyList())
@@ -918,14 +920,15 @@ private fun legacyFairDevOfBucket(mem: IntArray, cnt: IntArray, n: Int, members:
     var sum = 0
     for (idx in 0 until n) sum += cnt[idx]
     val tgt = Math.round(sum.toDouble() / n).toInt()
-    var total = 0
+    var total = 0; var worst = 0
     val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
         val dx = kotlin.math.abs(cnt[idx] - tgt)
         total += dx
+        if (dx > worst) worst = dx
         if (dx > 0) perMember?.add(mem[idx] to dx)
     }
-    return FairDevResult(total, perMember ?: emptyList())
+    return FairDevResult(total + worst, perMember ?: emptyList())
 }
 
 fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {

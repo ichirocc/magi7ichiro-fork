@@ -24,12 +24,14 @@ class ViolationComponentRepairTest {
 
     private fun combineTwoRejectedState(): MagiState {
         val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""), Shift("Qres", "Qres", "", ""), Shift("D", "D", "", ""))
-        val groups = listOf(Group("G0", "G0"))
-        val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("W1", 0), Staff("W2", 0))
+        // [3.727.77] W1/W2 は別グループ G1。fair が「偏差の和＋最大」になり、同じグループに 4 人いると X+Y の結合でも fair が 2 増えて
+        //   apt の改善を打ち消した（41→43）。G1 に分けると X 単独・Y 単独は 26→48（不採用）、X+Y は 26→18（採用）。
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
+        val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("W1", 1), Staff("W2", 1))
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
-            groupShift = listOf(listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "0", "", "1")),
+            groupShift = listOf(listOf(1, 1, 1, 1), listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "0", "", "1"), listOf("", "0", "", "1")),
             schedule = listOf(listOf(1), listOf(2), listOf(0), listOf(0)), wishes = emptyMap(),
             // [3.541.0] W2 の D は上限 0 でなく 0〜1。fair v2 は担当不可(上限0)で 0 回の職員を母集団から外すため、上限 0 のままだと
             //   D バケットが Y 1 人＝偏差 0 になり、Y 単独の移動が「タイ」でなく改善になって結合の検証にならない。

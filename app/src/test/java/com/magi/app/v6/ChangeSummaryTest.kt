@@ -31,7 +31,7 @@ class ChangeSummaryTest {
         assertEquals("変更：2人・4か所／希望どおり 2/2件", s.line())
         assertEquals(-1, s.familyDeltas["pref"]); assertEquals(1, s.familyDeltas["high"])   // s0 の希望が通り、s2 が上限超過
         assertEquals("減った：pref 1件", s.familyLine().substringBefore("／"))
-        assertTrue(s.familyLine { if (it == "high") "上限超過" else it }.substringAfter("／").startsWith("増えた：上限超過 1件・fair 6件"))   // 加重順: 上限超過 +1(=50) が先頭、fair +6(=30) が続く（2026-10-30 high 50。3.647.0〜は fair が先頭）
+        assertTrue(s.familyLine { if (it == "high") "上限超過" else it }.substringAfter("／").startsWith("増えた：上限超過 1件・fair 8件"))   // 加重順: 上限超過 +1(=50) が先頭、fair +8(=40) が続く（3.727.77〜 fair は偏差の和＋最大＝6+2）
     }
 
     @Test fun familyLineOrdersByWeightedImpactAndReportsEmptySides() {

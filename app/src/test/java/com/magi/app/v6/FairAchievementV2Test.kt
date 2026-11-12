@@ -42,21 +42,21 @@ class FairAchievementV2Test {
     fun outOfBandMemberIsClampedAndDoesNotPunishOthers() {
         // A: 範囲 0〜1 で 6 回（達成率は 6.0 でなくクランプで 1.0）、B: 目標 10 で 9 回、C: 10〜10 ピン。
         val fair = fairOf(3, mapOf(0 to Range("0", "1"), 2 to Range("10", "10")), "10", intArrayOf(6, 9, 10))
-        // 重み付き中央値＝B の −0.1（幅 10 が総幅 10.5 の半分を超える）→ A: round(1.1×0.5)=1、B: 0、C: 0。
-        assertEquals(1, fair)
+        // 重み付き中央値＝B の −0.1（幅 10 が総幅 10.5 の半分を超える）→ A: round(1.1×0.5)=1、B: 0、C: 0。和 1＋最大 1（3.727.77）。
+        assertEquals(2, fair)
     }
 
     @Test
     fun unplaceableZeroCountMemberIsExcludedFromLegacyPopulation() {
-        // 基準なし（apt 空欄）→ 旧式。C は上限 0 で 0 回＝除外 → [9,3] の round(平均)=6 → 3+3。
-        assertEquals(6, fairOf(3, emptyMap(), "", intArrayOf(9, 3, 0), hiZero = setOf(2)))
+        // 基準なし（apt 空欄）→ 旧式。C は上限 0 で 0 回＝除外 → [9,3] の round(平均)=6 → 3+3、＋最大 3（3.727.77）。
+        assertEquals(9, fairOf(3, emptyMap(), "", intArrayOf(9, 3, 0), hiZero = setOf(2)))
     }
 
     @Test
     fun weightedMedianIgnoresTheMemberAtTheEdgeOfHisOwnBand() {
         // A: 範囲 1〜2 で 3 回（クランプ 2＝達成率 1.0、幅 0.5）、B/C/D: 目標 10 で 7/4/4 回。
-        // 中央値は −0.6（B..D の幅 10 が支配）→ A: round(1.6×0.5)=1、B: round(0.3×10)=3、C/D: 0 → 4。単純平均なら 13。
-        assertEquals(4, fairOf(4, mapOf(0 to Range("1", "2")), "10", intArrayOf(3, 7, 4, 4)))
+        // 中央値は −0.6（B..D の幅 10 が支配）→ A: round(1.6×0.5)=1、B: round(0.3×10)=3、C/D: 0 → 和 4＋最大 3（3.727.77）。
+        assertEquals(7, fairOf(4, mapOf(0 to Range("1", "2")), "10", intArrayOf(3, 7, 4, 4)))
     }
 
     @Test

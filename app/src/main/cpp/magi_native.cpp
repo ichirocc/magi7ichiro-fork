@@ -286,9 +286,9 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
                 int sum = 0;
                 for (int i2 = 0; i2 < n; i2++) sum += count(mem[i2]);
                 long long tgt = jround((double)sum / n);
-                long long d = 0;
-                for (int i2 = 0; i2 < n; i2++) d += std::llabs((long long)count(mem[i2]) - tgt);
-                return d;
+                long long d = 0, worst = 0;
+                for (int i2 = 0; i2 < n; i2++) { const long long dx = std::llabs((long long)count(mem[i2]) - tgt); d += dx; if (dx > worst) worst = dx; }
+                return d + worst;
             }
             scale[idx] = (double)t; ach[idx] = t > 0 ? (double)(c - t) / t : 0.0;
         }
@@ -304,9 +304,10 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
         order[y + 1] = v; }
     double acc = 0.0; double tgt = ach[order[n - 1]];
     for (int oi = 0; oi < n; oi++) { int idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break; } }
-    long long total = 0;
-    for (int idx = 0; idx < n; idx++) total += jround(std::fabs(ach[idx] - tgt) * scale[idx]);
-    return total;
+    long long total = 0, worst = 0;
+    for (int idx = 0; idx < n; idx++) { const long long dx = jround(std::fabs(ach[idx] - tgt) * scale[idx]); total += dx; if (dx > worst) worst = dx; }
+    // [3.727.77] 偏差の和＋最大の偏差（Kotlin fairDevCore と同式）。
+    return total + worst;
 }
 
 // C3Run.rowDeficit と同式（行走査で run の不足 L-r を加算）。

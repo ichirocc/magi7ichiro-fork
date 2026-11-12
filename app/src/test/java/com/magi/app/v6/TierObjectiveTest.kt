@@ -26,7 +26,12 @@ class TierObjectiveTest {
             for ((b, board) in boards(st, p).withIndex()) {
                 val rep = UnifiedViolationChecker.check(st, board)
                 for ((fam, arr) in TierObjective.t1PerStaff(p, board)) assertEquals("$name #$b $fam", rep.breakdown[fam] ?: 0, arr.sum())
-                assertEquals("$name #$b fair", rep.breakdown["fair"] ?: 0, TierObjective.fairDeviations(p, board).sum())
+                // fair＝職員ごとの偏差の和＋グループ×シフトごとの最大の偏差（3.727.77）。
+                val counts = countMatrix(p, board)
+                var worst = 0
+                for (g in 0 until p.G) if (p.groupMembers[g].size >= 2) for (k in p.bucket[g])
+                    worst += p.fairDevOfBucket(g, k) { x -> counts[x][k] }.perMember.maxOfOrNull { it.second } ?: 0
+                assertEquals("$name #$b fair", rep.breakdown["fair"] ?: 0, TierObjective.fairDeviations(p, board).sum() + worst)
                 val k = TierObjective.key(p, board, rep)
                 assertEquals("$name #$b 段の超過量の合計＝total", rep.total, k.excess.sum())
                 assertEquals("$name #$b T0＝hard", rep.hard, k.excess[0])

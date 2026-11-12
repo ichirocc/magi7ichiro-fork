@@ -69,6 +69,6 @@ class CheckerReportDigestTest {
     }
 
     private companion object {
-        const val EXPECTED = "7027fa500842c6ab94ddcbcbb3538641909a853ffcc6342ab8a93809a04a557a"   // [2026-10-26] c1 50→90・c3mn 90→50、[2026-10-30] high 25→50・c3mn 50→25
+        const val EXPECTED = "c35958ed406e0ea50371fe4d4b4023d141292167a631e0ce3b78140d00f780b3"   // [3.727.77] fair＝偏差の和＋最大、 [2026-10-26] c1 50→90・c3mn 90→50、[2026-10-30] high 25→50・c3mn 50→25
     }
 }
