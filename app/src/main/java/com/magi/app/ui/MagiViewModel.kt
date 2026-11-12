@@ -716,7 +716,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "勤務表をつくり始めました。閉じても大丈夫です（できたら通知します）") }
         writeRunMarker("bg")
-        logOp("I", OpLogText.startLine("バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
+        logOp("I", OpLogText.startLine("バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm}, 直す順番=${objectiveMethodLabel(_ui.value.objectiveMethod)})",
             st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))   // [3.694.0] 前景の開始行と同じ項目
         logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
@@ -1923,7 +1923,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         var lastHardLogMs = -10_000L
         val boardToken = beginBoardJob(MagiPhase.Optimizing, engineRun = true)   // [3.328.0/3.404.0]
         // [3.694.0] 開始行は beginBoardJob の後（#N が付く）。期間・人数・入力の指紋と、開始点で読んだ設定を残す（G1・G6・G8）。
-        logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
+        logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm}, 直す順番=${objectiveMethodLabel(_ui.value.objectiveMethod)})",
             st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))
         logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
         beginFgRunGuard("最適化")   // 直後の launch の finally で必ず解放
@@ -2151,7 +2151,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val adoptedReport = if (worseThanInput) baseReport else res.report
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
-                logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} 重み=${res.report.weightedScore.toLong()} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
+                logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} 重み=${res.report.weightedScore.toLong()}（${objectiveMethodLabel(_ui.value.objectiveMethod)}） (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
                 noteRunResult(adoptedReport.hard, kept = worseThanInput)
                 preDraft?.let { p ->
                     val curKey = state?.let { stateKey(it) }

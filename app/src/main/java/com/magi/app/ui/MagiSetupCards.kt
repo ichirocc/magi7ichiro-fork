@@ -467,7 +467,7 @@ internal fun objectiveMethodLabel(m: ObjectiveMethod): String = when (m) {
     ObjectiveMethod.WEIGHTS -> "重み（従来）"
     ObjectiveMethod.PRIORITY -> "優先順位"
 }
-internal const val OBJECTIVE_METHOD_NOTE = "優先順位（既定）: 個人の回数・期間の制約を先に、連続の希望・グループの人数を次に、適切回数や偏りは最後に直します。必ず守るものは同じです。重み（従来）は前の版と同じ直し方です"
+internal const val OBJECTIVE_METHOD_NOTE = "優先順位（既定）: 個人の回数・期間の制約を先に、連続の希望・グループの人数・グループ内の偏りを次に、適切回数は最後に直します。必ず守るものは同じです。重み（従来）は前の版と同じ直し方です"
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
 internal const val APT_FAIR_PRIORITY_NOTE = "直す順番が優先順位のときは使いません（適切回数・偏りのために上の段を悪くしない）。じっくりの 6% 容認も同じく使いません"
 

@@ -32,7 +32,7 @@ class ObjectiveWeightsTest {
         for (f in MirrorKeys.hard) assertEquals(f, MirrorKeys.weights[f], t[f])
         for (f in TierObjective.tiers[1]) assertEquals(f, 200.0, t[f])
         for (f in TierObjective.tiers[2]) assertEquals(f, 20.0, t[f])
-        for (f in TierObjective.tiers[3]) assertEquals(f, 1.0, t[f])
+        for (f in TierObjective.tiers[3]) assertEquals(f, if (f == "fair") 20.0 else 1.0, t[f])
         assertEquals(MirrorKeys.weights.keys.toList(), t.keys.toList())
     }
 
