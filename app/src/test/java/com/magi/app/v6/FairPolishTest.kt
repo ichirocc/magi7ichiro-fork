@@ -183,7 +183,7 @@ class FairPolishTest {
         val st = multiUnitSelfSwapState()
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
-        assertEquals("初期fair偏差=8", 8, before.breakdown["fair"] ?: -1)
+        assertEquals("初期fair偏差=13（和 8＋最大 5、3.727.77）", 13, before.breakdown["fair"] ?: -1)
 
         // maxPasses=1に固定し、1パス内での自己振替の反復可否そのものを検証する。
         val result = AptFairPolish.applyFairPolish(st, sched, maxPasses = 1)

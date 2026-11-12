@@ -64,7 +64,7 @@ object TierObjective {
         return linkedMapOf("low" to low, "c1" to c1, "high" to high, "c3mn" to c3mn)
     }
 
-    /** fair の職員ごとの偏差（チェッカーと同じグループ×担当シフトの範囲、偏差 > 0 のものだけ）。合計は `breakdown["fair"]`。 */
+    /** fair の職員ごとの偏差（チェッカーと同じグループ×担当シフトの範囲、偏差 > 0 のものだけ）。合計にグループ×シフトごとの最大を足すと `breakdown["fair"]`（3.727.77）。 */
     fun fairDeviations(p: Problem, schedule: Array<IntArray>): List<Int> {
         val counts = countMatrix(p, schedule)
         val out = ArrayList<Int>()
