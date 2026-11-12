@@ -381,6 +381,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      *  [logOp] は main のほか最適化の進捗コールバック（Default）からも呼ばれる＝2 つの deque の更新はモニタで原子化する。 */
     private var opLogLines: List<String> = emptyList()
 
+    private var hardCauseJob: Job? = null
+
+    /** 必須違反の原因（互いに素な最小の組）を CP-SAT で求めて操作ログへ（最大 15 秒・結果は表示済み＝待たせない）。日またぎの原因も名指しする。 */
+    private fun explainHardCauses(st: com.magi.app.model.MagiState, board: Array<IntArray>, hard: Int) {
+        hardCauseJob?.cancel()
+        hardCauseJob = viewModelScope.launch(Dispatchers.Default) {
+            val p = cachedProblem(st)
+            val cores = runCatching { com.magi.app.v6.HardCauses.explain(p, board, maxCores = hard + 2, totalSeconds = 15.0) }.getOrNull()
+            if (cores.isNullOrEmpty() || !isActive) return@launch
+            com.magi.app.v6.HardCauseText.lines(cores,
+                staff = { i -> st.staff.getOrNull(i)?.name ?: "$i" }, shift = { k -> st.shifts.getOrNull(k)?.kigou ?: "$k" },
+                day = { j -> com.magi.app.v6.dayLabel(st.startDate, j) },
+                seq = { e -> p.cons3n.getOrNull(e)?.seq?.joinToString("→") { k -> st.shifts.getOrNull(k)?.kigou ?: "$k" } ?: "#$e" },
+            ).forEach { logOp("I", "必須の原因（証明・この中の 1 件を緩めないと消えない）$it") }
+        }
+    }
+
     @Synchronized
     internal fun logOp(level: String, message: String) {
         val e = OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial)
@@ -2125,6 +2142,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, res.report.hard, adoptedMsg) },
                     ) }
                     lastResultHard = newHard
+                    // [3.727.73/S5] 残った必須違反の原因（CP-SAT の最小の組）を結果の表示の後に裏で求め、操作ログへ。
+                    if (res.report.hard > 0 && res.bound != null) explainHardCauses(st0.withSchedule(res.schedule), res.schedule.copy2D(), res.report.hard)
                 }
                 lastC1Plateau?.logLines()?.take(4)?.forEach { logOp("W", it.removePrefix("[W] ")) }
                 // [3.475.0/論理監査] 採用した盤面の族を覚える。旧: 入力維持の分岐でも捨てた盤面（res.report）
