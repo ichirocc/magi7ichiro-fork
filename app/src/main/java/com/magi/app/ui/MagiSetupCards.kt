@@ -29,7 +29,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -230,7 +229,7 @@ private val BUDGET_TILE_SECS = setOf(10, 60, 120, 180, 240, MAX_BUDGET_SEC)
 /** 設定タブの保存失敗の帯（3.706.0 S4＋F-3）。1 文と塗りの［もう一度保存する］。 */
 @Composable
 internal fun SettingsSaveFailedBanner(onRetry: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(HOME_SAVE_FAILED_LINE, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
@@ -252,16 +251,9 @@ private fun AlgorithmChoiceSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
             Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            V6Algorithm.values().forEach { alg ->
-                val selected = ui.v6Algorithm == alg
-                if (selected) {
-                    Button(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
-                } else {
-                    OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
-                }
-            }
-        }
+        // 選択肢が 6 つ＝チェックの付く一覧（Apple の設定の形）。
+        val algs = V6Algorithm.values()
+        ChoiceRows(algs.map { v6AlgorithmLabel(it) }, algs.indexOf(ui.v6Algorithm), enabled = !ui.running) { onEvent(MagiEvent.Settings.SetAlgorithm(algs[it])) }
     }
 }
 
@@ -327,33 +319,25 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {
+        // スイッチは他の行と同じく右端（Apple の設定の形。2 行だけ左にあった）。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {
+            Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Switch(checked = ui.softPolish, onCheckedChange = null, enabled = !ui.running)
-            Spacer(Modifier.width(8.dp))
-            Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.agentAuto, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAgentAuto(it)) }).semantics(mergeDescendants = true) {}) {
-            Switch(checked = ui.agentAuto, onCheckedChange = null, enabled = !ui.running)
-            Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.agentAuto, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAgentAuto(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text(AGENT_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
                 Text(AGENT_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Switch(checked = ui.agentAuto, onCheckedChange = null, enabled = !ui.running)
         }
         Column(Modifier.fillMaxWidth()) {
             Text("探す強さ", style = MaterialTheme.typography.titleSmall)
             Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SearchStrength.values().forEach { s ->
-                    val label = searchStrengthLabel(s)
-                    if (ui.searchStrength == s) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetSearchStrength(s)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetSearchStrength(s)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    }
-                }
-            }
+            val strengths = SearchStrength.values()
+            MagiSegmentedControl(strengths.map { searchStrengthLabel(it) }, strengths.indexOf(ui.searchStrength),
+                { onEvent(MagiEvent.Settings.SetSearchStrength(strengths[it])) }, enabled = !ui.running)
             val toleranceUsable = ui.searchStrength == SearchStrength.THOROUGH && ui.objectiveMethod != ObjectiveMethod.PRIORITY
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.aptFairToleranceUnguarded, enabled = !ui.running && toleranceUsable, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) }).semantics(mergeDescendants = true) {}) {
                 Column(Modifier.weight(1f)) {
@@ -366,31 +350,16 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Column(Modifier.fillMaxWidth()) {
             Text("直す順番", style = MaterialTheme.typography.titleSmall)
             Text(OBJECTIVE_METHOD_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ObjectiveMethod.values().forEach { m ->
-                    val label = objectiveMethodLabel(m)
-                    if (ui.objectiveMethod == m) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetObjectiveMethod(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetObjectiveMethod(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    }
-                }
-            }
+            val methods = ObjectiveMethod.values()
+            MagiSegmentedControl(methods.map { objectiveMethodLabel(it) }, methods.indexOf(ui.objectiveMethod),
+                { onEvent(MagiEvent.Settings.SetObjectiveMethod(methods[it])) }, enabled = !ui.running)
         }
         Column(Modifier.fillMaxWidth()) {
             Text("玉突きで直す（月全体）", style = MaterialTheme.typography.titleSmall)
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す（行の間も 8dp 空ける＝押し間違いを防ぐ）。
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                EjectionChainMode.values().forEach { m ->
-                    val label = ejectionChainLabel(m)
-                    if (ui.ejectionChain == m) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChain(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChain(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    }
-                }
-            }
+            // 4 択で語も長い＝チェックの付く一覧（区切りの切替には入らない）。
+            val modes = EjectionChainMode.values()
+            ChoiceRows(modes.map { ejectionChainLabel(it) }, modes.indexOf(ui.ejectionChain), enabled = !ui.running) { onEvent(MagiEvent.Settings.SetEjectionChain(modes[it])) }
             // 次はパイプライン（「見込みのある所だけ」）にだけ効く。
             val pipelineOn = !ui.running && ui.ejectionChain == EjectionChainMode.PIPELINE
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.ejectionPipelineHardLeg, enabled = pipelineOn, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }).semantics(mergeDescendants = true) {}) {
@@ -401,28 +370,13 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = null, enabled = pipelineOn)
             }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
-                    val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
-                    val label = ejectionChainScopeLabel(sc)
-                    if (ui.ejectionChainScope == sc) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainScope(sc)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainScope(sc)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-                    }
-                }
+            val chainOn = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
+            ChoiceRows(EJECTION_CHAIN_SCOPES_SHOWN.map { ejectionChainScopeLabel(it) }, EJECTION_CHAIN_SCOPES_SHOWN.indexOf(ui.ejectionChainScope), enabled = chainOn) {
+                onEvent(MagiEvent.Settings.SetEjectionChainScope(EJECTION_CHAIN_SCOPES_SHOWN[it]))
             }
             Text("1回あたりの上限時間（残り時間の半分を超えません）", style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EJECTION_CHAIN_SECONDS.forEach { sec ->
-                    val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
-                    if (ui.ejectionChainSeconds == sec) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(sec)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text("${sec}秒") }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(sec)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text("${sec}秒") }
-                    }
-                }
-            }
+            MagiSegmentedControl(EJECTION_CHAIN_SECONDS.map { "${it}秒" }, EJECTION_CHAIN_SECONDS.indexOf(ui.ejectionChainSeconds),
+                { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(EJECTION_CHAIN_SECONDS[it])) }, enabled = chainOn)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.membraneCellLns, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetMembraneCellLns(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
@@ -563,7 +517,7 @@ internal fun EditHeaderCard(
     var issuesAll by rememberSaveable { mutableStateOf(false) }
     val fixList = com.magi.app.v6.fixItems(ui.settingIssues)
     val issues = fixList.size
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             inner?.invoke()
             Text(plan.title, style = MaterialTheme.typography.titleMedium)
@@ -692,20 +646,15 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView, bare: Boolean 
 @Composable
 internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.reviewMemos.isEmpty()) return
-    val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            ui.reviewMemos.forEachIndexed { idx, memo ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    DeleteRowButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, text = "済みにする")
+    // [島（3.727.69）] メモは一覧＝島の行。右端の「済みにする」で消す（確認なしは従来どおり）。
+    GroupedSection("見直し候補（${ui.reviewMemos.size}件）", footer = "修正中に印を付けたルール見直しのメモです（アプリを閉じると消えます）。",
+        rows = ui.reviewMemos.mapIndexed { idx, memo ->
+            @Composable {
+                GroupedRow(memo, enabled = true, onClick = null) {
+                    MagiTextButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("済みにする") }
                 }
             }
-        }
-    }
+        })
 }
 
 

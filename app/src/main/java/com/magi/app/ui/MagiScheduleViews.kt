@@ -42,7 +42,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -160,7 +159,7 @@ internal fun LiveScheduleCard(ui: UiState) {
     if (!ui.running || ui.liveSchedule.isEmpty()) return
     var show by rememberSaveable { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // [冗長性見直し] progressSummary(ui) は直上の OperatorNextActionCard の実行中表示（進捗行）に
             //   既出のため、ここでの再表示は削除（同一文字列が直列2回並んでいた）。
@@ -330,7 +329,7 @@ internal fun ScheduleToolsCard(
     // 種別のチップは既定で畳む（表を上げる）。絞り込み中・集中中は開いたまま＝いまの状態が見える。
     var filterOpen by rememberSaveable { mutableStateOf(false) }
     val filterShown = filterOpen || enabled != allVioBucketKeys || focusMode
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (hardChip != null || anyViol) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -441,7 +440,7 @@ internal fun ScheduleGrid(
     val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
     val hScroll = nav.hScroll
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示（[Set化] visibleCellVio で判定）。
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         BoxWithConstraints {
         // [7日間表示] セル幅を「利用可能幅から1週間(7日)が名前列と同時に収まる」よう動的計算（旧: 48dp固定＝
         //   多くの端末で6日強しか見えず週の模様が切れていた）。36dp未満は記号(2文字15sp)の可読性が崩れるため
@@ -1124,7 +1123,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     var open by rememberSaveable { mutableStateOf(true) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル。月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。
     val periodLabel = remember(ui.startDate, ui.days) { "集計期間 ${DayText.range(ui.startDate, 0, ui.days - 1)}" }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }
@@ -1439,7 +1438,7 @@ private fun StickyHeaderTable(stickyTopPx: Float, headH: androidx.compose.ui.uni
     Column {
         Box(Modifier.zIndex(1f).graphicsLayer {
             translationY = if (stickyTopPx >= 0f && bodyHpx > headHpx) (stickyTopPx - (bodyTopPx - headHpx)).coerceIn(0f, bodyHpx - headHpx) else 0f
-        }.background(CardDefaults.cardColors().containerColor)) { header() }
+        }.background(magiCardColors().containerColor)) { header() }
         Box(Modifier.onGloballyPositioned { c -> bodyTopPx = c.positionInRoot().y; bodyHpx = c.size.height.toFloat() }) { body() }
     }
 }
@@ -1608,7 +1607,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         val delta = (top + cellHpx) - want
         if (kotlin.math.abs(delta) > 1f) sc.animateScrollBy(delta)
     }
-    val headerBg = CardDefaults.cardColors().containerColor
+    val headerBg = magiCardColors().containerColor
     @Composable
     fun DayHeader(d: Int) {
         val dow = (sdow + d) % 7

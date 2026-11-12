@@ -110,7 +110,7 @@ internal fun WishCard(
     val onToggleDay: (Int) -> Unit = { d -> onDaysSel(if (d in daysSel) daysSel - d else daysSel + d) }
 
     Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
-        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
+        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("希望シフト登録", style = MaterialTheme.typography.titleMedium)
             // [1行に統合] 職員▼のみ常時表示。「全職員を見る」は小さな文字リンクで副次的に残す。

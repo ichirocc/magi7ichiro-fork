@@ -101,7 +101,7 @@ internal fun StaffShiftMatrixCard(
     val overloaded = cv.aptBalances.filter { it.overloaded }
     val worst = overloaded.maxByOrNull { it.shortfall }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("回数マトリクス（職員 × シフト：月に何回か）", style = MaterialTheme.typography.titleMedium)   // [3.483.0 E-7]
             Text(

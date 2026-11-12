@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -22,6 +24,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -98,10 +101,47 @@ internal fun GroupedAddRow(text: String, enabled: Boolean, onClick: () -> Unit) 
     }
 }
 
+/** 島のいちばん下の赤い文字の行（まとめて消すなど。押した時点で実行＝元に戻すで取り消す）。 */
+@Composable
+internal fun GroupedDestructiveRow(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = LocalGroupedInset.current),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = if (enabled) cs.error else cs.onSurface.copy(alpha = 0.38f))
+    }
+}
+
 /** 島の行の右端の「削除」（赤い文字・押せる大きさ 48dp。確認なしで即時は従来どおり）。 */
 @Composable
 internal fun GroupedDeleteButton(enabled: Boolean, onClick: () -> Unit) {
     TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
         Text("削除", color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+    }
+}
+
+/**
+ * 1 つを選ぶ一覧（Apple の設定の「チェックの付く行」）。選択肢が 4 つ以上か、語が長くて区切りの切替に入らないときに使う。
+ * 行は 48dp・選んだ行の右端に「✓」・行の間は細線。2〜3 択の短い語は [MagiSegmentedControl]。
+ */
+@Composable
+internal fun ChoiceRows(options: List<String>, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().selectableGroup()) {
+        options.forEachIndexed { i, label ->
+            if (i > 0) HorizontalDivider(color = cs.outlineVariant)
+            val active = i == selected
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .selectable(selected = active, enabled = enabled, role = Role.RadioButton, onClick = { onSelect(i) }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+                    color = if (enabled) cs.onSurface else cs.onSurface.copy(alpha = 0.38f))
+                if (active) Text("✓", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    color = if (enabled) cs.primary else cs.onSurface.copy(alpha = 0.38f), modifier = Modifier.clearAndSetSemantics { })
+            }
+        }
     }
 }

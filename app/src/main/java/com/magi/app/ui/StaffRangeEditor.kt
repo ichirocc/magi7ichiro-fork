@@ -9,7 +9,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -35,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
@@ -56,11 +53,7 @@ internal fun CountsCard(
     //   StaffShiftMatrixCard の見出し直下にもあり二重だったので、こちらを撤去。
     StaffShiftMatrixCard(ui, v, cv, onEvent, counts, sheetCell, onSheetCellChange)
     Spacer(Modifier.height(8.dp))
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            GroupRangeSection(ui, cv, onEvent)
-        }
-    }
+    GroupRangeSection(ui, cv, onEvent)
 }
 
 // ---- グループ単位の回数（一括）: 選んだグループの全職員に同じ上下限を設定する。
@@ -71,44 +64,31 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
     var dialog by remember { mutableStateOf(false) }
     // チップから開くとその行を入れて開く（null＝新規）。
     var dialogInit by remember { mutableStateOf<GroupRangeView?>(null) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // [適用済み一覧] 一括適用したグループ上下限(全メンバー同一レンジ)を表示。各メンバーの個人の回数にも
-            //   展開済みだが、ここでグループ単位に集約して確認・削除できるようにする。×=全員分クリア。
-            // [3.533.0/ユーザー提示のデザイン案] groupRangeSummary は既に g→k 順ソート済み＝groupBy で
-            //   隣接するグループ単位にまとまる。グループ名の重複表示をやめ見出し1つにまとめ、
-            //   チップからも「グループ名・」の接頭辞を外して短くする（1行に収まる件数を増やす）。
-            val applied = cv.groupRanges
-            if (applied.isNotEmpty()) {
-                Text("適用中のグループ上下限（${applied.size}件・個人の回数にも展開済み）",
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                applied.groupBy { it.g to it.groupName }.forEach { (gKey, rows) ->
-                    val (g, groupName) = gKey
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(groupName, style = MaterialTheme.typography.titleSmall)
-                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "すべて解除する")
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rows.forEach { gr ->
-                            val rangeLab = when {
-                                gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
-                                gr.hi.isNotBlank() -> "≤${gr.hi}"
-                                gr.lo.isNotBlank() -> "≥${gr.lo}"
-                                else -> ""
-                            }
-                            RemovableChip("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）",
-                                enabled = !ui.running, onClick = { dialogInit = gr; dialog = true },
-                                onRemove = { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }, removeDescription = "削除")
-                        }
-                    }
+    // [島（3.727.67）] 追加の島＋グループごとの島（行＝シフトの上下限・タップで変更・右端「削除」、最下行「すべて解除する」）。
+    // [3.533.0] groupRanges は g→k 順＝groupBy で隣接するグループ単位にまとまる（行から「グループ名・」の接頭辞を外す）。
+    val applied = cv.groupRanges
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        GroupedSection("グループ一括設定",
+            footer = "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。" +
+                (if (applied.isNotEmpty()) "適用中の ${applied.size} 件は個人の回数にも展開済みです。" else ""),
+            rows = listOf { GroupedAddRow("グループに上下限を適用", enabled = ui.loaded && !ui.running) { dialogInit = null; dialog = true } })
+        applied.groupBy { it.g to it.groupName }.forEach { (gKey, ranges) ->
+            val (g, groupName) = gKey
+            val rows = ArrayList<@Composable () -> Unit>()
+            ranges.forEach { gr ->
+                val rangeLab = when {
+                    gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
+                    gr.hi.isNotBlank() -> "≤${gr.hi}"
+                    gr.lo.isNotBlank() -> "≥${gr.lo}"
+                    else -> ""
                 }
+                val members = if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"
+                rows += { GroupedRow("${toHankakuKigou(gr.kigou)}  $rangeLab（${members}名）", enabled = !ui.running, onClick = { dialogInit = gr; dialog = true }) {
+                    GroupedDeleteButton(enabled = !ui.running) { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) } } }
             }
-            AddRowButton("グループに上下限を適用", onClick = { dialogInit = null; dialog = true }, enabled = ui.loaded && !ui.running)
+            rows += { GroupedDestructiveRow("すべて解除する", enabled = !ui.running) { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) } }
+            GroupedSection("適用中：$groupName", rows = rows)
+        }
     }
     if (dialog) {
         GroupRangeDialog(

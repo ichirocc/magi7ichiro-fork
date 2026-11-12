@@ -17,6 +17,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +65,7 @@ fun MagiSegmentedControl(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
@@ -78,11 +81,12 @@ fun MagiSegmentedControl(
                 val active = i == selected
                 Surface(
                     onClick = { onSelect(i) },
+                    enabled = enabled,
                     // [a11y/touch] Surface(onClick) は 48dp 自動補完が無いため明示。選択状態を読み上げに公開。
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { this.selected = active },
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
-                    contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                    contentColor = (if (active) cs.onPrimaryContainer else cs.onSurfaceVariant).let { if (enabled) it else it.copy(alpha = 0.38f) },
                     shape = MagiCorners.capsule,
                     tonalElevation = 0.dp,
                 ) {
@@ -188,8 +192,26 @@ internal fun MagiTextButton(
 @Composable
 internal fun MagiCardOrPlain(bare: Boolean, content: @Composable (PaddingValues) -> Unit) {
     if (bare) content(PaddingValues(0.dp))
-    else Card(Modifier.fillMaxWidth()) { content(PaddingValues(16.dp)) }
+    else Card(Modifier.fillMaxWidth(), colors = magiCardColors()) { content(PaddingValues(16.dp)) }
 }
+
+/**
+ * まとめの札の見出し（Apple のヘルスケアのまとめの形、3.727.70）: 小さめの太字・意味の色（必須＝error、他＝primary）。
+ * 大きな見出しで札ごとに主張し合うのをやめ、本文（数・理由）を主役にする。読み上げは見出し。
+ */
+@Composable
+internal fun TileTitle(text: String, modifier: Modifier = Modifier, hard: Boolean = false) {
+    val cs = MaterialTheme.colorScheme
+    Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+        color = if (hard) cs.error else cs.primary, modifier = modifier.semantics { heading() })
+}
+
+/**
+ * カードの地（3.727.68）。島（[MagiGroup]）と同じ surfaceContainer＝Apple の grouped の入れ物は 1 色（旧: Material の既定
+ * surfaceContainerHighest で、カードと島が別の灰色に見えた）。カードの色を写す所（集計の固定見出しなど）もこれを読む。
+ */
+@Composable
+internal fun magiCardColors(): CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
 
 /**
  * iOS の設定アプリの一覧の形（2026-10-23）: 入れ物の外に小さな見出し、入れ物の中は同じ高さの行を細い線で区切る、下に注記。
