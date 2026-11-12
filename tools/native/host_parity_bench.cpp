@@ -825,7 +825,9 @@ static int runMarginalCostTest() {
             for (int k = 0; k < q.K; k++) {
                 int sum = counts[k] + counts[(size_t)q.K + k];
                 long long tgt = jround((double)sum / 2.0);
-                d += (std::llabs((long long)counts[k] - tgt) + std::llabs((long long)counts[(size_t)q.K + k] - tgt)) * 5;
+                // [3.727.77] fair＝偏差の和＋最大の偏差（評価器の fairDevOfBucket と同式）。
+                const long long d0 = std::llabs((long long)counts[k] - tgt), d1 = std::llabs((long long)counts[(size_t)q.K + k] - tgt);
+                d += (d0 + d1 + std::max(d0, d1)) * 5;
             }
             return d;
         };
