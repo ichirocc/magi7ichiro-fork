@@ -69,6 +69,9 @@ WEIGHT_LINT_EXEMPT = {
         (("covU",), "重みではない。fmtIter の「万」への換算"),
     # [3.726 前・2026-10-24] destroy-repair/polish 系の重みの写しは PenaltyWeights（MirrorKeys.weights を初期化時に 1 回読む）へ移した＝ここに許可は要らない。
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
+    ("app/src/main/java/com/magi/app/v6/ObjectiveWeights.kt", 'm["fair"] = 50.0'):
+        ((), "優先順位方式の fair の重み（3.727.80、利用者の明示数値指示「50」）。MirrorKeys.weights の写しではなく"
+        "方式ごとの採点表の値で、high(50) との一致は偶然"),
     ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", "50 + deficit, GoalKind.RANGE_LOW"):
         ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
         "同関数内の他の GoalKind 追加箇所）。c1の重み(50)とは無関係な偶然の一致（GoalKindはRANGE_LOWで、C1ではない）"),
