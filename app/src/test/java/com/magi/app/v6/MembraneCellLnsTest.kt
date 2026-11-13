@@ -36,8 +36,8 @@ class MembraneCellLnsTest {
     fun matchesCSharpOnSampleFixture() {
         val st = StateParser.parse(javaClass.classLoader!!.getResource("sample_state_v6.json")!!.readText())!!
         val r = MembraneCellLns.apply(st, st.schedule.map { it.toIntArray() }.toTypedArray(), MembraneCellLns.Params(deterministic = true, maxCells = 30, itersPerCell = 60_000))
-        assertEquals(1, r.applied)   // [3.727.77] fair＝偏差の和＋最大で 8→1（C# の同名テストと同じ指紋）
-        assertEquals(-1124469770, r.newSchedule.joinToString(";") { it.joinToString(",") }.hashCode())
+        assertEquals(6, r.applied)   // [3.727.79] c1＝窓の不足量で 1→6（C# の同名テストと同じ指紋）
+        assertEquals(1395822771, r.newSchedule.joinToString(";") { it.joinToString(",") }.hashCode())
     }
 
     @Test

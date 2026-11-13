@@ -77,11 +77,11 @@ class C1RepairIndexTest {
     @Test
     fun expectedGainSeparatesTargetShifts() {
         // [3.279.0/C1-07] 同一職員・同一日に別シフトの不足窓が併存しても gain が混合されない。
-        //   盤面 [休,休]・ルール「X 2日窓≥1」(1手で解消=gain1) と「Y 2日窓≥2」(1手では解消しない=gain0)。
+        //   盤面 [休,Y]・ルール「X 2日窓≥1」(1手で不足が減る=gain1) と「Y 2日窓≥1」(すでに充足=gain0)。
         //   旧 API(staff,day) は max 混合で両問い合わせとも 1 になり判別不能だった。
-        val s = st(2, 1, listOf(listOf(0, 0)), listOf(C1Row("2", "X", "1"), C1Row("2", "Y", "2")))
+        val s = st(2, 1, listOf(listOf(0, 2)), listOf(C1Row("2", "X", "1"), C1Row("2", "Y", "1")))
         val idx = C1RepairIndex.build(Problem(s), s.schedule.toIntArray2D())
         assertEquals("Xへの1手は窓を解消=gain1", 1, idx.expectedGain(0, 0, 1))
-        assertEquals("Yは必要2で1手では解消しない=gain0", 0, idx.expectedGain(0, 0, 2))
+        assertEquals("Yは充足済み=gain0", 0, idx.expectedGain(0, 0, 2))
     }
 }

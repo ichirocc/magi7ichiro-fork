@@ -42,8 +42,8 @@ class WideC3nFixtureTest {
         val sched = Array(st.schedule.size) { i -> st.schedule[i].toIntArray() }
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, rep.hard)
-        assertEquals(410, rep.total)   // [3.727.77] fair 偏差の和＋最大で 17→28。[3.541.0] fair 達成率モード v2 で fair 19→17（3.538.0 は 23→19。他族は 3.509.0 の D9 以来不変）
-        assertEquals(8711.0, rep.weightedScore, 1e-9)   // [3.727.77] fair 17→28（×5）、 [2026-10-30] high 25→50（8件）・c3mn 50→25（0件）、[3.556.0] c3m 10→6（62件）・c42 1→9（3件）、[3.647.0] fair 2→5（17件）、[2026-10-26] c1 50→90・c3mn 90→50
+        assertEquals(441, rep.total)   // [3.727.79] c1 を窓の不足量で 79→110。[3.727.77] fair 偏差の和＋最大で 17→28。[3.541.0] fair 達成率モード v2 で fair 19→17（3.538.0 は 23→19。他族は 3.509.0 の D9 以来不変）
+        assertEquals(11501.0, rep.weightedScore, 1e-9)   // [3.727.79] c1 79→110（×90）、[3.727.77] fair 17→28（×5）、 [2026-10-30] high 25→50（8件）・c3mn 50→25（0件）、[3.556.0] c3m 10→6（62件）・c42 1→9（3件）、[3.647.0] fair 2→5（17件）、[2026-10-26] c1 50→90・c3mn 90→50
     }
 
     @Test

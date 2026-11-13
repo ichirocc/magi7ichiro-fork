@@ -322,10 +322,10 @@ class V6SanityPortTest {
         val summary = lines.firstOrNull { it.contains("c1内訳") }
         assertTrue("c1内訳サマリ行が出力されること", summary != null)
         // [3.282.0] 計数を「違反ラン先頭のみ」→ checker の inc と同じ「違反窓ごと」へ是正。
-        //   この盤面は窓j=0(休0回)とj=1(休1回)の2窓が違反＝breakdown c1=2 と厳密に一致する
+        //   この盤面は窓j=0(休0回＝不足2)とj=1(休1回＝不足1)が違反＝breakdown c1=3 と厳密に一致する
         //   （旧実装は連続窓を1ランとして「1件」と表示し breakdown と食い違う第3の計数だった）。
-        assertEquals("前提: 違反窓は2窓", 2, report.breakdown["c1"])
-        assertTrue("s0が休(5日窓≥2)で2件（=breakdownと同じ窓計上）と表示されること", summary!!.contains("s0 休(5日窓≥2)2件"))
+        assertEquals("前提: 不足量の和は3", 3, report.breakdown["c1"])
+        assertTrue("s0が休(5日窓≥2)で3件（=breakdownと同じ不足量の計上）と表示されること", summary!!.contains("s0 休(5日窓≥2)3件"))
         assertTrue("s1は違反なしのため内訳に出ないこと", !summary.contains("s1 "))
     }
 

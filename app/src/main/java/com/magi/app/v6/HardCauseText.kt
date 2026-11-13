@@ -4,7 +4,7 @@ package com.magi.app.v6
  * 必須違反の原因（CP-SAT の互いに素な最小の組、[HardCauses]）を診断ログの 1 行ずつへ（3.727.73、S5）。
  * 1 行＝「この中の 1 件を緩めないと、その必須違反は消えない」の証明。日またぎの原因（前日の必要人数と禁止の並び）も名指しする。
  */
-internal object HardCauseText {
+object HardCauseText {
     /** [staff]/[shift] は名前・記号、[day] は日付の表示、[seq] は禁止の並びの行の記号列。 */
     fun lines(
         cores: List<HardCauses.Core>,

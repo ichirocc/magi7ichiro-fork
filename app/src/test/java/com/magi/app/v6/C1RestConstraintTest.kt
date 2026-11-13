@@ -87,7 +87,7 @@ class C1RestConstraintTest {
             assertTrue("X${i + 1}（休≤3）は C1 違反として検出されるはず", rowHasC1(report, i, 14))
         }
         // day1(14) == 期間(14) なので各違反スタッフにつき窓は1個 → 件数はちょうどパターン数
-        assertEquals(violationPatterns.size, report.breakdown["c1"])
+        assertEquals(violationPatterns.sumOf { r -> 4 - r.count { it == 0 } }, report.breakdown["c1"])   // 件数＝不足量の和
     }
 
     @Test
@@ -95,6 +95,6 @@ class C1RestConstraintTest {
         val st = buildState(validPatterns + violationPatterns)
         val report = UnifiedViolationChecker.check(st)
         // 合格8 + 違反5 を混在させても、c1 件数は違反5件のみ
-        assertEquals(violationPatterns.size, report.breakdown["c1"])
+        assertEquals(violationPatterns.sumOf { r -> 4 - r.count { it == 0 } }, report.breakdown["c1"])   // 件数＝不足量の和
     }
 }
