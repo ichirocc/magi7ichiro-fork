@@ -77,12 +77,12 @@ internal object C1TemporalFlowPolish {
                 if (x !in 0 until p.K || d <= 0 || d > p.T || !p.canDo(i, x)) continue
                 var count = 0
                 for (j in 0 until d) if (s[i][j] == x) count++
-                if (count < c.day2) out++
+                if (count < c.day2) out += c.day2 - count
                 var start = 1
                 while (start <= p.T - d) {
                     if (s[i][start - 1] == x) count--
                     if (s[i][start + d - 1] == x) count++
-                    if (count < c.day2) out++
+                    if (count < c.day2) out += c.day2 - count
                     start++
                 }
             }

@@ -1108,7 +1108,7 @@ object V6HotfixPasses {
             d.refreshedWithCounts(c1Left) { i, x, ri ->
                 val c = pFin.cons1.getOrNull(ri)
                 if (c == null || c.shiftIdx != x || c.day1 <= 0 || c.day1 > pFin.T) 0
-                else (0..pFin.T - c.day1).count { w -> (0 until c.day1).count { l -> work[i][w + l] == x } < c.day2 }
+                else (0..pFin.T - c.day1).sumOf { w -> maxOf(0, c.day2 - (0 until c.day1).count { l -> work[i][w + l] == x }) }
             }
         }
         return refreshed?.takeIf { it.hasEntries || it.causeUnknown }

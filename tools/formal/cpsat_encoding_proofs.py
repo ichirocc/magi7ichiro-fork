@@ -53,10 +53,12 @@ min_encoding("low d>=0, d+n>=lo", zmax(0, lo - n), lambda y: z3.And(y >= 0, y + 
 min_encoding("high d>=0, d-n>=-hi", zmax(0, n - hi), lambda y: z3.And(y >= 0, y - n >= -hi), u, (n >= 0, hi >= 0))
 min_encoding("apt d>=|n-t|", z3.If(n >= t, n - t, t - n), lambda y: z3.And(y >= 0, y - n >= -t, y + n >= t), u, (n >= 0, t >= 0))
 
-# c1・c2: f∈{0,1}, z + d·f >= d の最小 f は [z < d]（窓の回数 z が最低数 d 未満なら違反 1）。
+# c1: 0<=f<=d, z + f >= d の最小 f は max(0, d−z)（窓の回数 z が最低数 d に足りない分）。
+# c2: f∈{0,1}, z + d·f >= d の最小 f は [z < d]（回数 z が最低数 d 未満なら違反 1）。
 z, d, m, ul = z3.Ints("z d m ul")
 f = z3.Int("f")
-min_encoding("c1/c2 z+d*f>=d", z3.If(z < d, 1, 0), lambda y: z3.And(y >= 0, y <= 1, z + d * y >= d), f, (z >= 0, d >= 1))
+min_encoding("c1 z+f>=d", zmax(0, d - z), lambda y: z3.And(y >= 0, y <= d, z + y >= d), f, (z >= 0, d >= 1))
+min_encoding("c2 z+d*f>=d", z3.If(z < d, 1, 0), lambda y: z3.And(y >= 0, y <= 1, z + d * y >= d), f, (z >= 0, d >= 1))
 # c41: 0<=z<=m、z + l·f >= l かつ z − (m−u)·f <= u の最小 f は [z<l or z>u]（l>0・u<m のときだけ条件を置く）。
 l41 = z3.Int("l41")
 min_encoding("c41 range", z3.If(z3.Or(z < l41, z > ul), 1, 0),

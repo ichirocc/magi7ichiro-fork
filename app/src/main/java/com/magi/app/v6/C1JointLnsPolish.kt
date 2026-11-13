@@ -391,7 +391,7 @@ internal object C1JointLnsPolish {
                 for (bit in minBit..maxBit) {
                     val windowPenalty = if (day + 1 >= d) {
                         val ones = Integer.bitCount(mask) + bit
-                        if (ones < c.day2) 1 else 0
+                        maxOf(0, c.day2 - ones)
                     } else 0
                     val nm = if (suffixBits == 0) 0 else ((mask shl 1) or bit) and maskKeep
                     val v = base + windowPenalty
@@ -422,7 +422,7 @@ internal object C1JointLnsPolish {
             for (day in start until start + d) {
                 if (!p.wishLocked(staff, day) || p.lockTo(staff, day) == c.shiftIdx) possible++
             }
-            if (possible < c.day2) unavoidable++
+            if (possible < c.day2) unavoidable += c.day2 - possible
         }
         return unavoidable
     }

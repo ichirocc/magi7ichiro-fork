@@ -383,7 +383,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
     long long hard1 = 0, soft = 0;
     if (bd) for (int i = 0; i < kBreakdownCount; i++) bd[i] = 0;
 
-    // c1（canDo ガード＋#fire×重み90、[3.522.0] 30→50、2026-10-26 50→90。経緯はdocs/history/3.4xx.md）
+    // c1（canDo ガード＋窓ごとの不足量×重み90、[3.522.0] 30→50、2026-10-26 50→90。経緯はdocs/history/3.4xx.md）
     {
         long long raw = 0;
         for (const auto& c : p.cons1) {
@@ -393,7 +393,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 for (int j = 0; j <= T - c.d1; j++) {
                     int z = 0;
                     for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                    if (z < c.d2) raw++;
+                    if (z < c.d2) raw += c.d2 - z;
                 }
             }
         }
@@ -796,14 +796,17 @@ struct SaChunk {
             uint64_t rm = rowMask[(size_t)i * K + c.si];
             uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
             for (int j = 0; j <= T - c.d1; j++)
-                if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += p.w.c1;
+            {
+                const int z = __builtin_popcountll((rm >> j) & wmask);
+                if (z < c.d2) v += (c.d2 - z) * p.w.c1;
+            }
             return v;
         }
         const int* row = a.data() + (size_t)i * T;
         for (int j = 0; j <= T - c.d1; j++) {
             int z = 0;
             for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-            if (z < c.d2) v += p.w.c1;
+            if (z < c.d2) v += (c.d2 - z) * p.w.c1;
         }
         return v;
     }

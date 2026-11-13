@@ -147,11 +147,10 @@ object C1RepairAnalysis {
             if (s[v.staff][d] == v.shift) continue
             val wishConflict = p.wishLocked(v.staff, d)
             val patternRisk = p.makesForbiddenRun(s, v.staff, d, v.shift)
-            // gain = この日を shift にすると**実際に解消する**（この職員の）不足窓数。
+            // gain = この日を shift にすると減る（この職員の）c1 の件数。
             //   [3.278.0/監査修正] ①窓開始の下界 lo は**ルールごとの窓幅 c.day1** から取る（旧: v.windowDays
             //   固定＝同一シフトのより長い別ルール窓（休の5日窓＋15日窓型）が d を含んでいても切り捨てられ過小）。
-            //   ②+1 で充足に変わるのは z == c.day2 - 1 の窓のみ（旧: z < c.day2＝1手では解消しない深い不足窓も
-            //   計上する過大）。checker は不足窓ごとに 1 fire 計上するため「解消数」＝ちょうど閾値未満1の窓数。
+            //   ②不足の窓はどれも +1 で不足量が 1 減る（checker は窓ごとの不足量を計上）。
             var gain = 0
             for (c in p.cons1) {
                 if (c.shiftIdx != v.shift || c.day1 !in 1..p.T) continue
@@ -160,7 +159,7 @@ object C1RepairAnalysis {
                     if (d !in ws until ws + c.day1) continue
                     var z = 0
                     for (l in 0 until c.day1) if (s[v.staff][ws + l] == v.shift) z++
-                    if (z == c.day2 - 1) gain++
+                    if (z < c.day2) gain++
                 }
             }
             val old = s[v.staff][d]
@@ -240,7 +239,7 @@ object C1RepairAnalysis {
                     while (jj <= p.T - c.day1) {
                         var z = 0
                         for (l in 0 until c.day1) if (rows[mi][jj + l] == c.shiftIdx) z++
-                        if (z < c.day2) total++
+                        if (z < c.day2) total += c.day2 - z
                         jj++
                     }
                 }

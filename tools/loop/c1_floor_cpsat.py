@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """頭打ち盤面の c1 の下限（CP-SAT）。HardFloorExport.kt の *.model.json を読み、
-HARD（covU＋c3n＋c3w、hard_floor_cpsat.py と同じ式）を上限 H 以下に保ったまま c1（違反窓の数）を最小にする。
+HARD（covU＋c3n＋c3w、hard_floor_cpsat.py と同じ式）を上限 H 以下に保ったまま c1（窓ごとの不足量の和）を最小にする。
 置ける範囲は mayPlace（最適化器と同じ、希望・手動固定は固定）。開始解は書き出した盤面。
   /usr/bin/python3 tools/loop/c1_floor_cpsat.py <model.json> <H> [秒=300] [workers=4] [low上限|-] [high上限|-] [tag=c1]
 low/high は個人の下限・上限の超過の合計に上限を足す（c1 より重い族を悪化させない比較）。解は <model>.<tag>.sol.json。checker 照合は HardFloorExport の verify（*.mayPlace.sol.json として置いて読む）。
@@ -66,8 +66,8 @@ def build(m, hmax, lowmax=None, highmax=None):
                 continue
             for j in range(T - day1 + 1):
                 z = sum(x[i, j + l, k] for l in range(day1) if (i, j + l, k) in x)
-                v = md.NewBoolVar("")
-                md.Add(z >= day2).OnlyEnforceIf(v.Not())
+                v = md.NewIntVar(0, day2, "")
+                md.Add(z + v >= day2)
                 c1.append(v)
     md.Minimize(sum(c1))
     for i in range(S):

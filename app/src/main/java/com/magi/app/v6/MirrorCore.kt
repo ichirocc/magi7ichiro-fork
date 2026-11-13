@@ -290,7 +290,7 @@ object UnifiedViolationChecker {
                     }
                     val viol = z < c.day2
                     if (viol) {
-                        inc("c1")
+                        inc("c1", c.day2 - z)
                         if (!prevViol) { mark(i, j, "c1"); runStart = j }
                     } else if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
                     prevViol = viol

@@ -97,7 +97,7 @@ internal object CountChainPolish {
                 var j = 0
                 while (j <= p.T - c.day1) {
                     if (j > 0) { if (row[j - 1] == c.shiftIdx) z--; if (row[j + c.day1 - 1] == c.shiftIdx) z++ }
-                    if (z < c.day2) v += wC1
+                    if (z < c.day2) v += (c.day2 - z) * wC1
                     j++
                 }
             }
