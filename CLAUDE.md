@@ -84,7 +84,7 @@
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
 c1(90) > high(50) > c3mn(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
-weekly(2)。採点だけは方式で切り替わる（`ObjectiveWeights`）: アプリの既定は「直す順番：優先順位」＝SOFT が T1 200／T2 20／T3 1・fair 20（3.727.40、fair は 3.727.75、エンジン単体の既定とテストの基準は上の重みのまま）。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
+weekly(2)。採点だけは方式で切り替わる（`ObjectiveWeights`）: アプリの既定は「直す順番：優先順位」＝SOFT が T1 200／T2 20／T3 1・fair 50（3.727.40、fair は 3.727.80、エンジン単体の既定とテストの基準は上の重みのまま）。経緯（旧値・改定の版と指示）は `docs/business-logic.md` §2「重みの経緯」。
 この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・
 `magi_native.cpp` の5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md`・この行を**同じコミットで**揃える
 （destroy-repair/polish系4ファイルは `PenaltyWeights` 経由で追従＝直さない。詳細は `.claude/rules/weights.md`）。
