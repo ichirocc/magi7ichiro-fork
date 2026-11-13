@@ -1147,6 +1147,34 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
 
 
 /**
+ * 必須違反の原因（CP-SAT が証明した互いに素な最小の組、[com.magi.app.v6.HardCauseText.blocks]）。結果の根拠の行と同じ条件で出す。
+ * 読むだけ＝直す操作は問題の一覧と希望の試算にある。
+ */
+@Composable
+internal fun HardCauseCard(ui: UiState) {
+    if (!ui.hasResult || ui.boundSummary == null || ui.hardCauses.isEmpty()) return
+    val cs = MaterialTheme.colorScheme
+    var all by remember(ui.hardCauses) { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TileTitle(com.magi.app.v6.HARD_CAUSE_CARD_TITLE, hard = true)
+            Text(com.magi.app.v6.HARD_CAUSE_CARD_LEAD, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            val shown = if (all) ui.hardCauses else ui.hardCauses.take(com.magi.app.v6.HARD_CAUSE_PREVIEW)
+            for (b in shown) {
+                Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.small) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(b.title, color = cs.onErrorContainer, style = MaterialTheme.typography.titleSmall)
+                        for (l in b.lines) Text(l, color = cs.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+                        if (!b.minimal) Text(com.magi.app.v6.HARD_CAUSE_NOT_MINIMAL, color = cs.onErrorContainer, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (shown.size < ui.hardCauses.size) SettingIssuesShowAll(ui.hardCauses.size - shown.size) { all = true }
+        }
+    }
+}
+
+/**
  * [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断カード。CoverageDiagnosisCard（人員不足/過剰の原因）の
  * c3n 版＝同じ作り。必須違反が残っているのに探索が進まないとき、「構造的に不能（希望調整が必要）」か
  * 「多段手が必要（再実行で解消し得る）」かを違反 run ごとに示す。読取専用・スコア不変。

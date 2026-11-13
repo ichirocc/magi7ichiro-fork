@@ -105,6 +105,7 @@ data class UiState(
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val stopSummary: com.magi.app.v6.V6FinalPort.StopSummary? = null,   // [3.643.0] 直近の実行がどう終わったか（ホームの説明行）。結果が無効になる操作で null
     val boundSummary: com.magi.app.v6.V6FinalPort.BoundSummary? = null,   // [3.727.72] CP-SAT の下限とギャップ（根拠の一行）。stopSummary と同じく結果が無効になる操作で null
+    val hardCauses: List<com.magi.app.v6.HardCauseText.Block> = emptyList(),   // [3.727.78] 必須違反の原因の組（分析タブの札）。boundSummary と同じ寿命
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
     val logs: List<String> = emptyList(),
     val elapsedMs: Long = 0,
