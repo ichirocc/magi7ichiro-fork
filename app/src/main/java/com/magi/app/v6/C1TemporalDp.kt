@@ -151,7 +151,7 @@ internal object C1TemporalDp {
                     else for (rule in validRules) {
                         if (day + 1 < rule.days) continue
                         val rm = (1L shl rule.days) - 1L
-                        if (java.lang.Long.bitCount(full and rm) < rule.minimum) fireInc++
+                        fireInc += maxOf(0, rule.minimum - java.lang.Long.bitCount(full and rm))
                     }
                     val changed = (bit == 1) != oldBit
                     val changedCount = recChanged + if (changed) 1 else 0
@@ -255,7 +255,7 @@ internal object C1TemporalDp {
     private fun fireTableFor(rules: List<Rule>, window: Int): ByteArray = fireTables.getOrPut(rules) {
         ByteArray(1 shl window) { m ->
             var inc = 0
-            for (rule in rules) if (Integer.bitCount(m and ((1 shl rule.days) - 1)) < rule.minimum) inc++
+            for (rule in rules) inc += maxOf(0, rule.minimum - Integer.bitCount(m and ((1 shl rule.days) - 1)))
             inc.toByte()
         }
     }
@@ -267,12 +267,12 @@ internal object C1TemporalDp {
             if (d !in 1..row.size || rule.minimum <= 0) continue
             var count = 0
             for (j in 0 until d) if (row[j] == targetShift) count++
-            if (count < rule.minimum) fires++
+            if (count < rule.minimum) fires += rule.minimum - count
             var start = 1
             while (start <= row.size - d) {
                 if (row[start - 1] == targetShift) count--
                 if (row[start + d - 1] == targetShift) count++
-                if (count < rule.minimum) fires++
+                if (count < rule.minimum) fires += rule.minimum - count
                 start++
             }
         }

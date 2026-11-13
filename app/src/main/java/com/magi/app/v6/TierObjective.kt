@@ -50,7 +50,7 @@ object TierObjective {
                 for (w in 0..p.T - c.day1) {
                     var z = 0
                     for (l in 0 until c.day1) if (row[w + l] == c.shiftIdx) z++
-                    if (z < c.day2) c1[i]++
+                    if (z < c.day2) c1[i] += c.day2 - z
                 }
             }
         }

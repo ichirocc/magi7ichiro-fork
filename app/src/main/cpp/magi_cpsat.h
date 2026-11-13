@@ -160,9 +160,9 @@ private:
                 sat::LinearExpr z;
                 for (int l = 0; l < c.d1; l++) z += X(i, j + l, c.si);
                 long long cz;
-                if (isConst(z, cz)) { if (cz < c.d2) addSoft(sat::LinearExpr(1), p_.w.c1); continue; }
-                auto f = cp_.NewBoolVar();
-                cp_.AddGreaterOrEqual(z + c.d2 * f, c.d2);
+                if (isConst(z, cz)) { if (cz < c.d2) addSoft(sat::LinearExpr(c.d2 - cz), p_.w.c1); continue; }
+                auto f = cp_.NewIntVar({0, c.d2});
+                cp_.AddGreaterOrEqual(z + f, c.d2);
                 addSoft(f, p_.w.c1);
             }
         }

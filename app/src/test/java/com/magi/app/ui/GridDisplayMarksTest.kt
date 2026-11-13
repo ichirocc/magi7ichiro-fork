@@ -55,7 +55,7 @@ class GridDisplayMarksTest {
     }
 
     @Test fun everyViolatedC1WindowWithAChangeableDayHasAMark() {
-        assertEquals("ランの窓数の和はチェッカーの c1 件数", rep.breakdown["c1"] ?: 0, ui.c1Shortages.sumOf { it.windows })
+        assertEquals("ランの窓数の和は不足の窓の数", com.magi.app.v6.C1RepairAnalysis.analyze(cachedProblem(st), st.schedule.toIntArray2D()).size, ui.c1Shortages.sumOf { it.windows })
         val p = cachedProblem(st)
         for (sh in ui.c1Shortages) for (w in sh.from..sh.to - sh.day1 + 1) {
             val win = w until w + sh.day1

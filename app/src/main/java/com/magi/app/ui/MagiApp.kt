@@ -1016,6 +1016,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onFixNeed = { k, d -> openEditLandingFrom(EditLanding(0, null, needShift = k, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
                         summary = analysis,
                     )
+                    HardCauseCard(ui)
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6, ui.breakdown)
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,

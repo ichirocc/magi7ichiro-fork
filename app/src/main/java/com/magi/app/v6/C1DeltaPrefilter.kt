@@ -158,7 +158,7 @@ object C1DeltaPrefilter {
             while (j <= p.T - c.day1) {
                 var z = 0
                 for (l in 0 until c.day1) if (row[j + l] == x) z++
-                if (z < c.day2) fires++
+                if (z < c.day2) fires += c.day2 - z
                 j++
             }
         }

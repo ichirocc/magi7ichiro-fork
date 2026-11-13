@@ -510,7 +510,8 @@ class DeltaEvaluator(private val p: Problem) {
             val row = bits[i][c.shiftIdx]; val win = if (c.day1 == 63) Long.MAX_VALUE else (1L shl c.day1) - 1
             var js = js0
             while (js <= js1) {
-                if (java.lang.Long.bitCount((row ushr js) and win) < c.day2) tot += 1
+                val z = java.lang.Long.bitCount((row ushr js) and win)
+                if (z < c.day2) tot += c.day2 - z
                 js++
             }
             return tot
@@ -519,7 +520,7 @@ class DeltaEvaluator(private val p: Problem) {
         while (js <= js1) {
             var z = 0; var l = 0
             while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
-            if (z < c.day2) tot += 1   // [統一] #fire 計上。重みは soft 集約で×4
+            if (z < c.day2) tot += c.day2 - z
             js++
         }
         return tot
@@ -612,7 +613,7 @@ class DeltaEvaluator(private val p: Problem) {
             while (js <= T - c.day1) {
                 var z = 0; var l = 0
                 while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
-                if (z < c.day2) tot += 1   // [統一] #fire 計上。重みは soft 集約で×4
+                if (z < c.day2) tot += c.day2 - z
                 js++
             }
         }

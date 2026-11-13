@@ -302,7 +302,7 @@ internal object C3RotationPolish {
             while (j <= p.T - c.day1) {
                 var z = 0
                 for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
-                if (z < c.day2) { total++; weighted += ObjectiveWeights.of("c1") }
+                if (z < c.day2) { total += c.day2 - z; weighted += (c.day2 - z) * ObjectiveWeights.of("c1") }
                 j++
             }
         }

@@ -312,7 +312,7 @@ object V6SanityPort {
                     for (j in w until w + c.day1) {
                         if (if (p.wishLocked(i, j)) row[j] == x else p.mayPlaceAt(i, j, x)) reach++
                     }
-                    if (reach < c.day2) n++
+                    if (reach < c.day2) n += c.day2 - reach
                 }
             }
         }
@@ -1842,7 +1842,7 @@ object V6SanityPort {
                         while (j <= p.T - c.day1) {
                             var z = 0
                             for (l in 0 until c.day1) if (s[i][j + l] == c.shiftIdx) z++
-                            if (z < c.day2) perStaffRule.getOrPut(i) { LinkedHashMap() }.merge(ruleLabel, 1, Int::plus)
+                            if (z < c.day2) perStaffRule.getOrPut(i) { LinkedHashMap() }.merge(ruleLabel, c.day2 - z, Int::plus)
                             j++
                         }
                     }

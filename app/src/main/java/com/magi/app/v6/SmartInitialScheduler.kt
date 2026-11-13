@@ -266,7 +266,7 @@ object SmartInitialScheduler {
                     for (rule in validRules) {
                         if (day + 1 < rule.days) continue
                         val rm = (1L shl rule.days) - 1L
-                        if (java.lang.Long.bitCount(full and rm) < rule.minimum) fireInc++
+                        fireInc += maxOf(0, rule.minimum - java.lang.Long.bitCount(full and rm))
                     }
                     val cost = rec.cost + fireInc.toLong() * 1_000_000L + bit.toLong() * 1_000L
                     val newMask = full and keepMask

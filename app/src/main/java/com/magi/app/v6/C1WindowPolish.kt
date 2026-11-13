@@ -27,7 +27,7 @@ internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
         while (w <= p.T - d) {
             var z = 0
             for (l in 0 until d) if (work[i][w + l] == x) z++
-            if (z < n) fires++
+            if (z < n) fires += n - z
             w++
         }
     }
