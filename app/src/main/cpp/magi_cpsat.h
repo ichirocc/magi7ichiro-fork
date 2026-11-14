@@ -1,6 +1,7 @@
 // CP-SAT（OR-Tools）で勤務表全体を 1 つのモデルにして解く。今の探索と併走し、①下限（これ以上良くならない値）
 // ②より良い勤務表 を返す。モデルの目的は fullEvalParts と同じ式（必須の件数 → 重み付きの点数の 2 段）。
-// fair（達成率の中央値）は線形に書けないので 0 以上の緩和＝下限は常に正しい（実際の値以下）。
+// fair（達成率の中央値）は線形に書けないので、実際の値以下になる近似（[addFair]）を目的にだけ足す＝下限は常に正しい（実際の値以下）。
+// 点数 [weighted]（解の重み・盤面固定の照合に使う）は fair を含めない。
 // magi_native.cpp の末尾から include される（MAGI_WITH_CPSAT のときだけ）＝MagiProblem などを同じ翻訳単位で使う。
 #pragma once
 #include "ortools/sat/cp_model.h"
@@ -42,7 +43,7 @@ struct Options {
     int linearizationLevel = 2;
     // 使う探索役（空なら CP-SAT の既定の並び）。少ないワーカーでも下限を担う役（max_lp など）を必ず入れるため。
     std::vector<std::string> subsolvers;
-    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage）。
+    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage,9 fair の近似）。
     unsigned families = ~0u;
     // 第 1 段の持ち時間の上限（秒）。
     double phase1MaxSeconds = 6.0;
@@ -55,7 +56,7 @@ struct Result {
     long long hard = -1;            // 見つけた解の必須件数（モデルの値）
     long long weighted = -1;        // 見つけた解の重み付き（必須の重み込み・fair を除く）
     long long hardBound = -1;       // 必須件数の下限
-    long long weightedBound = -1;   // 重み付きの下限（hard が hardBound と同じ解の範囲で）
+    long long weightedBound = -1;   // 重み付き＋fair の近似の下限（hard が hardBound と同じ解の範囲で）＝チェッカーの weightedScore 以下
     bool hardProven = false;        // 必須件数が最適と証明できた
     std::vector<int> board;         // 見つけた最良の盤面（無ければ空）
     double wallSeconds = 0.0;
@@ -74,10 +75,13 @@ public:
         if (f & 32u) addCells();
         addCountsMaybe(f & 64u);
         if (f & 128u) addWeekly(); if (f & 256u) addCoverage();
+        if (f & 512u) addFair();
     }
 
     const sat::LinearExpr& hardCount() const { return hardCount_; }
     const sat::LinearExpr& weighted() const { return weighted_; }
+    // 第 2 段で最小にする式＝重み付き＋fair の近似（[addFair]、実際の fair 以下）。
+    sat::LinearExpr objective() const { return weighted_ + fair_; }
     // 最上段（優先順位方式の T1＝low・c1・high・c3mn）の件数の和。優先順位方式でないときは空（[tierPhase] が false）。
     const sat::LinearExpr& topTier() const { return top_; }
     bool tierPhase() const { return topW_ > 0; }
@@ -101,7 +105,7 @@ private:
     // セルごとの (k, 変数)。変数が 1 つだけのセルは fixed_ に値を置き、変数は作らない。
     std::vector<std::vector<std::pair<int, sat::BoolVar>>> vars_;
     std::vector<int> fixed_;
-    sat::LinearExpr hardCount_, weighted_, top_;
+    sat::LinearExpr hardCount_, weighted_, top_, fair_;
     // 優先順位方式（T1 の 4 族が同じ重み）のときだけ最上段の重み、それ以外は 0。
     const long long topW_ = (p_.w.c1 == p_.w.low && p_.w.c1 == p_.w.high && p_.w.c1 == p_.w.c3mn) ? p_.w.c1 : 0;
     std::vector<sat::LinearExpr> cnt_;   // S*K: 回数
@@ -366,6 +370,76 @@ private:
         }
     }
 
+    // fair の近似（3.727.81）。群×担当シフトごとに、実際の fair（MirrorCore.fairDevCore）以下になる値を足す。
+    //   達成率モード: 偏差の和＋最大＝Σ|c'−中心−r×幅| と max の、基準 r を自由にした最小（r は 1/Q 刻み）。丸めと刻みの誤差ぶんを引く。
+    //   従来の round(平均) 方式（基準の無い人がいる群）: 基準の代わりに自由な整数 m を置いた Σ|c−m|＋max。
+    //   どちらも母集団の一部（置ける人で幅 > 0）だけで数える＝実際の値以下。置けない人が基準なしで入りうる群は数えない。
+    void addFair() {
+        if (p_.w.fair == 0) return;
+        const long long Q = 24;
+        const long long big = 4LL * Q * T * (T + 2);
+        for (int g = 0; g < (int)p_.members.size() && g < (int)p_.bucket.size(); g++) for (int k : p_.bucket[g]) {
+            std::vector<int> pop;
+            bool legacy = false, skip = false;
+            for (int x : p_.members[g]) {
+                const size_t xk = (size_t)x * K + k;
+                const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
+                const bool basis = (lo != INT32_MIN && hi != INT32_MAX) || t >= 0;
+                if (p_.pl(x, k)) { pop.push_back(x); if (!basis) legacy = true; continue; }
+                if (basis) continue;
+                for (int j = 0; j < T && !skip; j++) if (mayBe(x, j, k)) skip = true;
+            }
+            if (skip || pop.size() < 2) continue;
+            if (legacy) {
+                auto m = cp_.NewIntVar({0, T});
+                auto mx = cp_.NewIntVar({0, T});
+                sat::LinearExpr sum;
+                for (int x : pop) {
+                    const auto& n = cnt_[(size_t)x * K + k];
+                    auto d = cp_.NewIntVar({0, T});
+                    cp_.AddGreaterOrEqual(d - n + m, 0);
+                    cp_.AddGreaterOrEqual(d + n - m, 0);
+                    cp_.AddGreaterOrEqual(mx - d, 0);
+                    sum += d;
+                }
+                fair_ += p_.w.fair * (sum + mx);
+                continue;
+            }
+            auto r = cp_.NewIntVar({-Q, Q * T});
+            auto mx = cp_.NewIntVar({0, big});
+            sat::LinearExpr sum;
+            long long n = 0, s2sum = 0, s2max = 0;
+            for (int x : pop) {
+                const size_t xk = (size_t)x * K + k;
+                const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
+                const auto& c = cnt_[(size_t)x * K + k];
+                sat::LinearExpr e = c;
+                long long center2, s2;
+                if (lo != INT32_MIN && hi != INT32_MAX) {
+                    if (hi <= lo || lo < 0) continue;
+                    auto upper = cp_.NewIntVar({0, T});
+                    cp_.AddMinEquality(upper, {c, sat::LinearExpr(hi)});
+                    auto clamped = cp_.NewIntVar({lo, hi});
+                    cp_.AddMaxEquality(clamped, {sat::LinearExpr(upper), sat::LinearExpr(lo)});
+                    e = clamped; center2 = (long long)lo + hi; s2 = (long long)hi - lo;
+                } else {
+                    if (t <= 0) continue;
+                    center2 = 2LL * t; s2 = 2LL * t;
+                }
+                auto d = cp_.NewIntVar({0, big});
+                cp_.AddGreaterOrEqual(d - 2 * Q * e + s2 * r, -Q * center2);
+                cp_.AddGreaterOrEqual(d + 2 * Q * e - s2 * r, Q * center2);
+                cp_.AddGreaterOrEqual(mx - d, 0);
+                sum += d; n++; s2sum += s2; s2max = std::max(s2max, s2);
+            }
+            if (n < 2) continue;
+            const long long slack = Q * (n + 1) + (s2sum + s2max + 1) / 2;
+            auto fv = cp_.NewIntVar({0, (n + 1) * big / (2 * Q) + 1});
+            cp_.AddGreaterOrEqual(2 * Q * fv - sum - mx, -slack);
+            fair_ += p_.w.fair * fv;
+        }
+    }
+
     // 被覆: covU＝max(0, min(定義された必要数) − got)、covO＝max(0, got − max(定義された必要数))（per-cell OR/AND と同値）。
     void addCoverage() {
         for (int k = 0; k < K; k++) for (int j = 0; j < T; j++) {
@@ -454,7 +528,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     Model m(p, hw);
     m.build(hint2, opt);
     m.cp().AddLessOrEqual(m.hardCount(), hardCap);
-    m.cp().Minimize(m.weighted());
+    m.cp().Minimize(m.objective());
     sat::Model env;
     env.Add(sat::NewSatParameters(params(opt, std::max(0.05, opt.maxSeconds - elapsed()))));
     std::atomic<bool> phaseStop{false};
@@ -463,7 +537,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     if (opt.onSolution) {
         env.Add(sat::NewFeasibleSolutionObserver([&](const sat::CpSolverResponse& r) {
             auto b = m.boardFrom(r);
-            if (!opt.onSolution(b, (long long)std::llround(sat::SolutionIntegerValue(r, m.hardCount())), (long long)std::llround(r.objective_value()))) {
+            if (!opt.onSolution(b, (long long)std::llround(sat::SolutionIntegerValue(r, m.hardCount())), (long long)sat::SolutionIntegerValue(r, m.weighted()))) {
                 phaseStop.store(true);
             }
         }));
@@ -475,7 +549,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
 #endif
     if (r.status() == sat::OPTIMAL || r.status() == sat::FEASIBLE) {
         res.board = m.boardFrom(r);
-        res.weighted = (long long)std::llround(r.objective_value());
+        res.weighted = sat::SolutionIntegerValue(r, m.weighted());
         res.weightedBound = (long long)std::llround(r.best_objective_bound());
         res.hard = sat::SolutionIntegerValue(r, m.hardCount());
     }

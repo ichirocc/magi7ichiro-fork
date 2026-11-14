@@ -65,7 +65,7 @@ object HardCauses {
 
 /**
  * 作成と併走する CP-SAT の 1 回分。[start] で別スレッドに解かせ、[poll] で最良と下限を読み、[finish] で止めて結果を返す。
- * 下限 [weightedBound] は fair を 0 とした緩和の下限＝チェッカーの weightedScore（fair 込み）以下が常に成り立つ。
+ * 下限 [weightedBound] は fair を実際の値以下の近似で数えた下限＝チェッカーの weightedScore（fair 込み）以下が常に成り立つ。
  */
 class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
     data class Snapshot(

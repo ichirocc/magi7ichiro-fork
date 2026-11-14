@@ -43,7 +43,7 @@ internal fun stopNextLabel(n: StopNext): String? = when (n) {
 
 /**
  * 採用した勤務表の根拠の一行（3.727.72、CP-SAT の S5）。必須の件数が証明済みの最少と同じなら「これ以上減らせない」、重みのギャップがあれば
- * 「最良との差は多くても X%」。下限は fair を 0 とした緩和＝ギャップは実際より大きく出る（「多くても」）。言えることが無ければ null。
+ * 「最良との差は多くても X%」。下限は fair を実際の値以下の近似で数える＝ギャップは実際より大きく出る（「多くても」）。言えることが無ければ null。
  */
 internal fun boundLineOf(b: V6FinalPort.BoundSummary?, hard: Int): String? {
     if (b == null) return null
