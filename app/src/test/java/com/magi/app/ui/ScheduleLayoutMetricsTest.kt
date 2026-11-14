@@ -40,7 +40,7 @@ class ScheduleLayoutMetricsTest {
         assertEquals(8, rows(740, false, 0, false)); assertEquals(9, rows(740, true, 0, false))
         assertEquals(5, rows(740, false, m.SHEET_PEEK_DP, false)); assertEquals(8, rows(740, true, m.SHEET_PEEK_DP, false))
         // tab entry (scroll 0 before, scrolled to grid top after)
-        assertEquals(4, rows(915, false, 0, true)); assertEquals(12, rows(915, true, 0, true, entry = true))
+        assertEquals(4, rows(915, false, 0, true)); assertEquals(13, rows(915, true, 0, true, entry = true))
         assertEquals(1, rows(740, false, 0, true)); assertEquals(9, rows(740, true, 0, true, entry = true))
     }
 
@@ -98,10 +98,19 @@ class ScheduleLayoutMetricsTest {
 
     /** [3.648.0] グリッドの上は道具カード 1 枚＝タブ先頭でも 9 行見える（3.481.0〜3.647.0 の 2 枚構成は 7 行）。 */
     @Test fun `one tools card above the grid`() {
-        assertEquals(188, m.bodyAboveAtTop(after = true))
+        assertEquals(172, m.bodyAboveAtTop(after = true))   // [3.727.83] 表のカードの余白 16 が無くなった（旧 188）
         assertEquals(340, m.bodyAboveAtTop(after = false))
         assertEquals(9, rows(915, true, 0, true))
         assertEquals(7, (915 - m.TOP_BAR_DP - m.bottomStackDp(true, false) - m.DAY_HEADER_DP - 264) / m.ROW_DP)
+    }
+
+    /** [3.727.83] 表はカードの外（左 16dp だけ空けて右は端まで）。名前の列とセルが広がり、360dp でも 7 日が収まる。 */
+    @Test fun `grid outside the card widens the name column and cells`() {
+        fun widths(screen: Int) = (screen - m.GRID_GUTTER_START_DP).toFloat().let { a -> m.gridNameDp(a, 36f) to m.gridCellDp(a, 36f, 48f) }
+        assertEquals(80f, widths(360).first); assertEquals(37.71f, widths(360).second, 0.01f)
+        assertEquals(80f, widths(390).first); assertEquals(42.0f, widths(390).second, 0.01f)
+        assertEquals(80f, widths(412).first); assertEquals(45.14f, widths(412).second, 0.01f)
+        assertEquals(56f, widths(320).first)   // 320dp は 80dp だと 7 日が入らない
     }
 
     @Test fun bottomNavCollapsesOnScrollDownAndExpandsOnScrollUpOrTop() {
