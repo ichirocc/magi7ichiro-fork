@@ -2190,7 +2190,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     .filter { k -> k in com.magi.app.v6.MirrorKeys.hard && (adoptedReport.breakdown[k] ?: 0) > 0 }) }
                 if (staleKeys.isNotEmpty()) {
                     val names = staleKeys.mapNotNull { k -> Hf63Infeasibility.KEY_TO_INDEX[k]?.let { Hf63Infeasibility.CNAMES[it] } }
-                    logOp("W", "構造的に充足が難しい制約を検出: ${names.joinToString(", ")}（データの見直しを推奨）")
+                    logOp("W", "この実行で減らしきれなかった制約: ${names.joinToString(", ")}（しばらく改善が無かった族。データの見直しで減る場合あり）")
                 }
                 captureAlternatives(res.alternatives)
             } catch (e: CancellationException) {
