@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,7 +91,7 @@ internal fun SelectorField(label: String, value: String, onClick: () -> Unit) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1)
-            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.UnfoldMore, contentDescription = null, tint = cs.onSurfaceVariant)
+            Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = cs.onSurfaceVariant)
         }
     }
 }
