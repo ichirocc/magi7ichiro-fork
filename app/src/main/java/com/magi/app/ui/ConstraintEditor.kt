@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.magi.app.v6.V6SanityPort
@@ -422,7 +421,7 @@ private fun Shell(
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton(okLabel, enabled = addEnabled, onClick = onAdd) },
         dismissButton = { DialogDismissButton(onClick = requestClose) },
@@ -458,15 +457,10 @@ private fun Picker(label: String, options: List<String>, selected: String, onSel
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box {
-            OutlinedButton(onClick = { open = true }) {
-                Text(if (selected.isBlank()) "(なし)" else selected)
-            }
+            MagiMenuButton(if (selected.isBlank()) "(なし)" else selected, onClick = { open = true })
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 options.forEach { opt ->
-                    DropdownMenuItem(
-                        text = { Text(if (opt.isBlank()) "(なし)" else opt, fontFamily = FontFamily.Monospace) },
-                        onClick = { onSelect(opt); open = false },
-                    )
+                    MagiMenuItem(if (opt.isBlank()) "(なし)" else opt, onClick = { onSelect(opt); open = false }, selected = opt == selected, monospace = true)
                 }
             }
         }

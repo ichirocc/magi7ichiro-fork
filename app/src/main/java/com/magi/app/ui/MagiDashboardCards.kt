@@ -29,7 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -142,7 +141,7 @@ internal fun WishConflictDialog(
     DisposableEffect(Unit) { onDispose { vm.cancelWishTrial() } }
     val control = vm.wishTrialControlFor()   // 非 State の読み取り＝ui（wishTrialRev）が変われば描き直される
     var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader("ぶつかっている希望", onDismiss) },
         text = {
@@ -282,7 +281,7 @@ internal fun RelaxTrialDialog(
         t.prerequisiteRows.forEach { Text("・$it", style = small) }
         t.rows.forEach { Text("・$it", style = small) }
     }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(onClose = onDismiss, title = when (step) {
             RelaxApproval.Step.R1 -> t?.dialogTitle ?: "試算結果の確認"
@@ -401,7 +400,7 @@ private fun ChangeCapsuleRow(r: ChangeRow) {
 @Composable
 internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, consulted: Boolean = false, onConsult: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(PREVIEW_TITLE, onDismiss) },
         text = {
@@ -545,7 +544,7 @@ internal fun GuidedFixDialog(
         else -> GuidedStage.BLOCKED
     }
 
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(guidedFixTitle(stage, target), onDismiss) },
         text = {
@@ -954,9 +953,9 @@ internal fun OperatorNextActionCard(
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = HOME_MORE_MENU, tint = plan.fg) }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(text = { Text(HOME_SCORE_MEANING) }, onClick = { menuOpen = false; detailOpen = !detailOpen }, modifier = Modifier.heightIn(min = 48.dp))
+                            MagiMenuItem(HOME_SCORE_MEANING, onClick = { menuOpen = false; detailOpen = !detailOpen })
                             // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る＝結果と戻し方を語に含める。
-                            DropdownMenuItem(text = { Text(HOME_REDRAFT_ITEM) }, onClick = { menuOpen = false; onSmartInitial() }, modifier = Modifier.heightIn(min = 48.dp))
+                            MagiMenuItem(HOME_REDRAFT_ITEM, onClick = { menuOpen = false; onSmartInitial() })
                         }
                     }
                     if (detailOpen) {
@@ -1269,7 +1268,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
         }
     }
     confirmRule?.let { (seq, n) ->
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmRule = null },
             title = { DialogHeader("禁止の並びを解除しますか？", { confirmRule = null }) },
             text = { Text("「$seq」の禁止を全員について外します（いま崩せない並び ${n}件）。元に戻せます。") },
@@ -1521,7 +1520,7 @@ internal fun SettingIssuesCard(
         }
     }
     if (confirmClear && wishClearCount > 0) {
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { DialogHeader("担当外の希望をまとめて消しますか？", { confirmClear = false }) },
             text = { Text("担当外の希望 ${wishClearCount}件 をまとめて削除します。勤務表の割当は変わりません。元に戻すで取り消せます。") },
@@ -2163,7 +2162,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
         }
     }
     confirm?.let { i ->
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirm = null },
             title = { DialogHeader("案${i + 1}を反映しますか？", { confirm = null }) },
             text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
@@ -2213,7 +2212,7 @@ private fun PreDistRowView(r: PreDistRow) {
 internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, onExport: () -> Unit, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var details by remember { mutableStateOf(false) }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {

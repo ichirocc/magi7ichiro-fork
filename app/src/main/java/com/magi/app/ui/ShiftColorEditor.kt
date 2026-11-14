@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -244,7 +243,7 @@ internal fun ColorPickerDialog(
     // [実機指摘「現在の設定している色が画面の中にない」] 未設定(空)のときグレーの偽色を出していた →
     //   実効色(既定色)を表示し、パレット上の一致スウォッチにも✓を付ける。
     val effectiveHex = currentHex.ifBlank { defaultHex }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onClose,
         confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
         dismissButton = { DialogDismissButton(onClick = onReset, text = "既定に戻す") },

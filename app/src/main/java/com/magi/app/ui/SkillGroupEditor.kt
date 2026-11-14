@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -77,7 +76,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
         val members = staff.count { it.skillIdx == g }
         val memberNote = if (members > 0) "所属していた職員${members}名のスキルは「(なし)」に戻ります（スキルグループのルールの対象から外れます）。" else "所属している職員はいません。"
         val refNote = if (refs > 0) " このスキルグループを使うルールが${refs}件あります。削除すると、そのルールは使われなくなります。" else ""
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { DialogHeader("スキルグループを削除しますか？", { confirmDelete = null }) },
             text = { Text("「$name」を削除します。${memberNote}元に戻すで取り消せます。$refNote") },
@@ -101,7 +100,7 @@ private fun SkillGroupDialog(title: String, name0: String, kigou0: String, onOk:
     var confirmDiscard by remember { mutableStateOf(false) }
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
     if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton("保存する", enabled = kigou.isNotBlank(), onClick = { if (kigou.isNotBlank()) onOk(name, kigou) }) },
         dismissButton = { DialogDismissButton(onClick = requestClose) },

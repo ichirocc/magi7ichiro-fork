@@ -31,7 +31,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1214,7 +1213,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxFrom = null; vm.openRelaxFlow() })
         }
         pendingCsvImport?.let { csvText ->
-            AlertDialog(
+            MagiAlertDialog(
                 onDismissRequest = { pendingCsvImport = null },
                 title = { DialogHeader("何として取り込みますか？", { pendingCsvImport = null }) },
                 text = {
@@ -1254,7 +1253,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 com.magi.app.v6.CsvPartialImport.CANCEL_LABEL, { vm.cancelCsvPartialImport() })
         }
         rosterCsvChoice?.let { csvText ->
-            AlertDialog(
+            MagiAlertDialog(
                 onDismissRequest = { rosterCsvChoice = null },
                 title = { DialogHeader("どちらとして取り込みますか？", { rosterCsvChoice = null }) },
                 text = {
@@ -1273,7 +1272,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             )
         }
         if (wishConfirm > 0) {
-            AlertDialog(
+            MagiAlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
                 title = { DialogHeader("担当外の希望を含めますか？", { wishConfirm = 0 }) },
                 text = { Text("担当外の希望が ${wishConfirm} 件あります。\n含めると担当外の勤務として入り、必須違反になります。「担当内だけ反映する」なら入れません。どちらも元に戻せます。") },

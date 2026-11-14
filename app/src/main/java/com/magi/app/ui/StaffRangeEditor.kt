@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -135,7 +134,7 @@ internal fun GroupRangeDialog(
     var confirmDiscard by remember { mutableStateOf(false) }
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
     if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = requestClose,
         confirmButton = {
             DialogConfirmButton("適用する", enabled = ok, onClick = { if (ok) onApply(g, k, lo.trim(), hi.trim()) })
@@ -146,23 +145,19 @@ internal fun GroupRangeDialog(
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
-                    OutlinedButton(onClick = { openG = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(groups.getOrNull(g)?.let { "$it（${memberCount(g)}名）" } ?: "(選択)")
-                    }
+                    MagiMenuButton(groups.getOrNull(g)?.let { "$it（${memberCount(g)}名）" } ?: "(選択)", onClick = { openG = true })
                     DropdownMenu(expanded = openG, onDismissRequest = { openG = false }) {
                         groups.forEachIndexed { idx, n ->
-                            DropdownMenuItem(text = { Text("$n（${memberCount(idx)}名）") }, onClick = { g = idx; k = 0; openG = false })
+                            MagiMenuItem("$n（${memberCount(idx)}名）", onClick = { g = idx; k = 0; openG = false }, selected = idx == g)
                         }
                     }
                 }
                 Text("シフト（全員が担当可のもの）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
-                    OutlinedButton(onClick = { openK = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(shifts.getOrNull(k)?.takeIf { k in allowed } ?: "(選択)")
-                    }
+                    MagiMenuButton(shifts.getOrNull(k)?.takeIf { k in allowed } ?: "(選択)", onClick = { openK = true })
                     DropdownMenu(expanded = openK, onDismissRequest = { openK = false }) {
                         shifts.forEachIndexed { idx, kg ->
-                            if (idx in allowed) DropdownMenuItem(text = { Text(kg) }, onClick = { k = idx; openK = false })
+                            if (idx in allowed) MagiMenuItem(kg, onClick = { k = idx; openK = false }, selected = idx == k)
                         }
                     }
                 }
