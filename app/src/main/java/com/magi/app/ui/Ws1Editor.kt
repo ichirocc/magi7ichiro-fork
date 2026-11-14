@@ -31,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -197,7 +196,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             existingKigou = v.groups.map { it.kigou })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
             { lines, _ -> onEvent(MagiEvent.Structure.BulkAddShift(lines)); dialog = null }, { dialog = null })
-        is Ws1Dialog.ConfirmShrink -> AlertDialog(
+        is Ws1Dialog.ConfirmShrink -> MagiAlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = { DialogDangerButton("期間を縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
             dismissButton = { DialogDismissButton(onClick = { dialog = null }, text = "縮めない") },
@@ -208,7 +207,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 Text("${v.days}日 → ${d.days}日にします。\n$cut の勤務表の割り当て・希望" + (if (wishN > 0) " ${wishN}件" else "") + "・日別の必要人数は削除されます（元に戻すで取り消せます）。")
             },
         )
-        is Ws1Dialog.ConfirmDelete -> AlertDialog(
+        is Ws1Dialog.ConfirmDelete -> MagiAlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
                 DialogDangerButton("削除する", onClick = {
@@ -389,11 +388,12 @@ internal fun StaffDialog(
             Text("先に「グループ」を追加してください。職員はグループに所属します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         } else {
-            OutlinedButton(onClick = { open = true }) { Text(groupKigou.getOrNull(gi) ?: "(なし)") }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                groupKigou.forEachIndexed { idx, kg ->
-                    DropdownMenuItem(text = { Text(kg, fontFamily = FontFamily.Monospace) },
-                        onClick = { gi = idx; open = false })
+            Box {
+                MagiMenuButton(groupKigou.getOrNull(gi) ?: "(なし)", onClick = { open = true }, monospace = true)
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    groupKigou.forEachIndexed { idx, kg ->
+                        MagiMenuItem(kg, onClick = { gi = idx; open = false }, selected = idx == gi, monospace = true)
+                    }
                 }
             }
         }
@@ -428,11 +428,12 @@ internal fun BulkAddDialog(
                 Text("先に「グループ」を追加してください。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             } else {
                 Text("既定のグループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton(onClick = { open = true }) { Text(groups.getOrNull(gi) ?: "(なし)") }
-                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    groups.forEachIndexed { idx, kg ->
-                        DropdownMenuItem(text = { Text(kg, fontFamily = FontFamily.Monospace) },
-                            onClick = { gi = idx; open = false })
+                Box {
+                    MagiMenuButton(groups.getOrNull(gi) ?: "(なし)", onClick = { open = true }, monospace = true)
+                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        groups.forEachIndexed { idx, kg ->
+                            MagiMenuItem(kg, onClick = { gi = idx; open = false }, selected = idx == gi, monospace = true)
+                        }
                     }
                 }
             }
@@ -450,7 +451,7 @@ private fun W1Shell(
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton("確定する", enabled = okEnabled, onClick = onOk) },
         dismissButton = { DialogDismissButton(onClick = requestClose) },

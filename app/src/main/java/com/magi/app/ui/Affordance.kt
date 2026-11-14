@@ -2,7 +2,6 @@ package com.magi.app.ui
 
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
-import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -128,7 +127,7 @@ fun DialogOptionButton(text: String, onClick: () -> Unit, recommended: Boolean =
 @Composable
 internal fun ConfirmDialog(title: String, points: List<String>, primary: String, onPrimary: () -> Unit, dismiss: String, onDismiss: () -> Unit) {
     val p = confirmDialogPoints(points)
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(title, onDismiss) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { p.forEach { Text(it) } } },
@@ -181,7 +180,7 @@ const val RANGE_REQUIRED_HINT = "下限か上限のどちらかに数値を設�
 /** [3.646.0 U01] 入力の途中で閉じるときの確認。✕・キャンセル・外側タップ・戻るを 1 か所で止める（ShiftDialog の確認を共通化）。 */
 @Composable
 fun DiscardConfirmDialog(onDiscard: () -> Unit, onContinue: () -> Unit) {
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onContinue,
         confirmButton = { DialogDangerButton("破棄する", onClick = onDiscard) },
         dismissButton = { DialogDismissButton(onClick = onContinue, text = "入力を続ける") },

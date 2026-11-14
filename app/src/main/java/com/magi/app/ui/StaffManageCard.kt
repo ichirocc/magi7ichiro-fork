@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -74,13 +73,11 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
                                 Spacer(Modifier.width(4.dp))
                                 var open by remember { mutableStateOf(false) }
                                 Box {
-                                    OutlinedButton(onClick = { open = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                                        Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)")
-                                    }
+                                    MagiMenuButton(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)", onClick = { open = true }, enabled = !ui.running)
                                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                                        DropdownMenuItem(text = { Text("(なし)") }, onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, -1)); open = false })
+                                        MagiMenuItem("(なし)", onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, -1)); open = false }, selected = st.skillIdx !in skills.indices)
                                         skills.forEachIndexed { gi, sg ->
-                                            DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, gi)); open = false })
+                                            MagiMenuItem("${sg.kigou}  ${sg.name}", onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, gi)); open = false }, selected = st.skillIdx == gi)
                                         }
                                     }
                                 }
@@ -117,7 +114,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             { n, gi -> onEvent(MagiEvent.Structure.AddStaff(n, gi)); addOpen = false }, { addOpen = false })
     }
     confirmDelete?.let { i ->
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmDelete = null },
             confirmButton = { DialogDangerButton("削除する（退職）", onClick = { onEvent(MagiEvent.Structure.RemoveStaff(i)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }, text = "削除しない") },

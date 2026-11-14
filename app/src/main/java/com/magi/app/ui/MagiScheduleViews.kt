@@ -36,7 +36,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -921,7 +920,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
         }
     }
     if (showStaff) {
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { showStaff = false },
             confirmButton = {},
             dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
@@ -939,7 +938,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
         )
     }
     if (confirmClear) {
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmClear = false },
             confirmButton = {
                 DialogDangerButton("希望を消す", onClick = {
@@ -1042,7 +1041,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
         }
     }
     if (showStaff) {
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { showStaff = false },
             confirmButton = {},
             dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
@@ -1306,7 +1305,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 }
             }
             detail?.let { d ->
-                AlertDialog(
+                MagiAlertDialog(
                     onDismissRequest = { detail = null },
                     title = { DialogHeader(d.title, { detail = null }) },
                     text = {
@@ -1847,7 +1846,7 @@ internal fun ShortageSlotHeader(ui: UiState, cv: ConditionsView?, shift: Int, da
 /** 日ヘッダ・集計の「計（期間）」の人員の印の内訳（読むだけ。直すのはセルのタップから）。[empty]＝本当に過不足が無いときだけ true（行を extra で出す呼び出しは lines が空でも過不足がある）。 */
 @Composable
 private fun GridMarkDialog(title: String, lines: List<String>, empty: Boolean, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(title, onDismiss) },
         text = {
@@ -1876,7 +1875,7 @@ private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: (
     // 行を選ぶまで案は探さない。選べる行が 1 つだけなら最初から選んでおく。
     var pick by remember(title) { mutableStateOf(if (picked != null) staffSheetPreselect(sheet.chips.map { it.shiftIdx }) else null) }
     val cs = MaterialTheme.colorScheme
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader(title, onDismiss) },
         text = {
@@ -2401,7 +2400,7 @@ private fun NoFixBlock(
 @Composable
 private fun AddCandidatesDialog(ui: UiState, shift: Int, list: List<AddCandidate>, onDismiss: () -> Unit, onCell: (Int) -> Unit, onSettings: (AddCandidate) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    AlertDialog(
+    MagiAlertDialog(
         onDismissRequest = onDismiss,
         title = { DialogHeader("「${ui.shiftSymbols.getOrNull(shift) ?: "?"}」を追加する候補日", onDismiss) },
         text = {

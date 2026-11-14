@@ -2,6 +2,8 @@ package com.magi.app.ui
 
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -83,13 +85,13 @@ internal fun MonthHeaderStatic(startDate: String) {
 internal fun SelectorField(label: String, value: String, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(
-        Modifier.fillMaxWidth().border(1.dp, cs.outline, MaterialTheme.shapes.extraSmall)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(MagiCorners.capsule).background(cs.surfaceVariant)
+            .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1)
-            Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = cs.onSurfaceVariant)
         }
     }
 }
@@ -155,15 +157,10 @@ internal fun NeedCalendarCard(
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box {
-                    Surface(color = cs.surfaceVariant, shape = MagiCorners.capsule, modifier = Modifier.heightIn(min = 48.dp).clickable { shiftMenu = true }) {
-                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(shift.kigou, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        }
-                    }
+                    MagiMenuButton(shift.kigou, onClick = { shiftMenu = true })
                     DropdownMenu(expanded = shiftMenu, onDismissRequest = { shiftMenu = false }) {
                         v.shifts.forEachIndexed { idx, s ->
-                            DropdownMenuItem(text = { Text(s.kigou) }, onClick = { onShiftSel(idx); onDaysSel(emptySet()); shiftMenu = false })
+                            MagiMenuItem(s.kigou, onClick = { onShiftSel(idx); onDaysSel(emptySet()); shiftMenu = false }, selected = s === shift)
                         }
                     }
                 }

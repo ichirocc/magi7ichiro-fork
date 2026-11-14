@@ -21,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -119,7 +118,7 @@ internal fun WishCard(
                     SelectorField(label = "職員", value = staff.getOrElse(i) { "" }, onClick = { staffMenu = true })
                     DropdownMenu(expanded = staffMenu, onDismissRequest = { staffMenu = false }) {
                         staff.forEachIndexed { idx, n ->
-                            DropdownMenuItem(text = { Text(n) }, onClick = { onStaffSel(idx); onDaysSel(emptySet()); staffMenu = false })
+                            MagiMenuItem(n, onClick = { onStaffSel(idx); onDaysSel(emptySet()); staffMenu = false }, selected = idx == i)
                         }
                     }
                 }
@@ -244,7 +243,7 @@ private fun WishApplyPanel(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の希望を消す（${clearable.size}件）") }
     }
     if (confirmClear) {
-        AlertDialog(
+        MagiAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { DialogHeader("選択した日の希望を消しますか？", { confirmClear = false }) },
             text = { Text("${ui.staffNames.getOrElse(staffIdx) { "" }}の${dayList(clearable)}の希望（${clearable.size}件）を消します。割当には影響しません。元に戻すで復元できます。") },
