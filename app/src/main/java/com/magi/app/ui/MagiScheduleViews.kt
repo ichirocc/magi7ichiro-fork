@@ -1520,12 +1520,6 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 ?.let { JapanHolidays.nameOf(holidayCtx, it) }
         }
     }
-    val todayIdx = remember(ui.startDate, days) {
-        runCatching {
-            val off = (LocalDate.now().toEpochDay() - LocalDate.parse(ui.startDate).toEpochDay()).toInt()
-            if (off in 0 until days) off else -1
-        }.getOrDefault(-1)
-    }
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
@@ -1625,13 +1619,12 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         // [レイアウト刷新/祝日色] 祝日法に基づく祝日（外部データ, JapanHolidays.kt）は日本の
         //   慣行どおり日曜と同じ扱い（色も意味も同一）＝曜日を問わず適用（平日祝日も対象）。
         val isHolidayCol = holidayName[d] != null
-        // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
+        // [3.727.83] 今日の印は外した（作るのは来月の勤務表＝表の期間に今日は無い。利用者 2026-11-14）。
         // [3.125.0と同型] 淡い塗り(α0.14)上の生アクセント文字はコントラスト不足になりうるため、
         //   実効背景（cs.surfaceへ合成後）に対して ensureReadable で保証する。
         val headerTintColor = when { isHolidayCol || dow == 6 -> MagiAccent.red; dow == 5 -> MagiAccent.blue; else -> null }
         val headerTint = headerTintColor?.copy(alpha = 0.14f)?.compositeOver(cs.surface)
         val dcol = when {
-            d == todayIdx -> cs.tertiary
             headerTintColor != null -> ensureReadable(headerTint ?: cs.surface, headerTintColor)
             else -> cs.onSurfaceVariant
         }
@@ -1645,8 +1638,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             ((editCell ?: tapped)?.second == d)
         val covMarks = vs.coverageMarks.getOrNull(d).orEmpty()
         Column(Modifier.width(cellW).height(headH)
-            // [祝日色] 今日マーカーの日はテキスト色のみで示す（背景タグは重ねない＝混同回避）。
-            .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
             .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${DayText.full(ui.startDate, d)} ${holidayName[d]}" } else Modifier)
@@ -1654,15 +1646,9 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             // [a11y/R-02] 表の見出し（0 行目・d+1 列目）。読み上げで表の位置と見出しとして伝える（見た目は不変）。
             .semantics { heading(); collectionItemInfo = CollectionItemInfo(0, 1, d + 1, 1) },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            // [3.727.83] 曜日 → 数字の順（カレンダー）。今日の数字は塗った丸（tertiary の地に onTertiary の字）。
-            Text(weekdayJa[dow], fontSize = headFontSize, color = if (d == todayIdx) cs.tertiary else dcol, maxLines = 1)
-            if (d == todayIdx) {
-                Box(Modifier.size(24.dp).background(cs.tertiary, CircleShape), contentAlignment = Alignment.Center) {
-                    Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onTertiary, fontWeight = FontWeight.Bold, maxLines = 1)
-                }
-            } else {
-                Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, maxLines = 1)
-            }
+            // [3.727.83] 曜日 → 数字の順（カレンダー）。
+            Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
+            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, maxLines = 1)
             // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
             // [E7] 「▼N」(人員不足)/「▲N」(人員過剰、3.527.0でユーザー明示指示により追加)は
             //   covU/covO由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
