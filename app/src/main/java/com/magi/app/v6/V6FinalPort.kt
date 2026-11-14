@@ -109,7 +109,7 @@ object V6FinalPort {
         val bound: BoundSummary? = null,
     )
 
-    /** 採用した勤務表の根拠: 必須の件数の下限（証明済みか）と、重み（weightedScore）の下限・ギャップ。下限は fair を 0 とした緩和＝必ず実際の値以下。 */
+    /** 採用した勤務表の根拠: 必須の件数の下限（証明済みか）と、重み（weightedScore）の下限・ギャップ。下限は fair を実際の値以下の近似で数える＝必ず実際の値以下。 */
     data class BoundSummary(val hardBound: Long, val hardProven: Boolean, val weightedBound: Long, val adoptedWeighted: Double, val gap: Double?, val stoppedByGap: Boolean)
 
     /** 入口で個人上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。 */
@@ -1530,7 +1530,7 @@ object V6FinalPort {
     /** CP-SAT の結果の 1 行（下限・証明・ギャップ・CP-SAT の最良と探索の最良の比較）。 */
     internal fun cpsatLogLine(s: CpsatCoRun.Snapshot, b: BoundSummary?, stage: StageCandidate?, searchBest: ViolationReport): String {
         val hard = "必須の下限 ${s.hardBound}" + if (s.hardProven) "（最少と証明）" else "（未証明）"
-        val weight = if (s.weightedBound >= 0) "重みの下限 ${s.weightedBound}（fair を 0 とした緩和）" else "重みの下限なし"
+        val weight = if (s.weightedBound >= 0) "重みの下限 ${s.weightedBound}（fair は近似の下限）" else "重みの下限なし"
         val gap = b?.gap?.let { "採用した勤務表とのギャップ ${"%.1f".format(it * 100)}%" } ?: "ギャップ —（必須の件数が下限と違う）"
         val own = stage?.let { "CP-SAT の最良 必須${it.report.hard}・重み${it.report.weightedScore.toLong()}（探索の最良 必須${searchBest.hard}・重み${searchBest.weightedScore.toLong()}" +
             (if (betterReport(it.report, searchBest)) "より良い＝統合の起点に採用）" else "）") } ?: "CP-SAT の解なし"
