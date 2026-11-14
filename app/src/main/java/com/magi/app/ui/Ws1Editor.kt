@@ -327,6 +327,7 @@ private fun ShiftDialog(
     W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad && !taken && !losesRest, dirty = dirty) {
         W1Text("記号（例: Dﾃ）", kigou, isError = taken) { kigou = it }
         if (taken) Text(symbolTakenHint("シフト"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+        if (kigou.isBlank()) DisabledReason(SYMBOL_NEEDED_HINT)
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             W1Field("最低人数", need1, Modifier.weight(1f), isError = bad) { need1 = it }
@@ -359,11 +360,15 @@ private fun GroupDialog(
     W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank() && !taken, dirty = name != name0 || kigou != kigou0) {
         W1Text("記号（例: A）", kigou, isError = taken) { kigou = it }
         if (taken) Text(symbolTakenHint("グループ"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+        if (kigou.isBlank()) DisabledReason(SYMBOL_NEEDED_HINT)
         W1Text("名称", name) { name = it }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このグループを削除")
         else if (deleteBlocked != null) Text(deleteBlocked, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+private const val SYMBOL_NEEDED_HINT = "記号を入れると確定できます"
+private const val NAME_NEEDED_HINT = "名称を入れると確定できます"
 
 private const val NO_REST_HINT = "休みのシフトが無くなると勤務表をつくれません。休みにする別のシフトでONにしてください"
 
@@ -381,6 +386,7 @@ internal fun StaffDialog(
     var gi by remember { mutableStateOf(gi0) }
     W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty(), dirty = name != name0 || gi != gi0) {
         W1Text("名称", name) { name = it }
+        if (name.isBlank()) DisabledReason(NAME_NEEDED_HINT)
         var open by remember { mutableStateOf(false) }
         Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (groupKigou.isEmpty()) {

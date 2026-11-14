@@ -214,8 +214,14 @@ internal fun CellEditSheet(
             relatedDays = (partners + j).distinct().sorted().takeIf { it.size >= 2 }.orEmpty(),
             pinned = pinned,
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
-            MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
-                DisclosureText("小さく表示", open = true)
+            // [3.727.85] 戻る・小さく表示は札のいちばん上の行に固定する（縦に送る部分・下の固定部の外）。旧: 勤務を選ぶ段では下のボタン群が
+            //   高さの上限いっぱいに伸び、末尾の「元の画面に戻る」と上段の ✕ が両方とも札の外へ押し出されて戻れなかった（2026-11-14 実機）。
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (mode == 0 && step == 1) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 元の画面に戻る", maxLines = 1) }
+                Spacer(Modifier.weight(1f))
+                MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp)) {
+                    DisclosureText("小さく表示", open = true)
+                }
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
@@ -460,7 +466,8 @@ internal fun CellEditSheet(
                     Text("別のシフトにすると、希望は未反映になります。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if ((mode == 0 && step == 1) || mode == 1) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 勤務の一覧は長いと札の高さを超える＝この部分だけ縦に送る（上の行の戻る・閉じるを押し出さない）。
+            if ((mode == 0 && step == 1) || mode == 1) Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, DayText.short(ui.startDate, j)) { fixNav.onWishes(i, j) }
                 cellSheetSlots(shown, canDoSet, leftHand).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -484,7 +491,6 @@ internal fun CellEditSheet(
                     }
                 }
                 if (mode == 0) Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                if (mode == 0) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("元の画面に戻る") }
             }
             if (mode == 0 && step == 2) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 適用と戻るは固定（比較の部分だけが縦に送られる）。
