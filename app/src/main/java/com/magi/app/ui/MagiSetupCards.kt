@@ -779,8 +779,10 @@ internal fun DataActionsCard(
     val saveNote = when (ui.saveState) { SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"; SaveState.Saving -> "保存中…"; else -> null }
     // [判断設計監査 #3] 開く=現データの置換。置換直前の1世代退避へ戻す導線（押すたび入れ替わる）。
     val restoreNote = if (ui.prevBackupAvailable) "「開く前のデータに戻す」はもう一度押すと、今のデータと入れ替わります。" else null
+    // 薄くなった行の理由（押せない理由と次の一手を言う）。
+    val lockNote = when { ui.running -> RUNNING_LOCK_HINT; !ui.loaded -> DATA_NEEDED_HINT; else -> null }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        MagiGroup("データ", footer = listOfNotNull(restoreNote, saveNote).joinToString("\n").ifEmpty { null }) {
+        MagiGroup("データ", footer = listOfNotNull(lockNote, restoreNote, saveNote).joinToString("\n").ifEmpty { null }) {
             MagiGroupRow("データを開く", enabled = !ui.running, onClick = onOpenJson)
             MagiGroupRow("サンプルで試す", enabled = !ui.running, onClick = onSample)
             if (ui.prevBackupAvailable) MagiGroupRow("開く前のデータに戻す", enabled = !ui.running, onClick = onRestorePrev)

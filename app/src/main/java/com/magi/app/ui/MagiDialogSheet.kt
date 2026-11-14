@@ -156,3 +156,12 @@ internal fun MagiMenuItem(
         },
     )
 }
+
+/** 確定のボタンが押せないときの理由と次の一手（3.727.84）。誤りではないので注意色にせず補助の色で 1 行。 */
+@Composable
+internal fun DisabledReason(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+internal const val RUNNING_LOCK_HINT = "実行中は変更できません。終わるか「やめる」を押してから変更してください"
+internal const val DATA_NEEDED_HINT = "保存・診断・CSV は、データを開くと使えます"
