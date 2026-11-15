@@ -8,7 +8,7 @@ enum class ObjectiveMethod { WEIGHTS, PRIORITY }
  * 違反の色・重なりの優先（表示）は方式に関わらず [MirrorKeys.weights] のまま（2026-11-06 ユーザー決定「色は今のまま」）。
  *
  * PRIORITY の重み（2026-11-06 ユーザー確定、HF77）: 必須（T0）は今のまま、T1（low・c1・high・c3mn）＝200、
- * T2（c3・c3m・c41・c42・c41s・c42s）＝20、T3（apt・c2・covO・weekly）＝1、fair＝50（3.727.80、旧 20）。根拠は §7.5 の 2 腕比較。
+ * T2（c3・c3m・c41・c42・c41s・c42s）＝20、T3（covO・weekly）＝1、fair＝50（3.727.80、旧 20）、c2・apt＝20（3.727.87、旧 1）。根拠は §7.5 の 2 腕比較。
  */
 object ObjectiveWeights {
     @Volatile var method: ObjectiveMethod = ObjectiveMethod.WEIGHTS
@@ -19,6 +19,9 @@ object ObjectiveWeights {
         for (f in TierObjective.tiers[3]) m[f] = 1.0
         // fair（グループ内の公平化）は 50（2026-11-13 ユーザー明示指示「50」、HF77。旧 20）。段の鍵の段（T3）は変えない＝重みだけ。
         m["fair"] = 50.0
+        // 個人の合計（c2）と目安の回数との差（apt）は 20（2026-11-15 ユーザー明示指示「20」、HF77。旧 1）。段は T3 のまま。
+        m["c2"] = 20.0
+        m["apt"] = 20.0
     }
 
     fun table(m: ObjectiveMethod = method): Map<String, Double> = if (m == ObjectiveMethod.PRIORITY) priority else MirrorKeys.weights
