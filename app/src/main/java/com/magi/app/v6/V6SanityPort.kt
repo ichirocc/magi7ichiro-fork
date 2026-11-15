@@ -319,6 +319,21 @@ object V6SanityPort {
         return n
     }
 
+    /** 個人の上限（high）のうち、希望で固定したセルだけで上限を超えている回数（報告の high と同じ単位＝超過 1 回で 1）。 */
+    fun wishHighFloor(p: Problem, schedule: Array<IntArray>): Int {
+        var n = 0
+        for (i in 0 until p.S) {
+            val row = schedule.getOrNull(i) ?: continue
+            for (k in 0 until p.K) {
+                val hi = p.rangeHi[i][k]
+                if (hi == Int.MAX_VALUE) continue
+                val fixed = (0 until p.T).count { j -> p.wishLocked(i, j) && row.getOrNull(j) == k }
+                if (fixed > hi) n += fixed - hi
+            }
+        }
+        return n
+    }
+
     /** [wishAvoidRuns] のうち盤面で成立している窓の数（報告の c3mn と同じ単位＝窓ごとに 1）。 */
     fun wishAvoidSoft(p: Problem, schedule: Array<IntArray>): Int =
         wishAvoidRuns(p).count { g -> g.days.all { j -> schedule.getOrNull(g.staff)?.getOrNull(j) == p.wish[g.staff][j] } }

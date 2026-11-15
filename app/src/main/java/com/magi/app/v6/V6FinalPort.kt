@@ -727,15 +727,23 @@ object V6FinalPort {
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
-        // CP-SAT が良い勤務表を出した最後の時刻。停滞は探索と CP-SAT の両方が改善しなくなってから（3.727.63）。
+        // CP-SAT が自分の前の盤面より良い勤務表を出した最後の時刻。停滞は探索と CP-SAT の両方が改善しなくなってから（3.727.63）。
+        //   良し悪しはチェッカーで採点して比べる（CP-SAT の返す重みは fair を含まず、目的の fair 近似とも物差しが違う）。
         val cpsatImprovedAt = java.util.concurrent.atomic.AtomicLong(0L)
-        var cpsatSeenHard = Long.MAX_VALUE; var cpsatSeenWeighted = Long.MAX_VALUE
+        val cpsatClockResets = java.util.concurrent.atomic.AtomicInteger(0)
+        var cpsatSeenBoard: Array<IntArray>? = null
+        var cpsatSeenReport: ViolationReport? = null
         fun cpsatGapReached(now: Long): Boolean = synchronized(cpsatLock) {
             if (cpsat == null || cpsatGapHit || now - cpsatPolledAt < 1_000L) return@synchronized cpsatGapHit
             cpsatPolledAt = now
             val snap = cpsat.poll()
-            if (snap.hard >= 0 && (snap.hard < cpsatSeenHard || (snap.hard == cpsatSeenHard && snap.weighted < cpsatSeenWeighted))) {
-                cpsatSeenHard = snap.hard; cpsatSeenWeighted = snap.weighted; cpsatImprovedAt.set(now)
+            val board = snap.board
+            if (snap.hard >= 0 && board != null && board !== cpsatSeenBoard) {
+                cpsatSeenBoard = board
+                val r = runCatching { UnifiedViolationChecker.check(state, board) }.getOrNull()
+                if (r != null && cpsatSeenReport.let { it == null || betterReport(r, it) }) {
+                    cpsatSeenReport = r; cpsatImprovedAt.set(now); cpsatClockResets.incrementAndGet()
+                }
             }
             val best = wd.bestReport ?: return@synchronized false
             if (!snap.hardProven || best.hard.toLong() != snap.hardBound) return@synchronized false
@@ -1042,7 +1050,7 @@ object V6FinalPort {
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
                     "入力超えの最終改善=${if (lastBeatInputAtSearchEnd < 0) "なし" else "経過${((lastBeatInputAtSearchEnd - startMs) / 1000).coerceAtLeast(0)}s"}・" +
-                    "探索終了時の停滞${endStallS}s・実効閾値($kind)・" +
+                    "探索終了時の停滞${endStallS}s(探索の最終改善から)・実効閾値($kind)・" +
                     "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${wd.bestHard.get()})・" +
                     "covU床${hardFloor}=${if (wd.bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (wd.stagnationFired.get()) "あり" else "なし"}" +
                     // [3.375.0] 時刻に加えて反復数も出す（「回していない」のか「回しても改善しない」のかの区別）。
@@ -1054,11 +1062,12 @@ object V6FinalPort {
         val stagnationLog = if (wd.stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
             message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 主探索を${(tChain1 - startMs) / 1000}sで停止・後処理の終了${(tPost1 - startMs) / 1000}s・" +
-                "停滞${wd.stagnationDurationMs.get() / 1000}s無改善" +
+                "発火時点の停滞${wd.stagnationDurationMs.get() / 1000}s無改善(探索とCP-SATの両方)" +
+                (if (cpsatClockResets.get() > 0) "・CP-SAT が自分の前の解より良くなり停滞の時計を戻した${cpsatClockResets.get()}回(最終 経過${(cpsatImprovedAt.get() - startMs) / 1000}s)" else "") +
                 // [3.375.0] 何回転ぶん空回りしたか（時間だけでは実施量が読めない）。
                 (if (wd.stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
-                "・発火種別=${if (wd.stagnationByOverride.get()) "猶予上書き" else "通常"}・解は最良を維持）" +
+                "・${if (wd.stagnationByOverride.get()) "段の切替直後の猶予中だが無改善が閾値の${STALL_OVERRIDE_FACTOR}倍を超えたので発火" else "無改善が閾値に達したので発火"}・解は最良を維持）" +
                 (if (e0Fired.get()) "（希望衝突の床に到達＝${if (wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが限定した手（1マス・玉突き・隣接日）では崩せないと判定。希望固定=証明相当/それ以外=探索で改善が見つかっていないだけ）" else ""),
@@ -1230,6 +1239,8 @@ object V6FinalPort {
             val avoidSelf = runCatching { V6SanityPort.wishAvoidSoft(cachedProblem(state), finalSched) }.getOrDefault(0)
             // 期間の制約（c1）のうち、固定のセルを変えない限り足りない窓（希望を調整するまで残る）。
             val c1Wall = minOf(bd["c1"] ?: 0, runCatching { V6SanityPort.wishC1Floor(cachedProblem(state), finalSched) }.getOrDefault(0))
+            // 個人の上限（high）のうち、希望の固定だけで上限を超える回数（希望を調整するまで残る）。
+            val highWall = minOf(bd["high"] ?: 0, runCatching { V6SanityPort.wishHighFloor(cachedProblem(state), finalSched) }.getOrDefault(0))
             var avoidShown = 0
             val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
@@ -1251,6 +1262,7 @@ object V6FinalPort {
                     "extWish" -> n0 - minOf(n0, extPinned)
                     "c3mn" -> n0 - avoidShown
                     "c1" -> n0 - c1Wall
+                    "high" -> n0 - highWall
                     else -> n0
                 } - self
                 if (n > 0) open.add("$key ${n}件")
@@ -1273,6 +1285,7 @@ object V6FinalPort {
             //   実データ3件の実測では 40〜56%（golden 73/183・real 126/226・user 106/214）が床＝追っても減らない。
             if (weeklyWall > 0) walls.add("weekly のうち${weeklyWall}件(回数が7の倍数でない＝配置では消せない)")
             if (extPinned > 0) walls.add("extWish のうち${extPinned}件(手動固定のセル＝自動では変えない)")
+            if (highWall > 0 && personalWall <= 0) walls.add("high のうち${highWall}件(希望の固定だけで個人の上限を超える＝希望か上限を調整するまで解消しない)")
             if (c1Wall > 0) walls.add("c1 のうち${c1Wall}件(窓の中が希望・固定で埋まり足りない＝希望を調整するまで解消しない)")
             if (personalWall > 0) {
                 walls.add("apt+high のうち${personalWall}件(個人の担当構成＝データ側)")
@@ -1543,8 +1556,8 @@ object V6FinalPort {
         val gone = ViolationIdentity.keys(input, hardOnly = true) - ViolationIdentity.keys(final, hardOnly = true)
         fun fam(ks: Set<ViolationKey>) = ks.groupingBy { it.family }.eachCount().entries.joinToString("・") { (f, n) -> "${FixApplyGate.famLabel(f)}$n" }
         fun where(k: ViolationKey) = when (k.space) {
-            ViolationKey.Space.CELL -> "${state.staff.getOrNull(k.a)?.name ?: k.a}/${k.b + 1}日目"
-            ViolationKey.Space.NEED -> "${state.shifts.getOrNull(k.a)?.kigou ?: k.a}/${k.b + 1}日目"
+            ViolationKey.Space.CELL -> "${state.staff.getOrNull(k.a)?.name ?: k.a} ${dayLabel(state.startDate, k.b)}"
+            ViolationKey.Space.NEED -> "${state.shifts.getOrNull(k.a)?.kigou ?: k.a} ${dayLabel(state.startDate, k.b)}"
             ViolationKey.Space.COUNT -> "${state.staff.getOrNull(k.a)?.name ?: k.a}/${state.shifts.getOrNull(k.b)?.kigou ?: k.b}"
         }
         return listOf(MirrorLog(level = "W", tag = "必須の入れ替わり",
