@@ -48,16 +48,24 @@ internal object ScheduleLayoutMetrics {
     private const val SPACER_GRID_TOP_DP = 12
     private const val SPACER_BELOW_TITLE_DP = 8
 
+    /** [3.727.83] 表はカードの外（画面の左 16dp だけ空けて右は端まで）＝カードの余白は無い。 */
+    const val GRID_GUTTER_START_DP = 16
+    /** 名前の列が 80dp で 7 日（セルの最小）が収まる幅なら 80、収まらなければ 56（D4）。[availDp]＝表に使える幅（端末−左の余白）。 */
+    fun gridNameDp(availDp: Float, cellMinDp: Float): Float = if (availDp - 80f >= cellMinDp * 7) 80f else 56f
+    /** セルの幅＝(使える幅−名前の列)/7 を最小〜最大へ。 */
+    fun gridCellDp(availDp: Float, cellMinDp: Float, cellMaxDp: Float): Float =
+        ((availDp - gridNameDp(availDp, cellMinDp)) / 7f).coerceIn(cellMinDp, cellMaxDp)
+
     /** タブ本体の縦スクロールが先頭のとき、日ヘッダの上にあるもの。after＝道具カード 1 枚（3.648.0）、
      *  before＝旧フィルタ＋検索の 2 枚と旧タイトル/ヒント（3.481.0 前。3.481.0〜3.647.0 の 2 枚構成は 264）。 */
     fun bodyAboveAtTop(after: Boolean): Int {
-        if (after) return SPACER_SMALL_DP + TOOLS_CARD_DP + GAP_DP + CARD_PAD_DP + SPACER_GRID_TOP_DP
+        if (after) return SPACER_SMALL_DP + TOOLS_CARD_DP + GAP_DP + SPACER_GRID_TOP_DP
         return SPACER_SMALL_DP + FILTER_BAR_DP + GAP_DP + SEARCH_BAR_DP + GAP_DP + CARD_PAD_DP + SPACER_GRID_TOP_DP +
             SECTION_TITLE_DP + SPACER_BELOW_TITLE_DP + OLD_HINT_DP + SPACER_BELOW_TITLE_DP
     }
 
-    /** タブを開いた直後にグリッドのカード上端へ寄せた状態（カード余白とグリッド上の余白だけが残る）。 */
-    fun bodyAboveAtEntryAfter(): Int = CARD_PAD_DP + SPACER_GRID_TOP_DP
+    /** タブを開いた直後に表の上端へ寄せた状態（表の上の余白だけが残る。3.727.83 でカードの余白は無くなった）。 */
+    fun bodyAboveAtEntryAfter(): Int = SPACER_GRID_TOP_DP
 
     fun bottomStackDp(after: Boolean, sheetOpen: Boolean, running: Boolean = false): Int = when {
         !after -> OLD_SCHEDULE_NAV_BAR_DP + COMMAND_BAR_DP + NAV_BAR_DP

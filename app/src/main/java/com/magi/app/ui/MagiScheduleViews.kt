@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.text.TextStyle
@@ -439,7 +440,15 @@ internal fun ScheduleGrid(
     val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
     val hScroll = nav.hScroll
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示（[Set化] visibleCellVio で判定）。
-    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
+    // [3.727.83] 表はカードの外へ（カレンダーの週表示・Numbers の表）。タブ本体は左右 16dp の余白を持つので、右だけ 16dp 外へ
+    //   広げて画面の右端まで使う（左の 16dp は残す）。旧: カードと画面の余白で左右 64dp を失っていた。
+    val gutterEnd = ScheduleLayoutMetrics.GRID_GUTTER_START_DP.dp
+    Box(Modifier.fillMaxWidth().layout { measurable, constraints ->
+        val extra = gutterEnd.roundToPx()
+        val w = constraints.maxWidth + extra
+        val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+        layout(constraints.maxWidth, placeable.height) { placeable.place(0, 0) }
+    }) {
         BoxWithConstraints {
         // [7日間表示] セル幅を「利用可能幅から1週間(7日)が名前列と同時に収まる」よう動的計算（旧: 48dp固定＝
         //   多くの端末で6日強しか見えず週の模様が切れていた）。36dp未満は記号(2文字15sp)の可読性が崩れるため
@@ -450,8 +459,9 @@ internal fun ScheduleGrid(
         // [3.719.0] 文字拡大 1.3× 超はセルも比例して広げる（`ScheduleLayoutMetrics.growth`）。1.3× までは寸法不変＝7 日が収まる。
         val fontScale = LocalDensity.current.fontScale
         val cellMin = ScheduleLayoutMetrics.cellMinDp(fontScale).dp
-        val gridNameW = if (this.maxWidth - 32.dp - 80.dp >= cellMin * 7) 80.dp else 56.dp
-        val gridCellW = ((this.maxWidth - 32.dp - gridNameW) / 7).coerceIn(cellMin, ScheduleLayoutMetrics.cellMaxDp(fontScale).dp)   // 32=Column水平padding
+        // [3.727.83] 使える幅＝端末−左 16dp（右は端まで）。旧: カードの幅（端末−32dp）からさらに内側の余白 32dp を引いていた。
+        val gridNameW = ScheduleLayoutMetrics.gridNameDp(this.maxWidth.value, cellMin.value).dp
+        val gridCellW = ScheduleLayoutMetrics.gridCellDp(this.maxWidth.value, cellMin.value, ScheduleLayoutMetrics.cellMaxDp(fontScale).toFloat()).dp
         val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
         // [3.481.0] 現在週の導出は ScheduleCommandBar（Scaffold 下部、旧 ScheduleNavBar）へ、日の範囲は名前列の左上（WeekCornerLabel）へ移動。ここはバーが必要とする
         //   セル幅(px)と週分割を共有状態へ書くだけ（SideEffect＝この合成が確定してから書く＝描画中の書換なし）。
@@ -469,7 +479,7 @@ internal fun ScheduleGrid(
         }
         // タブを離れたら注目を消す（上の解除は取り消されるので、残ると次に開いたとき古い位置＝並び替え後は別の職員へ飛ぶ）。
         DisposableEffect(Unit) { onDispose { onFocusShown(); nav.navFlash = null } }
-        Column(Modifier.padding(16.dp)) {
+        Column {
             // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
             if (proMode) {
                 OutlinedButton(onClick = { showBulk = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -1510,12 +1520,6 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 ?.let { JapanHolidays.nameOf(holidayCtx, it) }
         }
     }
-    val todayIdx = remember(ui.startDate, days) {
-        runCatching {
-            val off = (LocalDate.now().toEpochDay() - LocalDate.parse(ui.startDate).toEpochDay()).toInt()
-            if (off in 0 until days) off else -1
-        }.getOrDefault(-1)
-    }
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
@@ -1606,20 +1610,21 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         val delta = (top + cellHpx) - want
         if (kotlin.math.abs(delta) > 1f) sc.animateScrollBy(delta)
     }
-    val headerBg = magiCardColors().containerColor
+    // [3.727.83] 表はカードの外＝固定の見出しの地は画面の地。境目の細い線（名前の列の右・日ヘッダの下）は Numbers の固定行・固定列。
+    val headerBg = cs.background
+    val edgeLine = cs.outlineVariant
     @Composable
     fun DayHeader(d: Int) {
         val dow = (sdow + d) % 7
         // [レイアウト刷新/祝日色] 祝日法に基づく祝日（外部データ, JapanHolidays.kt）は日本の
         //   慣行どおり日曜と同じ扱い（色も意味も同一）＝曜日を問わず適用（平日祝日も対象）。
         val isHolidayCol = holidayName[d] != null
-        // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
+        // [3.727.83] 今日の印は外した（作るのは来月の勤務表＝表の期間に今日は無い。利用者 2026-11-14）。
         // [3.125.0と同型] 淡い塗り(α0.14)上の生アクセント文字はコントラスト不足になりうるため、
         //   実効背景（cs.surfaceへ合成後）に対して ensureReadable で保証する。
         val headerTintColor = when { isHolidayCol || dow == 6 -> MagiAccent.red; dow == 5 -> MagiAccent.blue; else -> null }
         val headerTint = headerTintColor?.copy(alpha = 0.14f)?.compositeOver(cs.surface)
         val dcol = when {
-            d == todayIdx -> cs.tertiary
             headerTintColor != null -> ensureReadable(headerTint ?: cs.surface, headerTintColor)
             else -> cs.onSurfaceVariant
         }
@@ -1633,8 +1638,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             ((editCell ?: tapped)?.second == d)
         val covMarks = vs.coverageMarks.getOrNull(d).orEmpty()
         Column(Modifier.width(cellW).height(headH)
-            // [祝日色] 今日マーカーの日はテキスト色のみで示す（背景タグは重ねない＝混同回避）。
-            .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
             .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${DayText.full(ui.startDate, d)} ${holidayName[d]}" } else Modifier)
@@ -1642,9 +1646,10 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             // [a11y/R-02] 表の見出し（0 行目・d+1 列目）。読み上げで表の位置と見出しとして伝える（見た目は不変）。
             .semantics { heading(); collectionItemInfo = CollectionItemInfo(0, 1, d + 1, 1) },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-            // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
+            // [3.727.83] 曜日 → 数字の順（カレンダー）。
             Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
+            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, maxLines = 1)
+            // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
             // [E7] 「▼N」(人員不足)/「▲N」(人員過剰、3.527.0でユーザー明示指示により追加)は
             //   covU/covO由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
             // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
@@ -1687,9 +1692,11 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                         (stickyTopPx - (bodyTopPx - headHpx)).coerceIn(0f, bodyHpx - headHpx)
                     } else 0f
                 }
-                .background(headerBg),
+                .background(headerBg)
+                .drawBehind { drawLine(edgeLine, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) },
         ) {
-            Box(Modifier.width(nameW).height(headH), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(nameW).height(headH).drawBehind { drawLine(edgeLine, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) },
+                contentAlignment = Alignment.CenterStart) {
                 if (corner != null) corner() else Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
             Row(Modifier.horizontalScroll(hScroll)) {
@@ -1702,7 +1709,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             bodyTopPx = c.positionInRoot().y
             bodyHpx = c.size.height.toFloat()
         }.semantics { isTraversalGroup = true }) {
-            Column {
+            Column(Modifier.drawBehind { drawLine(edgeLine, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) }) {
                 for (i in 0 until staffCount) {
                     // [行クロスハイライト] このセル行が最近タップされた対象なら淡い primary 背景で強調。
                     val rowTapped = (editCell ?: tapped)?.first == i

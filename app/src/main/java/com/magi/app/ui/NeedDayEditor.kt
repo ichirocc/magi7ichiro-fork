@@ -251,6 +251,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boo
                 NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "未設定")
             }
             if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+            if (running) DisabledReason(RUNNING_LOCK_HINT)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 DialogConfirmButton("保存する", onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad)
             }
