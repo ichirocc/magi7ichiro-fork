@@ -728,6 +728,7 @@ object V6FinalPort {
         val cpsat = if (config.cpsatCoRun && CpsatBridge.available) CpsatCoRun(state, baseProblem) else null
         // 解き直し（既定 OFF）: 探索が [CPSAT_RESOLVE_STALL_MS] 改善しなければ探索を終え、残りの探索の持ち時間を解き直しに使う。
         val resolveOn = config.cpsatResolve && CpsatBridge.available
+        val resolveStallHit = java.util.concurrent.atomic.AtomicBoolean(false)
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
@@ -755,6 +756,7 @@ object V6FinalPort {
             if (g <= CPSAT_GAP_STOP) cpsatGapHit = true
             cpsatGapHit
         }
+        fun cpsatBoardNow(): Array<IntArray>? = synchronized(cpsatLock) { cpsat?.poll()?.board }
         val shouldStop = {
             val now = EngineClock.nowMs()
             val gen = wd.bestVersion.get()   // 判定の世代。発火はこの世代のままだった場合だけ確定する（§5.4）
@@ -776,7 +778,7 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 cpsatGapReached(now) -> true
-                resolveOn && now - wd.lastBestImproveMs.get() >= CPSAT_RESOLVE_STALL_MS -> true
+                resolveOn && now - wd.lastBestImproveMs.get() >= CPSAT_RESOLVE_STALL_MS -> { resolveStallHit.set(true); true }
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs,
                     maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
@@ -814,9 +816,18 @@ object V6FinalPort {
         // 解き直し: 探索の最良の一部だけを CP-SAT で解き直す（証明役の併走は続けたまま、残りのコアを 1 スレッドずつ）。探索の締切まで。
         val resolveThreads = (Runtime.getRuntime().availableProcessors() - CPSAT_WORKERS).coerceAtLeast(1)
         val resolveLeftSec = (searchDeadlineMs - EngineClock.nowMs()) / 1000.0
-        val resolveOut = if (resolveOn && !cpsatGapHit && isActive && resolveLeftSec >= 2.0) {
-            CpsatResolve.run(baseProblem, chained.schedule, resolveLeftSec, resolveThreads, optsR.seed) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
+        val resolveRuns = resolveOn && !cpsatGapHit && isActive && resolveLeftSec >= 2.0
+        // 開始の盤面＝探索の最良と、併走の CP-SAT のいまの最良（固定を崩していないもの）の良いほう。
+        val resolveStart = if (resolveRuns) {
+            val coRun = (if (cpsatOn) cpsatBoardNow() else null)
+                ?.let { b -> StageCandidate("CP-SAT", b, UnifiedViolationChecker.check(state, b)) }
+                ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
+            pickBestStage(listOfNotNull(StageCandidate("探索", chained.schedule, chained.report), coRun))
         } else null
+        val resolveOut = resolveStart?.let { st ->
+            CpsatResolve.run(baseProblem, st.sched, resolveLeftSec, resolveThreads, optsR.seed) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
+        }
+        val tResolve1 = EngineClock.nowMs()
         val resolveStage = resolveOut?.takeIf { it.accepted > 0 }?.let { o -> StageCandidate("CP-SAT 解き直し", o.board, UnifiedViolationChecker.check(state, o.board)) }
             ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
         val cpsatSnap = if (cpsatOn) cpsat!!.finish() else null
@@ -989,7 +1000,7 @@ object V6FinalPort {
             level = if (overBudget) "W" else "I",
             tag = "TIME",
             message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s＋後処理${POST_RESERVE_SEC}s＋玉突き${CHAIN_RESERVE_SEC}s${if (overBudget) " 超過" else ""}): " +
-                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 統合${(tIntegration1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tIntegration1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
+                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 解き直し${(tResolve1 - tChain1) / 1000.0}s + 統合${(tIntegration1 - tResolve1) / 1000.0}s + 後処理${(tPost1 - tIntegration1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
                 "/ workers設定${workers} " +
                 (if (opts.algorithm == V6Algorithm.V5) "SAチェーン${workers}本"
                  else "実効仮説${effHypotheses}${if (effHypotheses < plannedHypotheses) "（設定${plannedHypotheses}をコア数まで縮小）" else ""}"),
@@ -1119,7 +1130,15 @@ object V6FinalPort {
                 CpsatCoRun.gap(finalReport.weightedScore, s.weightedBound).takeIf { finalReport.hard.toLong() == s.hardBound }, cpsatGapHit)
         }
         val cpsatLog = (cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report))) } ?: emptyList()) +
-            listOfNotNull(resolveOut?.let { MirrorLog(level = "I", tag = "CP-SAT", message = resolveLogLine(it, resolveThreads, resolveStage, chained.report)) })
+            listOfNotNull(
+                if (resolveOut != null && resolveStart != null) MirrorLog(level = "I", tag = "CP-SAT",
+                    message = resolveLogLine(resolveOut, resolveThreads, resolveStage, resolveStart, resolveStallHit.get(), (tChain1 - startMs) / 1000))
+                else if (resolveOn) MirrorLog(level = "I", tag = "CP-SAT", message = "解き直し: 走らせなかった（" + when {
+                    cpsatGapHit -> "ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を終えた"
+                    resolveLeftSec < 2.0 -> "探索の締切まで ${"%.1f".format(resolveLeftSec.coerceAtLeast(0.0))} 秒しか残っていなかった"
+                    else -> "中止された・または CP-SAT を始められなかった"
+                } + "）" + if (resolveStallHit.get()) "。探索は ${CPSAT_RESOLVE_STALL_MS / 1000} 秒改善が無く ${(tChain1 - startMs) / 1000} 秒で終えた" else "") else null,
+            )
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
         //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
         //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
@@ -1385,7 +1404,7 @@ object V6FinalPort {
             //   いちばん時間を食う探索（実測 golden 20s 中 12.0s）が `(±0)` でも名前が出なかった。
             val ms = mapOf(
                 "探索" to (tChain1 - tFirst0),
-                "統合" to (tIntegration1 - tChain1), "後処理" to (tPost1 - tIntegration1),
+                "解き直し" to (tResolve1 - tChain1), "統合" to (tIntegration1 - tResolve1), "後処理" to (tPost1 - tIntegration1),
                 "追加精製" to (tExtra1 - tPost1),
             )
             val wasted = idle.mapNotNull { n -> ms[n]?.takeIf { it >= 1_000 }?.let { "$n${it / 1000}s" } }
@@ -1564,14 +1583,15 @@ object V6FinalPort {
         return "$hard・$weight・$gap・$own" + if (b?.stoppedByGap == true) "・ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を早く終えた" else ""
     }
 
-    internal fun resolveLogLine(o: CpsatResolve.Outcome, threads: Int, stage: StageCandidate?, searchBest: ViolationReport): String {
-        val head = "解き直し: 探索が ${CPSAT_RESOLVE_STALL_MS / 1000} 秒改善しなかったので、探索の最良の一部を ${"%.1f".format(o.wallMs / 1000.0)} 秒・${threads} 本で解き直した。" +
-            "部分 ${o.parts} 個のうち ${o.accepted} 個で改善（最適まで解けた ${o.optimal} 個）"
+    internal fun resolveLogLine(o: CpsatResolve.Outcome, threads: Int, stage: StageCandidate?, start: StageCandidate, byStall: Boolean, searchEndSec: Long): String {
+        val why = if (byStall) "探索が ${CPSAT_RESOLVE_STALL_MS / 1000} 秒改善しなかったので ${searchEndSec} 秒で探索を終え、" else "探索が ${searchEndSec} 秒で終わったあと、"
+        val head = "解き直し: $why${start.label}の最良（必須${start.report.hard}・重み${start.report.weightedScore.toLong()}）の一部を " +
+            "${"%.1f".format(o.wallMs / 1000.0)} 秒・${threads} 本で解き直した。部分 ${o.parts} 個のうち ${o.accepted} 個で改善（最適まで解けた ${o.optimal} 個）"
         val tail = when {
             o.accepted == 0L -> "・改善なし"
             stage == null -> "・盤面が固定を崩していたため不採用"
-            betterReport(stage.report, searchBest) -> "・必須${searchBest.hard}→${stage.report.hard}・重み${searchBest.weightedScore.toLong()}→${stage.report.weightedScore.toLong()}"
-            else -> "・チェッカーの採点では探索の最良（重み${searchBest.weightedScore.toLong()}）以下にならず不採用（解き直し後 重み${stage.report.weightedScore.toLong()}）"
+            betterReport(stage.report, start.report) -> "・必須${start.report.hard}→${stage.report.hard}・重み${start.report.weightedScore.toLong()}→${stage.report.weightedScore.toLong()}"
+            else -> "・チェッカーの採点では開始の盤面より良くならず不採用（解き直し後 重み${stage.report.weightedScore.toLong()}）"
         }
         return head + tail
     }
