@@ -1,0 +1,9 @@
+start      t=  0.0 hard=9 W=96681 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=5 fair=44 weekly=236
+lns#8      t=  4.8 hard=9 W=96679 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=4 fair=44 weekly=235
+lns#14     t=  5.8 hard=9 W=96316 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=28 c2=0 covO=4 fair=44 weekly=232
+lns#25     t= 10.7 hard=9 W=96313 | c1=22 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=25 c2=0 covO=4 fair=49 weekly=239
+lns#31     t= 14.6 hard=9 W=96200 | c1=22 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=4 fair=46 weekly=236
+lns#40     t= 17.9 hard=9 W=95991 | c1=22 low=1 high=14 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=30 c2=0 covO=4 fair=45 weekly=237
+lns#46     t= 20.3 hard=9 W=95988 | c1=22 low=1 high=14 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=30 c2=0 covO=4 fair=45 weekly=234
+iters=125 accepted=6 optimal=120
+lns-end    t= 60.0 hard=9 W=95988 | c1=22 low=1 high=14 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=30 c2=0 covO=4 fair=45 weekly=234

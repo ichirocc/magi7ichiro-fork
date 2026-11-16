@@ -1,0 +1,17 @@
+start      t=  0.0 hard=9 W=96549 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=6 fair=41 weekly=233
+lns#2      t=  3.8 hard=9 W=96545 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=4 fair=41 weekly=231
+   (staff x3, 0.75s, status=4)
+lns#6      t= 10.6 hard=9 W=96355 | c1=22 low=1 high=16 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=30 c2=0 covO=4 fair=44 weekly=231
+   (staff x4 days 1..13, 1.31s, status=4)
+lns#11     t= 18.0 hard=9 W=96335 | c1=22 low=1 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=30 c2=0 covO=4 fair=44 weekly=231
+   (staff x3, 0.96s, status=4)
+lns#12     t= 21.0 hard=9 W=96228 | c1=22 low=1 high=16 c3mn=0 | c3m=0 c42=4 c42s=22 | apt=31 c2=0 covO=4 fair=41 weekly=234
+   (staff x5 days 3..15, 3.01s, status=2)
+lns#22     t= 36.5 hard=9 W=96151 | c1=22 low=1 high=15 c3mn=0 | c3m=0 c42=4 c42s=21 | apt=31 c2=0 covO=4 fair=44 weekly=227
+   (days 0..5, 3.01s, status=2)
+lns#30     t= 45.9 hard=9 W=96051 | c1=22 low=1 high=15 c3mn=0 | c3m=0 c42=4 c42s=22 | apt=30 c2=0 covO=4 fair=42 weekly=227
+   (staff x5 days 17..27, 0.51s, status=4)
+lns#36     t= 58.9 hard=9 W=96010 | c1=22 low=1 high=15 c3mn=0 | c3m=0 c42=4 c42s=22 | apt=28 c2=0 covO=4 fair=42 weekly=226
+   (staff x4 days 4..17, 2.63s, status=4)
+iters=39 accepted=7 optimal=24
+lns-end    t= 60.0 hard=9 W=96010 | c1=22 low=1 high=15 c3mn=0 | c3m=0 c42=4 c42s=22 | apt=28 c2=0 covO=4 fair=42 weekly=226

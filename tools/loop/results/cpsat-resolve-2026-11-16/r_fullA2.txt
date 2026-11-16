@@ -1,0 +1,9 @@
+start      t=  0.0 hard=9 W=96271 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=29 c2=0 covO=6 fair=42 weekly=245
+full-sol   t= 19.5 hard=9 W=96269 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=29 c2=0 covO=5 fair=42 weekly=244
+full-sol   t= 23.3 hard=9 W=96267 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=29 c2=0 covO=4 fair=42 weekly=243
+full-sol   t= 26.6 hard=9 W=96264 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=29 c2=0 covO=4 fair=42 weekly=240
+full-sol   t= 27.8 hard=9 W=96263 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=28 c2=0 covO=4 fair=42 weekly=239
+full-sol   t= 27.9 hard=9 W=96235 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=29 c2=0 covO=4 fair=41 weekly=241
+full-end   t= 30.0 hard=9 W=96235 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=29 c2=0 covO=4 fair=41 weekly=241
+full-best  t= 30.0 hard=9 W=96235 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=29 c2=0 covO=4 fair=41 weekly=241
+bound=93721

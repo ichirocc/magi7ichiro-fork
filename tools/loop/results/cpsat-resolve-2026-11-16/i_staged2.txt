@@ -1,0 +1,25 @@
+start      t=  0.0 hard=5 W=59338 | c1=25 low=4 high=20 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=32 c2=0 covO=3 fair=63 weekly=225
+mono-sol   t= 20.4 hard=5 W=102889 | c1=172 low=46 high=46 c3mn=0 | c3m=0 c42=3 c42s=28 | apt=36 c2=0 covO=20 fair=70 weekly=229
+mono-sol   t= 20.4 hard=5 W=101861 | c1=168 low=45 high=46 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=38 c2=0 covO=18 fair=69 weekly=233
+mono-sol   t= 21.1 hard=5 W=95385 | c1=142 low=41 high=45 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=38 c2=0 covO=15 fair=65 weekly=240
+mono-sol   t= 21.2 hard=5 W=92379 | c1=136 low=33 high=45 c3mn=0 | c3m=0 c42=4 c42s=21 | apt=31 c2=0 covO=15 fair=64 weekly=244
+mono-sol   t= 21.4 hard=5 W=84370 | c1=106 low=28 high=41 c3mn=0 | c3m=0 c42=4 c42s=21 | apt=29 c2=0 covO=12 fair=61 weekly=228
+mono-sol   t= 21.5 hard=5 W=80666 | c1=95 low=24 high=38 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=29 c2=0 covO=11 fair=59 weekly=225
+mono-sol   t= 21.6 hard=5 W=80169 | c1=95 low=24 high=37 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=27 c2=0 covO=11 fair=54 weekly=218
+mono-sol   t= 21.6 hard=5 W=79967 | c1=95 low=24 high=36 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=27 c2=0 covO=11 fair=54 weekly=216
+mono-sol   t= 22.1 hard=5 W=77620 | c1=86 low=21 high=37 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=31 c2=0 covO=9 fair=50 weekly=211
+mono-sol   t= 22.3 hard=5 W=75759 | c1=79 low=20 high=36 c3mn=0 | c3m=0 c42=2 c42s=20 | apt=30 c2=0 covO=9 fair=50 weekly=210
+mono-sol   t= 22.4 hard=5 W=75560 | c1=79 low=19 high=36 c3mn=0 | c3m=0 c42=3 c42s=20 | apt=29 c2=0 covO=8 fair=50 weekly=212
+mono-sol   t= 22.6 hard=5 W=73039 | c1=72 low=16 high=33 c3mn=0 | c3m=0 c42=3 c42s=20 | apt=28 c2=0 covO=7 fair=52 weekly=212
+mono-sol   t= 24.5 hard=5 W=72839 | c1=71 low=16 high=33 c3mn=0 | c3m=0 c42=3 c42s=20 | apt=28 c2=0 covO=7 fair=52 weekly=212
+mono-sol   t= 25.5 hard=5 W=71813 | c1=65 low=16 high=33 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=28 c2=0 covO=8 fair=55 weekly=215
+mono-sol   t= 26.0 hard=5 W=60218 | c1=19 low=5 high=17 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=54 c2=0 covO=3 fair=103 weekly=245
+mono-sol   t= 27.1 hard=5 W=60087 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=3 c42s=24 | apt=50 c2=0 covO=3 fair=98 weekly=244
+mono-sol   t= 29.1 hard=5 W=59897 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=2 c42s=23 | apt=50 c2=0 covO=3 fair=95 weekly=244
+mono-sol   t= 29.7 hard=5 W=57933 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=3 c42s=20 | apt=36 c2=0 covO=3 fair=62 weekly=250
+mono-sol   t= 31.0 hard=5 W=57816 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=34 c2=0 covO=3 fair=60 weekly=253
+mono-sol   t= 32.5 hard=5 W=57333 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=28 c2=0 covO=3 fair=52 weekly=250
+mono-sol   t= 34.9 hard=5 W=57332 | c1=19 low=5 high=18 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=28 c2=0 covO=3 fair=52 weekly=249
+mono-sol   t= 38.4 hard=5 W=57119 | c1=20 low=4 high=18 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=30 c2=0 covO=3 fair=47 weekly=246
+mono-end   t= 55.4 hard=5 W=57119 | c1=20 low=4 high=18 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=30 c2=0 covO=3 fair=47 weekly=246
+bound=55252 hardBound=5 proven=1

@@ -1,0 +1,3 @@
+start      t=  0.0 hard=9 W=96681 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=5 fair=44 weekly=236
+status=2 prep=0.06s t=60.1
+chint-end  t= 60.1 hard=9 W=96679 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=4 fair=44 weekly=235

@@ -1,0 +1,12 @@
+start      t=  0.0 hard=11 W=117033 | c1=25 low=4 high=18 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=34 c2=0 covO=4 fair=63 weekly=219
+mono-sol   t= 20.2 hard=9 W=97949 | c1=19 low=2 high=13 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=44 c2=0 covO=5 fair=88 weekly=244
+mono-sol   t= 37.8 hard=9 W=97831 | c1=23 low=3 high=13 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=39 c2=0 covO=4 fair=69 weekly=237
+mono-sol   t= 40.7 hard=9 W=96923 | c1=21 low=3 high=14 c3mn=0 | c3m=0 c42=2 c42s=23 | apt=31 c2=0 covO=4 fair=59 weekly=249
+mono-sol   t= 41.1 hard=9 W=96551 | c1=21 low=3 high=13 c3mn=0 | c3m=0 c42=2 c42s=23 | apt=30 c2=0 covO=5 fair=56 weekly=246
+mono-sol   t= 44.1 hard=9 W=96494 | c1=21 low=2 high=13 c3mn=0 | c3m=0 c42=2 c42s=23 | apt=32 c2=0 covO=4 fair=58 weekly=250
+mono-sol   t= 47.9 hard=9 W=96117 | c1=22 low=2 high=13 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=26 c2=0 covO=4 fair=49 weekly=243
+mono-sol   t= 51.0 hard=9 W=96115 | c1=22 low=2 high=13 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=26 c2=0 covO=4 fair=49 weekly=241
+mono-sol   t= 51.7 hard=9 W=95945 | c1=22 low=2 high=13 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=25 c2=0 covO=4 fair=46 weekly=241
+mono-sol   t= 52.8 hard=9 W=95915 | c1=22 low=2 high=13 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=26 c2=0 covO=4 fair=45 weekly=241
+mono-end   t= 60.0 hard=9 W=95915 | c1=22 low=2 high=13 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=26 c2=0 covO=4 fair=45 weekly=241
+bound=93722 hardBound=9 proven=1

@@ -1,0 +1,17 @@
+start      t=  0.0 hard=5 W=59338 | c1=25 low=4 high=20 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=32 c2=0 covO=3 fair=63 weekly=225
+mono-sol   t= 14.7 hard=5 W=59338 | c1=25 low=4 high=20 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=32 c2=0 covO=3 fair=63 weekly=225
+mono-sol   t= 33.7 hard=5 W=59305 | c1=22 low=4 high=23 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=33 c2=0 covO=3 fair=62 weekly=242
+mono-sol   t= 35.1 hard=5 W=59111 | c1=22 low=4 high=23 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=59 weekly=238
+mono-sol   t= 38.5 hard=5 W=59009 | c1=22 low=4 high=23 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=57 weekly=236
+mono-sol   t= 41.4 hard=5 W=58990 | c1=22 low=4 high=23 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=31 c2=0 covO=3 fair=57 weekly=237
+mono-sol   t= 42.1 hard=5 W=58828 | c1=22 low=4 high=22 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=33 c2=0 covO=3 fair=57 weekly=235
+mono-sol   t= 44.9 hard=5 W=58730 | c1=22 low=4 high=22 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=33 c2=0 covO=3 fair=55 weekly=237
+mono-sol   t= 46.5 hard=5 W=58538 | c1=23 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=31 c2=0 covO=3 fair=52 weekly=235
+mono-sol   t= 49.1 hard=5 W=58536 | c1=23 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=31 c2=0 covO=3 fair=52 weekly=233
+mono-sol   t= 49.9 hard=5 W=58534 | c1=23 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=31 c2=0 covO=3 fair=52 weekly=231
+mono-sol   t= 53.6 hard=5 W=57856 | c1=22 low=4 high=19 c3mn=0 | c3m=0 c42=3 c42s=21 | apt=32 c2=0 covO=3 fair=50 weekly=233
+mono-sol   t= 54.6 hard=5 W=57706 | c1=22 low=4 high=19 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=47 weekly=233
+mono-sol   t= 55.3 hard=5 W=57704 | c1=22 low=4 high=19 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=47 weekly=231
+mono-sol   t= 56.4 hard=5 W=57702 | c1=22 low=4 high=19 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=47 weekly=229
+mono-end   t= 60.0 hard=5 W=57702 | c1=22 low=4 high=19 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=31 c2=0 covO=3 fair=47 weekly=229
+bound=55177 hardBound=5 proven=1
