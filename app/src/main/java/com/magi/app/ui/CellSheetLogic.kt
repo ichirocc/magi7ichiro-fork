@@ -1504,9 +1504,12 @@ internal fun budgetStatusLine(sec: Int, reserveSec: Int): String = "組む時間
 /** 「組む時間を選ぶ」の候補（3.727.88、利用者指示「3分・5分・7分とユーザー指定」）。ほかの値はユーザー指定（[budgetCustomStep]）。 */
 internal val BUDGET_PRESET_SECS = listOf(180, 300, 420)
 
+/** 画面で選べる組む時間の下限（ユーザー指定の 2分、3.727.88）。エンジンは 1 秒から受ける（テスト・ベンチ用）。 */
+internal const val MIN_BUDGET_SEC = 120
+
 /** ユーザー指定の組む時間を 1 分ずつ増減する（2〜10分、分単位に丸める）。 */
 internal fun budgetCustomStep(sec: Int, deltaMin: Int): Int =
-    ((sec + 30) / 60 + deltaMin).times(60).coerceIn(MIN_BUDGET_SEC, MAX_BUDGET_SEC)
+    ((sec + 30) / 60 + deltaMin).times(60).coerceIn(MIN_BUDGET_SEC, com.magi.app.v6.MAX_OPTIMIZE_SEC)
 
 /** 勤務表を作成する画面の要点（作成前）を 1 行に。時間は設定値（探索）と固定の仕上げ枠。 */
 internal fun preRunPlanLine(startDate: String, days: Int, staff: Int, budgetSec: Int, reserveSec: Int): String {

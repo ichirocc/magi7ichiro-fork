@@ -9,8 +9,8 @@ class Review3706Test {
     /** [3.727.88] タイルは 3・5・7分、ユーザー指定は 2〜10分を 1 分ずつ。既定は 5分。 */
     @Test fun presetsAndCustomRange() {
         assertEquals(listOf(180, 300, 420), BUDGET_PRESET_SECS)
-        assertTrue(BUDGET_PRESET_SECS.all { it in MIN_BUDGET_SEC..MAX_BUDGET_SEC })
-        assertEquals(120 to 600, MIN_BUDGET_SEC to MAX_BUDGET_SEC)
+        assertTrue(BUDGET_PRESET_SECS.all { it in MIN_BUDGET_SEC..com.magi.app.v6.MAX_OPTIMIZE_SEC })
+        assertEquals(120 to 600, MIN_BUDGET_SEC to com.magi.app.v6.MAX_OPTIMIZE_SEC)
         assertEquals(240, budgetCustomStep(180, 1))
         assertEquals(120, budgetCustomStep(180, -5))
         assertEquals(600, budgetCustomStep(540, 3))

@@ -93,9 +93,6 @@ import kotlin.coroutines.resume
  */
 const val MAX_BUDGET_SEC = com.magi.app.v6.MAX_OPTIMIZE_SEC
 
-/** 画面で選べる組む時間の下限（ユーザー指定の 2分、3.727.88）。エンジンは 1 秒から受ける（テスト・ベンチ用）。 */
-const val MIN_BUDGET_SEC = 120
-
 /**
  * [saveNow メインスレッドI/O] onStop/onPause は「プロセスがこの直後に破棄されうる」区間なので、
  * saveNow() の同期書込は**意図的**（Dispatchers.IO へ逃がすと、ディスパッチされたコルーチンが走る前に
