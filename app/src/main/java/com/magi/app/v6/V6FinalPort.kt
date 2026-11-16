@@ -23,6 +23,8 @@ const val POST_RESERVE_SEC = 10
 const val CHAIN_RESERVE_SEC = 10
 /** CP-SAT 併走のワーカー数（探索の 8 本と同時に走る。docs/cpsat_formal.md）。 */
 const val CPSAT_WORKERS = 2
+/** 解き直し（[CpsatResolve]）へ切り替える停滞: 探索の最良がこの時間 改善しなければ探索を終える（2026-11-16 ユーザー指示「暫定値は改善なし 10秒」＝HF77 明示数値）。 */
+const val CPSAT_RESOLVE_STALL_MS = 10_000L
 /** 下限とのギャップがこの割合以下なら予算の途中でも探索を終える（2026-11-10 ユーザー指示「差 1% 以下」＝HF77 明示数値）。 */
 const val CPSAT_GAP_STOP = 0.01
 
@@ -724,6 +726,8 @@ object V6FinalPort {
         }
         // [CP-SAT 併走、docs/cpsat_formal.md] 下限・ギャップを得て、差が 1% 以下（必須は証明済みの最少と同じ件数）なら予算の途中でも止める。
         val cpsat = if (config.cpsatCoRun && CpsatBridge.available) CpsatCoRun(state, baseProblem) else null
+        // 解き直し（既定 OFF）: 探索が [CPSAT_RESOLVE_STALL_MS] 改善しなければ探索を終え、残りの探索の持ち時間を解き直しに使う。
+        val resolveOn = config.cpsatResolve && CpsatBridge.available
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
@@ -772,6 +776,7 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 cpsatGapReached(now) -> true
+                resolveOn && now - wd.lastBestImproveMs.get() >= CPSAT_RESOLVE_STALL_MS -> true
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs,
                     maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
@@ -806,10 +811,18 @@ object V6FinalPort {
         } else first
         val tChain1 = EngineClock.nowMs()
         // CP-SAT を止めて最良を読む。良ければ統合の起点にする（手動固定・希望固定を崩した盤面は使わない＝最終番兵と同じ多重防御）。
+        // 解き直し: 探索の最良の一部だけを CP-SAT で解き直す（証明役の併走は続けたまま、残りのコアを 1 スレッドずつ）。探索の締切まで。
+        val resolveThreads = (Runtime.getRuntime().availableProcessors() - CPSAT_WORKERS).coerceAtLeast(1)
+        val resolveLeftSec = (searchDeadlineMs - EngineClock.nowMs()) / 1000.0
+        val resolveOut = if (resolveOn && !cpsatGapHit && isActive && resolveLeftSec >= 2.0) {
+            CpsatResolve.run(baseProblem, chained.schedule, resolveLeftSec, resolveThreads, optsR.seed) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
+        } else null
+        val resolveStage = resolveOut?.takeIf { it.accepted > 0 }?.let { o -> StageCandidate("CP-SAT 解き直し", o.board, UnifiedViolationChecker.check(state, o.board)) }
+            ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
         val cpsatSnap = if (cpsatOn) cpsat!!.finish() else null
         val cpsatStage = cpsatSnap?.board?.let { b -> StageCandidate("CP-SAT", b, UnifiedViolationChecker.check(state, b)) }
             ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
-        val searchRoot = cpsatStage?.takeIf { betterReport(it.report, chained.report) }?.sched ?: chained.schedule
+        val searchRoot = pickBestStage(listOfNotNull(StageCandidate("探索", chained.schedule, chained.report), cpsatStage, resolveStage)).sched
         // [3.377.0/実機ログ起因] 停滞ウォッチドッグの遠隔測定は**探索フェーズの話**なのに、ログは
         //   `lastBestImproveMs` を出力時（後処理・追加精製のあと）に読んでいた。ExtraRefine(3.102.0)の
         //   改善も `progressWatch` を通るので lastBestImproveMs は tChain1 より後へ進み、
@@ -1081,7 +1094,7 @@ object V6FinalPort {
             StageCandidate("探索", chained.schedule, chained.report),
             StageCandidate("統合", integrated.schedule, integrated.report),
             StageCandidate("後処理", refSched, refReport),
-        ) + listOfNotNull(cpsatStage)
+        ) + listOfNotNull(cpsatStage, resolveStage)
         val pinSafeStages = stages.filter { baseProblem.holdsManualPins(it.sched) }
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
@@ -1105,7 +1118,8 @@ object V6FinalPort {
             BoundSummary(s.hardBound, s.hardProven, s.weightedBound, finalReport.weightedScore,
                 CpsatCoRun.gap(finalReport.weightedScore, s.weightedBound).takeIf { finalReport.hard.toLong() == s.hardBound }, cpsatGapHit)
         }
-        val cpsatLog = cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report))) } ?: emptyList()
+        val cpsatLog = (cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report))) } ?: emptyList()) +
+            listOfNotNull(resolveOut?.let { MirrorLog(level = "I", tag = "CP-SAT", message = resolveLogLine(it, resolveThreads, resolveStage, chained.report)) })
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
         //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
         //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
@@ -1548,6 +1562,18 @@ object V6FinalPort {
         val own = stage?.let { "CP-SAT の最良 必須${it.report.hard}・重み${it.report.weightedScore.toLong()}（探索の最良 必須${searchBest.hard}・重み${searchBest.weightedScore.toLong()}" +
             (if (betterReport(it.report, searchBest)) "より良い＝統合の起点に採用）" else "）") } ?: "CP-SAT の解なし"
         return "$hard・$weight・$gap・$own" + if (b?.stoppedByGap == true) "・ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を早く終えた" else ""
+    }
+
+    internal fun resolveLogLine(o: CpsatResolve.Outcome, threads: Int, stage: StageCandidate?, searchBest: ViolationReport): String {
+        val head = "解き直し: 探索が ${CPSAT_RESOLVE_STALL_MS / 1000} 秒改善しなかったので、探索の最良の一部を ${"%.1f".format(o.wallMs / 1000.0)} 秒・${threads} 本で解き直した。" +
+            "部分 ${o.parts} 個のうち ${o.accepted} 個で改善（最適まで解けた ${o.optimal} 個）"
+        val tail = when {
+            o.accepted == 0L -> "・改善なし"
+            stage == null -> "・盤面が固定を崩していたため不採用"
+            betterReport(stage.report, searchBest) -> "・必須${searchBest.hard}→${stage.report.hard}・重み${searchBest.weightedScore.toLong()}→${stage.report.weightedScore.toLong()}"
+            else -> "・チェッカーの採点では探索の最良（重み${searchBest.weightedScore.toLong()}）以下にならず不採用（解き直し後 重み${stage.report.weightedScore.toLong()}）"
+        }
+        return head + tail
     }
 
     internal fun identitySwapLog(state: MagiState, input: ViolationReport, final: ViolationReport): List<MirrorLog> {

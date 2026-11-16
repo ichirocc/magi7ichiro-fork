@@ -2,6 +2,7 @@
 //   g++ -O2 -std=c++20 -DMAGI_HOST_TEST -DOR_PROTO_DLL= -I app/src/main/cpp -I tools/native -I <ortools>/include \
 //       tools/native/cpsat_bench.cpp -L<ortools>/lib -lortools -lprotobuf -o cpsat_bench
 //   cpsat_bench <flat> [seconds=30] [workers=4] [priority=1]
+//   CPSAT_IMPROVE=30 cpsat_bench <flat> 0 3   … 一部だけ解き直す（30 秒・3 本）
 // ①盤面を固定したモデルの採点が fullEvalParts（fair を除く・必須の重み込み）と一致するか ②下限・解・ギャップ。
 #define main parity_main
 #include "host_parity_bench.cpp"
@@ -28,6 +29,16 @@ int main(int argc, char** argv) {
         wNoFair = out[1] - fairW + hw2;
     };
     long long h0, w0, f0; evalW(board, h0, w0, f0);
+    // CPSAT_IMPROVE=<秒>: 入力の盤面の一部だけを解き直す（magi_cpsat::improve、workers 本を 1 スレッドずつ）。これだけを走らせて終わる。
+    if (const char* imp = getenv("CPSAT_IMPROVE")) {
+        magi_cpsat::ImproveOptions io; io.maxSeconds = atof(imp); io.threads = workers;
+        if (const char* sd = getenv("CPSAT_SEED")) io.randomSeed = atoll(sd);
+        auto r = magi_cpsat::improve(p, board, io, hw);
+        long long h1, w1, f1; evalW(r.board, h1, w1, f1);
+        printf("IMPROVE %.1fs threads=%d | hard %lld -> %lld | weighted(fair 込み) %lld -> %lld (engine-check %lld) | 部分 %lld 個・採用 %lld・最適 %lld\n",
+               r.wallSeconds, workers, h0, r.hard, r.startWeighted, r.weighted, w1 + f1, r.iters, r.accepted, r.optimal);
+        return (h1 == r.hard && w1 + f1 == r.weighted) ? 0 : 1;
+    }
     magi_cpsat::Options fix; fix.fixToHint = true; fix.maxSeconds = 20; fix.workers = workers;
     auto rf = magi_cpsat::solve(p, board, fix, hw);
     printf("PARITY board: engine hard=%lld weighted(noFair)=%lld fair=%lld | model hard=%lld weighted=%lld -> %s\n",

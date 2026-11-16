@@ -1449,6 +1449,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 他の案を手がかりに仕上げる → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setCpsatResolve(on: Boolean) {
+        com.magi.app.v6.PolishGate.cpsatResolve = on
+        _ui.update { it.copy(cpsatResolve = on) }
+        logOp("I", "設定変更: 頭打ちのあと一部を解き直す → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setFloorShortStall(on: Boolean) {
         com.magi.app.v6.PolishGate.floorShortStall = on
         _ui.update { it.copy(floorShortStall = on) }

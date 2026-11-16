@@ -212,6 +212,9 @@ object PolishGate {
     @Volatile var seesawRelink: Boolean = false
     /** CP-SAT（OR-Tools）を作成と併走させ、下限・ギャップ・より良い勤務表を得る（`docs/cpsat_formal.md`）。OR-Tools を組み込んだビルドだけで効く。 */
     @Volatile var cpsatCoRun: Boolean = true
+    /** 探索が頭打ちになったら CP-SAT で一部だけ解き直す（[CpsatResolve]、`docs/cpsat_formal.md`「解き直し」）。既定 **false**（実機で測ってから既定を決める、
+     *  2026-11-16 ユーザー指示「スイッチは UI で既定 OFF」）。OR-Tools を組み込んだビルドだけで効く。 */
+    @Volatile var cpsatResolve: Boolean = false
 
     /** 必須違反が構造の下限に届いたら停滞閾値を短縮する（`effectiveStallMs` の basePlateau）。false＝下限に届いても通常閾値で粘る。
      *  既定 **true**＝従来どおり（実機ログ 2026-10-15: 300 s 予算で 59 s に終わった件の測定用。採否は測ってから）。 */
@@ -234,7 +237,7 @@ object PolishGate {
         "countChainPolish" to countChainPolish,
         "membraneCellLns" to membraneCellLns,
         "seesawRelink" to seesawRelink,
-        "cpsatCoRun" to cpsatCoRun,
+        "cpsatCoRun" to cpsatCoRun, "cpsatResolve" to cpsatResolve,
         
         "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "floorShortStall" to floorShortStall, "c3nWallDeepCheck" to c3nWallDeepCheck,
         "ejectionPipelineShallowOnly" to EjectionChainPipeline.shallowOnly,
@@ -256,7 +259,7 @@ object PolishGate {
         b("combineExhaustPairs") { combineExhaustPairs = it }
         b("membraneCellLns") { membraneCellLns = it }
         b("seesawRelink") { seesawRelink = it }
-        b("cpsatCoRun") { cpsatCoRun = it }
+        b("cpsatCoRun") { cpsatCoRun = it }; b("cpsatResolve") { cpsatResolve = it }
         b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }
         
