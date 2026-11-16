@@ -397,6 +397,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 Text(FLOOR_SHORT_STALL_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.floorShortStall, onCheckedChange = null, enabled = !ui.running)
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.cpsatResolve, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetCpsatResolve(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("頭打ちのあと一部を解き直す", style = MaterialTheme.typography.bodyMedium)
