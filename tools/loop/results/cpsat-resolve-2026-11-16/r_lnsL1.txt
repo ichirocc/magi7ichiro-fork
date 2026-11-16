@@ -1,0 +1,5 @@
+start      t=  0.0 hard=9 W=96681 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=5 fair=44 weekly=236
+lns#8      t= 12.7 hard=9 W=96679 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=4 fair=44 weekly=235
+lns#14     t= 22.1 hard=9 W=96316 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=28 c2=0 covO=4 fair=44 weekly=232
+iters=41 accepted=2 optimal=28
+lns-end    t= 60.0 hard=9 W=96316 | c1=23 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=28 c2=0 covO=4 fair=44 weekly=232

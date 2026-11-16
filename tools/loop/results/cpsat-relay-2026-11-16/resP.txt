@@ -1,0 +1,4 @@
+octP1 mode=0 seed=1 input=97666(fair 2150) tier=99866(fair 6150,h9) phase2start=15.5s first=99866@26.8s best=95723@74.8s(h9 fair 2500, model obj 94623) bound=93734 end=120.0s BETTER-THAN-INPUT
+octP1 mode=1 seed=1 input=97666(fair 2150) tier=-1(fair -1,h-1) phase2start=0.2s first=97666@13.2s best=95956@98.8s(h9 fair 2500, model obj 94656) bound=93740 end=120.0s BETTER-THAN-INPUT
+octP2 mode=0 seed=1 input=97301(fair 2450) tier=98907(fair 5200,h9) phase2start=6.2s first=107067@10.4s best=95588@68.4s(h9 fair 2300, model obj 94641) bound=93743 end=120.0s BETTER-THAN-INPUT
+octP2 mode=1 seed=1 input=97301(fair 2450) tier=-1(fair -1,h-1) phase2start=0.2s first=109119@5.4s best=96021@97.6s(h9 fair 2150, model obj 94722) bound=93738 end=120.0s BETTER-THAN-INPUT

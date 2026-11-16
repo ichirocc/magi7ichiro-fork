@@ -1,0 +1,18 @@
+start      t=  0.0 hard=9 W=96549 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=6 fair=41 weekly=233
+mono-sol   t= 10.1 hard=9 W=107360 | c1=56 low=7 high=22 c3mn=0 | c3m=0 c42=4 c42s=26 | apt=41 c2=0 covO=6 fair=74 weekly=234
+mono-sol   t= 10.4 hard=9 W=106407 | c1=53 low=6 high=22 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=40 c2=0 covO=5 fair=71 weekly=232
+mono-sol   t= 10.5 hard=9 W=105806 | c1=50 low=6 high=22 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=40 c2=0 covO=5 fair=71 weekly=231
+mono-sol   t= 10.6 hard=9 W=105603 | c1=49 low=6 high=22 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=40 c2=0 covO=4 fair=71 weekly=229
+mono-sol   t= 11.1 hard=9 W=105323 | c1=49 low=6 high=21 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=41 c2=0 covO=4 fair=69 weekly=229
+mono-sol   t= 11.9 hard=9 W=104153 | c1=44 low=5 high=21 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=41 c2=0 covO=4 fair=70 weekly=229
+mono-sol   t= 14.1 hard=9 W=103932 | c1=43 low=5 high=21 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=41 c2=0 covO=4 fair=70 weekly=228
+mono-sol   t= 16.8 hard=9 W=102801 | c1=38 low=5 high=22 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=37 c2=0 covO=4 fair=65 weekly=227
+mono-sol   t= 17.7 hard=9 W=102591 | c1=38 low=4 high=22 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=38 c2=0 covO=4 fair=64 weekly=227
+mono-sol   t= 18.5 hard=9 W=102511 | c1=38 low=4 high=22 c3mn=0 | c3m=0 c42=4 c42s=27 | apt=38 c2=0 covO=4 fair=62 weekly=227
+mono-sol   t= 19.0 hard=9 W=102491 | c1=38 low=4 high=22 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=38 c2=0 covO=4 fair=62 weekly=227
+mono-sol   t= 22.0 hard=9 W=102389 | c1=38 low=4 high=22 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=38 c2=0 covO=4 fair=60 weekly=225
+mono-sol   t= 24.3 hard=9 W=102258 | c1=38 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=27 | apt=39 c2=0 covO=4 fair=61 weekly=224
+mono-sol   t= 27.4 hard=9 W=101242 | c1=33 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=39 c2=0 covO=4 fair=61 weekly=228
+mono-sol   t= 28.2 hard=9 W=101122 | c1=33 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=38 c2=0 covO=4 fair=59 weekly=228
+mono-end   t= 30.0 hard=9 W=101122 | c1=33 low=4 high=21 c3mn=0 | c3m=0 c42=3 c42s=26 | apt=38 c2=0 covO=4 fair=59 weekly=228
+bound=93607 hardBound=9 proven=1

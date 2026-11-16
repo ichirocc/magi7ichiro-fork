@@ -1,0 +1,4 @@
+start      t=  0.0 hard=9 W=96681 | c1=25 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=23 | apt=26 c2=0 covO=5 fair=44 weekly=236
+mono-sol   t= 16.2 hard=9 W=97618 | c1=18 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=45 c2=0 covO=4 fair=82 weekly=254
+mono-end   t= 27.6 hard=9 W=97618 | c1=18 low=2 high=14 c3mn=0 | c3m=0 c42=3 c42s=25 | apt=45 c2=0 covO=4 fair=82 weekly=254
+bound=93440 hardBound=9 proven=1

@@ -1,0 +1,4 @@
+start      t=  0.0 hard=9 W=96549 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=6 fair=41 weekly=233
+full-end   t= 19.5 hard=9 W=96549 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=6 fair=41 weekly=233
+full-best  t= 19.5 hard=9 W=96549 | c1=23 low=2 high=16 c3mn=0 | c3m=0 c42=3 c42s=22 | apt=28 c2=0 covO=6 fair=41 weekly=233
+bound=39757

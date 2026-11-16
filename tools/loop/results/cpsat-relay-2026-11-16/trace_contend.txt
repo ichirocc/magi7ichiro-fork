@@ -1,0 +1,13 @@
+  21.3s 97286 max_lp [hint]
+  37.0s 97269 rins_lp_lns (d=5.00e-01 s=31 t=0.10 p=0.00 stall=0 h=base)
+  37.1s 97265 rnd_cst_lns (d=5.00e-01 s=33 t=0.10 p=0.00 stall=0 h=base)
+  42.3s 96633 rins_lp_lns (d=2.93e-01 s=58 t=0.10 p=0.00 stall=0 h=base)
+  46.9s 96629 rnd_cst_lns (d=7.87e-01 s=73 t=0.10 p=0.75 stall=3 h=base)
+  51.6s 96409 rnd_cst_lns (d=8.49e-01 s=91 t=0.10 p=0.80 stall=0 h=base)
+  52.4s 96391 graph_dec_lns (d=8.55e-01 s=92 t=0.10 p=0.71 stall=4 h=base)
+  60.3s 96349 rins_lp_lns (d=3.38e-01 s=123 t=0.10 p=0.43 stall=2 h=base)
+  61.0s 96329 graph_arc_lns (d=7.79e-01 s=124 t=0.10 p=0.60 stall=10 h=base)
+  62.6s 96257 graph_dec_lns (d=8.87e-01 s=129 t=0.10 p=0.70 stall=2 h=base)
+  74.0s 96245 graph_arc_lns (d=7.13e-01 s=163 t=0.10 p=0.54 stall=2 h=base)
+  106.7s 96205 rins_lp_lns (d=5.77e-01 s=261 t=0.10 p=0.52 stall=1 h=base)
+  109.0s 96079 graph_arc_lns (d=7.15e-01 s=269 t=0.10 p=0.52 stall=4 h=base)
