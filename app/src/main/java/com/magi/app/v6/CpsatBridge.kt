@@ -17,6 +17,8 @@ object CpsatBridge {
     @JvmStatic external fun nativeCpsatStop(handle: Long)
     /** 戻り値 [status, hard, weighted, hardBound, weightedBound, hardProven, wallMillis]。終わるまで戻らない。 */
     @JvmStatic external fun nativeCpsatSolve(handle: Long, hint: IntArray, maxSeconds: Double, workers: Int, seed: Long, hardCap: Long): LongArray
+    /** 一部だけ解き直す。戻り値 [iters, accepted, optimal, hard, weighted, startWeighted, wallMillis]。終わるまで戻らない。最良の盤面は [nativeCpsatPoll]。 */
+    @JvmStatic external fun nativeCpsatImprove(handle: Long, start: IntArray, maxSeconds: Double, threads: Int, seed: Long): LongArray
     /** 戻り値 [version, hard, weighted, weightedBound, hardBound, hardProven]。version が [knownVersion] と違えば [out] に最良の盤面。 */
     @JvmStatic external fun nativeCpsatPoll(handle: Long, knownVersion: Long, out: IntArray): LongArray
     /** 戻り値 [核の数, 各核: minimal, 件数, 件数×(kind, i, j, k, rule)]。[HardCauses.decode] で読む。 */
@@ -122,5 +124,39 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
         /** ギャップ（実際の最良と下限の差の割合）。下限が無ければ null。 */
         fun gap(bestWeighted: Double, bound: Long): Double? =
             if (bound < 0 || bestWeighted <= 0.0) null else ((bestWeighted - bound) / bestWeighted).coerceAtLeast(0.0)
+    }
+}
+
+/**
+ * 探索が頭打ちになったあとの解き直し（`magi_cpsat::improve`、`docs/cpsat_formal.md`「解き直し」）。探索の最良の一部（職員数人・数日の窓）だけを
+ * 自由にした小さい問題を、[threads] 本が 1 スレッドずつ CP-SAT で解き、エンジンの採点で良くなった盤面だけを採る。
+ * 返す盤面は開始の盤面より悪くならない。呼び出し側はチェッカーで採点し直してから使う。
+ */
+object CpsatResolve {
+    /** [board]＝最良の盤面（改善なしなら開始の盤面と同じ内容）、[parts]＝解いた部分の数、[accepted]＝採った数、[optimal]＝最適まで解けた数。 */
+    class Outcome(val board: Array<IntArray>, val parts: Long, val accepted: Long, val optimal: Long, val wallMs: Long)
+
+    /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。 */
+    fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long, shouldStop: () -> Boolean): Outcome? {
+        if (!CpsatBridge.available || maxSeconds <= 0.0) return null
+        val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
+        if (problemHandle == 0L) return null
+        val job = CpsatBridge.nativeCpsatCreate(problemHandle)
+        if (job == 0L) { NativeBridge.nativeDestroyProblem(problemHandle); return null }
+        val flat = NativeEval.flatten(start)
+        var stats: LongArray? = null
+        val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
+            .also { it.isDaemon = true; it.start() }
+        while (thread.isAlive) {
+            if (shouldStop()) CpsatBridge.nativeCpsatStop(job)
+            thread.join(200L)
+        }
+        val buf = IntArray(problem.S * problem.T)
+        val v = CpsatBridge.nativeCpsatPoll(job, -1L, buf)
+        CpsatBridge.nativeCpsatDestroy(job)
+        NativeBridge.nativeDestroyProblem(problemHandle)
+        val s = stats ?: return null
+        if (s.size < 7 || v[1] < 0) return null
+        return Outcome(NativeEval.unflatten(buf, problem.S, problem.T), s[0], s[1], s[2], s[6])
     }
 }

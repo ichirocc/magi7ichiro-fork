@@ -75,6 +75,34 @@ Java_com_magi_app_v6_CpsatBridge_nativeCpsatSolve(JNIEnv* env, jclass, jlong h, 
     return out;
 }
 
+// 一部だけ解き直す（magi_cpsat::improve）。戻り値 [iters, accepted, optimal, hard, weighted, startWeighted, wallMillis]。
+//   最良の盤面は poll で読む（hard・weighted はエンジンの採点＝必須の重み込み・fair 込み）。止めるのは nativeCpsatStop。
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_magi_app_v6_CpsatBridge_nativeCpsatImprove(JNIEnv* env, jclass, jlong h, jintArray startArr,
+                                                   jdouble maxSeconds, jint threads, jlong seed) {
+    jlongArray out = env->NewLongArray(7);
+    if (h == 0 || out == nullptr) return out;
+    auto* job = reinterpret_cast<CpsatJob*>(h);
+    const MagiProblem& p = *job->p;
+    std::vector<int> start((size_t)p.S * p.T, -1);
+    if (startArr == nullptr || env->GetArrayLength(startArr) != (jsize)start.size()) return out;
+    env->GetIntArrayRegion(startArr, 0, (jsize)start.size(), start.data());
+    magi_cpsat::ImproveOptions io;
+    io.maxSeconds = maxSeconds; io.threads = threads; io.randomSeed = seed; io.stop = &job->stop;
+    io.onBest = [job](const std::vector<int>& b, long long hard, long long weighted) {
+        std::lock_guard<std::mutex> g(job->mu);
+        job->best = b; job->hard = hard; job->weighted = weighted; job->version++;
+    };
+    const auto r = magi_cpsat::improve(p, start, io);
+    {
+        std::lock_guard<std::mutex> g(job->mu);
+        if (!r.board.empty()) { job->best = r.board; job->hard = r.hard; job->weighted = r.weighted; job->version++; }
+    }
+    jlong vals[7] = {r.iters, r.accepted, r.optimal, r.hard, r.weighted, r.startWeighted, (jlong)(r.wallSeconds * 1000)};
+    env->SetLongArrayRegion(out, 0, 7, vals);
+    return out;
+}
+
 // 読む。戻り値 [version, hard, weighted, weightedBound, hardBound, hardProven]。version が変わっていて out の長さが S*T なら盤面も写す。
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_magi_app_v6_CpsatBridge_nativeCpsatPoll(JNIEnv* env, jclass, jlong h, jlong knownVersion, jintArray outBoard) {

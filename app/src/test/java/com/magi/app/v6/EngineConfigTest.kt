@@ -14,6 +14,7 @@ class EngineConfigTest {
         assertEquals(false, d.aptFairSoftTolerance)
         assertEquals(false, d.countChainPolish)
         assertEquals(false, d.wideC3nBreakDays)
+        assertEquals(false, d.cpsatResolve)
         assertEquals(EjectionFlags(c1Chain = false, allFamilyChain = false, pipelineFocus = EjectionChainPipeline.Focus.BOTH,
             pipelineHardLeg = false, maxMillis = 10_000L, holeFocus = true, holeSoftOnly = true), d.ejection)
         assertEquals(d, EngineConfig.snapshot())

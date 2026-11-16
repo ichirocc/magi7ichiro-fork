@@ -19,6 +19,8 @@ data class EngineConfig(
     val seesawRelink: Boolean = false,
     /** CP-SAT の併走（[PolishGate.cpsatCoRun] の写し）。 */
     val cpsatCoRun: Boolean = true,
+    /** 探索が頭打ちになったあとの解き直し（[PolishGate.cpsatResolve] の写し）。 */
+    val cpsatResolve: Boolean = false,
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
@@ -47,6 +49,7 @@ data class EngineConfig(
             membraneCellLns = PolishGate.membraneCellLns,
             seesawRelink = PolishGate.seesawRelink,
             cpsatCoRun = PolishGate.cpsatCoRun,
+            cpsatResolve = PolishGate.cpsatResolve,
             wideC3nBreakDays = PolishGate.wideC3nBreakDays,
             ejection = EjectionFlags(
                 c1Chain = PolishGate.c1EjectionChain,
