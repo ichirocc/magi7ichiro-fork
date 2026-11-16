@@ -110,7 +110,7 @@ data class UiState(
     val logs: List<String> = emptyList(),
     val elapsedMs: Long = 0,
     val workers: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 8),
-    val budgetSec: Int = 60,   // 探索の時間。後処理は POST_RESERVE_SEC を後ろに足す（3.659.0 利用者指示: 既定 300→60）
+    val budgetSec: Int = 300,   // 探索の時間。後処理は POST_RESERVE_SEC を後ろに足す（3.727.90 利用者指示: 既定 60→300）
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）

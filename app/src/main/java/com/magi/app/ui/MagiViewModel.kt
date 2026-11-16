@@ -87,7 +87,7 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
 /**
- * 勤務表最適化のタイムアウト上限（秒）。高精度を保ったまま5分(300s)以内に圧縮。
+ * 勤務表最適化のタイムアウト上限（秒）。10分（3.727.90、利用者指示「ユーザー指定は 2分から10分」）。
  * 唯一の真実源はエンジン層の [com.magi.app.v6.MAX_OPTIMIZE_SEC]。UI 側はそれを参照し、
  * UI 設定の上限とエンジンの頭打ちが乖離しないようにする。
  */
@@ -1484,7 +1484,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   PolishGate 冒頭の記録参照）。
 
 
-    fun setBudget(sec: Int) { if (structuralEditBlocked()) return; val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
+    fun setBudget(sec: Int) { if (structuralEditBlocked()) return; val v = sec.coerceIn(MIN_BUDGET_SEC, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { if (structuralEditBlocked()) return; _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { if (structuralEditBlocked()) return; _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
     fun setAgentAuto(b: Boolean) { _ui.update { it.copy(agentAuto = b) }; logOp("I", "設定変更: 作成のあと代行で仕上げる → ${if (b) "ON" else "OFF"}") }

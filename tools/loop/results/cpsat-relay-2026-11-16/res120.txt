@@ -1,0 +1,15 @@
+oct1 mode=1 seed=1 input=98021(fair 2550) tier=-1(fair -1,h-1) phase2start=0.2s first=98021@5.9s best=95827@96.0s(h9 fair 2150, model obj 94578) bound=93753 end=120.0s BETTER-THAN-INPUT
+oct1 mode=0 seed=1 input=98021(fair 2550) tier=97741(fair 4300,h9) phase2start=2.9s first=97741@8.9s best=95610@69.3s(h9 fair 2550, model obj 94261) bound=93737 end=120.0s BETTER-THAN-INPUT
+oct1 mode=2 seed=1 input=98021(fair 2550) tier=97407(fair 3950,h9) phase2start=6.2s first=97407@12.1s best=95547@73.7s(h9 fair 2350, model obj 94397) bound=93742 end=120.0s BETTER-THAN-INPUT
+oct2 mode=0 seed=1 input=97734(fair 2600) tier=98809(fair 5200,h9) phase2start=6.2s first=102949@10.3s best=95549@119.0s(h9 fair 2350, model obj 94399) bound=93746 end=120.0s BETTER-THAN-INPUT
+oct2 mode=1 seed=1 input=97734(fair 2600) tier=-1(fair -1,h-1) phase2start=0.2s first=97734@6.5s best=95713@59.4s(h9 fair 2250, model obj 94513) bound=93740 end=120.0s BETTER-THAN-INPUT
+oct2 mode=2 seed=1 input=97734(fair 2600) tier=98543(fair 5000,h9) phase2start=13.4s first=97734@19.8s best=95829@108.3s(h9 fair 2300, model obj 94529) bound=93748 end=120.0s BETTER-THAN-INPUT
+oct3 mode=0 seed=1 input=98762(fair 2450) tier=97625(fair 4200,h9) phase2start=5.4s first=97625@11.0s best=95374@80.7s(h9 fair 2250, model obj 94224) bound=93731 end=120.0s BETTER-THAN-INPUT
+oct3 mode=1 seed=1 input=98762(fair 2450) tier=-1(fair -1,h-1) phase2start=0.2s first=98762@6.0s best=95875@88.4s(h9 fair 2350, model obj 94576) bound=93734 end=120.0s BETTER-THAN-INPUT
+gold1 mode=0 seed=1 input=28325(fair 300) tier=18180(fair 250,h0) phase2start=9.6s first=59453@9.9s best=18010@116.2s(h0 fair 250, model obj 17761) bound=17176 end=120.0s BETTER-THAN-INPUT
+oct3 mode=2 seed=1 input=98762(fair 2450) tier=98168(fair 4650,h9) phase2start=9.1s first=98168@15.2s best=95518@117.6s(h9 fair 2450, model obj 94368) bound=93731 end=120.0s BETTER-THAN-INPUT
+gold1 mode=1 seed=1 input=28325(fair 300) tier=-1(fair -1,h-1) phase2start=0.1s first=47599@0.3s best=18351@44.5s(h0 fair 150, model obj 18202) bound=17115 end=120.0s BETTER-THAN-INPUT
+gold1 mode=2 seed=1 input=28325(fair 300) tier=18165(fair 250,h0) phase2start=8.4s first=58929@8.7s best=18103@19.6s(h0 fair 250, model obj 17853) bound=17091 end=120.0s BETTER-THAN-INPUT
+sept1 mode=0 seed=1 input=15499(fair 950) tier=12655(fair 1650,h0) phase2start=3.4s first=54957@3.7s best=11624@90.2s(h0 fair 1150, model obj 11224) bound=10582 end=120.0s BETTER-THAN-INPUT
+sept1 mode=1 seed=1 input=15499(fair 950) tier=-1(fair -1,h-1) phase2start=0.2s first=59174@0.5s best=11773@97.1s(h0 fair 950, model obj 11574) bound=10576 end=120.0s BETTER-THAN-INPUT
+sept1 mode=2 seed=1 input=15499(fair 950) tier=12417(fair 1300,h0) phase2start=4.2s first=49770@4.5s best=11417@115.0s(h0 fair 1250, model obj 11017) bound=10614 end=120.0s BETTER-THAN-INPUT

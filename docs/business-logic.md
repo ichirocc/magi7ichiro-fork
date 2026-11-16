@@ -34,7 +34,7 @@
 > **例外（3.535.0/HF77明示数値指示、既定OFF）**: 適切回数(apt)/公平化(fair)研磨だけは
 > `PolishGate.aptFairSoftTolerance`をONにすると、対象家族以外のSOFT合計の悪化を研磨パス開始時点比
 > +6%まで容認する（`AptFairPolish.toleratedBetter`、累積予算）。**直す順番が優先順位（`ObjectiveMethod.PRIORITY`）のときは使わない**
-> （`EngineConfig.snapshot` が OFF にする。T3 の apt/fair のために上の段を悪くする手は優先順位と両立しない。実機ログで後処理が
+> （`EngineConfig.snapshot` が OFF にする。優先順位では apt/fair の重さを採点表の値（fair 50・apt 20、3.727.80・3.727.87）で決めるので、採否に別の許容を重ねない。実機ログで後処理が
 > 重みを悪化させ最終番兵に棄却された＝仕上げが効かない盤面が出ていた、2026-11-09 ユーザー指示 3.727.48）。HARDの不増加は不変。他の全ての
 > keep-best比較（`betterReport`単体）には影響しない。後処理チェーンの畳み込み（`postChainRunningKeepBest`）も、apt/fair
 > 研磨の結果だけは同じ基準（予算の基準＝パス開始時点のチェーン最良）で判定する＝パスが容認した手をチェーンで巻き戻さない（2026-10-04）。
