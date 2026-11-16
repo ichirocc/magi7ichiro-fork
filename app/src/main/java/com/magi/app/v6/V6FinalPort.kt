@@ -16,7 +16,7 @@ import kotlinx.coroutines.isActive
  * pure Kotlin so ViewModel/Compose can call the same workflow without WebView.
  */
 /** 勤務表最適化のタイムアウト上限（秒）。高精度を保ったまま5分(300s)以内へ圧縮（停滞早期脱出＋RSI++をこの予算に収める）。 */
-const val MAX_OPTIMIZE_SEC = 300
+const val MAX_OPTIMIZE_SEC = 600
 /** 後処理（研磨）の取り分（秒）。制限時間＝探索の時間で、後処理はその後ろにこの秒数だけ足す（3.659.0 利用者指示「60秒 + 10秒」）。 */
 const val POST_RESERVE_SEC = 10
 /** 玉突き（パイプラインの深い探索）の取り分（秒）。後処理の後ろにさらに足す（3.659.0 利用者指示「探索60秒後処理10秒玉突き検索10秒」）。 */
@@ -486,7 +486,7 @@ object V6FinalPort {
         //   その場合 SaOptimizer の rng.nextInt(S) が IllegalArgumentException を投げ、ViewModel の
         //   catch が「最適化失敗: bound must be positive」という原因の読めない文言を出していた。
         require(state.staff.isNotEmpty()) { "職員が1人も登録されていません。職員管理で追加してください" }
-        // [3.333.0/外部レビュー] 上限は [MAX_OPTIMIZE_SEC]（現在 300s＝5分）。呼び出し側に依らずここで
+        // [3.333.0/外部レビュー] 上限は [MAX_OPTIMIZE_SEC]（現在 600s＝10分、3.727.88）。呼び出し側に依らずここで
         //   頭打ちにする。旧コメントは「10分(600s)」のままで実装と食い違っていた（HF77: コメント≠実装）。
         val seconds = secondsRaw.coerceIn(1, MAX_OPTIMIZE_SEC)
         val gate = confirmDespiteImpossibleWishes(state, allowImpossible)

@@ -194,36 +194,44 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
     }
 }
 
-/** 「組む時間を選ぶ」シート（3.706.0 S1）。候補は [budgetPresets]、［この時間にする］で決める。 */
+/** 「組む時間を選ぶ」シート（3.727.88）。タイルは [BUDGET_PRESET_SECS] とユーザー指定（2〜10分を 1 分ずつ）、［この時間にする］で決める。 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun BudgetPickerSheet(currentSec: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
     var chosen by rememberSaveable { mutableIntStateOf(currentSec) }
+    var custom by rememberSaveable { mutableStateOf(currentSec !in BUDGET_PRESET_SECS) }
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, dragHandle = { MagiSheetGrabber(sheetState) }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("組む時間を選ぶ", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (sec in budgetPresets(currentSec)) {
-                    val sel = sec == chosen
-                    val label = if (sec == currentSec && sec !in BUDGET_TILE_SECS) "いまの値 ${sec}秒" else budgetText(sec)
-                    Surface(onClick = { chosen = sec }, shape = MagiCorners.capsule,
-                        color = if (sel) cs.primaryContainer else cs.surfaceVariant,
-                        border = if (sel) BorderStroke(2.dp, cs.primary) else null,
-                        modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = label + if (sel) "（選択中）" else "" }) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp)) {
-                            Text(label, style = MaterialTheme.typography.titleSmall, color = if (sel) cs.onPrimaryContainer else cs.onSurface)
-                        }
-                    }
-                }
+                for (sec in BUDGET_PRESET_SECS) BudgetTile(budgetText(sec), !custom && sec == chosen) { chosen = sec; custom = false }
+                BudgetTile(BUDGET_CUSTOM_LABEL, custom) { if (!custom) chosen = budgetCustomStep(chosen, 0); custom = true }
+            }
+            if (custom) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { chosen = budgetCustomStep(chosen, -1) }, enabled = chosen > MIN_BUDGET_SEC, modifier = Modifier.heightIn(min = 48.dp)) { Text("− 1分") }
+                Text(budgetText(chosen), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { chosen = budgetCustomStep(chosen, 1) }, enabled = chosen < MAX_BUDGET_SEC, modifier = Modifier.heightIn(min = 48.dp)) { Text("＋ 1分") }
             }
             Button(onClick = { onPick(chosen) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("この時間にする") }
         }
     }
 }
 
-private val BUDGET_TILE_SECS = setOf(10, 60, 120, 180, 240, MAX_BUDGET_SEC)
+@Composable
+private fun BudgetTile(label: String, sel: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = MagiCorners.capsule,
+        color = if (sel) cs.primaryContainer else cs.surfaceVariant,
+        border = if (sel) BorderStroke(2.dp, cs.primary) else null,
+        modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = label + if (sel) "（選択中）" else "" }) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp)) {
+            Text(label, style = MaterialTheme.typography.titleSmall, color = if (sel) cs.onPrimaryContainer else cs.onSurface)
+        }
+    }
+}
+
+internal const val BUDGET_CUSTOM_LABEL = "ユーザー指定"
 
 /** 設定タブの保存失敗の帯（3.706.0 S4＋F-3）。1 文と塗りの［もう一度保存する］。 */
 @Composable
@@ -468,7 +476,7 @@ internal fun objectiveMethodLabel(m: ObjectiveMethod): String = when (m) {
 }
 internal const val OBJECTIVE_METHOD_NOTE = "優先順位（既定）: 個人の回数・期間の制約を先に、連続の希望・グループの人数・グループ内の偏りを次に、適切回数は最後に直します。必ず守るものは同じです。重み（従来）は前の版と同じ直し方です"
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中。じっくりのときだけ、期間の制約などが1件増える手も採ります（測定では効果なし・既定OFF）"
-internal const val APT_FAIR_PRIORITY_NOTE = "直す順番が優先順位のときは使いません（適切回数・偏りのために上の段を悪くしない）。じっくりの 6% 容認も同じく使いません"
+internal const val APT_FAIR_PRIORITY_NOTE = "直す順番が優先順位のときは使いません（適切回数・偏りの重さは優先順位の重みで決めます）。じっくりの 6% 容認も同じく使いません"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"
