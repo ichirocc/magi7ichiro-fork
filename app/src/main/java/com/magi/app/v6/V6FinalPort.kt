@@ -126,7 +126,7 @@ object V6FinalPort {
     data class TimeSummary(val totalMs: Long, val phases: List<Pair<String, Long>>, val postTop: List<Pair<String, Long>>, val overBudget: Boolean) {
         /** 操作ログの 1 行。1 秒未満の段は省き、長い順に並べる。後処理は上位パスを括弧で添える。 */
         fun opLine(): String {
-            fun sec(ms: Long) = if (ms >= 10_000L) "${(ms + 500L) / 1000L}" else String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)
+            fun sec(ms: Long) = if (ms / 1000L >= 10L) "${(ms + 500L) / 1000L}" else String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)
             val parts = phases.filter { it.second >= 1000L }.sortedByDescending { it.second }.map { (name, ms) ->
                 val pct = ms * 100L / totalMs.coerceAtLeast(1L)
                 val detail = if (name == "後処理" && postTop.isNotEmpty())
