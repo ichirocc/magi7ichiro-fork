@@ -56,4 +56,18 @@ class C1RangeBalanceTest {
         assertTrue("上限 0 の日" in hit.first().problem && "少なくとも" in hit.first().problem)
         assertTrue(V6SanityPort.buildGuidance(st0.copy(cons1 = rule)).none { "延べ人数" in it.problem && "上限 0 の日" in it.problem })
     }
+
+    /** 希望の人数だけで日の上限人数を超えると知らせ、その分を数える（上限 0 の日に休の希望）。 */
+    @Test fun guidanceFlagsWishesOverTheDayCap() {
+        val st0 = load("sample_state_v6.json")
+        val p0 = Problem(st0)
+        val rest = p0.restIdx!!
+        val j = (0 until p0.T).first { d -> (0 until p0.S).any { p0.wishFixed(it, d) && p0.wish[it][d] == rest } }
+        val wished = (0 until p0.S).count { p0.wishFixed(it, j) && p0.wish[it][j] == rest }
+        val st = st0.copy(needDay1 = st0.needDay1 + ("$rest,$j" to "0"), needDay2 = st0.needDay2 + ("$rest,$j" to "0"))
+        assertEquals(wished to wished, V6SanityPort.wishCovOExcess(Problem(st))[j to rest])
+        val hit = V6SanityPort.buildGuidance(st).filter { "上限0人" in it.where && "希望" in it.where }
+        assertTrue(hit.any { "誰も入れない日" in it.problem && "${wished}人" in it.problem })
+        assertTrue(V6SanityPort.wishCovOExcess(p0)[j to rest] == null || p0.covOCell(rest, j, wished) > 0)
+    }
 }

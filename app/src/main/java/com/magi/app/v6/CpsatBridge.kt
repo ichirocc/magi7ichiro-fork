@@ -132,12 +132,17 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
  * 自由にした小さい問題を、[threads] 本が 1 スレッドずつ CP-SAT で解き、エンジンの採点で良くなった盤面だけを採る。
  * 返す盤面は開始の盤面より悪くならない。呼び出し側はチェッカーで採点し直してから使う。
  */
+/** 解き直しの進捗を知らせる間隔。 */
+const val RESOLVE_TICK_MS = 15_000L
+
 object CpsatResolve {
     /** [board]＝最良の盤面（改善なしなら開始の盤面と同じ内容）、[parts]＝解いた部分の数、[accepted]＝採った数、[optimal]＝最適まで解けた数。 */
     class Outcome(val board: Array<IntArray>, val parts: Long, val accepted: Long, val optimal: Long, val wallMs: Long)
 
     /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。 */
-    fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long, shouldStop: () -> Boolean): Outcome? {
+    /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
+    fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
+            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -147,9 +152,16 @@ object CpsatResolve {
         var stats: LongArray? = null
         val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
             .also { it.isDaemon = true; it.start() }
+        var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
+        val noBoard = IntArray(0)
         while (thread.isAlive) {
             if (shouldStop()) CpsatBridge.nativeCpsatStop(job)
             thread.join(200L)
+            if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {
+                nextTick += RESOLVE_TICK_MS
+                val v = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard)
+                if (v.size >= 3 && v[1] >= 0) onTick(v[1], v[2])
+            }
         }
         val buf = IntArray(problem.S * problem.T)
         val v = CpsatBridge.nativeCpsatPoll(job, -1L, buf)

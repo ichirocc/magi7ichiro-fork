@@ -1528,6 +1528,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelFixSearch()
         _ui.update { it.copy(agentRunning = true, agentRecord = null) }
         logOp("I", "代行: 開始（必須 ${u.bestHard}）")
+        val agentT0 = System.currentTimeMillis()
         agentJob = viewModelScope.launch {
             try {
                 val r = withContext(Dispatchers.Default) {
@@ -1542,7 +1543,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val rec = AgentRecord(r.steps.map { fixDisplayLabel(it.label) }, r.before.hard, r.after.hard,
                     softText(r.before.breakdown), softText(r.after.breakdown), agentStopWord(r.stop))
                 r.steps.forEach { s -> logOp("I", "代行: ${fixDisplayLabel(s.label)}（必須 ${s.hardBefore}→${s.hardAfter}・合計 ${s.totalBefore}→${s.totalAfter}・重み ${s.weightedBefore}→${s.weightedAfter}）") }
-                logOp("I", "代行: 終了 ${r.steps.size}手（${rec.stop}）必須 ${r.before.hard}→${r.after.hard}")
+                logOp("I", "代行: 終了 ${r.steps.size}手（${rec.stop}）必須 ${r.before.hard}→${r.after.hard} 所要 ${(System.currentTimeMillis() - agentT0 + 500L) / 1000L}秒")
                 if (r.steps.isEmpty()) { _ui.update { it.copy(agentRecord = rec) }; return@launch }
                 pushUndo("代行（${r.steps.size}手）")
                 val recU = rec.copy(undoSerial = undoStack.lastOrNull()?.serial ?: 0L)
@@ -2180,6 +2181,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.409.17/実機ログ 3.409.14] 予算超過の実行は内訳が診断ログ（次の実行で消える）にしか
                 //   残らず特定不能だった（13実行中5回が474〜959sまで超過したのに、残った診断は最後の
                 //   1回ぶんだけ）。超過時は TIME/エポック超過/後処理パス別 を操作ログへ写して生き残らせる。
+                res.time?.let { logOp(if (it.overBudget) "W" else "I", it.opLine()) }
                 if (res.logs.any { it.tag == "TIME" && it.level == "W" }) {
                     res.logs.firstOrNull { it.tag == "TIME" }?.let { logOp("W", "予算超過: ${it.message}") }
                     res.logs.firstOrNull { it.tag == "エポック超過" }?.let { logOp("W", it.message) }

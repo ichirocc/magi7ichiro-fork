@@ -319,6 +319,18 @@ object V6SanityPort {
         return n
     }
 
+    /** 日×シフトごとに、希望で固定した人数だけで上限人数を超える分（報告の covO と同じ単位）。キーは (日, シフト)、値は (希望の人数, 超える分)。 */
+    fun wishCovOExcess(p: Problem): Map<Pair<Int, Int>, Pair<Int, Int>> {
+        val out = LinkedHashMap<Pair<Int, Int>, Pair<Int, Int>>()
+        for (j in 0 until p.T) for (k in 0 until p.K) {
+            val wished = (0 until p.S).count { p.wishFixed(it, j) && p.wish[it][j] == k }
+            if (wished == 0) continue
+            val over = p.covOCell(k, j, wished)
+            if (over > 0) out[j to k] = wished to over
+        }
+        return out
+    }
+
     /** 個人の上限（high）のうち、希望で固定したセルだけで上限を超えている回数（報告の high と同じ単位＝超過 1 回で 1）。 */
     fun wishHighFloor(p: Problem, schedule: Array<IntArray>): Int {
         var n = 0
@@ -844,6 +856,19 @@ object V6SanityPort {
                         "期間の制約を守りたいときは、${Place.EDIT}${Place.COUNT}で「$sym」の上限を${need + 1}回以上にするか、${Place.RULE}の「期間の制約」を見直してください",
                         neutral = true))
                 }
+            }
+
+            // 2b-5) 希望の人数だけで日の上限人数を超える（2026-11-17 実機ログ: 休の上限 0 の 12/13・12/31 に休の希望が各 3 人）。
+            //   希望が優先されるので人員過剰が必ず残り、その分の休が他の日に回らない。
+            for ((key, v) in wishCovOExcess(p)) {
+                val (j, k) = key; val (wished, over) = v
+                val names = (0 until p.S).filter { p.wishFixed(it, j) && p.wish[it][j] == k }
+                    .let { s -> s.take(Guidance.NAME_PREVIEW).joinToString("・") { nameOf(it) } + (if (s.size > Guidance.NAME_PREVIEW) " ほか${s.size - Guidance.NAME_PREVIEW}名" else "") }
+                val sym = symOf(k)
+                val cap = wished - over
+                out.add(SettingIssue(IssueKind.DEMAND, "${safeDayLabel(state.startDate, j)} 「$sym」の上限${cap}人と希望",
+                    "上限${cap}人${if (cap == 0) "（誰も入れない日）" else ""}なのに、本人の希望で${wished}人（$names）が「$sym」です。希望が優先されるので人員過剰が必ず${over}人残ります",
+                    "${Place.EDIT}${Place.WISH}で希望を見直すか、${Place.NEED_DAYS}でこの日の「$sym」の上限を${wished}人以上にしてください"))
             }
 
             // 2b-4) 期間の制約の窓ごとの延べ人数（2026-11-17 実機ログ: 休の上限 0 の日が 8 日あり、12/18〜12/31 は休める日が 7 日・
