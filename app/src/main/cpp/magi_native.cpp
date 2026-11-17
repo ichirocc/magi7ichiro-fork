@@ -168,11 +168,14 @@ struct MagiProblem {
         if (extBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
         return extBan[((size_t)i * T + j) * K + k] != 0;
     }
-    // セル (i,j) に k を置く手を捨てるか（拡張希望の禁止・日の上限 0。Kotlin Problem.extBanned と同値）。旧値は問わない。
-    inline bool extBanned(int i, int j, int k) const {
-        if (extWishBanned(i, j, k)) return true;
+    // 日の上限 0 で置かないセルか（Kotlin Problem.dayCapBanned と同値。表は Kotlin が希望・逃げ先を見て作る）。
+    inline bool capBanned(int i, int j, int k) const {
         if (capBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
         return capBan[((size_t)i * T + j) * K + k] != 0;
+    }
+    // セル (i,j) に k を置く手を捨てるか（拡張希望の禁止・日の上限 0。Kotlin Problem.extBanned と同値）。旧値は問わない。
+    inline bool extBanned(int i, int j, int k) const {
+        return extWishBanned(i, j, k) || capBanned(i, j, k);
     }
     // 翌日が希望固定（実現可能な希望＝wishLockedN と同義）の X で、cons3w に (X→k) があれば ban。wish 確定後に呼ぶ。
     void buildC3wBan() {

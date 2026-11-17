@@ -32,7 +32,7 @@ object CpsatBridge {
  * 核どうしは互いに素＝核の数は必須の件数の下限。[Core.minimal] はどの 1 件を外しても成り立つと確かめた核。
  */
 object HardCauses {
-    enum class Kind { WISH, PIN, NEED, FORBIDDEN_SEQ, OUTSIDE }
+    enum class Kind { WISH, PIN, NEED, FORBIDDEN_SEQ, OUTSIDE, DAY_CAP }
     /** [staff]・[day]・[shift] は無ければ -1。NEED の [rule] は必要人数、FORBIDDEN_SEQ の [rule] は禁止の並びの行。 */
     data class Cause(val kind: Kind, val staff: Int, val day: Int, val shift: Int, val rule: Int)
     data class Core(val causes: List<Cause>, val minimal: Boolean)
