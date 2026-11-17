@@ -1229,6 +1229,14 @@ object V6FinalPort {
             val c3nWall = wd.bestNonCovUAllC3n.get() && wallProof.diagnoseBoard(finalSched.map { it.toList() })
             val walls = ArrayList<String>()
             val open = ArrayList<String>()
+            // CP-SAT が必須の最少を証明し、採用盤面がその件数なら、重みは下限より下がらない＝ほかの族を変えずに減らせる量の上限が出る。
+            val roomToBound = boundSummary?.takeIf { it.hardProven && it.weightedBound >= 0 && finalReport.hard.toLong() == it.hardBound }
+                ?.let { (finalReport.weightedScore - it.weightedBound).coerceAtLeast(0.0) }
+            fun openItem(key: String, n: Int): String {
+                val w = ObjectiveWeights.of(key)
+                val cap = if (roomToBound == null || w <= 0.0) null else kotlin.math.floor(roomToBound / w).toInt()
+                return if (cap != null && cap < n) "$key ${n}件(${key}だけで減らすなら多くて${cap}件)" else "$key ${n}件"
+            }
             // [3.375.0/実機ログ起因] 構造床は**族ループより先に**計算する。旧実装は床を後から walls へ
             //   足すだけで **open 側から差し引いていなかった**ため、同じ1行が
             //   「もう直せない: weekly のうち57件 ／ まだ狙える: … weekly 159件」と出て
@@ -1302,7 +1310,7 @@ object V6FinalPort {
                     "high" -> n0 - highWall
                     else -> n0
                 } - self
-                if (n > 0) open.add("$key ${n}件")
+                if (n > 0) open.add(openItem(key, n))
             }
             if (selfConflictShown.isNotEmpty()) walls.add("希望と禁止の衝突 ${selfConflictShown.sumOf { it.second }}件(" +
                 selfConflictShown.joinToString("・") { "${it.first} ${it.second}" } + "＝希望を1件取り消すまで解消しない)")
@@ -1330,7 +1338,8 @@ object V6FinalPort {
                 if (rest > 0) open.add("apt+high ${rest}件")
             }
             val wallTxt = if (walls.isEmpty()) "なし" else walls.joinToString(" / ")
-            val openTxt = if (open.isEmpty()) "なし＝これ以上は追っても減りません" else open.joinToString(" / ")
+            val openTxt = if (open.isEmpty()) "なし＝これ以上は追っても減りません" else open.joinToString(" / ") +
+                (roomToBound?.let { "（重みはあと${it.toLong()}点しか下がらない＝CP-SAT の下限）" } ?: "")
             // 採用盤面の必須を「希望どうしのぶつかり（希望を1件取り消すまで消えない）」と「それ以外」に分ける（表示・計測用）。
             val hardWishFloor = V6SanityPort.wishConflictHardShare(selfConflict, bd, finalReport.hard)
             listOf(MirrorLog(

@@ -86,6 +86,13 @@ class OpLogTextTest {
             OpLogText.strengthLine("ふつう", SearchStrength.NORMAL.flags()))
     }
 
+    @Test fun strengthLineSaysTheToleranceIsUnusedUnderPriority() {
+        assertEquals("設定変更: 探索の強さ → じっくり（結合探索を粘り強く=ON・禁止連続の崩し範囲=ON・回数連鎖研磨=ON・公平化/適切回数の他ソフト許容(6%)=ON（直す順番が優先順位のあいだは使わない））",
+            OpLogText.strengthLine("じっくり", SearchStrength.THOROUGH.flags(), toleranceUnused = true))
+        assertEquals(OpLogText.strengthLine("ふつう", SearchStrength.NORMAL.flags()),
+            OpLogText.strengthLine("ふつう", SearchStrength.NORMAL.flags(), toleranceUnused = true))
+    }
+
     @Test fun settingsStartLineUsesTheSameWordsAsTuningSummary() {
         val words = com.magi.app.v6.TuningTelemetry.startSettings(true, true, false, true, false, false, true)
         assertEquals("設定の開始時: ネイティブ加速（設定）=ON / Kotlin照合（設定）=ON / 必須が増える候補の事前フィルタ=ON / 禁止連続の崩し範囲=OFF / 仕上げ最適化=ON" +

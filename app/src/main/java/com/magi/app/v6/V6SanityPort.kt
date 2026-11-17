@@ -621,6 +621,20 @@ object V6SanityPort {
         return if (l > h) l to h else null
     }
 
+    /** [T] 日のどの [w] 日の窓にも [r] 回以上入れるのに要る最少回数（窓ごとに足りない分を窓の後ろから置く貪欲＝最適）。 */
+    internal fun c1MinCount(t: Int, w: Int, r: Int): Int {
+        if (w <= 0 || w > t || r <= 0) return 0
+        val m = BooleanArray(t)
+        var n = 0
+        for (s in 0..t - w) {
+            var c = 0
+            for (j in s until s + w) if (m[j]) c++
+            var j = s + w - 1
+            while (c < r && j >= s) { if (!m[j]) { m[j] = true; c++; n++ }; j-- }
+        }
+        return n
+    }
+
     fun buildGuidance(state: MagiState, p: Problem = cachedProblem(state)): List<SettingIssue> =
         GuidanceBuilder(state, p).run()
 
@@ -808,6 +822,27 @@ object V6SanityPort {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$sym ${c.day1}日で${c.day2}回以上」",
                         "${c.day1}日間に${c.day2}回は入りきらないため、「$sym」を担当する全員が期間中ずっと違反になります",
                         "${Place.EDIT}${Place.RULE}の「期間の制約」で回数を${c.day1}回以下に直すか、この行を削除してください"))
+                }
+            }
+
+            // 2b-3) 期間の制約と個人の上限の釣り合い（2026-11-17 実機ログ: 休を 10 回に固定した 8 人に「14日で休5回以上」＝
+            //   31 日で最少 10 回＝等間隔でしか満たせず c1 が 71 件残った）。上限が最少回数を下回れば必ず不足、ちょうどなら余地なし。
+            for (c in p.cons1) {
+                if (c.day1 <= 0 || c.day1 > p.T || c.day2 <= 0 || c.day2 > c.day1) continue
+                val need = c1MinCount(p.T, c.day1, c.day2)
+                val sym = symOf(c.shiftIdx)
+                val byHi = (0 until p.S).filter { p.canDo(it, c.shiftIdx) && p.rangeHi[it][c.shiftIdx] in 1..need }
+                    .groupBy { p.rangeHi[it][c.shiftIdx] }
+                for ((hi, staff) in byHi.toSortedMap()) {
+                    val names = staff.take(Guidance.NAME_PREVIEW).joinToString("・") { nameOf(it) } + (if (staff.size > Guidance.NAME_PREVIEW) " ほか${staff.size - Guidance.NAME_PREVIEW}名" else "")
+                    val rule = "「$sym ${c.day1}日で${c.day2}回以上」"
+                    if (hi < need) out.add(SettingIssue(IssueKind.RANGE, "$names の「$sym」上限${hi}回と期間の制約$rule",
+                        "${p.T}日で$rule を満たすには「$sym」が最少${need}回要ります。上限${hi}回では期間の制約が必ず足りません",
+                        "${Place.EDIT}${Place.COUNT}で「$sym」の上限を${need}回以上にするか、${Place.RULE}の「期間の制約」を見直してください"))
+                    else out.add(SettingIssue(IssueKind.RANGE, "$names の「$sym」上限${hi}回と期間の制約$rule",
+                        "${p.T}日で$rule を満たす最少の回数と同じです。「$sym」をきっちり等間隔に置くしかなく、希望や禁止の並びと重なると期間の制約が残りやすくなります",
+                        "期間の制約を守りたいときは、${Place.EDIT}${Place.COUNT}で「$sym」の上限を${need + 1}回以上にするか、${Place.RULE}の「期間の制約」を見直してください",
+                        neutral = true))
                 }
             }
 
