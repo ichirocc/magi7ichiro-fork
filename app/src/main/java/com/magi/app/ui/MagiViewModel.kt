@@ -395,7 +395,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val day = { j: Int -> com.magi.app.v6.dayLabel(st.startDate, j) }
             val seq = { e: Int -> p.cons3n.getOrNull(e)?.seq?.joinToString("→") { k -> shift(k) } ?: "#$e" }
             com.magi.app.v6.HardCauseText.lines(cores, staff, shift, day, seq)
-                .forEach { logOp("I", "必須の原因（証明・この中の 1 件を緩めないと消えない）$it") }
+                .forEach { logOpIfChanged("I", "必須の原因（証明・この中の 1 件を緩めないと消えない）$it") }
             // 求めている間に盤面が変わっていたら出さない（別の盤面の説明になる）。
             val blocks = com.magi.app.v6.HardCauseText.blocks(cores, staff, shift, day, seq)
             val shown = board.map { it.toList() }
@@ -412,6 +412,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val keep = opLog.size - 1
         opLogLines = ArrayList<String>(keep + 1).apply { add(formatOpLine(e)); for (i in 0 until keep) add(opLogLines[i]) }
         _ui.update { it.copy(opLog = opLogLines) }
+    }
+
+    /** 同じ見出しの直近の行と本文が同じなら出さない（その行がリングに残っている間だけ＝消えたら出し直す）。 */
+    private fun logOpIfChanged(level: String, message: String) {
+        val head = message.substringBefore(": ") + ": "
+        val last = opLogLines.firstOrNull { it.contains(head) }   // 整形済みの写し（差し替え式＝別スレッドからも安全に読める）
+        if (last != null && last.substring(last.indexOf(head)) == message) return
+        logOp(level, message)
     }
 
     /** [3.408.0] 実行中の行だけ `#N` を付ける（実行外＝0 は従来どおり無印）。 */
@@ -723,7 +731,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         writeRunMarker("bg")
         logOp("I", OpLogText.startLine("バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm}, 直す順番=${objectiveMethodLabel(_ui.value.objectiveMethod)})",
             st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))   // [3.694.0] 前景の開始行と同じ項目
-        logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
+        logOpIfChanged("I", OpLogText.settingsStartLine(settingsStartWords()))
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
         //   非同期に監視し、後から失敗した場合も開始失敗と同じ片付けをする（置き換え済みなら何もしない）。
         viewModelScope.launch {
@@ -1527,7 +1535,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = sched.copy2D(); val stKey = stateKey(st)
         cancelFixSearch()
         _ui.update { it.copy(agentRunning = true, agentRecord = null) }
-        logOp("I", "代行: 開始（必須 ${u.bestHard}）")
         val agentT0 = System.currentTimeMillis()
         agentJob = viewModelScope.launch {
             try {
@@ -1938,7 +1945,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.694.0] 開始行は beginBoardJob の後（#N が付く）。期間・人数・入力の指紋と、開始点で読んだ設定を残す（G1・G6・G8）。
         logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm}, 直す順番=${objectiveMethodLabel(_ui.value.objectiveMethod)})",
             st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))
-        logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
+        logOpIfChanged("I", OpLogText.settingsStartLine(settingsStartWords()))
         beginFgRunGuard("最適化")   // 直後の launch の finally で必ず解放
         job = viewModelScope.launch {
             // [3.372.0/実機ログ起因] 終端ログ（完了/停止/失敗）を必ず1行残す保証。実機ログ(2026-08-15)で
