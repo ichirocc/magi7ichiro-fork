@@ -846,6 +846,42 @@ object V6SanityPort {
                 }
             }
 
+            // 2b-4) 期間の制約の窓ごとの延べ人数（2026-11-17 実機ログ: 休の上限 0 の日が 8 日あり、12/18〜12/31 は休める日が 7 日・
+            //   1 日に休めるのは 5 人まで＝35 人日に対し、10 人が 5 回ずつで 50 人日要る）。置ける延べ人数は、上限 0 の日は希望の人数だけ、
+            //   ほかの日は職員数から他のシフトの最低人数を引いた人数＝上限。足りない分は c1 の件数の下限になる。最も足りない窓だけを出す。
+            run {
+                val capZero = p.dayCapZero
+                fun lowNeed(k: Int, j: Int): Int {
+                    val a = p.need1[k][j]; val b = if (p.use2) p.need2[k][j] else -1
+                    return (if (a >= 0 && b >= 0) minOf(a, b) else maxOf(a, b)).coerceAtLeast(0)
+                }
+                for (c in p.cons1) {
+                    if (c.day1 <= 0 || c.day1 > p.T || c.day2 <= 0 || c.day2 > c.day1) continue
+                    val x = c.shiftIdx
+                    val members = (0 until p.S).count { p.canDo(it, x) }
+                    if (members == 0) continue
+                    val cap = IntArray(p.T) { j ->
+                        val wished = (0 until p.S).count { p.wishFixed(it, j) && p.wish[it][j] == x }
+                        if (capZero != null && capZero[j * p.K + x]) wished
+                        else (p.S - (0 until p.K).filter { it != x }.sumOf { lowNeed(it, j) }).coerceIn(0, members)
+                    }
+                    var worst = 0; var at = -1
+                    for (s in 0..p.T - c.day1) {
+                        val short = members * c.day2 - (s until s + c.day1).sumOf { cap[it] }
+                        if (short > worst) { worst = short; at = s }
+                    }
+                    if (at < 0) continue
+                    val sym = symOf(x)
+                    val zeroDays = if (capZero == null) 0 else (at until at + c.day1).count { capZero[it * p.K + x] }
+                    val span = "${safeDayLabel(state.startDate, at)}〜${safeDayLabel(state.startDate, at + c.day1 - 1)}"
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$sym ${c.day1}日で${c.day2}回以上」と $span",
+                        "${span}の${c.day1}日で「$sym」を置ける延べ人数は多くて${(at until at + c.day1).sumOf { cap[it] }}人日です" +
+                            (if (zeroDays > 0) "（上限 0 の日が${zeroDays}日・" else "（") + "ほかの日は職員から他のシフトの最低人数を引いた人数まで）。" +
+                            "${members}人が${c.day2}回ずつ入るには${members * c.day2}人日要るので、期間の制約が少なくとも${worst}件足りません",
+                        "${Place.EDIT}${Place.NEED_DAYS}で「$sym」の上限 0 の日を減らすか、${Place.RULE}の「期間の制約」か${Place.NEED}を見直してください"))
+                }
+            }
+
             // 2b-2) [壁/covO-tension 分類] c1 窓制約の充足可否。需要 = 各 canDo 職員 × day2 × floor(T/day1)（disjoint窓の下界）。
             //   [3.364.0 訂正・実データ計測起因] 非休シフトの供給に per-day 上限(need2/need1)の総和を使うのは誤り。
             //   need2/need1 は covO の SOFT 目標(1日あたりの過剰配置しきい値)であって物理上限ではなく、最適化は covO を

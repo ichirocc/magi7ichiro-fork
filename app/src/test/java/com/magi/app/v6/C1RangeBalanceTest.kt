@@ -41,4 +41,19 @@ class C1RangeBalanceTest {
         assertTrue(issues.any { !it.neutral && "必ず足りません" in it.problem && st0.staff[staff[0]].name in it.where })
         assertTrue(issues.any { it.neutral && "等間隔" in it.problem && st0.staff[staff[1]].name in it.where })
     }
+
+    /** 休の上限 0 の日を月末に集めると、窓の延べ人数が足りないと知らせる（下限つき）。上限 0 の日が無ければ出さない。 */
+    @Test fun guidanceFlagsWindowsWithoutEnoughRoom() {
+        val st0 = load("sample_state_v6.json")
+        val p0 = Problem(st0)
+        val rest = p0.restIdx!!
+        val rule = listOf(com.magi.app.model.C1Row("14", st0.shifts[rest].kigou, "5"))
+        val days = (p0.T - 8 until p0.T)
+        val st = st0.copy(cons1 = rule,
+            needDay1 = st0.needDay1 + days.associate { "$rest,$it" to "0" }, needDay2 = st0.needDay2 + days.associate { "$rest,$it" to "0" })
+        val hit = V6SanityPort.buildGuidance(st).filter { "延べ人数" in it.problem }
+        assertTrue(hit.isNotEmpty())
+        assertTrue("上限 0 の日" in hit.first().problem && "少なくとも" in hit.first().problem)
+        assertTrue(V6SanityPort.buildGuidance(st0.copy(cons1 = rule)).none { "延べ人数" in it.problem && "上限 0 の日" in it.problem })
+    }
 }

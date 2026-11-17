@@ -26,6 +26,9 @@ const val CPSAT_WORKERS = 2
 /** 解き直し（[CpsatResolve]）へ切り替える停滞: 探索の最良がこの時間 改善しなければ探索を終える（2026-11-16 ユーザー指示「暫定値は改善なし 10秒」＝HF77 明示数値）。 */
 const val CPSAT_RESOLVE_STALL_MS = 10_000L
 
+/** 上限 0 の日に置いて必須違反を減らす最終段（[DayCapHardRelief]）の持ち時間。 */
+const val DAYCAP_RELIEF_MS = 3_000L
+
 /** 解き直しへ移る条件。ほかの早期終了と同じく最短実行（[minRunMs]）を待ってから、探索が [CPSAT_RESOLVE_STALL_MS] 改善しないときだけ。 */
 internal fun resolveStallReached(now: Long, startMs: Long, minRunMs: Long, lastImproveMs: Long): Boolean =
     now - startMs >= minRunMs && now - lastImproveMs >= CPSAT_RESOLVE_STALL_MS
@@ -1124,8 +1127,14 @@ object V6FinalPort {
         val wishLog = (extSafeStages - safeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が希望固定のセルを希望でない値へ変えていたため候補から外しました（多重防御）") }
         val bestStage = pickBestStage(safeStages)
-        val finalSched = bestStage.sched
-        val finalReport = bestStage.report
+        // 上限 0 の日を守るせいで残る必須違反は、その日に置いて減らす（必須が減るときだけ）。
+        val relief = DayCapHardRelief.apply(state, bestStage.sched, bestStage.report, EngineClock.nowMs() + DAYCAP_RELIEF_MS)
+        val finalSched = relief.schedule
+        val finalReport = relief.report
+        val reliefLog = if (relief.placed.isEmpty()) emptyList() else listOf(MirrorLog(level = "W", tag = "上限0の日",
+            message = "必須違反を避けるため、上限 0 の日に置いた: " + relief.placed.joinToString("、") { (i, j, k) ->
+                "${state.staff.getOrNull(i)?.name ?: i} ${dayLabel(state.startDate, j)}=${state.shifts.getOrNull(k)?.kigou ?: k}"
+            } + "（必須 ${bestStage.report.hard}→${finalReport.hard}。上限 0 の日の人員過剰として数える）"))
         // [MAGI-021/022] 採否は必須の「件数」で比べる（docs/adoption.md）＝人員不足 1 を解いて禁止連続 1 を作る入れ替わりは件数では見えない。
         //   採否は変えず、入力に無かった必須違反（族・場所）と解消した必須違反をログに出す（画面の変更案の同一性検査と説明を揃える）。
         val identityLog = identitySwapLog(state, inputReport, finalReport)
@@ -1456,7 +1465,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + identityLog + cpsatLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + wishLog + identityLog + reliefLog + cpsatLog + adoptedLog + sentinelLog + integrationLog + seesawLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

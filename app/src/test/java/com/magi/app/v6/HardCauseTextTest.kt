@@ -1,6 +1,7 @@
 package com.magi.app.v6
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HardCauseTextTest {
@@ -49,5 +50,12 @@ class HardCauseTextTest {
         val b = HardCauseText.blocks(listOf(core), staff = { "$it" }, shift = { "休" }, day = { "10/${it + 1}" }, seq = { "" }).single()
         assertEquals("10/5 の必要人数を満たせない", b.title)
         assertEquals(listOf("必要人数: 休 1人", "別の日の必要人数: 10/4 休 1人"), b.lines)
+    }
+
+    @Test fun dayCapCauseIsNamed() {
+        val core = HardCauses.Core(listOf(HardCauses.Cause(HardCauses.Kind.DAY_CAP, -1, 28, 0, 0)), true)
+        val sym = listOf("休", "A4")
+        assertEquals(listOf("#1: 上限0の日 D28 休"), HardCauseText.lines(listOf(core), { "S$it" }, { sym[it] }, { "D$it" }, { "Q$it" }))
+        assertTrue(HardCauseText.blocks(listOf(core), { "S$it" }, { sym[it] }, { "D$it" }, { "Q$it" }).single().lines.contains("上限0の日（置かない）: D28 休"))
     }
 }

@@ -22,6 +22,8 @@ object ObjectiveWeights {
         // 個人の合計（c2）と目安の回数との差（apt）は 20（2026-11-15 ユーザー明示指示「20」、HF77。旧 1）。段は T3 のまま。
         m["c2"] = 20.0
         m["apt"] = 20.0
+        // 人員過剰（covO）は 50（2026-11-17 ユーザー明示指示「50」、HF77。旧 1）。余った人を偏り（fair 50）より軽く扱わない。段は T3 のまま。
+        m["covO"] = 50.0
     }
 
     fun table(m: ObjectiveMethod = method): Map<String, Double> = if (m == ObjectiveMethod.PRIORITY) priority else MirrorKeys.weights

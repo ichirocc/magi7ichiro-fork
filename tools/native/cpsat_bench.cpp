@@ -12,7 +12,7 @@
 static void setPriority(MagiProblem& p) {   // Kotlin ObjectiveWeights の優先順位（T1 200 / T2 20 / T3 1・fair 50・c2 20・apt 20）
     p.w.low = p.w.c1 = p.w.high = p.w.c3mn = 200;
     p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = 20;
-    p.w.covO = p.w.weekly = 1; p.w.fair = 50; p.w.apt = p.w.c2 = 20;
+    p.w.weekly = 1; p.w.covO = p.w.fair = 50; p.w.apt = p.w.c2 = 20;
 }
 
 int main(int argc, char** argv) {

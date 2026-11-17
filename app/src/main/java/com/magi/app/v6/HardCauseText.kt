@@ -17,6 +17,7 @@ object HardCauseText {
                 HardCauses.Kind.NEED -> "必要人数 ${day(x.day)} ${shift(x.shift)} ${x.rule}人"
                 HardCauses.Kind.FORBIDDEN_SEQ -> "禁止の並び ${seq(x.rule)}"
                 HardCauses.Kind.OUTSIDE -> "担当外・拡張希望の禁止 ${staff(x.staff)}"
+                HardCauses.Kind.DAY_CAP -> "上限0の日 ${day(x.day)} ${shift(x.shift)}"
             }
         }
         "#${n + 1}" + (if (c.minimal) "" else "（最小か未確認）") + ": " + parts.joinToString(" ・ ")
@@ -35,7 +36,7 @@ object HardCauseText {
     ): List<Block> = cores.map { c ->
         fun of(kind: HardCauses.Kind) = c.causes.filter { it.kind == kind }
         val wishes = of(HardCauses.Kind.WISH); val pins = of(HardCauses.Kind.PIN); val needs = of(HardCauses.Kind.NEED)
-        val seqs = of(HardCauses.Kind.FORBIDDEN_SEQ); val outside = of(HardCauses.Kind.OUTSIDE)
+        val seqs = of(HardCauses.Kind.FORBIDDEN_SEQ); val outside = of(HardCauses.Kind.OUTSIDE); val caps = of(HardCauses.Kind.DAY_CAP)
         val anchor = needs.groupingBy { it.day }.eachCount().entries.maxWithOrNull(compareBy({ it.value }, { it.key }))?.key
         val fixedStaff = (wishes + pins).map { it.staff }.distinct()
         val title = when {
@@ -52,6 +53,7 @@ object HardCauseText {
         if (otherNeeds.isNotEmpty()) lines += "別の日の必要人数: " + otherNeeds.joinToString(" ・ ") { "${day(it.day)} ${shift(it.shift)} ${it.rule}人" }
         if (seqs.isNotEmpty()) lines += "禁止の並び: " + seqs.joinToString(" ・ ") { seq(it.rule) }
         if (outside.isNotEmpty()) lines += "担当外・拡張希望の禁止: " + outside.joinToString(" ・ ") { staff(it.staff) }
+        if (caps.isNotEmpty()) lines += "上限0の日（置かない）: " + caps.joinToString(" ・ ") { "${day(it.day)} ${shift(it.shift)}" }
         if (otherNeeds.isNotEmpty() && seqs.isNotEmpty()) lines += HARD_CAUSE_CROSS_DAY_NOTE
         Block(title, lines, c.minimal)
     }
