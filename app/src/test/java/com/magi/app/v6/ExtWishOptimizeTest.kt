@@ -14,6 +14,11 @@ import org.junit.Test
  * 最終番兵が段を戻した（候補生成の漏れ）ことも、後処理の段が禁止を置いたことも失敗として名指しする。
  */
 class ExtWishOptimizeTest {
+    /** 拡張希望の禁止だけで数える新しい配置。上限 0 のセル（[isCapZeroCell]）は除く＝入口の除去で基準からは外れるが、探索は生の入力から始まって
+     *  持ち越し、最終番兵が外す（日の上限 0 は [DayCapZeroTest] が見る）。 */
+    private fun extWishNew(p: Problem, base: Array<IntArray>, cand: Array<IntArray>): List<Pair<Int, Int>> =
+        p.extBanNewCells(base, cand).filter { (i, j) -> p.extWishBanned(i, j, cand[i][j]) && !p.isCapZeroCell(i, j, cand[i][j]) }
+
     private fun load(name: String): MagiState = StateParser.parse(javaClass.getResource("/$name")!!.readText())!!
 
     /** 禁止なしの最適化結果 [out0] から敵対的な拡張希望を作る（保存規則 sanitize を通す）。 */
@@ -41,7 +46,7 @@ class ExtWishOptimizeTest {
     private fun check(label: String, st: MagiState, input: Array<IntArray>, out: Array<IntArray>, logs: List<MirrorLog>, offenders: Map<String, Int>) {
         val p = Problem(st)
         val base = HardRepairCore.clearCappedCells(st, p.withManualPins(normalizeSchedule(input, p))).first
-        val fresh = p.extBanNewCells(base, out)
+        val fresh = extWishNew(p, base, out)
         val sentinel = logs.filter { "拡張希望の禁止が" in it.message }.map { it.message }
         assertTrue("$label: 最終盤面に禁止の新規配置 $fresh", fresh.isEmpty())
         assertTrue("$label: 最終番兵が段を戻した＝候補生成の漏れ $sentinel 後処理の段=$offenders", sentinel.isEmpty())
@@ -53,7 +58,7 @@ class ExtWishOptimizeTest {
         var prev: Array<IntArray>? = null
         // 段ごとの責任: 直前の段の盤面から値が変わり、新しい値が禁止のセルの数。
         V6HotfixPasses.PostChain.stageProbe = { key, work ->
-            val n = p.extBanNewCells(prev ?: base(), work).size
+            val n = extWishNew(p, prev ?: base(), work).size
             if (n > 0) offenders.merge(key, n, Int::plus)
             prev = work.copy2D()
         }
@@ -126,7 +131,7 @@ class ExtWishOptimizeTest {
                         params = V6HotfixPasses.PostOptimizationParams(deterministic = true, c1LnsMaxEvaluations = 5_000, personalLnsMaxEvaluations = 5_000)).schedule
                 }
                 assertTrue("$file: 後処理の段が禁止を新しく置いた $offenders", offenders.isEmpty())
-                assertTrue("$file: 後処理の最終盤面", p.extBanNewCells(base, out!!).isEmpty())
+                assertTrue("$file: 後処理の最終盤面", extWishNew(p, base, out!!).isEmpty())
             }
         } finally {
             PolishGate.restore(saved)

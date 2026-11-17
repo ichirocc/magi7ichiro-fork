@@ -456,6 +456,11 @@ static int runExtBanTest() {
             for (int i = 0; i < p.S; i++) for (int j = 0; j < p.T; j++) {
                 size_t x = (size_t)i * p.T + j;
                 if (bd[x] != board[x] && p.extBanned(i, j, bd[x])) {
+                    // 置けるシフトがどれも禁止のセルは逃げ先が無い＝埋めシフトのまま残してよい（Kotlin の「全部禁止なら従来の値」）。
+                    //   置けるシフトから目安 0 を外した（3.727.92）ので、合成データのランダムな目安 0 でこの形が出る。
+                    bool escape = false;
+                    for (int k : p.allowed[i]) if (!p.extBanned(i, j, k)) { escape = true; break; }
+                    if (!escape) continue;
                     printf("EXTBAN-TEST FAIL: %s が禁止を置いた (%d,%d)->%d\n", who, i, j, bd[x]); return false;
                 }
             }

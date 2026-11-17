@@ -42,8 +42,12 @@ object NativeEval {
         cons.add(pins.size / 3); cons.addAll(pins)
         // 拡張希望の禁止 [nBan,(i,j,k)*]（採点の extWish＝3.653.0 と、盤面へ書く手の判定 extBanned が読む）。
         val bans = ArrayList<Int>()
-        if (p.hasExtBan) for (i in 0 until s) for (j in 0 until t) for (kk in 0 until k) if (p.extBanned(i, j, kk)) { bans.add(i); bans.add(j); bans.add(kk) }
+        if (p.hasExtBan) for (i in 0 until s) for (j in 0 until t) for (kk in 0 until k) if (p.extWishBanned(i, j, kk)) { bans.add(i); bans.add(j); bans.add(kk) }
         cons.add(bans.size / 3); cons.addAll(bans)
+        // 日の上限 0 で置かないセル [nCap,(i,j,k)*]（ABI 12。盤面へ書く手の判定だけが読み、採点は読まない）。
+        val capBans = ArrayList<Int>()
+        if (p.dayCapZero != null) for (i in 0 until s) for (j in 0 until t) for (kk in 0 until k) if (p.dayCapBanned(i, j, kk)) { capBans.add(i); capBans.add(j); capBans.add(kk) }
+        cons.add(capBans.size / 3); cons.addAll(capBans)
         val c3 = ArrayList<Int>(64)
         for (fam in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) {
             c3.add(fam.size)

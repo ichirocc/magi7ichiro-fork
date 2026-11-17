@@ -322,7 +322,7 @@ class DeltaEvaluator(private val p: Problem) {
         dGrpV = (if (nw in 0 until K && !p.canDo(i, nw)) 1L else 0L) -
             (if (old in 0 until K && !p.canDo(i, old)) 1L else 0L)
         dC3w = (if (p.c3wBanned(i, j, nw)) 1L else 0L) - (if (p.c3wBanned(i, j, old)) 1L else 0L)
-        dExt = (if (p.extBanned(i, j, nw)) 1L else 0L) - (if (p.extBanned(i, j, old)) 1L else 0L)
+        dExt = (if (p.extWishBanned(i, j, nw)) 1L else 0L) - (if (p.extWishBanned(i, j, old)) 1L else 0L)
 
         // c41 (group/day range) on day j — only constraints touching this staff's group & shifts
         val gi = p.sgrp[i]
@@ -720,7 +720,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun extWishAll(): Long {
         if (!p.hasExtBan) return 0L
         var h = 0L
-        for (i in 0 until S) for (j in 0 until T) if (p.extBanned(i, j, a[i][j])) h++
+        for (i in 0 until S) for (j in 0 until T) if (p.extWishBanned(i, j, a[i][j])) h++
         return h
     }
 

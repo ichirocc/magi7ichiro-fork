@@ -196,7 +196,7 @@ class Evaluator(private val p: Problem) {
         // extWish: 拡張希望の違反（HARD）。チェッカーと同じ静的な禁止表 `Problem.extBan` を引く。
         if (p.hasExtBan) {
             var raw = 0L
-            for (i in 0 until S) for (j in 0 until T) if (p.extBanned(i, j, a[i][j])) raw++
+            for (i in 0 until S) for (j in 0 until T) if (p.extWishBanned(i, j, a[i][j])) raw++
             hard1 += raw; record("extWish", raw)
         }
 

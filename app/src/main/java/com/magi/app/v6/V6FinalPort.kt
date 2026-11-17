@@ -1270,7 +1270,7 @@ object V6FinalPort {
             // [3.653.0] 手動固定のセルにある拡張希望の違反は、最適化器が変えない＝もう直せない側（仕様: 自動では外さない）。
             val extPinned = runCatching {
                 val p = cachedProblem(state)
-                (0 until p.S).sumOf { i -> (0 until p.T).count { j -> p.pin[i][j] >= 0 && p.extBanned(i, j, finalSched[i][j]) } }
+                (0 until p.S).sumOf { i -> (0 until p.T).count { j -> p.pin[i][j] >= 0 && p.extWishBanned(i, j, finalSched[i][j]) } }
             }.getOrDefault(0)
             // 回避の並び（c3mn）が希望だけでできている窓も、希望を取り消すまで残る（要調整）。
             val avoidSelf = runCatching { V6SanityPort.wishAvoidSoft(cachedProblem(state), finalSched) }.getOrDefault(0)

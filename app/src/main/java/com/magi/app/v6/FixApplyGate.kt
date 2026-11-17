@@ -27,8 +27,10 @@ object FixApplyGate {
                 return Outcome.Rejected("手動固定のセルを変える提案です", before, null)
             if (p.wishLocked(op.staff, op.day) && p.lockTo(op.staff, op.day) != op.toShift)
                 return Outcome.Rejected("希望で固定されたセルを変える提案です", before, null)
-            if (op.toShift != schedule[op.staff][op.day] && p.extBanned(op.staff, op.day, op.toShift))
+            if (op.toShift != schedule[op.staff][op.day] && p.extWishBanned(op.staff, op.day, op.toShift))
                 return Outcome.Rejected("拡張希望で禁止された勤務を置く提案です", before, null)
+            if (op.toShift != schedule[op.staff][op.day] && p.dayCapBanned(op.staff, op.day, op.toShift))
+                return Outcome.Rejected("必要人数の上限が 0 の日に置く提案です", before, null)
             work[op.staff][op.day] = op.toShift
         }
         val after = UnifiedViolationChecker.check(state, work)

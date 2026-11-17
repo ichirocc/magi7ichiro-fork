@@ -316,7 +316,7 @@ private:
                 if (!mayBe(i, j, k)) continue;
                 if (!p_.cd(i, k)) addHard(X(i, j, k), hw_.groupViol);
                 if (p_.c3wBanned(i, j, k)) addHard(X(i, j, k), hw_.c3w);
-                if (p_.extBanned(i, j, k)) addHard(X(i, j, k), hw_.extWish);
+                if (p_.extWishBanned(i, j, k)) addHard(X(i, j, k), hw_.extWish);
             }
         }
     }
@@ -858,7 +858,7 @@ private:
         for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
             const size_t c = (size_t)i * T + j;
             std::vector<int> dom;
-            for (int k : p_.allowed[i]) if (!p_.extBanned(i, j, k)) dom.push_back(k);
+            for (int k : p_.allowed[i]) if (!p_.extWishBanned(i, j, k)) dom.push_back(k);
             const int w = p_.wish[c], pin = p_.pin.empty() ? -1 : p_.pin[c];
             const int h = input.empty() ? -1 : input[c];
             for (int extra : {w, pin, h}) if (extra >= 0 && extra < K && std::find(dom.begin(), dom.end(), extra) == dom.end()) dom.push_back(extra);
@@ -867,7 +867,7 @@ private:
             for (int k : dom) { auto v = cp_.NewBoolVar(); vars_[c].push_back({k, v}); one.push_back(v); }
             cp_.AddExactlyOne(one);
             // 担当できないシフト・拡張希望の禁止（評価器と同じく表どおり。希望の日は表を作るときに除かれる）は置かない。
-            for (int k : dom) if (!p_.cd(i, k) || p_.extBanned(i, j, k)) {
+            for (int k : dom) if (!p_.cd(i, k) || p_.extWishBanned(i, j, k)) {
                 if (outsideLit[i] < 0) outsideLit[i] = addLit({kOutside, i, -1, -1, -1});
                 cp_.AddEquality(X(i, j, k), 0).OnlyEnforceIf(lits_[(size_t)outsideLit[i]]);
             }

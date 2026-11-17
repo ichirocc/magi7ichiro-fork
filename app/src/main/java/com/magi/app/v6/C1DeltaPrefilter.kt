@@ -71,7 +71,7 @@ object C1DeltaPrefilter {
         // c3w: 希望の前日に禁止（セル単位、checker と同一の静的表）。
         delta += (if (p.c3wBanned(staff, day, newShift)) 1 else 0) - (if (p.c3wBanned(staff, day, old)) 1 else 0)
         // extWish: 拡張希望の違反（セル単位、同じく静的表。3.653.0）。
-        delta += (if (p.extBanned(staff, day, newShift)) 1 else 0) - (if (p.extBanned(staff, day, old)) 1 else 0)
+        delta += (if (p.extWishBanned(staff, day, newShift)) 1 else 0) - (if (p.extWishBanned(staff, day, old)) 1 else 0)
         // c3n: 行内の禁止連続 fire 数の正味差分（生成と破壊の両方を勘定＝C1-01）。
         delta += run {
             val row = IntArray(p.T) { cell(staff, it) }

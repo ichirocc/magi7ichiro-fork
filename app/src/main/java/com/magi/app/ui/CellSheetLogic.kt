@@ -80,7 +80,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         "c3w" -> p.wish.getOrNull(i)?.getOrNull(j + 1)?.takeIf { it >= 0 }?.let {
             "${breakdownLabels[fam]} ${sym(cur)}→${sym(it)}（${DayText.range(state.startDate, j, j + 1)}）"
         }
-        "extWish" -> (0 until p.K).filter { p.extBanned(i, j, it) }.takeIf { it.isNotEmpty() }?.let { ks ->
+        "extWish" -> (0 until p.K).filter { p.extWishBanned(i, j, it) }.takeIf { it.isNotEmpty() }?.let { ks ->
             "拡張希望（${ks.joinToString("・") { sym(it) }}以外）に${sym(cur)}が入っています"
         }
         "c3n", "c3mn" -> {

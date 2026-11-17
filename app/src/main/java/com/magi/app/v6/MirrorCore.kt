@@ -397,7 +397,7 @@ object UnifiedViolationChecker {
         }
         // [3.653.0] 拡張希望の違反(extWish, HARD)。静的な禁止表でセル単位に数える＝extWishCells と同じ集合。
         if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
-            if (p.extBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
+            if (p.extWishBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {
@@ -776,9 +776,9 @@ fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
     return true
 }
 
-/** 個人上限 0 で最適化器が置かないセル（担当可・[mayPlace] 外・縛る値でない）か。入口の除去と最終番兵が同じ基準を読む。 */
+/** 上限 0 で最適化器が置かないセル（担当可・[mayPlace] 外か日の上限 0（[dayCapBanned]）・縛る値でない）か。入口の除去と最終番兵が同じ基準を読む。 */
 fun Problem.isCapZeroCell(i: Int, j: Int, k: Int): Boolean =
-    k in 0 until K && canDo(i, k) && !mayPlace(i, k) && !(wishLocked(i, j) && lockTo(i, j) == k)
+    k in 0 until K && canDo(i, k) && (!mayPlace(i, k) || dayCapBanned(i, j, k)) && !(wishLocked(i, j) && lockTo(i, j) == k)
 
 /** 盤面中の [isCapZeroCell] のセル (i,j) の一覧（最終番兵）。 */
 fun Problem.capZeroCells(s: Array<IntArray>): List<Pair<Int, Int>> {

@@ -16,7 +16,7 @@ internal object HardDelta {
         val w = p.wish[i][j]
         if (w in 0 until p.K && p.canDo(i, w) && k != w) h++
         if (p.c3wBanned(i, j, k)) h++
-        if (p.extBanned(i, j, k)) h++
+        if (p.extWishBanned(i, j, k)) h++
         return h
     }
 

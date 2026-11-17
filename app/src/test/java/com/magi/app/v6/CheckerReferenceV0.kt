@@ -214,7 +214,7 @@ internal object CheckerReferenceV0 {
         }
         // [3.653.0] 族の追加は高速化と別の意味の変更＝新旧の両方へ同じ位置で入れる（比較の対象は高速化だけ）。
         if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
-            if (p.extBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
+            if (p.extWishBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

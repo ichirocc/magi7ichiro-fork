@@ -55,7 +55,8 @@
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
 - **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み120/50。amount計上）。
   **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 50 のまま、
-  希望固定は優先。ユーザー決定「最適化器だけ除外、表示は今のまま」）。
+  希望固定は優先。ユーザー決定「最適化器だけ除外、表示は今のまま」）。**実効の目安 0（休を除く）と日の上限人数 0 も同じく置かない**
+  （3.727.92、`mayPlace`／`Problem.dayCapBanned`、詳細は `docs/business-logic.md`）。
 - **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み4, L1偏差`|回数-目標|`）。
   担当可シフトのみ有効（`Problem.apt` 構築時に bucket=canDo ガード）。不足=赤(vio-aptLow)/超過=橙(vio-aptHigh)。
   **個人の下限または上限が入っている (職員,シフト) には群目標を適用しない（決定 D9。空欄だけのキーは未設定扱い）。**
