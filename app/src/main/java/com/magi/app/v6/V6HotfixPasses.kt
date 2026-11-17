@@ -93,6 +93,8 @@ data class V6PostOptimizationResult(
     val pinBlocks: PinBlockAttribution? = null,
     /** 後処理チェーンの段ごとの記録（採用数・所要・段の後の評価）。集計用で、盤面・採否には関わらない。 */
     val stageRecords: List<PostStageRecord> = emptyList(),
+    /** パスごとの所要時間（ms、計測順）。操作ログの「時間の内訳」に上位を出す。 */
+    val passMs: Map<String, Long> = emptyMap(),
 )
 
 /**
@@ -878,7 +880,7 @@ object V6HotfixPasses {
         allLogs.addAll(report.logs)
         return V6PostOptimizationResult(
             work, report.copy(logs = allLogs), pre.r80, pre.r67, pre.r66, r70, chain.logs, plateauOut,
-            chain.pinBlocksAll.attempts, chain.pinBlocksAll, chain.stageRecords.toList(),
+            chain.pinBlocksAll.attempts, chain.pinBlocksAll, chain.stageRecords.toList(), LinkedHashMap(chain.passMs),
         )
     }
 

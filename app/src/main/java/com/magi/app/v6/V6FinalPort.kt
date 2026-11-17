@@ -28,6 +28,8 @@ const val CPSAT_RESOLVE_STALL_MS = 10_000L
 
 /** 上限 0 の日に置いて必須違反を減らす最終段（[DayCapHardRelief]）の持ち時間。 */
 const val DAYCAP_RELIEF_MS = 3_000L
+/** 操作ログの所要時間の行に添える後処理パスの数。 */
+const val TIME_POST_TOP_N = 3
 
 /** 解き直しへ移る条件。ほかの早期終了と同じく最短実行（[minRunMs]）を待ってから、探索が [CPSAT_RESOLVE_STALL_MS] 改善しないときだけ。 */
 internal fun resolveStallReached(now: Long, startMs: Long, minRunMs: Long, lastImproveMs: Long): Boolean =
@@ -116,7 +118,24 @@ object V6FinalPort {
         val stop: StopSummary? = null,
         /** CP-SAT の下限とギャップ（`docs/cpsat_formal.md`）。CP-SAT を使わなかった実行では null。 */
         val bound: BoundSummary? = null,
+        /** この実行の所要時間の内訳。最適化以外の操作では null。 */
+        val time: TimeSummary? = null,
     )
+
+    /** 所要時間の内訳（ms）。`phases` は実行順、`postTop` は後処理で時間のかかったパスの上位。 */
+    data class TimeSummary(val totalMs: Long, val phases: List<Pair<String, Long>>, val postTop: List<Pair<String, Long>>, val overBudget: Boolean) {
+        /** 操作ログの 1 行。1 秒未満の段は省き、長い順に並べる。後処理は上位パスを括弧で添える。 */
+        fun opLine(): String {
+            fun sec(ms: Long) = if (ms >= 10_000L) "${(ms + 500L) / 1000L}" else String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)
+            val parts = phases.filter { it.second >= 1000L }.sortedByDescending { it.second }.map { (name, ms) ->
+                val pct = ms * 100L / totalMs.coerceAtLeast(1L)
+                val detail = if (name == "後処理" && postTop.isNotEmpty())
+                    postTop.joinToString("・", "（", "）") { (k, v) -> "$k ${sec(v)}秒" } else ""
+                "$name ${sec(ms)}秒（$pct%）$detail"
+            }
+            return "所要 ${sec(totalMs)}秒${if (overBudget) "（予算超過）" else ""}: " + (parts.ifEmpty { listOf("内訳はどれも1秒未満") }).joinToString(" ・ ")
+        }
+    }
 
     /** 採用した勤務表の根拠: 必須の件数の下限（証明済みか）と、重み（weightedScore）の下限・ギャップ。下限は fair を実際の値以下の近似で数える＝必ず実際の値以下。 */
     data class BoundSummary(val hardBound: Long, val hardProven: Boolean, val weightedBound: Long, val adoptedWeighted: Double, val gap: Double?, val stoppedByGap: Boolean)
@@ -832,7 +851,12 @@ object V6FinalPort {
             pickBestStage(listOfNotNull(StageCandidate("探索", chained.schedule, chained.report), coRun))
         } else null
         val resolveOut = resolveStart?.let { st ->
-            CpsatResolve.run(baseProblem, st.sched, resolveLeftSec, resolveThreads, optsR.seed) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
+            val resolveT0 = EngineClock.nowMs()
+            progressWatch("解き直し（CP-SAT） 開始・最大${resolveLeftSec.toLong()}秒", null, 0L, resolveT0 - startMs)
+            CpsatResolve.run(baseProblem, st.sched, resolveLeftSec, resolveThreads, optsR.seed, onTick = { hard, weighted ->
+                val now = EngineClock.nowMs()
+                progressWatch("解き直し（CP-SAT） 必須${hard} 重み${weighted}（残り${((searchDeadlineMs - now) / 1000L).coerceAtLeast(0L)}秒）", null, 0L, now - startMs)
+            }) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         }
         val tResolve1 = EngineClock.nowMs()
         val resolveStage = resolveOut?.takeIf { it.accepted > 0 }?.let { o -> StageCandidate("CP-SAT 解き直し", o.board, UnifiedViolationChecker.check(state, o.board)) }
@@ -1011,6 +1035,13 @@ object V6FinalPort {
                 "/ workers設定${workers} " +
                 (if (opts.algorithm == V6Algorithm.V5) "SAチェーン${workers}本"
                  else "実効仮説${effHypotheses}${if (effHypotheses < plannedHypotheses) "（設定${plannedHypotheses}をコア数まで縮小）" else ""}"),
+        )
+        val timeSummary = TimeSummary(
+            totalMs = tExtra1 - startMs,
+            phases = listOf("探索" to tFirst1 - tFirst0, "連鎖" to tChain1 - tFirst1, "解き直し" to tResolve1 - tChain1,
+                "統合" to tIntegration1 - tResolve1, "後処理" to tPost1 - tIntegration1, "追加精製" to tExtra1 - tPost1),
+            postTop = post.passMs.entries.sortedByDescending { it.value }.take(TIME_POST_TOP_N).filter { it.value >= 1000L }.map { it.key to it.value },
+            overBudget = overBudget,
         )
         val integrationLog = integrated.logs
         // [3.283.0/ログ強化] ウォッチドッグの内部状態を非発火時も1行で可視化。旧: 発火時の EarlyStop 行のみで、
@@ -1492,7 +1523,7 @@ object V6FinalPort {
             // 交換の候補を先に、空いた枠（最大 3）を探索の他の案で埋める（旧: 候補が 1 件でもあると他の案を全部置き換えていた）。
             alternatives = if (finalTradeoffs.isEmpty()) chained.alternatives
                 else (finalTradeoffs + chained.alternatives).filter { !it.contentDeepEquals(finalSched) }.distinctBy { BoardKey(it) }.take(SeesawRelink.MAX_TRADEOFFS),
-            capZero = capZero, stop = stopSummary, bound = boundSummary)
+            capZero = capZero, stop = stopSummary, bound = boundSummary, time = timeSummary)
     }
 
     /**
