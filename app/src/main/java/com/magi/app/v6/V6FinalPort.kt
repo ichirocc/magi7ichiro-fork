@@ -25,6 +25,10 @@ const val CHAIN_RESERVE_SEC = 10
 const val CPSAT_WORKERS = 2
 /** 解き直し（[CpsatResolve]）へ切り替える停滞: 探索の最良がこの時間 改善しなければ探索を終える（2026-11-16 ユーザー指示「暫定値は改善なし 10秒」＝HF77 明示数値）。 */
 const val CPSAT_RESOLVE_STALL_MS = 10_000L
+
+/** 解き直しへ移る条件。ほかの早期終了と同じく最短実行（[minRunMs]）を待ってから、探索が [CPSAT_RESOLVE_STALL_MS] 改善しないときだけ。 */
+internal fun resolveStallReached(now: Long, startMs: Long, minRunMs: Long, lastImproveMs: Long): Boolean =
+    now - startMs >= minRunMs && now - lastImproveMs >= CPSAT_RESOLVE_STALL_MS
 /** 下限とのギャップがこの割合以下なら予算の途中でも探索を終える（2026-11-10 ユーザー指示「差 1% 以下」＝HF77 明示数値）。 */
 const val CPSAT_GAP_STOP = 0.01
 
@@ -778,7 +782,7 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 cpsatGapReached(now) -> true
-                resolveOn && now - wd.lastBestImproveMs.get() >= CPSAT_RESOLVE_STALL_MS -> { resolveStallHit.set(true); true }
+                resolveOn && resolveStallReached(now, startMs, minRunMs, wd.lastBestImproveMs.get()) -> { resolveStallHit.set(true); true }
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs,
                     maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
