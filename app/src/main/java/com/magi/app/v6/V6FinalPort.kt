@@ -1293,6 +1293,8 @@ object V6FinalPort {
             val avoidSelf = runCatching { V6SanityPort.wishAvoidSoft(cachedProblem(state), finalSched) }.getOrDefault(0)
             // 期間の制約（c1）のうち、固定のセルを変えない限り足りない窓（希望を調整するまで残る）。
             val c1Wall = minOf(bd["c1"] ?: 0, runCatching { V6SanityPort.wishC1Floor(cachedProblem(state), finalSched) }.getOrDefault(0))
+            // 人員過剰（covO）のうち、希望の人数だけで日の上限人数を超える分（希望を調整するまで残る）。
+            val covOWall = minOf(bd["covO"] ?: 0, runCatching { V6SanityPort.wishCovOExcess(cachedProblem(state)).values.sumOf { it.second } }.getOrDefault(0))
             // 個人の上限（high）のうち、希望の固定だけで上限を超える回数（希望を調整するまで残る）。
             val highWall = minOf(bd["high"] ?: 0, runCatching { V6SanityPort.wishHighFloor(cachedProblem(state), finalSched) }.getOrDefault(0))
             var avoidShown = 0
@@ -1317,6 +1319,7 @@ object V6FinalPort {
                     "c3mn" -> n0 - avoidShown
                     "c1" -> n0 - c1Wall
                     "high" -> n0 - highWall
+                    "covO" -> n0 - covOWall
                     else -> n0
                 } - self
                 if (n > 0) open.add(openItem(key, n))
@@ -1339,6 +1342,7 @@ object V6FinalPort {
             //   実データ3件の実測では 40〜56%（golden 73/183・real 126/226・user 106/214）が床＝追っても減らない。
             if (weeklyWall > 0) walls.add("weekly のうち${weeklyWall}件(回数が7の倍数でない＝配置では消せない)")
             if (extPinned > 0) walls.add("extWish のうち${extPinned}件(手動固定のセル＝自動では変えない)")
+            if (covOWall > 0) walls.add("covO のうち${covOWall}件(希望の人数だけで日の上限人数を超える＝希望か上限を調整するまで解消しない)")
             if (highWall > 0 && personalWall <= 0) walls.add("high のうち${highWall}件(希望の固定だけで個人の上限を超える＝希望か上限を調整するまで解消しない)")
             if (c1Wall > 0) walls.add("c1 のうち${c1Wall}件(窓の中が希望・固定で埋まり足りない＝希望を調整するまで解消しない)")
             if (personalWall > 0) {
