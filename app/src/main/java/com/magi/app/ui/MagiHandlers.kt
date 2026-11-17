@@ -79,6 +79,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Condition.ClearWishesForDays -> vm.clearWishesForDays(e.staff, e.days)
             is MagiEvent.Condition.AddExtWish -> vm.addExtWishForDays(e.staff, e.days, e.shifts)
             is MagiEvent.Condition.RemoveExtWish -> vm.removeExtWish(e.index)
+            is MagiEvent.Condition.RemoveExtWishDays -> vm.removeExtWishDays(e.staff, e.days)
             MagiEvent.Condition.ClearAllWishes -> vm.clearAllWishes()
             MagiEvent.Condition.ClearOutOfScopeWishes -> vm.clearOutOfScopeWishes()
             is MagiEvent.Condition.SetShiftColor -> vm.setShiftColor(e.kigou, e.hex)

@@ -206,6 +206,13 @@ private fun WishApplyPanel(
     // 拡張希望の日は希望を保存しない（ExtWishRules.wishBlockedBy）＝数えず、送らない。
     val usable = sorted.filter { it !in extDays }
     val clearable = sorted.filter { it in wishDays }
+    val extClearable = sorted.filter { it in extDays }
+    var confirmExtClear by remember(staffIdx) { mutableStateOf(false) }
+    val extClearButton: @Composable () -> Unit = {
+        if (extClearable.isNotEmpty()) MagiTextButton(onClick = { confirmExtClear = true }, enabled = !ui.running,
+            contentColor = cs.error,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の拡張希望を消す（${extClearable.size}日）") }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -215,6 +222,7 @@ private fun WishApplyPanel(
         MagiSegmentedControl(options = listOf("希望にする", "以外にする"), selected = if (extMode) 1 else 0, onSelect = { extMode = it == 1 })
         if (extMode) {
             ExtWishPanel(ui, onEvent, staffIdx, days, shifts, wishDays, extSel, { k -> extSel = if (k in extSel) extSel - k else extSel + k }, onCancel, onDone)
+            extClearButton()
             return@Column
         }
         if (usable.size < sorted.size) {
@@ -241,6 +249,16 @@ private fun WishApplyPanel(
         MagiTextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
             contentColor = cs.error,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の希望を消す（${clearable.size}件）") }
+        extClearButton()
+    }
+    if (confirmExtClear) {
+        MagiAlertDialog(
+            onDismissRequest = { confirmExtClear = false },
+            title = { DialogHeader("選択した日の拡張希望を消しますか？", { confirmExtClear = false }) },
+            text = { Text("${ui.staffNames.getOrElse(staffIdx) { "" }}の${dayList(extClearable)}を拡張希望から外します。元に戻すで復元できます。") },
+            confirmButton = { DialogDangerButton("拡張希望を消す", onClick = { confirmExtClear = false; onEvent(MagiEvent.Condition.RemoveExtWishDays(staffIdx, extClearable.map { it - 1 })); onDone() }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmExtClear = false }, text = "消さない") },
+        )
     }
     if (confirmClear) {
         MagiAlertDialog(
