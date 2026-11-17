@@ -140,6 +140,7 @@ struct MagiProblem {
     std::vector<C3wr> cons3w;
     std::vector<uint8_t> c3wBan;             // S*T*K（cons3w が空なら空＝Kotlin Problem.c3wBan の null）。buildC3wBan で導出
     std::vector<uint8_t> extBan;             // S*T*K（拡張希望の禁止。空＝無し。採点（extWish, HARD）と盤面へ書く手の判定が読む）
+    std::vector<uint8_t> capBan;             // S*T*K（日の上限 0 で置かないセル。空＝無し。盤面へ書く手の判定だけが読む＝採点は読まない）
     std::vector<std::vector<int>> bucket;    // G: 群の担当ONシフト
     std::vector<std::vector<int>> members;   // G: 群のメンバー（sgrp から導出）
     std::vector<uint8_t> bucketHas;          // G*K: 群 g がシフト k を担当できるか（fair 用）
@@ -154,6 +155,7 @@ struct MagiProblem {
     inline bool pl(int i, int k) const {
         if (!cd(i, k)) return false;
         const size_t idx = (size_t)i * K + k;
+        if (idx < apt.size() && apt[idx] == 0 && k != restIdx) return false;   // 実効の目安 0（Kotlin Problem.placeableHas と同値）
         return !(idx < rangeHi.size() && rangeHi[idx] == 0 && k != restIdx);
     }
     // [3.542.0] セル (i,j) にシフト k を置くと「希望の前日に禁止」に当たるか（Kotlin Problem.c3wBanned と同値）。
@@ -161,10 +163,16 @@ struct MagiProblem {
         if (c3wBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
         return c3wBan[((size_t)i * T + j) * K + k] != 0;
     }
-    // 拡張希望: セル (i,j) に k を置く手を捨てるか（Kotlin Problem.extBanned と同値）。旧値は問わない。
-    inline bool extBanned(int i, int j, int k) const {
+    // 拡張希望の禁止だけ（Kotlin Problem.extWishBanned と同値）。採点の extWish が読む。
+    inline bool extWishBanned(int i, int j, int k) const {
         if (extBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
         return extBan[((size_t)i * T + j) * K + k] != 0;
+    }
+    // セル (i,j) に k を置く手を捨てるか（拡張希望の禁止・日の上限 0。Kotlin Problem.extBanned と同値）。旧値は問わない。
+    inline bool extBanned(int i, int j, int k) const {
+        if (extWishBanned(i, j, k)) return true;
+        if (capBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
+        return capBan[((size_t)i * T + j) * K + k] != 0;
     }
     // 翌日が希望固定（実現可能な希望＝wishLockedN と同義）の X で、cons3w に (X→k) があれば ban。wish 確定後に呼ぶ。
     void buildC3wBan() {
@@ -503,7 +511,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
     // [3.653.0] extWish（拡張希望の違反, HARD）。Kotlin Evaluator と同じ静的な禁止表 extBan を引く。
     if (!p.extBan.empty()) {
         long long raw = 0;
-        for (int i = 0; i < S; i++) { const int* row = a + (size_t)i * T; for (int j = 0; j < T; j++) if (p.extBanned(i, j, row[j])) raw++; }
+        for (int i = 0; i < S; i++) { const int* row = a + (size_t)i * T; for (int j = 0; j < T; j++) if (p.extWishBanned(i, j, row[j])) raw++; }
         hard1 += raw; if (bd) bd[20] += raw;
     }
 
@@ -865,7 +873,7 @@ struct SaChunk {
         if (w >= 0 && p.cd(i, w) && cur != w) v += (long long)M;
         if (cur >= 0 && cur < K && !p.cd(i, cur)) v += (long long)M;
         if (p.c3wBanned(i, j, cur)) v += (long long)M;   // [3.542.0] c3w もセル単位の HARD
-        if (p.extBanned(i, j, cur)) v += (long long)M;   // [3.653.0] extWish も同じ
+        if (p.extWishBanned(i, j, cur)) v += (long long)M;   // [3.653.0] extWish も同じ
         return v;
     }
     long long contribRangeApt(int i, int k) const {
@@ -1392,7 +1400,7 @@ void collectViolationCells(const MagiProblem& p, const int* a, std::vector<int>&
             int k = row[j];
             if (k >= 0 && k < K && !p.cd(i, k)) markCell(i, j);
             if (p.c3wBanned(i, j, k)) markCell(i, j);
-            if (p.extBanned(i, j, k)) markCell(i, j);
+            if (p.extWishBanned(i, j, k)) markCell(i, j);
         }
     }
 }
@@ -2560,7 +2568,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 11;   // 11＝膜の細胞 LNS（nativeMembrane*）。10＝nativeFullEval が族別の量も返す（MAGI-003）
+    return 12;   // 12＝日の上限 0 で置かないセル（cons 末尾の [nCap,(i,j,k)*]）。11＝膜の細胞 LNS（nativeMembrane*）。10＝nativeFullEval が族別の量も返す（MAGI-003）
 }
 
 // 膜の細胞 LNS の 1 細胞ぶん（Kotlin MembraneCellLns.solveCell）。cell＝細胞の職員、rngState＝JavaLcg の内部状態。0=失敗。
@@ -2830,7 +2838,7 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     p->apt.assign(ranges.begin() + 2 * (size_t)S * K, ranges.end());
 
     // cons レイアウト: [n1,(d1,si,d2)*] [n2,(si,c)*] [n41,(g,s,l,u)*] [n42,(g1,s1,g2,s2)*]
-    //                  [n41s,(g,s,l,u)*] [n42s,(g1,s1,g2,s2)*] [n3w,(wishK,prevK)*] [nPin,(i,j,k)*] [nBan,(i,j,k)*]
+    //                  [n41s,(g,s,l,u)*] [n42s,(g1,s1,g2,s2)*] [n3w,(wishK,prevK)*] [nPin,(i,j,k)*] [nBan,(i,j,k)*] [nCap,(i,j,k)*]（nCap は ABI 12、省略可）
     // [3.284.0/外部レビュー=JNI hardening] 可変長領域(cons/c3/bucket)を checked cursor で検証する。
     //   旧: count/len 未検証で、負の len が (size_t) 変換で巨大 reserve → C++例外が JNI 境界を越えて
     //   プロセスクラッシュ、巨大 count が 0 埋めの大量 push で異常確保になり得た（正規の Kotlin
@@ -2878,6 +2886,16 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
         if (bi < 0 || bi >= S || bj < 0 || bj >= T || bk < 0 || bk >= K) { parseOk = false; break; }
         if (p->extBan.empty()) p->extBan.assign((size_t)S * T * K, 0);
         p->extBan[((size_t)bi * T + bj) * K + bk] = 1;
+    }
+    // 日の上限 0 で置かないセル [nCap,(i,j,k)*]（ABI 12）。無い入力（旧形式のツール）は空のまま。
+    if (parseOk && idx < cons.size()) {
+        int nCap = takeCount(3);
+        for (int r = 0; r < nCap && parseOk; r++) {
+            int ci = next(), cj = next(), ck = next();
+            if (ci < 0 || ci >= S || cj < 0 || cj >= T || ck < 0 || ck >= K) { parseOk = false; break; }
+            if (p->capBan.empty()) p->capBan.assign((size_t)S * T * K, 0);
+            p->capBan[((size_t)ci * T + cj) * K + ck] = 1;
+        }
     }
     if (!parseOk) { delete p; return 0; }
     // [3.409.23/監査G3] 群 index が負・シフト index が範囲外の制約行はハンドル生成ごと拒否する

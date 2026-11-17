@@ -319,7 +319,7 @@ internal object C3RotationPolish {
         var c3wC = 0; var extC = 0                                // c3w・extWish（HARD、セル単位の静的表＝チェッカーと同じ）
         if (p.c3wBan != null || p.hasExtBan) for (j in 0 until p.T) {
             if (p.c3wBanned(i, j, sched[i][j])) c3wC++
-            if (p.hasExtBan && p.extBanned(i, j, sched[i][j])) extC++
+            if (p.hasExtBan && p.extWishBanned(i, j, sched[i][j])) extC++
         }
         total += c3nC + c3C + c3mC + c3mnC + c3wC + extC
         weighted += c3wC.toDouble() * ObjectiveWeights.of("c3w") + extC.toDouble() * ObjectiveWeights.of("extWish") +

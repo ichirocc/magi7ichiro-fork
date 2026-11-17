@@ -63,7 +63,7 @@ class Problem(val state: MagiState) {
      *  （担当可かつ個人上限 0 でない）。群の解決は必ず `sgrp` を通す＝単一ソース（3.410.0/P-06）。init で range 解決後に埋める。 */
     val staffForShift: Array<IntArray>
 
-    /** [3.507.0] 最適化器が置いてよいシフト（職員別）＝担当可（bucket）から個人上限 0（休を除く）を外したもの。評価・表示は canDo のまま
+    /** [3.507.0] 最適化器が置いてよいシフト（職員別）＝担当可（bucket）から個人上限 0・実効の目安 0（どちらも休を除く、目安は 3.727.92）を外したもの。評価・表示は canDo のまま
      *  （候補生成・入口 hf66・最終番兵の基準だけが見る。希望固定は wishLocked が優先。経緯は history 3.507.0）。 */
     val placeable: Array<IntArray>
     val placeableHas: Array<BooleanArray>
@@ -71,14 +71,41 @@ class Problem(val state: MagiState) {
     /** 拡張希望の禁止表（割当を見ずに作る。希望シフト日は空）。採点は見ない。 */
     val extBan: ExtWishRules.BanTable = ExtWishRules.banTable(state, S, T, K)
 
-    /** 拡張希望の禁止が 1 セルでもあるか。無ければ候補生成の判定は常に false。 */
-    val hasExtBan: Boolean get() = extBan.flat != null
+    /** 日の上限人数が 0 の (日, シフト)（1 人でも人員過剰になる＝`covOCell(k, j, 1) > 0`）。T×K、無ければ null。
+     *  最適化器はここへ置かない（個人の上限 0 と同じ扱い。採点・表示は covO のまま。2026-11-17 ユーザー決定）。 */
+    val dayCapZero: BooleanArray? by lazy {
+        var f: BooleanArray? = null
+        for (j in 0 until T) for (k in 0 until K) if (covOCell(k, j, 1) > 0) (f ?: BooleanArray(T * K).also { f = it })[j * K + k] = true
+        f
+    }
 
-    /** 最適化器がセル (i,j) に k を置く候補を捨てるか（拡張希望の禁止）。旧値は問わない＝禁止から禁止への手も捨てる。 */
-    fun extBanned(i: Int, j: Int, k: Int): Boolean = extBan.banned(i, j, k)
+    /** 最適化器が置かない表が 1 セルでもあるか（拡張希望の禁止か日の上限 0）。無ければ候補生成の判定は常に false。 */
+    val hasExtBan: Boolean get() = extBan.flat != null || dayCapZero != null
 
-    /** 置いてよいか（`mayPlace` に拡張希望の禁止を足したもの）。候補生成が読む。 */
-    fun mayPlaceAt(i: Int, j: Int, k: Int): Boolean = mayPlace(i, k) && !extBan.banned(i, j, k)
+    /** 拡張希望の禁止だけ（採点の extWish・必須の原因の証明が読む）。 */
+    fun extWishBanned(i: Int, j: Int, k: Int): Boolean = extBan.banned(i, j, k)
+
+    /** 日の上限 0 で置かないセルか。希望・手動固定でそのシフトになるセルと、置けるシフトがどれも上限 0 の日（逃げ先が無い）は対象外。 */
+    fun dayCapBanned(i: Int, j: Int, k: Int): Boolean {
+        val f = dayCapZero ?: return false
+        if (i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K || !f[j * K + k]) return false
+        return wish[i][j] != k && pin[i][j] != k && dayCapEscape[i * T + j]
+    }
+
+    /** 職員 i が日 j に、上限 0 でも拡張希望の禁止でもない置けるシフトを持つか（S×T）。 */
+    private val dayCapEscape: BooleanArray by lazy {
+        val f = dayCapZero
+        BooleanArray(S * T) { c ->
+            val i = c / T; val j = c % T
+            f == null || placeable[i].any { k -> !f[j * K + k] && !extBan.banned(i, j, k) }
+        }
+    }
+
+    /** 最適化器がセル (i,j) に k を置く候補を捨てるか（拡張希望の禁止・日の上限 0）。旧値は問わない＝禁止から禁止への手も捨てる。 */
+    fun extBanned(i: Int, j: Int, k: Int): Boolean = extBan.banned(i, j, k) || dayCapBanned(i, j, k)
+
+    /** 置いてよいか（`mayPlace` に [extBanned] を足したもの）。候補生成が読む。 */
+    fun mayPlaceAt(i: Int, j: Int, k: Int): Boolean = mayPlace(i, k) && !extBanned(i, j, k)
 
     /** wish[i][j] = desired shift index, or -1. */
     val wish: Array<IntArray> = Array(S) { IntArray(T) { -1 } }
@@ -186,12 +213,11 @@ class Problem(val state: MagiState) {
             }
         }
 
-        placeableHas = Array(S) { i ->
+        // 目安の回数のクランプは個人上限 0 だけを除いた表で見る（目安 0 の除外はクランプ後の実効値で決める）。
+        val place0 = Array(S) { i ->
             val b = bucket.getOrNull(sgrp[i])
             BooleanArray(K) { k -> b?.contains(k) == true && !(rangeHi[i][k] == 0 && k != restIdx) }
         }
-        placeable = Array(S) { i -> (0 until K).filter { placeableHas[i][it] }.toIntArray() }
-        staffForShift = Array(K) { k -> (0 until S).filter { i -> placeableHas[i][k] }.toIntArray() }
 
         // 適切回数（双方向目標）: state.groupShiftApt[群][シフト] を個人別 apt[i][k] へ展開（群単位＝同群全員に同一目標）。
         // 担当ONシフトのみ（bucket=canDo）有効化し、担当不可シフトの幻のapt偏差を除外する。
@@ -202,7 +228,7 @@ class Problem(val state: MagiState) {
         //   ＝到達下限 T−Σ他の上限 と、到達上限 T−Σ他の下限 が決まる。
         val wishCnt = Array(S) { i -> IntArray(K).also { c -> for (j in 0 until T) { val w = wish[i][j]; if (w in 0 until K && canDo(i, w)) c[w]++ } } }
         fun effLo(i: Int, k: Int): Int = maxOf(if (rangeLo[i][k] == Int.MIN_VALUE) 0 else rangeLo[i][k], wishCnt[i][k])
-        fun effHi(i: Int, k: Int): Int = maxOf(if (placeableHas[i][k]) (if (rangeHi[i][k] == Int.MAX_VALUE) T else rangeHi[i][k]) else 0, wishCnt[i][k])
+        fun effHi(i: Int, k: Int): Int = maxOf(if (place0[i][k]) (if (rangeHi[i][k] == Int.MAX_VALUE) T else rangeHi[i][k]) else 0, wishCnt[i][k])
         for (i in 0 until S) {
             val g = sgrp[i]
             val row = state.groupShiftApt.getOrNull(g) ?: continue
@@ -222,6 +248,10 @@ class Problem(val state: MagiState) {
                 apt[i][k] = t
             }
         }
+        // 実効の目安が 0 のシフト（休を除く）も置かない（個人上限 0 と同じ扱い。2026-11-17 ユーザー決定）。
+        placeableHas = Array(S) { i -> BooleanArray(K) { k -> place0[i][k] && !(apt[i][k] == 0 && k != restIdx) } }
+        placeable = Array(S) { i -> (0 until K).filter { placeableHas[i][it] }.toIntArray() }
+        staffForShift = Array(K) { k -> (0 until S).filter { i -> placeableHas[i][k] }.toIntArray() }
 
         cons1 = state.cons1.mapNotNull {
             // [3.475.0/論理監査] 数値は trim してから解決する。旧: `" 2 "` のような前後空白つきの値は

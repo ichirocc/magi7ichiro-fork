@@ -421,6 +421,19 @@ fun MagiViewModel.removeExtWish(index: Int) {
     applyStructure(st.copy(extWishes = st.extWishes.filterIndexed { n, _ -> n != index }))
 }
 
+/** 職員 [staffIdx] の日 [days]（0 始まり）を拡張希望から外す。日が無くなった拡張希望は消す。 */
+fun MagiViewModel.removeExtWishDays(staffIdx: Int, days: List<Int>) {
+    val st = state ?: return
+    val start = runCatching { java.time.LocalDate.parse(st.startDate) }.getOrNull() ?: return
+    val drop = days.map { start.plusDays(it.toLong()).toString() }.toSet()
+    val next = st.extWishes.mapNotNull { e ->
+        if (e.staff != staffIdx) e else e.copy(days = e.days.filter { it !in drop }).takeIf { it.days.isNotEmpty() }
+    }
+    if (next == st.extWishes) return
+    logOp("I", "拡張希望削除: ${opNm(staffIdx)} ${opDays(days)}")
+    applyStructure(st.copy(extWishes = next), notice = "${opNm(staffIdx)}さんの ${daysText(st.startDate, days)} の拡張希望を消しました")
+}
+
 /** [一括] すべての希望を削除。 */
 fun MagiViewModel.clearAllWishes() {
     val st = state ?: return

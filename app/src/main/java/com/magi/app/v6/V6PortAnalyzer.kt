@@ -762,7 +762,7 @@ object V6PortAnalyzer {
 
     /** 職員 [i] の行の extWish（拡張希望の違反, HARD）件数。 */
     private fun extWishOf(p: Problem, board: Array<IntArray>, i: Int): Int =
-        (0 until p.T).count { d -> p.extBanned(i, d, board[i][d]) }
+        (0 until p.T).count { d -> p.extWishBanned(i, d, board[i][d]) }
 
     /** 職員 [i] の行で「実現可能な希望どおりでない」日数（＝pref の HARD 件数）。 */
     private fun prefMissesOf(p: Problem, board: Array<IntArray>, i: Int): Int =
@@ -819,7 +819,7 @@ object V6PortAnalyzer {
         var scoreImproves = false
         val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
         // 今のセルが拡張希望の違反なら、代替（禁止へは置かない）へ動かすだけで必須が 1 減る（3.653.0）。
-        val extGain = if (p.extBanned(i, j, cur)) 1 else 0
+        val extGain = if (p.extWishBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
         var alts = 0
