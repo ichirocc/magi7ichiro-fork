@@ -1375,7 +1375,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchStrength(strength: SearchStrength) {
         strength.apply()
         _ui.update { it.copy(searchStrength = strength) }
-        logOp("I", OpLogText.strengthLine(searchStrengthLabel(strength), strength.flags()))
+        logOp("I", OpLogText.strengthLine(searchStrengthLabel(strength), strength.flags(),
+            toleranceUnused = !com.magi.app.v6.ObjectiveWeights.allowsAptFairTolerance()))
     }
 
     fun setAptFairToleranceUnguarded(on: Boolean) {

@@ -53,9 +53,11 @@ internal object OpLogText {
     /** 期間変更の行に、適用しようとする期間（要求）。前の期間は読込と期間の行で追える。拒否されれば直後に W の拒否行が出る。 */
     fun withRequestedPeriod(line: String, startDate: String, endDate: String, days: Int): String = "$line${SEP}要求期間=${period(startDate, endDate, days)}"
 
-    fun strengthLine(label: String, f: SearchStrength.Flags): String =
+    /** [toleranceUnused]＝直す順番が優先順位で 6% 許容が使われない（スイッチは ON でも実行時は OFF、3.727.48）。 */
+    fun strengthLine(label: String, f: SearchStrength.Flags, toleranceUnused: Boolean = false): String =
         "設定変更: 探索の強さ → $label（結合探索を粘り強く=${onOff(f.combineExhaustPairs)}・禁止連続の崩し範囲=${onOff(f.wideC3nBreakDays)}" +
-            "・回数連鎖研磨=${onOff(f.countChainPolish)}・公平化/適切回数の他ソフト許容(6%)=${onOff(f.aptFairSoftTolerance)}）"
+            "・回数連鎖研磨=${onOff(f.countChainPolish)}・公平化/適切回数の他ソフト許容(6%)=${onOff(f.aptFairSoftTolerance)}" +
+            (if (toleranceUnused && f.aptFairSoftTolerance) "（直す順番が優先順位のあいだは使わない）" else "") + "）"
 
     /** 実行の開始点で読んだ設定（語は `TuningTelemetry.startSettings`）。実際に使えたかは「設定の効き」が示す。 */
     fun settingsStartLine(words: String): String = "設定の開始時: $words"
