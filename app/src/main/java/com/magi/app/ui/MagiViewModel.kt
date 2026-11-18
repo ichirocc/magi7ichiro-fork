@@ -414,6 +414,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(opLog = opLogLines) }
     }
 
+    private var runClockSerial = 0
+    private val RUN_CLOCK_TICK_MS = 1_000L
+    /**
+     * 実行中の経過時間を 1 秒ごとに進める。エンジンの進捗の報告だけで進めていたため、報告の無い区間（解き直しの合間・統合・
+     * 後処理・追加精製）で画面の時計が止まって見えた（3.727.104）。次の実行が始まるか、実行が終わると止まる。
+     */
+    private fun startRunClock(startMs: Long) {
+        val serial = ++runClockSerial
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(RUN_CLOCK_TICK_MS)
+                if (serial != runClockSerial || !_ui.value.running) break
+                _ui.update { if (it.running) it.copy(elapsedMs = System.currentTimeMillis() - startMs) else it }
+            }
+        }
+    }
+
     /** 同じ見出しの直近の行と本文が同じなら出さない（その行がリングに残っている間だけ＝消えたら出し直す）。 */
     private fun logOpIfChanged(level: String, message: String) {
         val head = message.substringBefore(": ") + ": "
@@ -1947,6 +1964,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))
         logOpIfChanged("I", OpLogText.settingsStartLine(settingsStartWords()))
         beginFgRunGuard("最適化")   // 直後の launch の finally で必ず解放
+        startRunClock(startMs)
         job = viewModelScope.launch {
             // [3.372.0/実機ログ起因] 終端ログ（完了/停止/失敗）を必ず1行残す保証。実機ログ(2026-08-15)で
             //   「最適化 開始」だけあって終端行が無い実行が2件あり、死因を判別できなかった。全経路が
@@ -2491,6 +2509,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val startMs = System.currentTimeMillis()
         val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)   // [3.328.0/3.404.0]
         beginFgRunGuard("ソフト研磨")   // 直後の launch の finally で必ず解放
+        startRunClock(startMs)
         job = viewModelScope.launch {
             var terminalLogged = false   // [3.372.0] 終端ログの保証（runV6FullOptimize と同じ理由）
             try {
