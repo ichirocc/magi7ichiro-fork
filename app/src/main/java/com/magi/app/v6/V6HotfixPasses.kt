@@ -207,6 +207,12 @@ object PolishGate {
     /** [3.540.0] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（A/B 138 ペアで新2/同等135/旧1＝ゲート不合格、docs/algorithm_portfolio.md）。 */
     @Volatile var countChainPolish: Boolean = false
 
+    /**
+     * MAFS-II の試験（仕様書 §11 の予算の適応）: 解き直し（CP-SAT）の最良が [RESOLVE_STALL_STOP_MS] 更新されなければ打ち切り、
+     * 残りを使わずに後処理へ進む。既定 **false**（測定中。ON/OFF の比較は docs/history の 3.727.106）。
+     */
+    @Volatile var mafs2Enabled: Boolean = false
+
     /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **true**（2 腕比較 12 勝 3 敗、3.727.20 ユーザー決定）。 */
     @Volatile var membraneCellLns: Boolean = true
 

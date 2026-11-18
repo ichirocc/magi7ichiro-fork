@@ -28,6 +28,8 @@ const val CPSAT_RESOLVE_STALL_MS = 10_000L
 
 /** 上限 0 の日に置いて必須違反を減らす最終段（[DayCapHardRelief]）の持ち時間。 */
 const val DAYCAP_RELIEF_MS = 3_000L
+/** 解き直しの最良がこの時間更新されなければ打ち切る（`PolishGate.mafs2Enabled` のときだけ。暫定値、測定は 3.727.106）。 */
+const val RESOLVE_STALL_STOP_MS = 30_000L
 /** 操作ログの所要時間の行に添える後処理パスの数。 */
 const val TIME_POST_TOP_N = 3
 
@@ -856,7 +858,7 @@ object V6FinalPort {
             CpsatResolve.run(baseProblem, st.sched, resolveLeftSec, resolveThreads, optsR.seed, onTick = { hard, weighted ->
                 val now = EngineClock.nowMs()
                 progressWatch("解き直し（CP-SAT） 必須${hard} 重み${weighted}（残り${((searchDeadlineMs - now) / 1000L).coerceAtLeast(0L)}秒）", null, 0L, now - startMs)
-            }) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
+            }, stallStopMs = if (config.mafs2Enabled) RESOLVE_STALL_STOP_MS else 0L) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         }
         val tResolve1 = EngineClock.nowMs()
         val resolveStage = resolveOut?.takeIf { it.accepted > 0 }?.let { o -> StageCandidate("CP-SAT 解き直し", o.board, UnifiedViolationChecker.check(state, o.board)) }
@@ -1650,7 +1652,7 @@ object V6FinalPort {
             betterReport(stage.report, start.report) -> "・必須${start.report.hard}→${stage.report.hard}・重み${start.report.weightedScore.toLong()}→${stage.report.weightedScore.toLong()}"
             else -> "・チェッカーの採点では開始の盤面より良くならず不採用（解き直し後 重み${stage.report.weightedScore.toLong()}）"
         }
-        return head + tail
+        return head + tail + if (CpsatResolve.stalledOut) "・最良が ${RESOLVE_STALL_STOP_MS / 1000} 秒更新されなかったので解き直しを打ち切った（試験 mafs2Enabled）" else ""
     }
 
     internal fun identitySwapLog(state: MagiState, input: ViolationReport, final: ViolationReport): List<MirrorLog> {

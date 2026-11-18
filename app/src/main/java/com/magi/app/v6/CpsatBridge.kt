@@ -140,9 +140,13 @@ object CpsatResolve {
     class Outcome(val board: Array<IntArray>, val parts: Long, val accepted: Long, val optimal: Long, val wallMs: Long)
 
     /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。 */
+    /** 直前の [run] が `stallStopMs` で止まったか（ログ用）。 */
+    @Volatile var stalledOut: Boolean = false
+        private set
+
     /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
-            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, shouldStop: () -> Boolean): Outcome? {
+            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -150,13 +154,23 @@ object CpsatResolve {
         if (job == 0L) { NativeBridge.nativeDestroyProblem(problemHandle); return null }
         val flat = NativeEval.flatten(start)
         var stats: LongArray? = null
+        stalledOut = false
         val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
             .also { it.isDaemon = true; it.start() }
         var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
         val noBoard = IntArray(0)
+        var lastVersion = Long.MIN_VALUE
+        var lastChangeMs = EngineClock.nowMs()
         while (thread.isAlive) {
             if (shouldStop()) CpsatBridge.nativeCpsatStop(job)
             thread.join(200L)
+            // [stallStopMs] 最良が更新されない時間がこれを超えたら止める（0 は止めない）。
+            if (stallStopMs > 0L && thread.isAlive) {
+                val ver = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard).firstOrNull() ?: lastVersion
+                val now = EngineClock.nowMs()
+                if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
+                else if (now - lastChangeMs >= stallStopMs) { stalledOut = true; CpsatBridge.nativeCpsatStop(job) }
+            }
             if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {
                 nextTick += RESOLVE_TICK_MS
                 val v = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard)
