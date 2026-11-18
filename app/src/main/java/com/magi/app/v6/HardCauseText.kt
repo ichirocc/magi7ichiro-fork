@@ -15,7 +15,7 @@ object HardCauseText {
                 HardCauses.Kind.WISH -> "希望 ${staff(x.staff)} ${day(x.day)}=${shift(x.shift)}"
                 HardCauses.Kind.PIN -> "手動固定 ${staff(x.staff)} ${day(x.day)}=${shift(x.shift)}"
                 HardCauses.Kind.NEED -> "必要人数 ${day(x.day)} ${shift(x.shift)} ${x.rule}人"
-                HardCauses.Kind.FORBIDDEN_SEQ -> "禁止の並び ${seq(x.rule)}"
+                HardCauses.Kind.FORBIDDEN_SEQ -> "禁止の並び ${seq(x.rule)}" + (if (x.day >= 0) " ${day(x.day)}〜" else "")
                 HardCauses.Kind.OUTSIDE -> "担当外・拡張希望の禁止 ${staff(x.staff)}"
                 HardCauses.Kind.DAY_CAP -> "上限0の日 ${day(x.day)} ${shift(x.shift)}"
             }
@@ -51,7 +51,7 @@ object HardCauseText {
         if (pins.isNotEmpty()) lines += "手動固定: " + pins.joinToString(" ・ ") { cell(it) }
         needs.filter { it.day == anchor }.takeIf { it.isNotEmpty() }?.let { l -> lines += "必要人数: " + l.joinToString(" ・ ") { "${shift(it.shift)} ${it.rule}人" } }
         if (otherNeeds.isNotEmpty()) lines += "別の日の必要人数: " + otherNeeds.joinToString(" ・ ") { "${day(it.day)} ${shift(it.shift)} ${it.rule}人" }
-        if (seqs.isNotEmpty()) lines += "禁止の並び: " + seqs.joinToString(" ・ ") { seq(it.rule) }
+        if (seqs.isNotEmpty()) lines += "禁止の並び: " + seqs.joinToString(" ・ ") { seq(it.rule) + (if (it.day >= 0) "（${day(it.day)}〜）" else "") }
         if (outside.isNotEmpty()) lines += "担当外・拡張希望の禁止: " + outside.joinToString(" ・ ") { staff(it.staff) }
         if (caps.isNotEmpty()) lines += "上限0の日（置かない）: " + caps.joinToString(" ・ ") { "${day(it.day)} ${shift(it.shift)}" }
         if (otherNeeds.isNotEmpty() && seqs.isNotEmpty()) lines += HARD_CAUSE_CROSS_DAY_NOTE

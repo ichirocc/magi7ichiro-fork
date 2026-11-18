@@ -794,7 +794,7 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
 // 必須違反の原因（S4、docs/cpsat_formal.md）。希望・手動固定・必要人数・禁止の並びの規則を 1 件ずつ「守る」仮定にして、
 //   必須 0 が成り立たない最小の組（矛盾の核）を CP-SAT の仮定の核で求め、削って最小化し、外して繰り返す（互いに素な核）。
 //   どの核も「この中の 1 件を緩めないと必須違反は消えない」の証明。核の数は必須件数の下限にもなる。
-struct Cause { int kind; int i, j, k, rule; };   // kind: 0 希望 1 手動固定 2 必要人数 3 禁止の並び 4 担当外・拡張希望の禁止（職員 i） 5 日の上限 0（日 j・シフト k）
+struct Cause { int kind; int i, j, k, rule; };   // kind: 0 希望 1 手動固定 2 必要人数 3 禁止の並び（規則 rule・始まりの日 j） 4 担当外・拡張希望の禁止（職員 i） 5 日の上限 0（日 j・シフト k）
 struct Core { std::vector<Cause> causes; bool minimal; };   // minimal: どの 1 件を外しても成り立つと確かめた
 enum CauseKind { kWish = 0, kPin = 1, kNeed = 2, kForbidden = 3, kOutside = 4, kDayCap = 5 };
 
@@ -893,15 +893,18 @@ private:
             if (a < 0 || p_.wish[(size_t)i * T + j + 1] != r.wishK) continue;
             cp_.AddEquality(X(i, j, r.prevK), 0).OnlyEnforceIf(lits_[(size_t)a]);
         }
-        // 禁止の並び（c3n）: 規則ごとに 1 つの仮定。
+        // 禁止の並び（c3n）: 規則×始まりの日ごとに 1 つの仮定。規則ごと 1 つだと、互いに素な核の 1 つが規則を使い切り、
+        //   別の日の同じ規則による必須違反の核が見つからなかった（実機 2026-12: 12/4 の核が Dﾃ→A4 等を使い、12/27→28 が説明されない）。
         for (size_t e = 0; e < p_.cons3n.size(); e++) {
             const auto& seq = p_.cons3n[e].seq; const int D = (int)seq.size();
             if (D == 0) continue;
-            const int a = addLit({kForbidden, -1, -1, -1, (int)e});
-            for (int i = 0; i < S; i++) for (int j = 0; j + D <= T; j++) {
-                sat::LinearExpr m;
-                for (int l = 0; l < D; l++) m += X(i, j + l, seq[(size_t)l]);
-                cp_.AddLessOrEqual(m, D - 1).OnlyEnforceIf(lits_[(size_t)a]);
+            for (int j = 0; j + D <= T; j++) {
+                const int a = addLit({kForbidden, -1, j, -1, (int)e});
+                for (int i = 0; i < S; i++) {
+                    sat::LinearExpr m;
+                    for (int l = 0; l < D; l++) m += X(i, j + l, seq[(size_t)l]);
+                    cp_.AddLessOrEqual(m, D - 1).OnlyEnforceIf(lits_[(size_t)a]);
+                }
             }
         }
         // 必要人数（covU）: 日×シフトごとの仮定。
