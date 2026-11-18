@@ -558,8 +558,7 @@ class DeltaEvaluator(private val p: Problem) {
         var full = first
         for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
         val range = (-1L) ushr (63 - (T - D))
-        val nFull = java.lang.Long.bitCount(full and range)
-        return if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
+        return java.lang.Long.bitCount((if (fbd) full else C3Run.wantFireMask(first, full, D)) and range).toLong()
     }
 
     /** c3 族 [f]（0=c3, 1=c3n, 2=c3m, 3=c3mn）のうち old か nw を参照する規則の、セル (i,j) を含む窓の寄与。 */
@@ -581,25 +580,21 @@ class DeltaEvaluator(private val p: Problem) {
         if (!fbd && c3Single[f][e]) {
             return if (useBits && seq[0] in 0 until K) rowDeficitBits(bits[i][seq[0]], D) else C3Run.rowDeficit(a, i, seq[0], D)
         }
-        val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, j)
+        // 推奨の並びは前に始まって一致した窓の中を数えない（[C3Run.wantFires]）＝セル j は j+D−1 に始まる窓まで影響する。
+        val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, if (fbd) j else j + D - 1)
         if (useBits && js0 <= js1 && c3InRange[f][e]) {
             // 窓の開始日 js の集合をビットで持つ: first＝js がseq[0]、full＝js から seq 全体が一致。
             val first = bits[i][seq[0]]
             var full = first
             for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
             val range = ((-1L) ushr (63 - (js1 - js0))) shl js0
-            val nFull = java.lang.Long.bitCount(full and range)
-            return if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
+            return java.lang.Long.bitCount((if (fbd) full else C3Run.wantFireMask(first, full, D)) and range).toLong()
         }
         var sub = 0L
         var js = js0
         while (js <= js1) {
-            if (a[i][js] == seq[0]) {
-                var z = 0; var l = 1
-                while (l < D) { if (a[i][js + l] == seq[l]) z++; l++ }
-                val fire = if (fbd) (z == D - 1) else (z < D - 1)
-                if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
-            }
+            val fire = if (fbd) C3Run.matchAt(a[i], js, seq) else C3Run.wantFires(a[i], js, seq)
+            if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
             js++
         }
         return sub
@@ -689,12 +684,8 @@ class DeltaEvaluator(private val p: Problem) {
             for (i in 0 until S) {
                 var j = 0
                 while (j <= T - D) {
-                    if (a[i][j] == seq[0]) {
-                        var z = 0; var l = 1
-                        while (l < D) { if (a[i][j + l] == seq[l]) z++; l++ }
-                        val fire = if (fbd) (z == D - 1) else (z < D - 1)
-                        if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
-                    }
+                    val fire = if (fbd) C3Run.matchAt(a[i], j, seq) else C3Run.wantFires(a[i], j, seq)
+                    if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
                     j++
                 }
             }

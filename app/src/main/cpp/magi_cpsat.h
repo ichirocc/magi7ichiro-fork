@@ -239,14 +239,32 @@ private:
     }
     void addC42() { addC42Fam(p_.cons42, p_.sgrp, p_.w.c42); addC42Fam(p_.cons42s, p_.ssk, p_.w.c42s); }
 
-    // c3 族。forbidden（c3n/c3mn）と非 forbidden の複数シフト連は窓マッチの #fire、非 forbidden の単一シフト連は run の不足。
+    // c3 族。forbidden（c3n/c3mn）は窓マッチの #fire、非 forbidden の複数シフト連は C3Run.wantFires の #fire、非 forbidden の単一シフト連は run の不足。
     void addC3Fam(const std::vector<C3r>& list, bool forbidden, long long w, bool hard) {
         auto add = [&](const sat::LinearExpr& e) { if (hard) addHard(e, hw_.c3n); else addSoft(e, w); };
         for (const auto& c : list) {
             const int D = (int)c.seq.size();
             if (D == 0) continue;
             if (!forbidden && c.singleRun) { addRunDeficit(c.seq[0], D, add); continue; }
+            // 推奨の並び: 窓 s が全体一致なら 1 になり得る変数 M(s)（各セル以下＝一致していなければ 0）。前の日に始まって
+            //   一致した窓の中は数えない（C3Run.wantFires、3.727.102）＝fire の下限から Σ M(j−l) を引く（最小化で M は一致時に 1 へ寄る）。
+            std::vector<sat::LinearExpr> full;
             for (int i = 0; i < S; i++) for (int j = 0; j + D <= T; j++) {
+                if (!forbidden && j == 0) {
+                    full.assign((size_t)T, sat::LinearExpr(0));
+                    for (int st = 0; st + D <= T; st++) {
+                        bool possible = true, allOne = true;
+                        for (int l = 0; l < D && possible; l++) {
+                            if (!mayBe(i, st + l, c.seq[l])) { possible = false; break; }
+                            long long v; if (!(isConst(X(i, st + l, c.seq[l]), v) && v == 1)) allOne = false;
+                        }
+                        if (!possible) continue;
+                        if (allOne) { full[(size_t)st] = sat::LinearExpr(1); continue; }
+                        auto m = cp_.NewBoolVar();
+                        for (int l = 0; l < D; l++) cp_.AddLessOrEqual(m, X(i, st + l, c.seq[l]));
+                        full[(size_t)st] = sat::LinearExpr(m);
+                    }
+                }
                 if (!mayBe(i, j, c.seq[0])) continue;
                 if (forbidden) {
                     sat::LinearExpr m; bool possible = true;
@@ -258,10 +276,21 @@ private:
                     cp_.AddGreaterOrEqual(f, m - (D - 1));
                     add(f);
                 } else {
-                    // fire＝先頭が一致し、残りのどれかが一致しない。
+                    // fire＝先頭が一致し、残りのどれかが一致しない（一致した窓の中なら数えない）。
                     sat::LinearExpr x0 = X(i, j, c.seq[0]);
                     bool restAll = true; std::vector<sat::LinearExpr> rest;
                     for (int l = 1; l < D; l++) { if (!mayBe(i, j + l, c.seq[l])) restAll = false; rest.push_back(X(i, j + l, c.seq[l])); }
+                    sat::LinearExpr cover(0);
+                    for (int l = 1; l < D && j - l >= 0; l++) cover += full[(size_t)(j - l)];
+                    long long cv;
+                    if (!(isConst(cover, cv) && cv == 0)) {
+                        if (isConst(cover, cv) && cv >= 1) continue;
+                        auto f = cp_.NewBoolVar();
+                        if (!restAll) cp_.AddGreaterOrEqual(f + cover, x0);
+                        else for (auto& r : rest) cp_.AddGreaterOrEqual(f + r + cover, x0);
+                        add(f);
+                        continue;
+                    }
                     long long c0;
                     if (!restAll) {   // 残りが一致し得ない＝先頭が一致すれば必ず fire
                         add(x0); continue;

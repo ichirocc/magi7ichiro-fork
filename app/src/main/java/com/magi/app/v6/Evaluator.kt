@@ -287,13 +287,8 @@ class Evaluator(private val p: Problem) {
             for (i in 0 until S) {
                 var j = 0
                 while (j <= T - D) {
-                    if (a[i][j] == first) {
-                        var z = 0
-                        var l = 1
-                        while (l < D) { if (a[i][j + l] == seq[l]) z++; l++ }
-                        val fire = if (forbidden) (z == D - 1) else (z < D - 1)
-                        if (fire) sub += 1   // [統一] #fire 計上(チェッカー inc(key,1) と一致)。重みは呼び出し側で適用
-                    }
+                    val fire = if (forbidden) C3Run.matchAt(a[i], j, seq) else C3Run.wantFires(a[i], j, seq)
+                    if (fire) sub += 1   // [統一] #fire 計上(チェッカー inc(key,1) と一致)。重みは呼び出し側で適用
                     j++
                 }
             }
