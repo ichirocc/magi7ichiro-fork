@@ -153,7 +153,7 @@ object C1DeltaPrefilter {
         for (c in p.cons1) {
             val x = c.shiftIdx
             if (x !in 0 until p.K || c.day1 !in 1..p.T || c.day2 < 1) continue
-            if (!p.canDo(staff, x)) continue
+            if (!p.c1Applies(staff, x)) continue
             var j = 0
             while (j <= p.T - c.day1) {
                 var z = 0

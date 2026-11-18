@@ -151,6 +151,12 @@ struct MagiProblem {
         if (i < 0 || i >= S || k < 0 || k >= K) return false;
         return canDo[(size_t)i * K + k] != 0;
     }
+    // C1 を掛けるか: 担当可かつ個人上限 0 でない（休は上限 0 でも掛ける）。Kotlin Problem.c1Applies と同値（3.727.105）。
+    inline bool c1On(int i, int k) const {
+        if (!cd(i, k)) return false;
+        const size_t idx = (size_t)i * K + k;
+        return !(idx < rangeHi.size() && rangeHi[idx] == 0 && k != restIdx);
+    }
     // [3.507.0] 候補生成用: 担当可かつ個人上限 0 でない（休は除外しない）。評価は cd のまま（Kotlin Problem.mayPlace と同値）。
     inline bool pl(int i, int k) const {
         if (!cd(i, k)) return false;
@@ -412,7 +418,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         long long raw = 0;
         for (const auto& c : p.cons1) {
             for (int i = 0; i < S; i++) {
-                if (!p.cd(i, c.si)) continue;
+                if (!p.c1On(i, c.si)) continue;
                 const int* row = a + (size_t)i * T;
                 for (int j = 0; j <= T - c.d1; j++) {
                     int z = 0;
@@ -814,7 +820,7 @@ struct SaChunk {
     // ---- 影響スライスの寄与（combined: HARD族は ×1e6）----
     // [3.522.0] c1 重み30→50・c3mn重み30→90、2026-10-26 c1 50→90・c3mn 90→50。経緯はdocs/history/3.4xx.md。
     long long contribC1(int i, const C1r& c) const {
-        if (!p.cd(i, c.si)) return 0;
+        if (!p.c1On(i, c.si)) return 0;
         long long v = 0;
         if (useBits) {
             uint64_t rm = rowMask[(size_t)i * K + c.si];
@@ -1325,7 +1331,7 @@ void collectViolationCells(const MagiProblem& p, const int* a, std::vector<int>&
     // c1: canDo ガード＋違反窓ランの先頭セル
     for (const auto& c : p.cons1) {
         for (int i = 0; i < S; i++) {
-            if (!p.cd(i, c.si)) continue;
+            if (!p.c1On(i, c.si)) continue;
             const int* row = a + (size_t)i * T;
             bool prevViol = false;
             for (int j = 0; j <= T - c.d1; j++) {

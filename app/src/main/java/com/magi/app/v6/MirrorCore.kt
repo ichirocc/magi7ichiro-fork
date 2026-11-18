@@ -268,7 +268,7 @@ object UnifiedViolationChecker {
 
         for (c in p.cons1) {
             for (i in 0 until p.S) {
-                if (!p.canDo(i, c.shiftIdx)) continue
+                if (!p.c1Applies(i, c.shiftIdx)) continue
                 var j = 0
                 // [視認性] scoring(inc)は各違反窓ごとに従来どおり計上（不変）。表示(mark)だけは
                 //   窓幅ぶんの塗り広げを止め、違反窓ランの先頭1セルにアンカーする。スライド窓が重複して
@@ -710,6 +710,11 @@ fun Problem.canDo(staffI: Int, shiftK: Int): Boolean {
     if (staffI !in 0 until S || shiftK !in 0 until K) return false
     return canDoHas[staffI][shiftK]
 }
+
+/** C1（期間の制約）を職員 [staffI] のシフト [shiftK] に掛けるか: 担当でき、個人の上限が 0 回でない（休は上限 0 でも掛ける）。
+ *  上限 0 のシフトは最適化が置かない（[mayPlace]）ので、掛けると決して直らない違反になる（3.727.105、利用者「上限0の人を C1 の対象外に」）。 */
+fun Problem.c1Applies(staffI: Int, shiftK: Int): Boolean =
+    canDo(staffI, shiftK) && !(rangeHi[staffI][shiftK] == 0 && shiftK != restIdx)
 
 /** [監査#11①] セル(i,j)に「実現可能な希望」が入っているか（希望の意味＝pref の計数・希望の診断・S5 が読む）。
  *  担当不可（bucket外）の不可能希望は含めない。正当性: 不可能希望の pref 寄与は割当値に依存しない定数1。

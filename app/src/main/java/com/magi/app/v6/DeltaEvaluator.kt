@@ -503,7 +503,7 @@ class DeltaEvaluator(private val p: Problem) {
     }
 
     private fun c1At(i: Int, j: Int, c: C1): Long {
-        if (!p.canDo(i, c.shiftIdx)) return 0L   // [統一] 担当不可は対象外(チェッカーと一致)
+        if (!p.c1Applies(i, c.shiftIdx)) return 0L   // [統一] 担当不可は対象外(チェッカーと一致)
         var tot = 0L
         val js0 = maxOf(0, j - c.day1 + 1); val js1 = minOf(T - c.day1, j)
         if (useBits && c.day1 in 1..63 && c.shiftIdx in 0 until K) {
@@ -603,7 +603,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun c1All(): Long {
         var tot = 0L
         for (c in p.cons1) for (i in 0 until S) {
-            if (!p.canDo(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
+            if (!p.c1Applies(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
             var js = 0
             while (js <= T - c.day1) {
                 var z = 0; var l = 0

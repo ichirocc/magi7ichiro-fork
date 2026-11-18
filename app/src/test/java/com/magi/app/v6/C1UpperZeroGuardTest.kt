@@ -40,7 +40,8 @@ class C1UpperZeroGuardTest {
         val st = state()
         val p = Problem(st)
         assertFalse(p.mayPlace(0, 1))
-        assertEquals(1, UnifiedViolationChecker.check(st, st.schedule.toIntArray2D()).breakdown["c1"] ?: 0)
+        // 3.727.105: 上限 0 のシフトには C1 を掛けない（直せない違反を数えない）。
+        assertEquals(0, UnifiedViolationChecker.check(st, st.schedule.toIntArray2D()).breakdown["c1"] ?: 0)
     }
 
     @Test fun indexChainRepairDoesNotPlaceOnUpperZero() {

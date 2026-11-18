@@ -234,7 +234,7 @@ object C1RepairAnalysis {
             for (mi in m.indices) {
                 val i = m[mi]
                 for (c in rules) {
-                    if (!p.canDo(i, c.shiftIdx)) continue
+                    if (!p.c1Applies(i, c.shiftIdx)) continue
                     var jj = 0
                     while (jj <= p.T - c.day1) {
                         var z = 0

@@ -297,7 +297,7 @@ internal object C3RotationPolish {
         val cnt = IntArray(p.K)                                   // 期間内シフト回数(c2/low/high 用)
         for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cnt[k]++ }
         for (c in p.cons1) {                                      // c1: d日窓で shiftIdx が day2 回未満
-            if (!p.canDo(i, c.shiftIdx)) continue
+            if (!p.c1Applies(i, c.shiftIdx)) continue
             var j = 0
             while (j <= p.T - c.day1) {
                 var z = 0

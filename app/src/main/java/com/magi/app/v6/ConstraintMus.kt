@@ -95,7 +95,7 @@ object ConstraintMus {
             val universe = ArrayList<Item>()
             for (c in p.cons1) {
                 if (c.shiftIdx !in 0 until p.K || c.day1 !in 1..p.T || c.day2 !in 1..c.day1) continue
-                if (!p.canDo(i, c.shiftIdx)) continue
+                if (!p.c1Applies(i, c.shiftIdx)) continue
                 universe.add(WindowRule(c.shiftIdx, c.day1, c.day2))
             }
             for (k in allowed) {

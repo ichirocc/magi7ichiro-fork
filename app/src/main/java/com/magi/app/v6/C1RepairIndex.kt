@@ -82,7 +82,7 @@ object C1RepairIndex {
                 var margin = Int.MAX_VALUE
                 for (c in p.cons1) {
                     if (c.shiftIdx != x || c.day1 !in 1..p.T || c.day2 < 1) continue
-                    if (!p.canDo(i, x)) continue
+                    if (!p.c1Applies(i, x)) continue
                     val lo = (d - c.day1 + 1).coerceAtLeast(0)
                     val hi = d.coerceAtMost(p.T - c.day1)
                     var ws = lo

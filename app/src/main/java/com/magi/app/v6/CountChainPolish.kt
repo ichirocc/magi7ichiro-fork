@@ -91,7 +91,7 @@ internal object CountChainPolish {
         fun seqPenRow(s: Int, row: IntArray): Double {
             var v = 0.0
             for (c in p.cons1) {
-                if (!p.canDo(s, c.shiftIdx) || c.day1 > p.T) continue
+                if (!p.c1Applies(s, c.shiftIdx) || c.day1 > p.T) continue
                 var z = 0
                 for (l in 0 until c.day1) if (row[l] == c.shiftIdx) z++
                 var j = 0

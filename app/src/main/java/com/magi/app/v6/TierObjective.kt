@@ -45,7 +45,7 @@ object TierObjective {
         for (c in p.cons1) {
             if (c.day1 <= 0 || c.day1 > p.T) continue
             for (i in 0 until p.S) {
-                if (!p.canDo(i, c.shiftIdx)) continue
+                if (!p.c1Applies(i, c.shiftIdx)) continue
                 val row = schedule[i]
                 for (w in 0..p.T - c.day1) {
                     var z = 0

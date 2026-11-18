@@ -92,7 +92,7 @@ internal object CheckerReferenceV0 {
 
         for (c in p.cons1) {
             for (i in 0 until p.S) {
-                if (!p.canDo(i, c.shiftIdx)) continue
+                if (!p.c1Applies(i, c.shiftIdx)) continue
                 var j = 0
                 // [視認性] scoring(inc)は各違反窓ごとに従来どおり計上（不変）。表示(mark)だけは
                 //   窓幅ぶんの塗り広げを止め、違反窓ランの先頭1セルにアンカーする。スライド窓が重複して

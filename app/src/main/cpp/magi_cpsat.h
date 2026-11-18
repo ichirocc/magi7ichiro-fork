@@ -167,7 +167,7 @@ private:
 
     void addC1() {
         for (const auto& c : p_.cons1) for (int i = 0; i < S; i++) {
-            if (!p_.cd(i, c.si)) continue;
+            if (!p_.c1On(i, c.si)) continue;
             for (int j = 0; j <= T - c.d1; j++) {
                 sat::LinearExpr z;
                 for (int l = 0; l < c.d1; l++) z += X(i, j + l, c.si);
@@ -681,7 +681,7 @@ inline long long rowLoad(const MagiProblem& p, const std::vector<int>& b, int i)
         if (hi != INT32_MAX && cnt[k] > hi) v += cnt[k] - hi;
     }
     for (const auto& c : p.cons1) {
-        if (!p.cd(i, c.si)) continue;
+        if (!p.c1On(i, c.si)) continue;
         for (int j = 0; j <= T - c.d1; j++) {
             int z = 0;
             for (int l = 0; l < c.d1; l++) if (b[(size_t)i * T + j + l] == c.si) z++;
