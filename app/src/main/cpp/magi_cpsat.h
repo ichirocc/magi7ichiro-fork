@@ -582,7 +582,8 @@ private:
             r = sat::LinearExpr(cp_.NewIntVar({-Q, Q * T}));
         }
         for (const auto& q : ps) {
-            // D＝round(|u|/(2Q))（四捨五入＝jround）: 2Q·D + Q − 1 ≥ |u|。基準を刻みで表せないときは r が 1/(2Q) ずれる分を引く（四捨五入以下）。
+            // D＝round(|u|/(2Q))（四捨五入＝jround）: 2Q·D + Q − 1 ≥ |u|。エンジンも偏差を分数で四捨五入する（3.727.107）＝ちょうど半分も一致。
+            //   基準を刻みで表せないときは r が 1/(2Q) ずれる分を引く（四捨五入以下）。
             const long long off = qOver && !fixedR ? Q + (q.s2 + 1) / 2 : Q - 1;
             const sat::LinearExpr u = uOf(q, r);
             auto D = cp_.NewIntVar({0, q.s2 * T + 1});
