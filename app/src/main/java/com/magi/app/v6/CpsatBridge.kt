@@ -67,7 +67,7 @@ object HardCauses {
 
 /**
  * 作成と併走する CP-SAT の 1 回分。[start] で別スレッドに解かせ、[poll] で最良と下限を読み、[finish] で止めて結果を返す。
- * 下限 [weightedBound] は fair を実際の値以下の近似で数えた下限＝チェッカーの weightedScore（fair 込み）以下が常に成り立つ。
+ * 下限 [weightedBound] は fair 込みの下限（fair は実際の値以下で数える）＝チェッカーの weightedScore 以下が常に成り立つ（tools/native/cpsat_bound_check.cpp）。
  */
 class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
     data class Snapshot(
@@ -121,6 +121,23 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
     }
 
     companion object {
+        /** 盤面が CP-SAT の定義域（`magi_cpsat::Model::makeVars` と同じ規則）にあるか＝下限が当てはまるか。手動固定はその値・希望は希望か
+         *  入力 [input] の値・ほかは置ける値か入力の値（どちらも無ければ休）。外れる例: 上限 0 の日に置いた最終段（[DayCapHardRelief]）。 */
+        fun inDomain(p: Problem, input: Array<IntArray>, board: Array<IntArray>): Boolean {
+            for (i in 0 until p.S) for (j in 0 until p.T) {
+                val v = board.getOrNull(i)?.getOrNull(j) ?: return false
+                val h = input.getOrNull(i)?.getOrNull(j) ?: -1
+                if (p.wishLocked(i, j)) {
+                    if (v != p.lockTo(i, j) && (p.pinned(i, j) || v != h || h !in 0 until p.K)) return false
+                    continue
+                }
+                if (v in 0 until p.K && (v == h || p.mayPlaceAt(i, j, v))) continue
+                if (h < 0 && v == (p.restIdx ?: -1) && (0 until p.K).none { p.mayPlaceAt(i, j, it) }) continue
+                return false
+            }
+            return true
+        }
+
         /** ギャップ（実際の最良と下限の差の割合）。下限が無ければ null。 */
         fun gap(bestWeighted: Double, bound: Long): Double? =
             if (bound < 0 || bestWeighted <= 0.0) null else ((bestWeighted - bound) / bestWeighted).coerceAtLeast(0.0)
