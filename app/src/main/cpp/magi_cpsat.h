@@ -1,6 +1,6 @@
 // CP-SAT（OR-Tools）で勤務表全体を 1 つのモデルにして解く。今の探索と併走し、①下限（これ以上良くならない値）
 // ②より良い勤務表 を返す。モデルの目的は fullEvalParts と同じ式（必須の件数 → 重み付きの点数の 2 段）。
-// fair（達成率の中央値）は線形に書けないので、実際の値以下になる近似（[addFair]）を目的にだけ足す＝下限は常に正しい（実際の値以下）。
+// fair（[addFair]）は目的にだけ足す: 母集団が盤面で決まる群は基準の中央値を式で決めて実際と一致させ、決まらない群は実際以下の値＝下限は常に正しい。
 // 点数 [weighted]（解の重み・盤面固定の照合に使う）は fair を含めない。
 // magi_native.cpp の末尾から include される（MAGI_WITH_CPSAT のときだけ）＝MagiProblem などを同じ翻訳単位で使う。
 #pragma once
@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <numeric>
 #include <mutex>
 #include <random>
 #include <thread>
@@ -46,12 +47,12 @@ struct Options {
     int linearizationLevel = 2;
     // 使う探索役（空なら CP-SAT の既定の並び）。少ないワーカーでも下限を担う役（max_lp など）を必ず入れるため。
     std::vector<std::string> subsolvers;
-    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage,9 fair の近似）。
+    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage,9 fair）。
     unsigned families = ~0u;
     // 第 1 段の持ち時間の上限（秒）。
     double phase1MaxSeconds = 6.0;
-    // fair の基準（達成率の基準・従来方式の平均）を hint の盤面の値に固定する（解き直し [improve] 用）。固定すると偏差が一次式になり、
-    //   hint の近くでは実際の fair にほぼ一致する。実際の値以下とは限らない＝下限の計算（[solve]）では使わない。
+    // fair の基準（達成率の基準・従来方式の平均）を hint の盤面の値に固定する（解き直し [improve] 用）。中央値を式で決めるより速く、
+    //   hint の近くでは実際の fair と一致する。実際の値以下とは限らない＝下限の計算（[solve]）では使わない。
     bool fairFixedRef = false;
 };
 
@@ -60,7 +61,7 @@ struct Result {
     long long hard = -1;            // 見つけた解の必須件数（モデルの値）
     long long weighted = -1;        // 見つけた解の重み付き（必須の重み込み・fair を除く）
     long long hardBound = -1;       // 必須件数の下限
-    long long weightedBound = -1;   // 重み付き＋fair の近似の下限（hard が hardBound と同じ解の範囲で）＝チェッカーの weightedScore 以下
+    long long weightedBound = -1;   // 重み付き＋fair の下限（hard が hardBound と同じ解の範囲で）＝チェッカーの weightedScore 以下
     bool hardProven = false;        // 必須件数が最適と証明できた
     std::vector<int> board;         // 見つけた最良の盤面（無ければ空）
     double wallSeconds = 0.0;
@@ -84,11 +85,24 @@ public:
 
     const sat::LinearExpr& hardCount() const { return hardCount_; }
     const sat::LinearExpr& weighted() const { return weighted_; }
-    // 第 2 段で最小にする式＝重み付き＋fair の近似（[addFair]、実際の fair 以下）。
+    // 第 2 段で最小にする式＝重み付き＋fair（[addFair]、実際の fair 以下・母集団が決まる群は一致）。
     sat::LinearExpr objective() const { return weighted_ + fair_; }
     sat::CpModelBuilder& cp() { return cp_; }
     // 変数を持つマスのすべてに hint の値があったか（[completeHint] で全変数のヒントへ広げられる）。
     bool fullyHinted() const { return fullyHinted_; }
+    // 盤面 b の値に全マスを縛る（定義域と式の組み立ては変えずに、その盤面でのモデルの値を測る検査用。tools/native/cpsat_bound_check.cpp）。
+    //   定義域に無い値のマスがあれば false（縛らない）。
+    bool pinBoard(const std::vector<int>& b) {
+        if (b.size() != (size_t)S * T) return false;
+        for (size_t c = 0; c < b.size(); c++) {
+            if (fixed_[c] >= 0) { if (fixed_[c] != b[c]) return false; continue; }
+            bool found = false;
+            for (const auto& kv : vars_[c]) if (kv.first == b[c]) found = true;
+            if (!found) return false;
+        }
+        for (size_t c = 0; c < b.size(); c++) for (const auto& kv : vars_[c]) cp_.FixVariable(kv.second, kv.first == b[c]);
+        return true;
+    }
 
     std::vector<int> boardFrom(const sat::CpSolverResponse& r) const {
         std::vector<int> b((size_t)S * T, -1);
@@ -407,107 +421,177 @@ private:
         }
     }
 
-    // fair の近似（3.727.81）。群×担当シフトごとに、実際の fair（MirrorCore.fairDevCore）以下になる値を足す。
-    //   達成率モード: 偏差の和＋最大＝Σ|c'−中心−r×幅| と max の、基準 r を自由にした最小（r は 1/Q 刻み）。丸めと刻みの誤差ぶんを引く。
-    //   従来の round(平均) 方式（基準の無い人がいる群）: 基準の代わりに自由な整数 m を置いた Σ|c−m|＋max。
-    //   どちらも母集団の一部（置ける人で幅 > 0）だけで数える＝実際の値以下。置けない人が基準なしで入りうる群は数えない。
+    // fair（docs/cpsat_formal.md「モデル」）: 群×担当シフトごとに実際の fair（fairDevOfBucket）以下の値を足す＝下限は正しい。母集団が盤面で
+    //   決まる群は実際と一致、決まらない群（回数が変わり得る置けない人がいる）は基準を自由にした最小。fairFixedRef は基準を hint の値に固定。
     void addFair(const std::vector<int>& hint, const Options& opt) {
         if (p_.w.fair == 0) return;
-        const long long Q = 24;
-        const long long big = 4LL * Q * T * (T + 2);
-        const bool fixedRef = opt.fairFixedRef && !hint.empty();
-        auto hintCount = [&](int x, int k) { long long n = 0; for (int j = 0; j < T; j++) if (hint[(size_t)x * T + j] == k) n++; return n; };
-        for (int g = 0; g < (int)p_.members.size() && g < (int)p_.bucket.size(); g++) for (int k : p_.bucket[g]) {
-            std::vector<int> pop;
-            bool legacy = false, skip = false;
-            for (int x : p_.members[g]) {
-                const size_t xk = (size_t)x * K + k;
-                const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
-                const bool basis = (lo != INT32_MIN && hi != INT32_MAX) || t >= 0;
-                if (p_.pl(x, k)) { pop.push_back(x); if (!basis) legacy = true; continue; }
-                if (basis) continue;
-                for (int j = 0; j < T && !skip; j++) if (mayBe(x, j, k)) skip = true;
-            }
-            if (skip || pop.size() < 2) continue;
-            if (legacy) {
-                sat::LinearExpr m;
-                if (fixedRef) {
-                    long long tot = 0; for (int x : pop) tot += hintCount(x, k);
-                    m = sat::LinearExpr((long long)std::llround((double)tot / (double)pop.size()));
-                } else {
-                    m = sat::LinearExpr(cp_.NewIntVar({0, T}));
-                }
-                auto mx = cp_.NewIntVar({0, T});
-                sat::LinearExpr sum;
-                for (int x : pop) {
-                    const auto& n = cnt_[(size_t)x * K + k];
-                    auto d = cp_.NewIntVar({0, T});
-                    cp_.AddGreaterOrEqual(d - n + m, 0);
-                    cp_.AddGreaterOrEqual(d + n - m, 0);
-                    cp_.AddGreaterOrEqual(mx - d, 0);
-                    sum += d;
-                }
-                fair_ += p_.w.fair * (sum + mx);
-                continue;
-            }
-            // 基準を持つ人（帯 [lo,hi] か適切回数 t）。center2＝中心の 2 倍、s2＝幅の 2 倍。
-            struct Who { int x; bool band; int lo, hi; long long center2, s2; };
-            std::vector<Who> who;
-            for (int x : pop) {
-                const size_t xk = (size_t)x * K + k;
-                const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
-                if (lo != INT32_MIN && hi != INT32_MAX) {
-                    if (hi <= lo || lo < 0) continue;
-                    who.push_back({x, true, lo, hi, (long long)lo + hi, (long long)hi - lo});
-                } else {
-                    if (t <= 0) continue;
-                    who.push_back({x, false, 0, 0, 2LL * t, 2LL * t});
-                }
-            }
-            if (who.size() < 2) continue;
-            sat::LinearExpr r;
-            if (fixedRef) {
-                // hint の盤面の基準＝幅を重みにした達成率の中央値（1/Q 刻みへ丸める）。
-                std::vector<std::pair<double, long long>> rate;
-                long long wsum = 0;
-                for (const auto& w : who) {
-                    long long c = hintCount(w.x, k);
-                    if (w.band) c = std::max<long long>(w.lo, std::min<long long>(w.hi, c));
-                    rate.push_back({(double)Q * (double)(2 * c - w.center2) / (double)w.s2, w.s2});
-                    wsum += w.s2;
-                }
-                std::sort(rate.begin(), rate.end());
-                long long acc = 0; double med = rate.back().first;
-                for (const auto& rw : rate) { acc += rw.second; if (2 * acc >= wsum) { med = rw.first; break; } }
-                r = sat::LinearExpr((long long)std::llround(med));
-            } else {
-                r = sat::LinearExpr(cp_.NewIntVar({-Q, Q * T}));
-            }
-            auto mx = cp_.NewIntVar({0, big});
-            sat::LinearExpr sum;
-            long long n = 0, s2sum = 0, s2max = 0;
-            for (const auto& w : who) {
-                const auto& c = cnt_[(size_t)w.x * K + k];
-                sat::LinearExpr e = c;
-                if (w.band) {
-                    auto upper = cp_.NewIntVar({0, T});
-                    cp_.AddMinEquality(upper, {c, sat::LinearExpr(w.hi)});
-                    auto clamped = cp_.NewIntVar({w.lo, w.hi});
-                    cp_.AddMaxEquality(clamped, {sat::LinearExpr(upper), sat::LinearExpr(w.lo)});
-                    e = clamped;
-                }
-                auto d = cp_.NewIntVar({0, big});
-                cp_.AddGreaterOrEqual(d - 2 * Q * e + w.s2 * r, -Q * w.center2);
-                cp_.AddGreaterOrEqual(d + 2 * Q * e - w.s2 * r, Q * w.center2);
-                cp_.AddGreaterOrEqual(mx - d, 0);
-                sum += d; n++; s2sum += w.s2; s2max = std::max(s2max, w.s2);
-            }
-            // 基準が自由なときは丸めと刻みの誤差ぶんを引いて実際の値以下にする。固定のときは四捨五入だけ。
-            const long long slack = fixedRef ? Q : Q * (n + 1) + (s2sum + s2max + 1) / 2;
-            auto fv = cp_.NewIntVar({0, (n + 1) * big / (2 * Q) + 1});
-            cp_.AddGreaterOrEqual(2 * Q * fv - sum - mx, -slack);
-            fair_ += p_.w.fair * fv;
+        const std::vector<int>* ref = opt.fairFixedRef && !hint.empty() ? &hint : nullptr;
+        for (int g = 0; g < (int)p_.members.size() && g < (int)p_.bucket.size(); g++)
+            for (int k : p_.bucket[g]) addFairBucket(g, k, ref);
+    }
+
+    // 盤面 b での基準（fairDevOfBucket と同じ手順を有理数で）。従来方式なら m、達成率なら num/den。母集団 2 人未満・幅の和 0 は valid=false。
+    struct FairRef { bool valid = false, legacy = false; long long m = 0, num = 0, den = 1; };
+    FairRef fairRefAt(int g, int k, const std::vector<int>& b) const {
+        FairRef out;
+        std::vector<int> mem; std::vector<long long> cnt;
+        for (int x : p_.members[g]) {
+            long long c = 0;
+            for (int j = 0; j < T; j++) if (b[(size_t)x * T + j] == k) c++;
+            if (p_.pl(x, k) || c > 0) { mem.push_back(x); cnt.push_back(c); }
         }
+        if (mem.size() < 2) return out;
+        struct Rate { long long num, den, w2; };   // 達成率＝num/den、重み＝w2/2
+        std::vector<Rate> rs;
+        for (size_t a = 0; a < mem.size(); a++) {
+            const size_t xk = (size_t)mem[a] * K + k;
+            const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
+            if (lo != INT32_MIN && hi != INT32_MAX) {
+                const long long e = std::max<long long>(lo, std::min<long long>(hi, cnt[a]));
+                rs.push_back(hi > lo ? Rate{2 * e - lo - hi, (long long)hi - lo, (long long)hi - lo} : Rate{0, 1, 0});
+            } else if (t < 0) {
+                long long sum = 0;
+                for (long long c : cnt) sum += c;
+                out.valid = true; out.legacy = true; out.m = jround((double)sum / (double)mem.size());
+                return out;
+            } else {
+                rs.push_back(t > 0 ? Rate{cnt[a] - t, t, 2LL * t} : Rate{0, 1, 0});
+            }
+        }
+        long long w2 = 0;
+        for (const auto& r : rs) w2 += r.w2;
+        if (w2 <= 0) return out;
+        std::vector<int> ord(rs.size());
+        for (size_t a = 0; a < ord.size(); a++) ord[a] = (int)a;
+        std::stable_sort(ord.begin(), ord.end(), [&](int a, int c) { return rs[a].num * rs[c].den < rs[c].num * rs[a].den; });
+        long long acc = 0;
+        for (int a : ord) {
+            acc += rs[a].w2;
+            if (2 * acc >= w2) { out.valid = true; out.num = rs[a].num; out.den = rs[a].den; return out; }
+        }
+        return out;
+    }
+
+    void addFairBucket(int g, int k, const std::vector<int>* ref) {
+        static constexpr long long kQMax = 50400;   // 刻みの分母の上限（これを超える最小公倍数は刻みの誤差を引く）
+        std::vector<int> in;
+        bool maybeAny = false, maybeNoBasis = false, legacy = false, qOver = false;
+        long long Q = 1;
+        for (int x : p_.members[g]) {
+            const size_t xk = (size_t)x * K + k;
+            const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
+            const bool band = lo != INT32_MIN && hi != INT32_MAX;
+            const bool basis = band || t >= 0;
+            long long cn;
+            const bool cst = isConst(cnt_[xk], cn);
+            const bool member = p_.pl(x, k) || (cst && cn > 0);
+            if (!member && cst) continue;
+            const long long s2 = band ? (hi > lo ? (long long)hi - lo : 0) : (t > 0 ? 2LL * t : 0);
+            if (basis && s2 > 0 && !qOver) {
+                const long long l = Q / std::gcd(Q, s2) * s2;
+                if (l > kQMax) qOver = true; else Q = l;
+            }
+            if (!member) { maybeAny = true; if (!basis) maybeNoBasis = true; continue; }
+            in.push_back(x);
+            if (!basis) legacy = true;
+        }
+        if (in.size() < 2 || (!legacy && maybeNoBasis)) return;
+        const FairRef rf = ref ? fairRefAt(g, k, *ref) : FairRef();
+        sat::LinearExpr sum;
+        auto mx = cp_.NewIntVar({0, 2LL * T * T + 1});
+        if (legacy) {
+            sat::LinearExpr m;
+            if (!maybeAny) {
+                sat::LinearExpr tot;
+                for (int x : in) tot += cnt_[(size_t)x * K + k];
+                const long long n = (long long)in.size();
+                auto mv = cp_.NewIntVar({0, T});
+                cp_.AddLessOrEqual(2 * n * mv, 2 * tot + n);
+                cp_.AddLessOrEqual(2 * tot + n, 2 * n * mv + 2 * n - 1);
+                m = mv;
+            } else if (rf.valid && rf.legacy) {
+                m = sat::LinearExpr(rf.m);
+            } else {
+                m = sat::LinearExpr(cp_.NewIntVar({0, T}));
+            }
+            for (int x : in) {
+                const auto& n = cnt_[(size_t)x * K + k];
+                auto d = cp_.NewIntVar({0, T});
+                cp_.AddGreaterOrEqual(d - n + m, 0);
+                cp_.AddGreaterOrEqual(d + n - m, 0);
+                cp_.AddGreaterOrEqual(mx - d, 0);
+                sum += d;
+            }
+            fair_ += p_.w.fair * (sum + mx);
+            return;
+        }
+        if (qOver) Q = kQMax;
+        // 偏差を持つ人（幅 > 0）。e＝回数（帯の人は帯へクランプ）、center2＝中心の 2 倍、s2＝幅の 2 倍。幅 0 の人は偏差も重みも 0。
+        struct Pers { sat::LinearExpr e; long long center2, s2; };
+        std::vector<Pers> ps;
+        for (int x : in) {
+            const size_t xk = (size_t)x * K + k;
+            const int lo = p_.rangeLo[xk], hi = p_.rangeHi[xk], t = p_.apt[xk];
+            const auto& c = cnt_[xk];
+            if (lo != INT32_MIN && hi != INT32_MAX) {
+                if (hi <= lo) continue;
+                long long cn;
+                if (isConst(c, cn)) { ps.push_back({sat::LinearExpr(std::max<long long>(lo, std::min<long long>(hi, cn))), (long long)lo + hi, (long long)hi - lo}); continue; }
+                auto upper = cp_.NewIntVar({std::min<long long>(0, lo), std::max<long long>(T, hi)});
+                cp_.AddMinEquality(upper, {c, sat::LinearExpr(hi)});
+                auto clamped = cp_.NewIntVar({lo, hi});
+                cp_.AddMaxEquality(clamped, {sat::LinearExpr(upper), sat::LinearExpr(lo)});
+                ps.push_back({sat::LinearExpr(clamped), (long long)lo + hi, (long long)hi - lo});
+            } else if (t > 0) {
+                ps.push_back({c, 2LL * t, 2LL * t});
+            }
+        }
+        if (ps.empty()) { fair_ += p_.w.fair * (sum + mx); return; }
+        // u＝Q·(2e − center2) − s2·r＝Q·s2·(達成率 − r/Q)。|u|＝2Q×（連続の偏差）。
+        auto uOf = [&](const Pers& q, const sat::LinearExpr& r) { return 2 * Q * q.e - q.s2 * r - Q * q.center2; };
+        // 母集団が決まり刻みが基準を表せる群は、基準を実際と同じ重み付き中央値に式で決める（どれかの人の達成率で、それ以下の幅の和が総幅の
+        //   半分以上・未満が半分未満）＝fair が実際と一致。解き直し（ref あり）は開始の盤面の基準に固定（部分 1 つが約 2 倍速い）。
+        const bool exact = !maybeAny && !qOver && ref == nullptr;
+        const bool fixedR = !exact && rf.valid && !rf.legacy;
+        sat::LinearExpr r;
+        if (exact) {
+            auto rv = cp_.NewIntVar({-Q, Q * T});
+            r = sat::LinearExpr(rv);
+            long long w2 = 0;
+            sat::LinearExpr le2, lt2;
+            std::vector<sat::BoolVar> at;
+            for (const auto& q : ps) {
+                const sat::LinearExpr u = uOf(q, r);
+                auto le = cp_.NewBoolVar(), lt = cp_.NewBoolVar(), z = cp_.NewBoolVar();
+                cp_.AddLessOrEqual(u, 0).OnlyEnforceIf(le);
+                cp_.AddGreaterOrEqual(u, 1).OnlyEnforceIf(sat::Not(le));
+                cp_.AddLessOrEqual(u, -1).OnlyEnforceIf(lt);
+                cp_.AddGreaterOrEqual(u, 0).OnlyEnforceIf(sat::Not(lt));
+                cp_.AddEquality(u, 0).OnlyEnforceIf(z);
+                cp_.AddImplication(lt, le);
+                cp_.AddImplication(z, le);
+                cp_.AddImplication(z, sat::Not(lt));
+                w2 += q.s2; le2 += q.s2 * le; lt2 += q.s2 * lt; at.push_back(z);
+            }
+            cp_.AddBoolOr(at);
+            cp_.AddGreaterOrEqual(2 * le2, w2);
+            cp_.AddLessOrEqual(2 * lt2, w2 - 1);
+        } else if (fixedR) {
+            r = sat::LinearExpr((long long)std::llround((double)Q * (double)rf.num / (double)rf.den));
+        } else {
+            r = sat::LinearExpr(cp_.NewIntVar({-Q, Q * T}));
+        }
+        for (const auto& q : ps) {
+            // D＝round(|u|/(2Q))（四捨五入＝jround）: 2Q·D + Q − 1 ≥ |u|。基準を刻みで表せないときは r が 1/(2Q) ずれる分を引く（四捨五入以下）。
+            const long long off = qOver && !fixedR ? Q + (q.s2 + 1) / 2 : Q - 1;
+            const sat::LinearExpr u = uOf(q, r);
+            auto D = cp_.NewIntVar({0, q.s2 * T + 1});
+            cp_.AddGreaterOrEqual(2 * Q * D + u, -off);
+            cp_.AddGreaterOrEqual(2 * Q * D - u, -off);
+            cp_.AddGreaterOrEqual(mx - D, 0);
+            sum += D;
+        }
+        fair_ += p_.w.fair * (sum + mx);
     }
 
     // 被覆: covU＝max(0, min(定義された必要数) − got)、covO＝max(0, got − max(定義された必要数))（per-cell OR/AND と同値）。

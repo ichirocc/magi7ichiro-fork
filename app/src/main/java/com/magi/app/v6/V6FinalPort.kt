@@ -1169,11 +1169,14 @@ object V6FinalPort {
         // [MAGI-021/022] 採否は必須の「件数」で比べる（docs/adoption.md）＝人員不足 1 を解いて禁止連続 1 を作る入れ替わりは件数では見えない。
         //   採否は変えず、入力に無かった必須違反（族・場所）と解消した必須違反をログに出す（画面の変更案の同一性検査と説明を揃える）。
         val identityLog = identitySwapLog(state, inputReport, finalReport)
-        val boundSummary = cpsatSnap?.takeIf { it.hardBound >= 0 }?.let { s ->
+        // CP-SAT の下限は CP-SAT の定義域（探索と同じ置ける値＋入力の値）の盤面についての値＝外れた盤面（上限 0 の日に置いた最終段など）には
+        //   当てはまらないので、根拠に使わない。
+        val boundApplies = cpsatSnap != null && CpsatCoRun.inDomain(baseProblem, cappedInput, finalSched)
+        val boundSummary = cpsatSnap?.takeIf { it.hardBound >= 0 && boundApplies }?.let { s ->
             BoundSummary(s.hardBound, s.hardProven, s.weightedBound, finalReport.weightedScore,
                 CpsatCoRun.gap(finalReport.weightedScore, s.weightedBound).takeIf { finalReport.hard.toLong() == s.hardBound }, cpsatGapHit)
         }
-        val cpsatLog = (cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report))) } ?: emptyList()) +
+        val cpsatLog = (cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report, outOfDomain = !boundApplies))) } ?: emptyList()) +
             listOfNotNull(
                 if (resolveOut != null && resolveStart != null) MirrorLog(level = "I", tag = "CP-SAT",
                     message = resolveLogLine(resolveOut, resolveThreads, resolveStage, resolveStart, resolveStallHit.get(), (tChain1 - startMs) / 1000))
@@ -1631,10 +1634,13 @@ object V6FinalPort {
 
     /** 入力に無かった必須違反（族・場所）と解消した必須違反の 1 行。新しく生まれたものが無ければ空。 */
     /** CP-SAT の結果の 1 行（下限・証明・ギャップ・CP-SAT の最良と探索の最良の比較）。 */
-    internal fun cpsatLogLine(s: CpsatCoRun.Snapshot, b: BoundSummary?, stage: StageCandidate?, searchBest: ViolationReport): String {
+    internal fun cpsatLogLine(s: CpsatCoRun.Snapshot, b: BoundSummary?, stage: StageCandidate?, searchBest: ViolationReport, outOfDomain: Boolean = false): String {
         val hard = "必須の下限 ${s.hardBound}" + if (s.hardProven) "（最少と証明）" else "（未証明）"
-        val weight = if (s.weightedBound >= 0) "重みの下限 ${s.weightedBound}（fair は近似の下限）" else "重みの下限なし"
-        val gap = b?.gap?.let { "採用した勤務表とのギャップ ${"%.1f".format(it * 100)}%" } ?: "ギャップ —（必須の件数が下限と違う）"
+        val weight = if (s.weightedBound >= 0) "重みの下限 ${s.weightedBound}（fair 込み）" else "重みの下限なし"
+        val gap = when {
+            outOfDomain -> "ギャップ —（採用した勤務表は下限を出した範囲の外＝上限 0 の日に置いたなど。比べない）"
+            else -> b?.gap?.let { "採用した勤務表とのギャップ ${"%.1f".format(it * 100)}%" } ?: "ギャップ —（必須の件数が下限と違う）"
+        }
         val own = stage?.let { "CP-SAT の最良 必須${it.report.hard}・重み${it.report.weightedScore.toLong()}（探索の最良 必須${searchBest.hard}・重み${searchBest.weightedScore.toLong()}" +
             (if (betterReport(it.report, searchBest)) "より良い＝統合の起点に採用）" else "）") } ?: "CP-SAT の解なし"
         return "$hard・$weight・$gap・$own" + if (b?.stoppedByGap == true) "・ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を早く終えた" else ""

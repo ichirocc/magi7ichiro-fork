@@ -44,6 +44,7 @@ int main(int argc, char** argv) {
     printf("PARITY board: engine hard=%lld weighted(noFair)=%lld fair=%lld | model hard=%lld weighted=%lld -> %s\n",
            h0, w0, f0, rf.hard, rf.weighted, (rf.hard == h0 && rf.weighted == w0) ? "MATCH" : "MISMATCH");
     magi_cpsat::Options o; o.maxSeconds = secs; o.workers = workers;
+    if (const char* sd = getenv("CPSAT_SEED")) o.randomSeed = atoll(sd);
     if (const char* sub = getenv("CPSAT_SUBSOLVERS")) { std::string x(sub), t; for (char ch : x + ",") { if (ch == ',') { if (!t.empty()) o.subsolvers.push_back(t); t.clear(); } else t += ch; } }
     // CPSAT_STOP_AT: アプリの探索の終わり（秒）を模して外から止める。
     std::atomic<bool> stopFlag{false}; o.stop = &stopFlag;
