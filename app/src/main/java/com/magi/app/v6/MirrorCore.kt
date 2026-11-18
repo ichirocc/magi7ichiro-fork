@@ -634,7 +634,8 @@ object UnifiedViolationChecker {
                     var rest = -1L
                     for (l in 1 until d) rest = rest and (masks[base + seq[l]] ushr l)
                     val first = masks[base + seq[0]] and starts
-                    var fires = if (forbidden) first and rest else first and rest.inv()
+                    val full = first and rest
+                    var fires = if (forbidden) full else C3Run.wantFireMask(first, full, d) and starts
                     while (fires != 0L) {
                         val j = java.lang.Long.numberOfTrailingZeros(fires)
                         fires = fires and (fires - 1)
@@ -650,7 +651,7 @@ object UnifiedViolationChecker {
                     if (schedule[i][j] == seq[0]) {
                         var z = 0
                         for (l in 1 until d) if (schedule[i][j + l] == seq[l]) z++
-                        val fire = if (forbidden) z == d - 1 else z < d - 1
+                        val fire = if (forbidden) z == d - 1 else C3Run.wantFires(schedule[i], j, seq)
                         if (fire) {
                             inc(key, 1)
                             // [視認性] SOFT want窓は先頭1セルへアンカー。forbidden(c3n=HARD/c3mn)は禁止パターン

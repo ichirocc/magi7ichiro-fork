@@ -48,7 +48,8 @@
   - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishFixed`＝実現可能な希望。手動固定は含まない)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
-    それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
+    それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。非forbidden の複数シフト連は、一致した窓の中（2 つ目以降のセル）を
+    書き出しと数えない（`C3Run.wantFires`、3.727.102）。
 - **c41/c42**（群/日 範囲, SOFT, 重み9）／**c41s/c42s**（スキル群変種, SOFT, 重み10）。
 - **covU**（人員不足, HARD, 重み10000）/ **covO**（人員過剰, SOFT, 重み10）。被覆は同日のみ（夜勤繰越なし）。
   最適化器とチェッカーは同じ値（重みの経緯は `docs/business-logic.md` §2）。

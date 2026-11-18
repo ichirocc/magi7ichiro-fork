@@ -352,6 +352,23 @@ inline long long rowDeficitBitsN(uint64_t m, int L) {
     return sub;
 }
 
+// C3Run.matchAt / wantFires / wantFireMask と同式。推奨の並び（非forbidden 多シフト）は先頭が一致して全体が一致しない窓を数え、
+//   前の日に始まって全体が一致した窓の中（2 つ目以降のセル）は数えない（3.727.102）。
+static inline bool c3MatchAt(const int* row, int js, const std::vector<int>& seq) {
+    for (size_t l = 0; l < seq.size(); l++) if (row[js + (int)l] != seq[l]) return false;
+    return true;
+}
+static inline bool c3WantFires(const int* row, int js, const std::vector<int>& seq) {
+    if (row[js] != seq[0] || c3MatchAt(row, js, seq)) return false;
+    for (int l = 1; l < (int)seq.size(); l++) if (js - l >= 0 && c3MatchAt(row, js - l, seq)) return false;
+    return true;
+}
+static inline uint64_t c3WantFireMask(uint64_t first, uint64_t full, int D) {
+    uint64_t covered = 0;
+    for (int l = 1; l < D; l++) covered |= full << l;
+    return first & ~full & ~covered;
+}
+
 // Evaluator.c3check と同式（forbidden=窓マッチ#fire / 非forbidden単一連=run-deficit）。
 long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& list, bool forbidden) {
     long long sub = 0;
@@ -366,12 +383,8 @@ long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& li
         for (int i = 0; i < p.S; i++) {
             const int* row = a + (size_t)i * p.T;
             for (int j = 0; j <= p.T - D; j++) {
-                if (row[j] == first) {
-                    int z = 0;
-                    for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
-                    bool fire = forbidden ? (z == D - 1) : (z < D - 1);
-                    if (fire) sub += 1;
-                }
+                const bool fire = forbidden ? c3MatchAt(row, j, c.seq) : c3WantFires(row, j, c.seq);
+                if (fire) sub += 1;
             }
         }
     }
@@ -844,25 +857,20 @@ struct SaChunk {
         // [ビット化] 窓マッチ（forbidden 完全一致 / 非forbidden 多シフト部分不一致）を popcount で。
         //   rowMask[i*K+k]=職員 i がシフト k を持つ日ビット集合（deltaApply が維持済＝新規マスク不要）。
         //   (rowMask[seq[l]] >> l) の bit j = (row[j+l]==seq[l])。AND で「窓開始 j に完全一致」の集合を得る。
-        //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=先頭一致−完全一致（z<D-1）。
+        //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=c3WantFireMask（完全一致の窓の中は数えない）。
         //   マスク索引の安全のため seq が全て [0,K) のときのみ（範囲外は理論上到達不能だが scalar へ退避）。
         if (useBits && D <= T) {
             if (seqOk) {
                 uint64_t full = rowMask[(size_t)i * K + first];
                 for (int l = 1; l < D; l++) full &= (rowMask[(size_t)i * K + c.seq[l]] >> l);
                 uint64_t range = (T - D + 1 >= 64) ? ~0ULL : ((1ULL << (T - D + 1)) - 1ULL);
-                long long fullCnt = __builtin_popcountll(full & range);
-                if (forbidden) return fullCnt * w;
-                return (__builtin_popcountll(rowMask[(size_t)i * K + first] & range) - fullCnt) * w;
+                if (forbidden) return (long long)__builtin_popcountll(full & range) * w;
+                return (long long)__builtin_popcountll(c3WantFireMask(rowMask[(size_t)i * K + first], full, D) & range) * w;
             }
         }
         for (int j = 0; j <= T - D; j++) {
-            if (row[j] == first) {
-                int z = 0;
-                for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
-                bool fire = forbidden ? (z == D - 1) : (z < D - 1);
-                if (fire) v += w;
-            }
+            const bool fire = forbidden ? c3MatchAt(row, j, c.seq) : c3WantFires(row, j, c.seq);
+            if (fire) v += w;
         }
         return v;
     }
@@ -1377,10 +1385,8 @@ void collectViolationCells(const MagiProblem& p, const int* a, std::vector<int>&
             for (int i = 0; i < S; i++) {
                 const int* row = a + (size_t)i * T;
                 for (int j = 0; j <= T - D; j++) {
-                    if (row[j] == first) {
-                        int z = 0;
-                        for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
-                        bool fire = forbidden ? (z == D - 1) : (z < D - 1);
+                    {
+                        const bool fire = forbidden ? c3MatchAt(row, j, c.seq) : c3WantFires(row, j, c.seq);
                         if (fire) {
                             if (forbidden) { for (int l = 0; l < D; l++) markCell(i, j + l); }
                             else markCell(i, j);

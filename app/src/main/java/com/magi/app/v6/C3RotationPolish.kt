@@ -341,7 +341,7 @@ internal object C3RotationPolish {
                 if (sched[i][j] == seq[0]) {
                     var z = 0
                     for (l in 1 until d) if (sched[i][j + l] == seq[l]) z++
-                    val fire = if (forbidden) z == d - 1 else z < d - 1
+                    val fire = if (forbidden) z == d - 1 else C3Run.wantFires(sched[i], j, seq)
                     if (fire) c++
                 }
                 j++

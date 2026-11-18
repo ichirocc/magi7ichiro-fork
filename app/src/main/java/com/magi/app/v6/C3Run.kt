@@ -40,4 +40,27 @@ object C3Run {
         }
         return sub
     }
+    /** 職員の行 [row] で、日 [js] から [seq] がそのまま並んでいるか（[js] + 長さ ≤ 月の日数のときだけ呼ぶ）。 */
+    fun matchAt(row: IntArray, js: Int, seq: IntArray): Boolean {
+        for (l in seq.indices) if (row[js + l] != seq[l]) return false
+        return true
+    }
+
+    /**
+     * 複数シフトの推奨の並び（c3・c3m）で、日 [js] の窓を 1 件と数えるか: 先頭が一致して並び全体は一致しない窓。
+     * ただし、前の日に始まって並び全体が一致した窓の中（2 つ目以降のセル）は数えない（3.727.102、
+     * 完成した「DﾃDﾃ休休」の 2 つ目の Dﾃ を未完成の書き出しと数えていた）。[js] ≤ 月の日数 − 長さ。
+     */
+    fun wantFires(row: IntArray, js: Int, seq: IntArray): Boolean {
+        if (row[js] != seq[0] || matchAt(row, js, seq)) return false
+        for (l in 1 until seq.size) if (js - l >= 0 && matchAt(row, js - l, seq)) return false
+        return true
+    }
+
+    /** [wantFires] のビット版。[first]＝先頭が一致する開始日、[full]＝並び全体が一致する開始日。窓の範囲で絞るのは呼び出し側。 */
+    fun wantFireMask(first: Long, full: Long, d: Int): Long {
+        var covered = 0L
+        for (l in 1 until d) covered = covered or (full shl l)
+        return first and full.inv() and covered.inv()
+    }
 }

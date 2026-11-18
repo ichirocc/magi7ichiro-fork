@@ -119,7 +119,7 @@ internal object CountChainPolish {
                         if (row[j] == seq[0]) {
                             var z = 0
                             for (l in 1 until d) if (row[j + l] == seq[l]) z++
-                            if (if (forbidden) z == d - 1 else z < d - 1) v += w
+                            if (if (forbidden) z == d - 1 else C3Run.wantFires(row, j, seq)) v += w
                         }
                         j++
                     }

@@ -52,6 +52,13 @@ class HardCauseTextTest {
         assertEquals(listOf("必要人数: 休 1人", "別の日の必要人数: 10/4 休 1人"), b.lines)
     }
 
+    @Test fun forbiddenSeqWithAStartDayNamesTheDay() {
+        val core = HardCauses.Core(listOf(HardCauses.Cause(HardCauses.Kind.FORBIDDEN_SEQ, -1, 26, -1, 0)), true)
+        val args = arrayOf<(Int) -> String>({ "S$it" }, { "K$it" }, { "12/${it + 1}" }, { "Dﾃ→A4" })
+        assertEquals(listOf("#1: 禁止の並び Dﾃ→A4 12/27〜"), HardCauseText.lines(listOf(core), args[0], args[1], args[2], args[3]))
+        assertTrue(HardCauseText.blocks(listOf(core), args[0], args[1], args[2], args[3]).single().lines.contains("禁止の並び: Dﾃ→A4（12/27〜）"))
+    }
+
     @Test fun dayCapCauseIsNamed() {
         val core = HardCauses.Core(listOf(HardCauses.Cause(HardCauses.Kind.DAY_CAP, -1, 28, 0, 0)), true)
         val sym = listOf("休", "A4")

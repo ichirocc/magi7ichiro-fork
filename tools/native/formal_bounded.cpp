@@ -40,6 +40,7 @@ static bool holds(const MagiProblem& p, const std::vector<int>& b, const magi_cp
         case magi_cpsat::kForbidden: {
             const auto& seq = p.cons3n[(size_t)c.rule].seq; const int D = (int)seq.size();
             for (int i = 0; i < p.S; i++) for (int j = 0; j + D <= T; j++) {
+                if (c.j >= 0 && j != c.j) continue;
                 bool m = true; for (int l = 0; l < D && m; l++) m = b[(size_t)i * T + j + l] == seq[(size_t)l];
                 if (m) return false;
             }

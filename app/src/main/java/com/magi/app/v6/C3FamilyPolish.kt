@@ -435,8 +435,7 @@ internal object C3FamilyPolish {
         //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
 
-        // アンカー: 各規則(seq,d)で「schedule[i][j]==seq[0]かつ残りd-1日が全一致しない(z<d-1)」窓の
-        //   先頭(i,j,seq[0])。checkC3Familyの非forbidden複数シフト分岐と同一の意味論。
+        // アンカー: 各規則(seq,d)で数える窓（[C3Run.wantFires]）の先頭(i,j,seq[0])。checkC3Familyの非forbidden複数シフト分岐と同一の意味論。
         fun collectAnchors(): List<Triple<Int, Int, Int>> {
             val out = ArrayList<Triple<Int, Int, Int>>()
             for (c in rules) {
@@ -445,11 +444,7 @@ internal object C3FamilyPolish {
                 for (i in 0 until p.S) {
                     var j = 0
                     while (j <= p.T - d) {
-                        if (work[i][j] == seq[0]) {
-                            var z = 0
-                            for (l in 1 until d) if (work[i][j + l] == seq[l]) z++
-                            if (z < d - 1) out.add(Triple(i, j, seq[0]))
-                        }
+                        if (C3Run.wantFires(work[i], j, seq)) out.add(Triple(i, j, seq[0]))
                         j++
                     }
                 }
