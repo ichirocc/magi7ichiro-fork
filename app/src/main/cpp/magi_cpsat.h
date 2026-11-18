@@ -141,10 +141,15 @@ private:
             const int h = hint.empty() ? -1 : hint[c];
             int forced = (!opt.force.empty() && opt.force[c] >= 0) ? opt.force[c] : -1;
             if (opt.fixToHint) forced = h;
-            if (forced < 0 && wishLockedN(p_, i, j)) forced = lockToN(p_, i, j);
+            // 希望固定（手動固定でない）は「希望どおり」か「入力のまま」（規則 A＝エンジンの keepsWishPins）。希望だけに固定すると、
+            //   入力で希望が外れた盤面（人員不足を避けて外した等）をモデルが表せず、下限が実際の点数を上回った（3.727.103）。
+            const bool wishOrInput = forced < 0 && wishLockedN(p_, i, j) && (p_.pin.empty() || p_.pin[c] < 0) && opt.keepInputValues
+                && h >= 0 && h < K && h != p_.wish[c];
+            if (forced < 0 && !wishOrInput && wishLockedN(p_, i, j)) forced = lockToN(p_, i, j);
             if (forced >= 0) { fixed_[c] = forced; continue; }
             std::vector<int> dom;
-            for (int k : p_.allowed[i]) if (!p_.extBanned(i, j, k)) dom.push_back(k);
+            if (wishOrInput) dom = {p_.wish[c], h};
+            else for (int k : p_.allowed[i]) if (!p_.extBanned(i, j, k)) dom.push_back(k);
             // 入力の値はエンジンが動かさずに残せる（置かない規則は新しく置く手だけ）＝到達できる範囲に入れる。
             if (opt.keepInputValues && h >= 0 && h < K && std::find(dom.begin(), dom.end(), h) == dom.end()) dom.push_back(h);
             if (dom.empty()) { fixed_[c] = h >= 0 ? h : p_.restIdx; continue; }
