@@ -74,7 +74,7 @@ internal object C1TemporalFlowPolish {
             var out = 0
             for (c in p.cons1) {
                 val x = c.shiftIdx; val d = c.day1
-                if (x !in 0 until p.K || d <= 0 || d > p.T || !p.canDo(i, x)) continue
+                if (x !in 0 until p.K || d <= 0 || d > p.T || !p.c1Applies(i, x)) continue
                 var count = 0
                 for (j in 0 until d) if (s[i][j] == x) count++
                 if (count < c.day2) out += c.day2 - count
@@ -188,7 +188,7 @@ internal object C1TemporalFlowPolish {
                 var bestForStaff: Plan? = null
                 for ((x, rules) in rulesByShift) {
                     if (shouldStop()) break
-                    if (!p.canDo(i, x)) continue
+                    if (!p.c1Applies(i, x)) continue
                     val focusBefore = C1TemporalDp.countFires(work[i], x, rules)
                     if (focusBefore == 0) continue
                     // x が拡張希望で禁止の日は非 x のまま固定（DP が置けない日を提案しない）

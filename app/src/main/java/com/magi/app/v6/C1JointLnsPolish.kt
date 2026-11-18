@@ -339,7 +339,7 @@ internal object C1JointLnsPolish {
         for (c in p.cons1) {
             if (c.day1 <= 0 || c.day1 > p.T || c.shiftIdx !in 0 until p.K) continue
             for (i in 0 until p.S) {
-                if (!p.canDo(i, c.shiftIdx)) continue
+                if (!p.c1Applies(i, c.shiftIdx)) continue
                 val key = buildString {
                     append(c.day1).append(',').append(c.day2).append(',').append(c.shiftIdx).append(':')
                     for (day in 0 until p.T) append(if (!p.wishLocked(i, day)) '.' else if (p.lockTo(i, day) == c.shiftIdx) '1' else '0')
@@ -449,7 +449,7 @@ internal object C1JointLnsPolish {
             val d = c.day1; val n = c.day2; val x = c.shiftIdx
             if (d <= 0 || d > p.T || x !in 0 until p.K) continue
             for (i in 0 until p.S) {
-                if (!p.canDo(i, x)) continue
+                if (!p.c1Applies(i, x)) continue
                 for (start in 0..p.T - d) {
                     var count = 0
                     for (j in start until start + d) if (schedule[i][j] == x) count++

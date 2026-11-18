@@ -80,7 +80,7 @@ class Evaluator(private val p: Problem) {
             for (c in p.cons1) {
                 val d1 = c.day1; val si = c.shiftIdx; val d2 = c.day2
                 for (i in 0 until S) {
-                    if (!p.canDo(i, si)) continue
+                    if (!p.c1Applies(i, si)) continue
                     var j = 0
                     while (j <= T - d1) {
                         var z = 0

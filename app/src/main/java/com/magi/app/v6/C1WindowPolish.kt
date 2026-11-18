@@ -22,7 +22,7 @@ internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
     var fires = 0
     for (c in p.cons1) {
         val x = c.shiftIdx; val d = c.day1; val n = c.day2
-        if (x !in 0 until p.K || d <= 0 || !p.canDo(i, x)) continue
+        if (x !in 0 until p.K || d <= 0 || !p.c1Applies(i, x)) continue
         var w = 0
         while (w <= p.T - d) {
             var z = 0
@@ -530,7 +530,7 @@ internal object C1WindowPolish {
             for ((ri, c) in p.cons1.withIndex()) {
                 if (shouldStop()) break
                 val x = c.shiftIdx; val d = c.day1; val n = c.day2
-                if (x !in 0 until p.K || d <= 0 || !p.canDo(i, x)) continue
+                if (x !in 0 until p.K || d <= 0 || !p.c1Applies(i, x)) continue
                 val stillDeficient0 = (0..p.T - d).any { j -> inDeficientC1Window(p, work, i, x, d, n, j) }
                 if (!stillDeficient0) continue
                 val hx = (0 until p.T).filter { work[i][it] == x && movable(i, it) }

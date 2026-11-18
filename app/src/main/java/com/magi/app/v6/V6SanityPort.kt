@@ -305,7 +305,7 @@ object V6SanityPort {
             if (c.day1 <= 0 || c.day1 > p.T) continue
             val x = c.shiftIdx
             for (i in 0 until p.S) {
-                if (!p.canDo(i, x)) continue
+                if (!p.c1Applies(i, x)) continue
                 val row = schedule.getOrNull(i) ?: continue
                 for (w in 0..p.T - c.day1) {
                     var reach = 0
@@ -996,7 +996,7 @@ object V6SanityPort {
                     val sym = symOf(shiftIdx)
                     val ruleDesc = rules.joinToString(" かつ ") { "${it.day1}日で${it.day2}回以上" }
                     for (i in 0 until p.S) {
-                        if (!p.canDo(i, shiftIdx)) continue
+                        if (!p.c1Applies(i, shiftIdx)) continue
                         val hi = p.rangeHi[i][shiftIdx]
                         if (hi == Int.MAX_VALUE || hi >= minNeeded) continue
                         val name = nameOf(i)
@@ -1948,7 +1948,7 @@ object V6SanityPort {
                 for (c in p.cons1) {
                     val ruleLabel = "${sym(c.shiftIdx)}(${c.day1}日窓≥${c.day2})"
                     for (i in 0 until p.S) {
-                        if (!p.canDo(i, c.shiftIdx)) continue
+                        if (!p.c1Applies(i, c.shiftIdx)) continue
                         var j = 0
                         while (j <= p.T - c.day1) {
                             var z = 0

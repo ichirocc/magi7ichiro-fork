@@ -11,7 +11,7 @@ import kotlin.math.max
  * ②のC1充足は`C1TemporalDp`（既存の月内最適配置DP）を流用したいが、あちらは「対象シフトの
  * 月間回数を厳密保存しつつ限られた移設数で再配置する」ポリッシュ専用（既存回数0=ゼロからの
  * 構築には使えない）。そのため本ファイルに`solveConstructionDp`を新設: 回数保存・移設数上限を
- * 課さず、希望で確定済みの日(forced)だけ固定し、違反窓数(最優先)→対象日数(次点、他制約への
+ * 課さず、希望で確定済みの日(forced)だけ固定し、窓ごとの不足量の和(最優先。c1 の件数と同じ式)→対象日数(次点、他制約への
  * 自由度を残すため最小化)の順で最適な対象/非対象の月内配置をビットマスクDPで直接求める。
  *
  * 生成した解はそのまま`currentSchedule`を置き換える下書き。以降の本最適化(SA/ALNS)や後段研磨は
@@ -64,6 +64,7 @@ object SmartInitialScheduler {
             rulesByShift.getOrPut(c.shiftIdx) { ArrayList() }.add(C1Rule(c.day1, c.day2))
         }
         var c1Filled = 0
+        var c1Skipped = 0
         for (x in rulesByShift.keys.sorted()) {
             val rules = rulesByShift.getValue(x)
             for (i in 0 until p.S) {
@@ -73,7 +74,8 @@ object SmartInitialScheduler {
                     when (schedule[i][j]) { -1 -> if (p.extBanned(i, j, x)) 0 else -1; x -> 1; else -> 0 }
                 }
                 val cap = p.rangeHi[i][x]
-                val targetDays = solveConstructionDp(p.T, rules, forced, cap) ?: continue
+                val targetDays = solveConstructionDp(p.T, rules, forced, cap)
+                if (targetDays == null) { c1Skipped++; continue }
                 for (j in 0 until p.T) {
                     if (targetDays[j] && schedule[i][j] < 0) { schedule[i][j] = x; c1Filled++ }
                 }
@@ -172,7 +174,8 @@ object SmartInitialScheduler {
         val log = MirrorLog(
             tag = "SmartInitial",
             message = "初期解生成: HARD=${report.hard} total=${report.total} " +
-                "希望seed=${wishIn}件/担当外=${wishOut}件 C1充足セル=${c1Filled}件 (${elapsedMs}ms)",
+                "希望seed=${wishIn}件/担当外=${wishOut}件 C1充足セル=${c1Filled}件" +
+                (if (c1Skipped > 0) " C1配置を省いた職員×シフト=${c1Skipped}件（状態数上限・希望で上限超過など）" else "") + " (${elapsedMs}ms)",
         )
         return ScheduleRunResult(schedule, report.copy(logs = listOf(log) + report.logs))
     }
@@ -224,7 +227,7 @@ object SmartInitialScheduler {
      *   C1充足のためだけに個人上限を超えて割り当てない（high超過は初期解では作らず、探索の採否に任せる）。
      *   forced済み(希望由来)の対象日もこの上限に含める＝希望だけで既に上限超過なら
      *   (=既存の別問題)これ以上は増やさずnullで安全側に諦める。
-     * @return 目的= まず違反窓数を最小化、次に対象日数を最小化（他制約(③④⑤)への自由度を残す）、
+     * @return 目的= まず窓ごとの不足量の和（c1 の件数と同じ）を最小化、次に対象日数を最小化（他制約(③④⑤)への自由度を残す）、
      *   同点は対象日のビット列の小さい方で一意に選ぶ（決定的）。
      */
     private fun solveConstructionDp(
