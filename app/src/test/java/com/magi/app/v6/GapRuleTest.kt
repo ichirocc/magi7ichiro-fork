@@ -93,6 +93,18 @@ class GapRuleTest {
         }
     }
 
+    @Test fun csvRoundTripKeepsRows() {
+        val st = randomState(Random(5))
+        val r = ConstraintsCsvIO.parse(ConstraintsCsvIO.build(st), st)!!
+        assertEquals(st.consGap, r.state.consGap)
+        assertEquals(0, r.rejected)
+    }
+
+    @Test fun shiftRenameFollowsRows() {
+        val st = randomState(Random(6))
+        assertEquals(2, Ws1Ops.shiftRefCount(st, "D"))
+    }
+
     @Test fun jsonRoundTripKeepsRows() {
         val st = randomState(Random(3))
         val back = StateParser.parse(StateParser.serialize(st, st.schedule.map { it.toIntArray() }.toTypedArray()))

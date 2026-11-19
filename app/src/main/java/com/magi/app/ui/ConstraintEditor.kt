@@ -275,6 +275,18 @@ private fun ConstraintDialog(
                 InputHint(err ?: DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
+        "consGap" -> {
+            var sk by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
+            var d by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
+            val err = consGapInputError(d, cv.dayCount)
+            val isDup = dup(listOf(sk, d))
+            Shell("シフトの間隔$mode", okLabel, onClose, { commit(listOf(sk, d)) { onEvent(MagiEvent.Constraint.AddConsGap(sk, d)) } },
+                sk.isNotBlank() && d.isNotBlank() && err == null && !isDup, dirty = listOf(sk, d) != remember { listOf(sk, d) }) {
+                Picker("シフト", shifts, sk) { sk = it }
+                NumField("次まで何日以上空ける", d, isError = err != null) { d = it }
+                InputHint(err ?: DUPLICATE_ROW_HINT.takeIf { isDup })
+            }
+        }
         "cons2" -> {
             var sk by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
             var c by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
