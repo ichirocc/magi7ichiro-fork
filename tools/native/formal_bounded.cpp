@@ -1,6 +1,7 @@
 // 有界の全数検証（small-scope）: 小さい問題の「すべての盤面 × すべての 1 マスの書き換え」で実際の C++ コードを走らせ、
 //   ①差分評価（SaChunk::deltaApply、規則ごとの表を使う版）の点数 == 全体評価（fullEvalCombined）
-//   ②（MAGI_WITH_CPSAT のとき）CP-SAT モデルの採点（盤面を固定）== チェッカー同等の fullEvalParts（必須の重み込み・fair を除く）
+//   ②（MAGI_WITH_CPSAT のとき）CP-SAT モデルの採点（盤面を固定）== チェッカー同等の fullEvalParts（必須の重み込み・fair を除く）。
+//     fair 込みの目的の最小（第 2 段の下限）も fullEvalParts（fair 込み）と一致する（盤面を固定すると母集団が決まる）
 //   を確かめる。乱数の試し打ちと違い、範囲内は漏れなく見る。
 //   g++ -O2 -std=c++20 -DMAGI_HOST_TEST -I app/src/main/cpp -I tools/native tools/native/formal_bounded.cpp -o formal_bounded
 //   formal_bounded [configs=200]
@@ -69,7 +70,7 @@ static bool nextBoard(std::vector<int>& b, int lo, int hi) {
 
 int main(int argc, char** argv) {
     const int configs = argc > 1 ? atoi(argv[1]) : 200;
-    long long boards = 0, moves = 0, rollbacks = 0, bad = 0, cpBoards = 0, cpBad = 0, exCases = 0, exBad = 0, exNotMin = 0, coreChecks = 0;
+    long long boards = 0, moves = 0, rollbacks = 0, bad = 0, cpBoards = 0, cpBad = 0, cpFairBad = 0, cpFairBoards = 0, exCases = 0, exBad = 0, exNotMin = 0, coreChecks = 0;
     struct Shape { int S, T, K, G; };
     const Shape shapes[] = {{2, 4, 3, 2}, {3, 3, 3, 2}, {2, 5, 3, 1}};
     for (int c = 0; c < configs; c++) {
@@ -122,6 +123,9 @@ int main(int argc, char** argv) {
                 auto r = magi_cpsat::solve(p, cb, o, hw);
                 cpBoards++;
                 if (r.hard != out[0] || r.weighted != want) { if (cpBad++ < 5) printf("CPSAT MISMATCH config=%d hard %lld/%lld weighted %lld/%lld\n", c, r.hard, out[0], r.weighted, want); }
+                // fair 込みの目的（第 2 段の最小＝下限）: 盤面を固定すると母集団が決まる＝fair もチェッカーと一致する。
+                if (r.weightedBound != out[1] + hw2) { if (cpFairBad++ < 5) printf("CPSAT FAIR MISMATCH config=%d bound %lld actual %lld (fair %lld)\n", c, r.weightedBound, out[1] + hw2, bd[17] * p.w.fair); }
+                if (bd[17] > 0) cpFairBoards++;
             } while (nextBoard(cb, 0, p.K - 1));
         }
         // ③ 必須違反の原因（HardExplainer、小さい形すべて）: 互いに素な核の数 <= 総当たりの必須の最少（手動固定は守る・
@@ -178,7 +182,7 @@ int main(int argc, char** argv) {
         }
 #endif
     }
-    printf("BOUNDED: configs=%d boards=%lld moves=%lld rollbacks=%lld delta-mismatch=%lld | cpsat boards=%lld cpsat-mismatch=%lld | explain cases=%lld cores=%lld mismatch=%lld not-minimal=%lld\n",
-           configs, boards, moves, rollbacks, bad, cpBoards, cpBad, exCases, coreChecks, exBad, exNotMin);
-    return (bad || cpBad || exBad) ? 1 : 0;
+    printf("BOUNDED: configs=%d boards=%lld moves=%lld rollbacks=%lld delta-mismatch=%lld | cpsat boards=%lld cpsat-mismatch=%lld fair-mismatch=%lld (fair>0 の盤面 %lld) | explain cases=%lld cores=%lld mismatch=%lld not-minimal=%lld\n",
+           configs, boards, moves, rollbacks, bad, cpBoards, cpBad, cpFairBad, cpFairBoards, exCases, coreChecks, exBad, exNotMin);
+    return (bad || cpBad || cpFairBad || exBad) ? 1 : 0;
 }

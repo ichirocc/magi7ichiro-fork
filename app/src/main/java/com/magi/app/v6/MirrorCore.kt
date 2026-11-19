@@ -872,6 +872,8 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, members: Boolean = true, count: (Int
 internal class FairScratch(n: Int) {
     val counts = IntArray(n); val mem = IntArray(n); val cnt = IntArray(n)
     val ach = DoubleArray(n); val scale = DoubleArray(n); val order = IntArray(n)
+    /** 達成率を分数 num/den で（偏差の丸めを浮動小数の誤差なしに）。half＝幅が den/2（帯）か den（目安）か。 */
+    val num = LongArray(n); val den = LongArray(n); val half = BooleanArray(n)
 }
 
 /** [fairDevOfBucket] の合計だけを、[sc] の `counts`（`groupMembers[g]` の並びの回数、呼び出し側が書く）から出す。 */
@@ -882,7 +884,7 @@ private fun Problem.fairDevCore(g: Int, k: Int, members: Boolean, sc: FairScratc
     val mem = sc.mem; val cnt = sc.cnt; var n = 0
     for ((pos, x) in all.withIndex()) { val c = sc.counts[pos]; if (mayPlace(x, k) || c > 0) { mem[n] = x; cnt[n] = c; n++ } }
     if (n < 2) return FAIR_ZERO
-    val ach = sc.ach; val scale = sc.scale
+    val ach = sc.ach; val scale = sc.scale; val num = sc.num; val den = sc.den; val half = sc.half
     for (idx in 0 until n) {
         val x = mem[idx]
         val lo = rangeLo[x][k]; val hi = rangeHi[x][k]; val c = cnt[idx]
@@ -891,9 +893,13 @@ private fun Problem.fairDevCore(g: Int, k: Int, members: Boolean, sc: FairScratc
             val e = if (c < lo) lo else if (c > hi) hi else c
             val s = if (hi > lo) (hi - lo) / 2.0 else 0.0
             scale[idx] = s; ach[idx] = if (s > 0.0) (e - (lo + hi) / 2.0) / s else 0.0
+            if (hi > lo) { num[idx] = 2L * e - lo - hi; den[idx] = hi.toLong() - lo } else { num[idx] = 0L; den[idx] = 1L }
+            half[idx] = true
         } else if (apt[x][k] >= 0) {
             val t = apt[x][k]
             scale[idx] = t.toDouble(); ach[idx] = if (t > 0) (c - t).toDouble() / t else 0.0
+            if (t > 0) { num[idx] = (c - t).toLong(); den[idx] = t.toLong() } else { num[idx] = 0L; den[idx] = 1L }
+            half[idx] = false
         } else return legacyFairDevOfBucket(mem, cnt, n, members)
     }
     var w = 0.0
@@ -905,12 +911,18 @@ private fun Problem.fairDevCore(g: Int, k: Int, members: Boolean, sc: FairScratc
     for (x in 1 until n) { val v = order[x]; var y = x - 1
         while (y >= 0 && ach[order[y]].compareTo(ach[v]) > 0) { order[y + 1] = order[y]; y-- }
         order[y + 1] = v }
-    var acc = 0.0; var tgt = ach[order[n - 1]]
-    for (oi in 0 until n) { val idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
+    var acc = 0.0; var t = order[n - 1]
+    for (oi in 0 until n) { val idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { t = idx; break } }
     var total = 0; var worst = 0
     val perMember = if (members) ArrayList<Pair<Int, Int>>() else null
     for (idx in 0 until n) {
-        val dx = Math.round(kotlin.math.abs(ach[idx] - tgt) * scale[idx]).toInt()
+        // round(|達成率−基準|×幅) を分数で（|num/den − N/D|×幅 ＝ a/b、四捨五入＝(2a+b)/(2b)）。浮動小数ではちょうど半分が
+        //   0.4999… になり切り捨てられることがあった（3.727.107、CP-SAT の厳密な式と食い違って下限が実際を上回った）。
+        val dx = if (scale[idx] <= 0.0) 0 else {
+            val a = kotlin.math.abs(num[idx] * den[t] - num[t] * den[idx])
+            val b = if (half[idx]) 2L * den[t] else den[t]
+            ((2L * a + b) / (2L * b)).toInt()
+        }
         total += dx
         if (dx > worst) worst = dx
         if (dx > 0) perMember?.add(mem[idx] to dx)

@@ -67,7 +67,7 @@ object HardCauses {
 
 /**
  * 作成と併走する CP-SAT の 1 回分。[start] で別スレッドに解かせ、[poll] で最良と下限を読み、[finish] で止めて結果を返す。
- * 下限 [weightedBound] は fair を実際の値以下の近似で数えた下限＝チェッカーの weightedScore（fair 込み）以下が常に成り立つ。
+ * 下限 [weightedBound] は fair 込みの下限（fair は実際の値以下で数える）＝チェッカーの weightedScore 以下が常に成り立つ（tools/native/cpsat_bound_check.cpp）。
  */
 class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
     data class Snapshot(
@@ -121,6 +121,23 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
     }
 
     companion object {
+        /** 盤面が CP-SAT の定義域（`magi_cpsat::Model::makeVars` と同じ規則）にあるか＝下限が当てはまるか。手動固定はその値・希望は希望か
+         *  入力 [input] の値・ほかは置ける値か入力の値（どちらも無ければ休）。外れる例: 上限 0 の日に置いた最終段（[DayCapHardRelief]）。 */
+        fun inDomain(p: Problem, input: Array<IntArray>, board: Array<IntArray>): Boolean {
+            for (i in 0 until p.S) for (j in 0 until p.T) {
+                val v = board.getOrNull(i)?.getOrNull(j) ?: return false
+                val h = input.getOrNull(i)?.getOrNull(j) ?: -1
+                if (p.wishLocked(i, j)) {
+                    if (v != p.lockTo(i, j) && (p.pinned(i, j) || v != h || h !in 0 until p.K)) return false
+                    continue
+                }
+                if (v in 0 until p.K && (v == h || p.mayPlaceAt(i, j, v))) continue
+                if (h < 0 && v == (p.restIdx ?: -1) && (0 until p.K).none { p.mayPlaceAt(i, j, it) }) continue
+                return false
+            }
+            return true
+        }
+
         /** ギャップ（実際の最良と下限の差の割合）。下限が無ければ null。 */
         fun gap(bestWeighted: Double, bound: Long): Double? =
             if (bound < 0 || bestWeighted <= 0.0) null else ((bestWeighted - bound) / bestWeighted).coerceAtLeast(0.0)
@@ -140,9 +157,13 @@ object CpsatResolve {
     class Outcome(val board: Array<IntArray>, val parts: Long, val accepted: Long, val optimal: Long, val wallMs: Long)
 
     /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。 */
+    /** 直前の [run] が `stallStopMs` で止まったか（ログ用）。 */
+    @Volatile var stalledOut: Boolean = false
+        private set
+
     /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
-            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, shouldStop: () -> Boolean): Outcome? {
+            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -150,13 +171,23 @@ object CpsatResolve {
         if (job == 0L) { NativeBridge.nativeDestroyProblem(problemHandle); return null }
         val flat = NativeEval.flatten(start)
         var stats: LongArray? = null
+        stalledOut = false
         val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
             .also { it.isDaemon = true; it.start() }
         var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
         val noBoard = IntArray(0)
+        var lastVersion = Long.MIN_VALUE
+        var lastChangeMs = EngineClock.nowMs()
         while (thread.isAlive) {
             if (shouldStop()) CpsatBridge.nativeCpsatStop(job)
             thread.join(200L)
+            // [stallStopMs] 最良が更新されない時間がこれを超えたら止める（0 は止めない）。
+            if (stallStopMs > 0L && thread.isAlive) {
+                val ver = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard).firstOrNull() ?: lastVersion
+                val now = EngineClock.nowMs()
+                if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
+                else if (now - lastChangeMs >= stallStopMs) { stalledOut = true; CpsatBridge.nativeCpsatStop(job) }
+            }
             if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {
                 nextTick += RESOLVE_TICK_MS
                 val v = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard)

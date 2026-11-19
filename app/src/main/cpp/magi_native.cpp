@@ -288,6 +288,7 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
     for (int x : all) if (n < 64 && (p.pl(x, k) || count(x) > 0)) mem[n++] = x;
     if (n < 2) return 0;
     double ach[64], scale[64];
+    long long num[64], den[64]; bool half[64];   // 達成率の分数（偏差の丸めを浮動小数の誤差なしに、Kotlin FairScratch と同じ）
     for (int idx = 0; idx < n; idx++) {
         int x = mem[idx];
         int lo = p.rangeLo[(size_t)x * p.K + k];
@@ -297,6 +298,8 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
             int e = c < lo ? lo : (c > hi ? hi : c);
             double s = hi > lo ? (hi - lo) / 2.0 : 0.0;
             scale[idx] = s; ach[idx] = s > 0.0 ? (e - (lo + hi) / 2.0) / s : 0.0;
+            if (hi > lo) { num[idx] = 2LL * e - lo - hi; den[idx] = (long long)hi - lo; } else { num[idx] = 0; den[idx] = 1; }
+            half[idx] = true;
         } else {
             int t = p.apt[(size_t)x * p.K + k];
             if (t < 0) {
@@ -308,6 +311,8 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
                 return d + worst;
             }
             scale[idx] = (double)t; ach[idx] = t > 0 ? (double)(c - t) / t : 0.0;
+            if (t > 0) { num[idx] = (long long)c - t; den[idx] = t; } else { num[idx] = 0; den[idx] = 1; }
+            half[idx] = false;
         }
     }
     double w = 0.0;
@@ -319,10 +324,19 @@ inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn cou
     for (int x = 1; x < n; x++) { int v = order[x]; int y = x - 1;
         while (y >= 0 && ach[order[y]] > ach[v]) { order[y + 1] = order[y]; y--; }
         order[y + 1] = v; }
-    double acc = 0.0; double tgt = ach[order[n - 1]];
-    for (int oi = 0; oi < n; oi++) { int idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break; } }
+    double acc = 0.0; int t = order[n - 1];
+    for (int oi = 0; oi < n; oi++) { int idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { t = idx; break; } }
     long long total = 0, worst = 0;
-    for (int idx = 0; idx < n; idx++) { const long long dx = jround(std::fabs(ach[idx] - tgt) * scale[idx]); total += dx; if (dx > worst) worst = dx; }
+    for (int idx = 0; idx < n; idx++) {
+        // round(|達成率−基準|×幅) を分数で（Kotlin fairDevCore と同式、3.727.107）。
+        long long dx = 0;
+        if (scale[idx] > 0.0) {
+            const long long a = std::llabs(num[idx] * den[t] - num[t] * den[idx]);
+            const long long b = half[idx] ? 2 * den[t] : den[t];
+            dx = (2 * a + b) / (2 * b);
+        }
+        total += dx; if (dx > worst) worst = dx;
+    }
     // [3.727.77] 偏差の和＋最大の偏差（Kotlin fairDevCore と同式）。
     return total + worst;
 }
