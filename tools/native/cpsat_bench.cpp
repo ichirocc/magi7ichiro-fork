@@ -2,7 +2,7 @@
 //   g++ -O2 -std=c++20 -DMAGI_HOST_TEST -DOR_PROTO_DLL= -I app/src/main/cpp -I tools/native -I <ortools>/include \
 //       tools/native/cpsat_bench.cpp -L<ortools>/lib -lortools -lprotobuf -o cpsat_bench
 //   cpsat_bench <flat> [seconds=30] [workers=4] [priority=1]
-//   CPSAT_IMPROVE=30 cpsat_bench <flat> 0 3   … 一部だけ解き直す（30 秒・3 本）。CPSAT_NOSKIP=1 で証明済みの部分も解き直す（3.727.107 以前）
+//   CPSAT_IMPROVE=30 cpsat_bench <flat> 0 3   … 一部だけ解き直す（30 秒・3 本）。CPSAT_SKIP=1 で証明済みの部分を飛ばす（既定 OFF）
 // ①盤面を固定したモデルの採点が fullEvalParts（fair を除く・必須の重み込み）と一致するか ②下限・解・ギャップ。
 #define main parity_main
 #include "host_parity_bench.cpp"
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     long long h0, w0, f0; evalW(board, h0, w0, f0);
     // CPSAT_IMPROVE=<秒>: 入力の盤面の一部だけを解き直す（magi_cpsat::improve、workers 本を 1 スレッドずつ）。これだけを走らせて終わる。
     if (const char* imp = getenv("CPSAT_IMPROVE")) {
-        magi_cpsat::ImproveOptions io; io.maxSeconds = atof(imp); io.threads = workers; io.skipProven = getenv("CPSAT_NOSKIP") == nullptr;
+        magi_cpsat::ImproveOptions io; io.maxSeconds = atof(imp); io.threads = workers; io.skipProven = getenv("CPSAT_SKIP") != nullptr;
         if (const char* sd = getenv("CPSAT_SEED")) io.randomSeed = atoll(sd);
         auto r = magi_cpsat::improve(p, board, io, hw);
         long long h1, w1, f1; evalW(r.board, h1, w1, f1);

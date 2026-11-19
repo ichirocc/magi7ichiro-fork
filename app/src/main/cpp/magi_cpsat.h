@@ -763,7 +763,7 @@ struct ImproveOptions {
     // 最良が更新されるたびに呼ぶ（盤面・必須の件数・重み付き）。ロックの中から呼ぶ＝短く。
     std::function<void(const std::vector<int>&, long long, long long)> onBest;
     // 同じ盤面で最適と証明済みの部分（自由にするマスの組）を解き直さない（解き直しても改善は出ない）。浮いた時間で別の部分を解く。
-    bool skipProven = true;
+    bool skipProven = false;
 };
 
 namespace improve_detail {

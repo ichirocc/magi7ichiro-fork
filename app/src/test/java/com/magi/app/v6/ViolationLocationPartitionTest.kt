@@ -23,7 +23,7 @@ class ViolationLocationPartitionTest {
         assertEquals(MirrorKeys.all.size, parts.sumOf { it.size })
         assertEquals(MirrorKeys.all.toSet(), parts.flatten().toSet())
         assertEquals(6, MirrorKeys.hard.size)
-        assertEquals(15, MirrorKeys.soft.size)
+        assertEquals(16, MirrorKeys.soft.size)
     }
 
     @Test fun everyHardFamilyIsShownOnTheCellSheet() {
