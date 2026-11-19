@@ -117,6 +117,7 @@ internal sealed interface MagiEvent {
         data class AddCons2(val shiftKigou: String, val count: String) : Constraint
         data class AddCons3(val family: String, val pattern: List<String>) : Constraint
         data class AddCons3w(val wishKigou: String, val prevKigou: String) : Constraint
+        data class AddConsGap(val shiftKigou: String, val days: String) : Constraint
         data class AddCons41(val groupKigou: String, val shiftKigou: String, val l: String, val u: String) : Constraint
         data class AddCons41s(val groupKigou: String, val shiftKigou: String, val l: String, val u: String) : Constraint
         data class AddCons42(val g1: String, val g2: String, val s1: String, val s2: String) : Constraint

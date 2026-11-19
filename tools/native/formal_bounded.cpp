@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
             magi_cpsat::HardW hw;
             std::vector<int> cb(n, 0);
             do {
-                long long out[2], bd[21]; fullEvalParts(p, cb.data(), out, bd);
+                long long out[2], bd[kBreakdownCount]; fullEvalParts(p, cb.data(), out, bd);
                 const long long hw2 = bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish;
                 const long long want = out[1] - bd[17] * p.w.fair + hw2;
                 magi_cpsat::Options o; o.fixToHint = true; o.workers = 1; o.maxSeconds = 5;
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
                     ok = inDom;
                 }
                 if (!ok) continue;
-                long long out[2], bd[21]; fullEvalParts(p, cb.data(), out, bd);
+                long long out[2], bd[kBreakdownCount]; fullEvalParts(p, cb.data(), out, bd);
                 minHard = std::min(minHard, out[0]);
             } while (nextBoard(cb, 0, p.K - 1));
             magi_cpsat::HardExplainer ex(p, input);

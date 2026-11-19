@@ -68,6 +68,10 @@ object StateFingerprint {
         if (st.manualPins.isNotEmpty()) {
             mix(6); for (m in st.manualPins.sortedWith(compareBy({ it.staff }, { it.day }))) { mix(m.staff.toLong()); mix(m.day.toLong()); mix(m.shift.toLong()) }
         }
+        // シフトの間隔。無いときは混ぜない（行の無いデータの指紋は従来と同じ値）。
+        if (st.consGap.isNotEmpty()) {
+            mix(12); for (c in st.consGap) { txt(c.shiftKigou); txt(c.days) }
+        }
         // 拡張希望（最適化器の候補を変える）。無いときは混ぜない。
         if (st.extWishes.isNotEmpty()) {
             mix(11); for (e in st.extWishes) { mix(e.staff.toLong()); for (d in e.days) txt(d); mix(ROW); for (k in e.shifts) txt(k); mix(ROW) }

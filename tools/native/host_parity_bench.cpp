@@ -104,6 +104,8 @@ static bool loadFlat(const char* path, MagiProblem& p, std::vector<int>& board) 
     n = rd(); for (int c = 0; c < n; c++) { int g = rd(), s = rd(), l = rd(), u = rd(); p.cons41s.push_back({g, s, l, u}); }
     n = rd(); for (int c = 0; c < n; c++) { int g1 = rd(), s1 = rd(), g2 = rd(), s2 = rd(); p.cons42s.push_back({g1, s1, g2, s2}); }
     n = rd(); for (int c = 0; c < n; c++) { int x = rd(), y = rd(); p.cons3w.push_back({x, y}); }
+    // シフトの間隔 [n,(si,days)*]（3.727.109。古いファイルには無い）。
+    if (ix < cons.size()) { n = rd(); for (int c = 0; c < n; c++) { int si = rd(), d = rd(); p.consGap.push_back({si, d}); } }
     size_t cx = 0;
     auto rdc = [&]() { return c3[cx++]; };
     for (std::vector<C3r>* fam : {&p.cons3, &p.cons3n, &p.cons3m, &p.cons3mn}) {
@@ -201,6 +203,7 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
     for (int c = 0; c < ri(1, 2); c++) p.cons3mn.push_back(mkC3({ri(1, K - 1), 0}));
     // [3.542.0] 希望の前日に禁止: 希望に多いシフトを起点に 1〜3 行（wish は上で ~10% 埋め済み＝実際に ban セルが生える）。
     for (int c = 0; c < ri(1, 3); c++) p.cons3w.push_back({ri(0, K - 1), ri(0, K - 1)});
+    for (int c = 0; c < ri(0, 2); c++) p.consGap.push_back({ri(0, K - 1), ri(2, 7)});
     // [c3 窓マッチのビット化(3.174.0)を明示的に踏む] 多シフト D>=3 の非forbidden/forbidden を追加。
     //   これらは singleRun=false の窓マッチ経路＝新しい popcount パスの主対象。
     if (K >= 4) {

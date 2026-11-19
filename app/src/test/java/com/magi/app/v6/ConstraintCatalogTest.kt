@@ -6,10 +6,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** T-11: 族の表の 21 件が MirrorKeys（族・必須・重み）と一致し、位置の空間がチェッカーの記録先と一致する。 */
+/** T-11: 族の表の 22 件が MirrorKeys（族・必須・重み）と一致し、位置の空間がチェッカーの記録先と一致する。 */
 class ConstraintCatalogTest {
     @Test fun catalogMatchesMirrorKeys() {
-        assertEquals(21, ConstraintCatalog.all.size)
+        assertEquals(22, ConstraintCatalog.all.size)
         assertEquals(MirrorKeys.all, ConstraintCatalog.all.map { it.key })
         assertEquals(MirrorKeys.hard.toSet(), ConstraintCatalog.all.filter { it.hard }.map { it.key }.toSet())
         assertEquals(MirrorKeys.weights.keys, ConstraintCatalog.all.map { it.key }.toSet())

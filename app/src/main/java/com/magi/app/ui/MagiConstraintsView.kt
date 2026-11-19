@@ -61,6 +61,16 @@ internal fun cons1InputError(d1: String, d2: String, dayCount: Int): String? {
     }
 }
 
+/** シフトの間隔の日数。かたまりどうしは必ず 2 日以上離れる（間に 1 日以上ある）ので、2 以下は必ず満たされて意味が無い。 */
+internal fun consGapInputError(days: String, dayCount: Int = 0): String? =
+    days.trim().toIntOrNull()?.let {
+        when {
+            it < 3 -> "日数は 3 以上で入れてください（2 以下はいつも満たされます）"
+            dayCount in 1 until it -> "日数は 3〜$dayCount で入れてください（勤務表は $dayCount 日です）"
+            else -> null
+        }
+    }
+
 internal fun cons2InputError(count: String, dayCount: Int = 0): String? =
     count.trim().toIntOrNull()?.let {
         when {
@@ -153,6 +163,8 @@ internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
         families = listOf(
             ConstraintFamilyView("cons1", "期間の制約（○日間で○回など）",
                 st.cons1.map { "${it.shiftKigou}：${it.day1}日で${it.day2}回以上" }),
+            ConstraintFamilyView("consGap", "シフトの間隔（次まで○日以上空ける）",
+                st.consGap.map { "${it.shiftKigou}：次まで${it.days}日以上空ける" }),
             ConstraintFamilyView("cons2", "個人の合計（回数）",
                 st.cons2.map { "${it.shiftKigou}：合計${it.count}回以上" }),
             ConstraintFamilyView("cons3", "守るとよい並び", st.cons3.map { seq(it.pattern) }),
@@ -183,6 +195,7 @@ internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
             "cons3m" to st.cons3m.map { it.pattern },
             "cons3mn" to st.cons3mn.map { it.pattern },
             "cons3w" to st.cons3w.map { listOf(it.wishKigou, it.prevKigou) },
+            "consGap" to st.consGap.map { listOf(it.shiftKigou, it.days) },
             "cons41" to st.cons41.map { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) },
             "cons41s" to st.cons41s.map { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) },
             "cons42" to st.cons42.map { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) },

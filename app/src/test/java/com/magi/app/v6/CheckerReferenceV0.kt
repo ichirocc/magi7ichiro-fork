@@ -25,7 +25,7 @@ internal object CheckerReferenceV0 {
         "low" to "vio-low", "high" to "vio-high", "groupViol" to "vio-groupViol",
         // 適切回数(双方向目標): 不足=赤 / 超過=橙（range と同色だが家族は別。TallyCard/内訳で個別解決可能にする）。
         "aptLow" to "vio-aptLow", "aptHigh" to "vio-aptHigh",
-        "extWish" to "vio-extWish",
+        "extWish" to "vio-extWish", "gap" to "vio-gap",
     )
 
     fun check(
@@ -215,6 +215,12 @@ internal object CheckerReferenceV0 {
         // [3.653.0] 族の追加は高速化と別の意味の変更＝新旧の両方へ同じ位置で入れる（比較の対象は高速化だけ）。
         if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
             if (p.extWishBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
+        }
+        // [3.727.109] シフトの間隔も同じ位置で新旧の両方へ。
+        for (c in p.consGap) for (i in 0 until p.S) {
+            if (!p.c1Applies(i, c.shiftIdx)) continue
+            val d = GapRule.deficit(s[i], c.shiftIdx, c.days)
+            if (d > 0) { inc("gap", d); GapRule.violatingStarts(s[i], c.shiftIdx, c.days) { j -> mark(i, j, "gap") } }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

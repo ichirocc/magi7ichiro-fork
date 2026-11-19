@@ -87,6 +87,7 @@ class StateFingerprintTest {
         "スキル群ペア禁止" to b.copy(cons42s = listOf(C42Row("S", "S", "休", "A"))),
         "希望の前日に禁止" to b.copy(cons3w = listOf(C3wRow("休", "A"))),
         "手動固定" to b.copy(manualPins = listOf(com.magi.app.model.ManualPin(0, 0, 0))),
+        "シフトの間隔" to b.copy(consGap = listOf(com.magi.app.model.GapRow("A", "5"))),
         "拡張希望" to b.copy(extWishes = listOf(com.magi.app.model.ExtWish(0, listOf("0"), listOf("A")))),
     )
 
@@ -102,7 +103,7 @@ class StateFingerprintTest {
         )
         val covered = setOf("startDate", "endDate", "shifts", "groups", "staff", "use2Patterns", "groupShift", "groupShiftApt", "wishes",
             "staffRange", "needDay1", "needDay2", "cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons41", "cons42", "skillGroups",
-            "cons41s", "cons42s", "cons3w", "manualPins", "extWishes")
+            "cons41s", "cons42s", "cons3w", "consGap", "manualPins", "extWishes")
         val fields = com.magi.app.model.MagiState::class.java.declaredFields
             .filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) }.map { it.name }.toSet()
         assertEquals(emptySet<String>(), fields - covered - notInFingerprint)

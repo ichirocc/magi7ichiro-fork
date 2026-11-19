@@ -100,6 +100,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Constraint.AddCons2 -> vm.addCons2(e.shiftKigou, e.count)
             is MagiEvent.Constraint.AddCons3 -> vm.addCons3(e.family, e.pattern)
             is MagiEvent.Constraint.AddCons3w -> vm.addCons3w(e.wishKigou, e.prevKigou)
+            is MagiEvent.Constraint.AddConsGap -> vm.addConsGap(e.shiftKigou, e.days)
             is MagiEvent.Constraint.AddCons41 -> vm.addCons41(e.groupKigou, e.shiftKigou, e.l, e.u)
             is MagiEvent.Constraint.AddCons41s -> vm.addCons41s(e.groupKigou, e.shiftKigou, e.l, e.u)
             is MagiEvent.Constraint.AddCons42 -> vm.addCons42(e.g1, e.g2, e.s1, e.s2)

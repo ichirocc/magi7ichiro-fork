@@ -2,7 +2,7 @@
 //   g++ -O2 -std=c++20 -DMAGI_HOST_TEST -DOR_PROTO_DLL= -I app/src/main/cpp -I tools/native -I <ortools>/include \
 //       tools/native/cpsat_bench.cpp -L<ortools>/lib -lortools -lprotobuf -o cpsat_bench
 //   cpsat_bench <flat> [seconds=30] [workers=4] [priority=1]
-//   CPSAT_IMPROVE=30 cpsat_bench <flat> 0 3   … 一部だけ解き直す（30 秒・3 本）
+//   CPSAT_IMPROVE=30 cpsat_bench <flat> 0 3   … 一部だけ解き直す（30 秒・3 本）。CPSAT_SKIP=1 で証明済みの部分を飛ばす（既定 OFF）
 // ①盤面を固定したモデルの採点が fullEvalParts（fair を除く・必須の重み込み）と一致するか ②下限・解・ギャップ。
 #define main parity_main
 #include "host_parity_bench.cpp"
@@ -11,7 +11,7 @@
 
 static void setPriority(MagiProblem& p) {   // Kotlin ObjectiveWeights の優先順位（T1 200 / T2 20 / T3 1・fair 50・c2 20・apt 20）
     p.w.low = p.w.c1 = p.w.high = p.w.c3mn = 200;
-    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = 20;
+    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = p.w.gap = 20;
     p.w.weekly = 1; p.w.covO = p.w.fair = 50; p.w.apt = p.w.c2 = 20;
 }
 
@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     if (argc <= 4 || atoi(argv[4]) == 1) setPriority(p);
     magi_cpsat::HardW hw;
     auto evalW = [&](const std::vector<int>& b, long long& hard, long long& wNoFair, long long& fairW) {
-        long long out[2], bd[21]; fullEvalParts(p, b.data(), out, bd);
+        long long out[2], bd[kBreakdownCount]; fullEvalParts(p, b.data(), out, bd);
         hard = out[0];
         long long hw2 = bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish;
         fairW = bd[17] * p.w.fair;
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     long long h0, w0, f0; evalW(board, h0, w0, f0);
     // CPSAT_IMPROVE=<秒>: 入力の盤面の一部だけを解き直す（magi_cpsat::improve、workers 本を 1 スレッドずつ）。これだけを走らせて終わる。
     if (const char* imp = getenv("CPSAT_IMPROVE")) {
-        magi_cpsat::ImproveOptions io; io.maxSeconds = atof(imp); io.threads = workers;
+        magi_cpsat::ImproveOptions io; io.maxSeconds = atof(imp); io.threads = workers; io.skipProven = getenv("CPSAT_SKIP") != nullptr;
         if (const char* sd = getenv("CPSAT_SEED")) io.randomSeed = atoll(sd);
         auto r = magi_cpsat::improve(p, board, io, hw);
         long long h1, w1, f1; evalW(r.board, h1, w1, f1);
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
            r.status, r.wallSeconds, r.hard, r.hardBound, (int)r.hardProven, r.weighted, r.weightedBound, h1, w1, f1, w0, f0);
     if (!r.board.empty() && (h1 != r.hard || w1 != r.weighted)) {
         // 族ごとに盤面を固定したモデルとエンジンの内訳を比べる（不一致の切り分け）。
-        long long out[2], bd[21]; fullEvalParts(p, r.board.data(), out, bd);
+        long long out[2], bd[kBreakdownCount]; fullEvalParts(p, r.board.data(), out, bd);
         const char* names[9] = {"c1", "c2", "c41/c41s", "c42/c42s", "c3 族", "セル(pref/groupViol/c3w/ext)", "low/high/apt", "weekly", "covU/covO"};
         long long eng[9] = {bd[0] * p.w.c1, bd[1] * p.w.c2, bd[6] * p.w.c41 + bd[8] * p.w.c41s, bd[7] * p.w.c42 + bd[9] * p.w.c42s,
             bd[2] * p.w.c3 + bd[3] * hw.c3n + bd[4] * p.w.c3m + bd[5] * p.w.c3mn,
@@ -68,6 +68,12 @@ int main(int argc, char** argv) {
             magi_cpsat::Options fo; fo.fixToHint = true; fo.workers = 1; fo.maxSeconds = 20; fo.families = 1u << fam;
             auto rr = magi_cpsat::solve(p, r.board, fo, hw);
             printf("  FAMILY %-28s model=%lld engine=%lld %s\n", names[fam], rr.weighted, eng[fam], rr.weighted == eng[fam] ? "" : "<-- MISMATCH");
+        }
+        {
+            magi_cpsat::Options fo; fo.fixToHint = true; fo.workers = 1; fo.maxSeconds = 20; fo.families = 1024u;
+            auto rr = magi_cpsat::solve(p, r.board, fo, hw);
+            const long long eg = bd[21] * p.w.gap;
+            printf("  FAMILY %-28s model=%lld engine=%lld %s\n", "gap", rr.weighted, eg, rr.weighted == eg ? "" : "<-- MISMATCH");
         }
     }
     if (r.weightedBound >= 0) {

@@ -85,6 +85,7 @@ object Ws1Ops {
             cons42 = s.cons42.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
             cons42s = s.cons42s.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
             cons3w = s.cons3w.map { it.copy(wishKigou = if (it.wishKigou == old) new else it.wishKigou, prevKigou = if (it.prevKigou == old) new else it.prevKigou) },
+            consGap = s.consGap.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
             // 拡張希望も記号で参照する（禁止シフトの集合）。
             extWishes = s.extWishes.map { e -> e.copy(shifts = e.shifts.map { if (it == old) new else it }.distinct()) },
         )
@@ -235,6 +236,7 @@ object Ws1Ops {
         n += state.cons41s.count { it.shiftKigou == kigou }
         n += state.cons42s.count { it.s1Kigou == kigou || it.s2Kigou == kigou }
         n += state.cons3w.count { it.wishKigou == kigou || it.prevKigou == kigou }
+        n += state.consGap.count { it.shiftKigou == kigou }
         return n
     }
 

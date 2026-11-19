@@ -69,6 +69,6 @@ class CheckerReportDigestTest {
     }
 
     private companion object {
-        const val EXPECTED = "d7c8c8c8caa2238195505d5cd34b5877e34737cba4075a9b48f4fa6e0b6ff9a4"   // [3.727.79] c1＝窓の不足量、[3.727.77] fair＝偏差の和＋最大、 [2026-10-26] c1 50→90・c3mn 90→50、[2026-10-30] high 25→50・c3mn 50→25
+        const val EXPECTED = "35fa7668fcdfdcfdc1a3d5213b36f060ccbd7be3313ee5737ecd20c6a575b2b4"   // [3.727.109] 族 gap を追加（内訳に gap=0）、[3.727.79] c1＝窓の不足量、[3.727.77] fair＝偏差の和＋最大、 [2026-10-26] c1 50→90・c3mn 90→50、[2026-10-30] high 25→50・c3mn 50→25
     }
 }

@@ -274,6 +274,19 @@ def main():
     cons.append(len(c3w))
     for r in c3w:
         cons.extend(r)
+    # [3.727.109] consGap: [n, (si, days)*]（Problem.consGap: 記号が解決でき日数が正の行だけ）
+    gap = []
+    for c in st.get("consGap", []):
+        si = shift_idx(c.get("shiftKigou", ""))
+        try:
+            d = int(str(c.get("days", "")).strip())
+        except ValueError:
+            d = 0
+        if si >= 0 and d > 0:
+            gap.append((si, d))
+    cons.append(len(gap))
+    for r in gap:
+        cons.extend(r)
 
     # c3 blob: 各族 count, (len, seq...)*
     def resolve_c3(rows):

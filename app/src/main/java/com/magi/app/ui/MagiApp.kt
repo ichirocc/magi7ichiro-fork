@@ -991,7 +991,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     // [3.427.0] 旧 SectionNote（窓の要件／個人の合計／並び4種の列挙）は撤去:
                                     //   ④と同じく直下のカード・族見出しの完全な重複だった。
                                     ConstraintsCard(ui, constraintsView, onEvent, title = "",
-                                        keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w"))
+                                        keys = setOf("cons1", "consGap", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w"))
                                 }
                             }
                         }

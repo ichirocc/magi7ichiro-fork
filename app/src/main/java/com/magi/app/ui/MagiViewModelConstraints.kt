@@ -6,6 +6,7 @@ import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
 import com.magi.app.model.C3wRow
+import com.magi.app.model.GapRow
 import kotlinx.coroutines.flow.update
 
 /**
@@ -90,6 +91,12 @@ fun MagiViewModel.addCons3w(wishKigou: String, prevKigou: String) {
     logOp("I", "制約追加(希望前日禁止): ${wishKigou} の希望の前日は ${prevKigou} 禁止"); mutateConstraints(st.copy(cons3w = st.cons3w + C3wRow(wishKigou, prevKigou)))
 }
 
+fun MagiViewModel.addConsGap(shiftKigou: String, days: String) {
+    val st = state ?: return
+    if (rowAlreadyExists("consGap", listOf(shiftKigou, days))) return
+    logOp("I", "制約追加(シフトの間隔): $shiftKigou は次まで${days.trim()}日以上空ける"); mutateConstraints(st.copy(consGap = st.consGap + GapRow(shiftKigou, days.trim())))
+}
+
 /**
  * [3.482.0 入口ガード] 同じ並びが既に登録されていれば、その族の日本語名を返す（無ければ null）。
  * 旧: 追加/変更のどちらにも重複検出が無く、見本データの `Dﾃ→A4` が禁止の並びに2行入ったまま
@@ -144,7 +151,7 @@ private fun seqDuplicateMessage(family: String, pat: List<String>, dupFam: Strin
 }
 
 /** 変更時に値の重複を止める族（追加は各 addConsX が止める・並び4族は [seqDuplicateOf]）。 */
-private val DUP_GUARDED = setOf("cons1", "cons2", "cons41", "cons41s", "cons42", "cons42s", "cons3w")
+private val DUP_GUARDED = setOf("cons1", "cons2", "cons41", "cons41s", "cons42", "cons42s", "cons3w", "consGap")
 
 fun MagiViewModel.removeConstraint(family: String, index: Int) {
     val st = state ?: return
@@ -164,6 +171,7 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
         "cons41s" -> st.cons41s.size
         "cons42s" -> st.cons42s.size
         "cons3w" -> st.cons3w.size
+        "consGap" -> st.consGap.size
         else -> return
     }
     if (index !in 0 until size) {
@@ -188,6 +196,7 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
             "cons41s" -> st.copy(cons41s = st.cons41s.without(index))
             "cons42s" -> st.copy(cons42s = st.cons42s.without(index))
             "cons3w" -> st.copy(cons3w = st.cons3w.without(index))
+            "consGap" -> st.copy(consGap = st.consGap.without(index))
             else -> return
         },
         notice,
@@ -214,6 +223,7 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
         "cons42" -> { if (index !in st.cons42.indices) return; st.copy(cons42 = st.cons42.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
         "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
         "cons3w" -> { if (index !in st.cons3w.indices) return; st.copy(cons3w = st.cons3w.replaced(index, C3wRow(g(0), g(1)))) }
+        "consGap" -> { if (index !in st.consGap.indices) return; st.copy(consGap = st.consGap.replaced(index, GapRow(g(0), g(1)))) }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
             if (seqGapRejected(family, v, update = true)) return
             val pat = v.takeWhile { it.isNotEmpty() }.take(5)

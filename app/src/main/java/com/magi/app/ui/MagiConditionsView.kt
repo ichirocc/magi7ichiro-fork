@@ -105,7 +105,7 @@ internal fun conditionsViewOf(st: MagiState?, p: Problem?): ConditionsView {
     }
     val cons = st.cons1.size + st.cons2.size + st.cons3.size + st.cons3n.size +
         st.cons3m.size + st.cons3mn.size + st.cons41.size + st.cons42.size + st.cons3w.size +
-        st.cons41s.size + st.cons42s.size
+        st.cons41s.size + st.cons42s.size + st.consGap.size
     return ConditionsView(
         shiftKigou = st.shifts.map { it.kigou },
         restIdx = com.magi.app.v6.restShiftIndex(st) ?: -1,  // [3.603.0] 休が無い設定はどのシフトにも一致しない番兵

@@ -68,7 +68,7 @@ class MagiConstraintsViewTest {
         val st = load("/golden_state.json")
         val cv = constraintsViewOf(st)
         assertEquals(
-            listOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w", "cons41", "cons42"),
+            listOf("cons1", "consGap", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w", "cons41", "cons42"),
             cv.families.map { it.key },
         )
         assertEquals(listOf("cons41s", "cons42s"), cv.skillFamilies.map { it.key })

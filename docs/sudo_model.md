@@ -298,6 +298,7 @@ classDiagram
   MagiState "1" *-- "0..*" C2Row : cons2
   MagiState "1" *-- "0..*" C3Row : cons3/cons3n/cons3m/cons3mn（4本）
   MagiState "1" *-- "0..*" C3wRow : cons3w（希望の前日に禁止・HARD）
+  MagiState "1" *-- "0..*" GapRow : consGap（シフトの間隔・SOFT）
   MagiState "1" *-- "0..*" C41Row : cons41 / cons41s
   MagiState "1" *-- "0..*" C42Row : cons42 / cons42s
   Staff ..> Group : groupIdx → groups[g]

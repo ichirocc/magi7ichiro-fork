@@ -13,7 +13,7 @@ static void setPriority(MagiProblem& p) {
 }
 static HardW hw;
 static long long checkW(const MagiProblem& p, const std::vector<int>& b, long long& hard, long long& fairW) {
-    long long out[2], bd[21]; fullEvalParts(p, b.data(), out, bd); hard = out[0];
+    long long out[2], bd[kBreakdownCount]; fullEvalParts(p, b.data(), out, bd); hard = out[0];
     long long h = bd[15]*hw.groupViol + bd[10]*hw.covU + bd[3]*hw.c3n + bd[19]*hw.c3w + bd[12]*hw.pref + bd[20]*hw.extWish;
     fairW = bd[17]*p.w.fair; return out[1] + h;   // チェッカーの weightedScore（fair 込み）
 }

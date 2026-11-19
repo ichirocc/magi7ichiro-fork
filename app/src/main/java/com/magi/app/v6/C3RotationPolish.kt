@@ -321,8 +321,10 @@ internal object C3RotationPolish {
             if (p.c3wBanned(i, j, sched[i][j])) c3wC++
             if (p.hasExtBan && p.extWishBanned(i, j, sched[i][j])) extC++
         }
-        total += c3nC + c3C + c3mC + c3mnC + c3wC + extC
-        weighted += c3wC.toDouble() * ObjectiveWeights.of("c3w") + extC.toDouble() * ObjectiveWeights.of("extWish") +
+        var gapC = 0                                              // シフトの間隔（行だけで決まる SOFT）
+        for (c in p.consGap) if (p.c1Applies(i, c.shiftIdx)) gapC += GapRule.deficit(sched[i], c.shiftIdx, c.days)
+        total += c3nC + c3C + c3mC + c3mnC + c3wC + extC + gapC
+        weighted += gapC.toDouble() * ObjectiveWeights.of("gap") + c3wC.toDouble() * ObjectiveWeights.of("c3w") + extC.toDouble() * ObjectiveWeights.of("extWish") +
             c3nC.toDouble() * ObjectiveWeights.of("c3n") +
             c3C.toDouble() * ObjectiveWeights.of("c3") +
             c3mC.toDouble() * ObjectiveWeights.of("c3m") +

@@ -200,6 +200,13 @@ class Evaluator(private val p: Problem) {
             hard1 += raw; record("extWish", raw)
         }
 
+        // シフトの間隔（SOFT）。チェッカーと同じく担当でき個人上限が 0 でない職員だけ（[Problem.c1Applies]）。
+        if (p.consGap.isNotEmpty()) {
+            var raw = 0L
+            for (c in p.consGap) for (i in 0 until S) if (p.c1Applies(i, c.shiftIdx)) raw += GapRule.deficit(a[i], c.shiftIdx, c.days)
+            soft += raw * w.gap; record("gap", raw)
+        }
+
         // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low/high)・
         // 同じガード(lo!=0, low は canDo 必須)。旧実装は hard2(=表示HARD) として +1 計上していた。
         val ssn = Array(S) { IntArray(K) }

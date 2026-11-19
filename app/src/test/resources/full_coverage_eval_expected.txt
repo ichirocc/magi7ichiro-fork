@@ -1,5 +1,5 @@
 hard=29
-soft=6372
+soft=7137
 c1=41
 c2=3
 c3=18
@@ -21,3 +21,4 @@ fair=94
 weekly=10
 c3w=1
 extWish=1
+gap=51

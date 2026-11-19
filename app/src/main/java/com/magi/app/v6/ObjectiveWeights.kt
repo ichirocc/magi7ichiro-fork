@@ -45,9 +45,9 @@ object ObjectiveWeights {
         @JvmField val c41 = w("c41"); @JvmField val c42 = w("c42"); @JvmField val c41s = w("c41s"); @JvmField val c42s = w("c42s")
         @JvmField val covO = w("covO"); @JvmField val low = w("low"); @JvmField val high = w("high")
         @JvmField val apt = w("apt"); @JvmField val fair = w("fair"); @JvmField val weekly = w("weekly")
-        @JvmField val covU = w("covU")
+        @JvmField val covU = w("covU"); @JvmField val gap = w("gap")
         /** C++ へ渡す並び（`magi_native.cpp` の `SoftW` と同じ順）。 */
-        fun toLongArray(): LongArray = longArrayOf(c1, c2, c3, c3m, c3mn, c41, c42, c41s, c42s, covO, low, high, apt, fair, weekly, covU)
+        fun toLongArray(): LongArray = longArrayOf(c1, c2, c3, c3m, c3mn, c41, c42, c41s, c42s, covO, low, high, apt, fair, weekly, covU, gap)
     }
 
     private val softWeights = Soft(MirrorKeys.weights)
