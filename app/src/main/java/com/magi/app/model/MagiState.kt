@@ -65,6 +65,8 @@ data class C42Row(val g1Kigou: String, val g2Kigou: String, val s1Kigou: String,
 data class ManualPin(val staff: Int, val day: Int, val shift: Int)
 /** 希望(ws3)で固定した [wishKigou] の前日に [prevKigou] を置けない（3.542.0）。素の連続禁止は cons3n。 */
 data class C3wRow(val wishKigou: String, val prevKigou: String)
+/** シフトの間隔: [shiftKigou] のまとまり（続く日をひとかたまり）の最後の日から次のまとまりの最初の日まで [days] 日以上空ける。 */
+data class GapRow(val shiftKigou: String, val days: String)
 
 /** 拡張希望の 1 件: [days]（"yyyy-MM-dd"）の各日、[staff] を [shifts]（記号）以外にする。基本希望の否定形で、セルは固定しない。 */
 data class ExtWish(val staff: Int, val days: List<String>, val shifts: List<String>)
@@ -99,6 +101,8 @@ data class MagiState(
     val cons42s: List<C42Row> = emptyList(),
     /** 希望の前日に禁止（HARD、c3n と同格）。希望で固定された wishKigou の前日セルが prevKigou なら違反。 */
     val cons3w: List<C3wRow> = emptyList(),
+    /** シフトの間隔（SOFT、件数＝足りない日数）。 */
+    val consGap: List<GapRow> = emptyList(),
     /** [#41] 手動固定（1 セル 1 件）。採点・希望の意味は変えない。 */
     val manualPins: List<ManualPin> = emptyList(),
     /** 拡張希望（職員×日の集合×禁止シフトの集合）。違反は必須の族 extWish（重み 8000、3.653.0）。 */

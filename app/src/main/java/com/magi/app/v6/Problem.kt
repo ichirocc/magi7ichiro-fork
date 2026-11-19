@@ -10,6 +10,8 @@ class C41(@JvmField val groupIdx: Int, @JvmField val shiftIdx: Int, @JvmField va
 class C42(@JvmField val g1: Int, @JvmField val s1: Int, @JvmField val g2: Int, @JvmField val s2: Int)
 /** 希望で固定した [wishIdx] の前日に [prevIdx] を禁止（cons3w, HARD）。 */
 class C3w(@JvmField val wishIdx: Int, @JvmField val prevIdx: Int)
+/** シフトの間隔: [shiftIdx] のかたまりどうしを [days] 日以上空ける（consGap, SOFT、[GapRule]）。 */
+class Gap(@JvmField val shiftIdx: Int, @JvmField val days: Int)
 
 /**
  * Immutable, index-resolved view of a [MagiState] ready for fast evaluation.
@@ -174,6 +176,7 @@ class Problem(val state: MagiState) {
     val cons41s: List<C41>
     val cons42s: List<C42>
     val cons3w: List<C3w>
+    val consGap: List<Gap>
     /** [3.542.0] c3wBan[i][j][k] = 翌日 j+1 が希望固定（wishFixed）の X で、cons3w に (X→k) がある＝セル (i,j) に k を置くと違反。
      *  希望は探索中に動かないので盤面非依存の静的表。cons3w が空なら null（評価・Δの分岐を無料にする）。 */
     val c3wBan: Array<Array<BooleanArray>>?
@@ -278,6 +281,12 @@ class Problem(val state: MagiState) {
             val x = shiftIdxOf(it.wishKigou); val y = shiftIdxOf(it.prevKigou)
             if (x >= 0 && y >= 0) C3w(x, y)
             else { _unresolvedRows.add("希望の前日に禁止" to "${mark(it.wishKigou, x >= 0)} の希望の前日は ${mark(it.prevKigou, y >= 0)}"); null }
+        }
+        consGap = state.consGap.mapNotNull {
+            val si = shiftIdxOf(it.shiftKigou)
+            val d = it.days.trim().toIntOrNull() ?: 0
+            if (si >= 0 && d > 0) Gap(si, d)
+            else { _unresolvedRows.add("シフトの間隔" to "${mark(it.shiftKigou, si >= 0)} は次まで${it.days}日以上空ける"); null }
         }
         c3wBan = if (cons3w.isEmpty()) null else Array(S) { i ->
             Array(T) { j ->

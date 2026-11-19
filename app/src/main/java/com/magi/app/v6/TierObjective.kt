@@ -15,7 +15,7 @@ object TierObjective {
     val tiers: List<List<String>> = listOf(
         listOf("groupViol", "covU", "c3n", "c3w", "pref", "extWish"),
         listOf("low", "c1", "high", "c3mn"),
-        listOf("c3", "c3m", "c41", "c42", "c41s", "c42s"),
+        listOf("c3", "c3m", "c41", "c42", "c41s", "c42s", "gap"),
         listOf("apt", "c2", "covO", "weekly", "fair"),
     )
 

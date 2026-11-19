@@ -45,6 +45,11 @@ class DeltaEvaluator(private val p: Problem) {
     private var sFair = 0L                            // [統一fair] グループ内公平化の running total（SOFT）
     private var sWeekly = 0L                          // [統一weekly] 曜日平準化の running total（SOFT）
     private var scovO = 0L                            // [統一a] 過剰被覆(covO)の running total（SOFT）
+    private var sGap = 0L                             // シフトの間隔(gap)の running total（SOFT）
+    // gapCur[r*S+i]＝規則 r の職員 i の不足日数。手は 1 行だけを動かすので、動くシフトの規則だけ行を数え直す。
+    private val gapCur = IntArray(p.consGap.size * S)
+    private val gapPendR = IntArray(p.consGap.size); private val gapPendV = IntArray(p.consGap.size)
+    private var gapPendN = 0; private var dGap = 0L
     private var covUTot = 0L   // [監査#4b] per-cell covU の総和（セル局所Δで維持）
 
     // stashed deltas from the last preview (applied by commit())
@@ -141,7 +146,7 @@ class DeltaEvaluator(private val p: Problem) {
         "c1" to sc1, "c2" to sc2, "c41" to sc41, "c42" to sc42, "c41s" to sc41s, "c42s" to sc42s,
         "c3" to sc3, "c3n" to hc3n, "c3m" to sc3m, "c3mn" to sc3mn,
         "pref" to hpref, "groupViol" to hGrpV, "c3w" to hc3w, "apt" to sApt, "fair" to sFair, "weekly" to sWeekly,
-        "covO" to scovO, "covU" to covUTot, "extWish" to hExt,
+        "covO" to scovO, "covU" to covUTot, "extWish" to hExt, "gap" to sGap,
     )
 
     /**
@@ -202,7 +207,7 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
-        val soft = weightedSoft(sc1, sc2, sc41, sc42, sc41s, sc42s, sc3, sc3m, sc3mn, hct, sApt, sFair, sWeekly, scovO)
+        val soft = weightedSoft(sc1, sc2, sc41, sc42, sc41s, sc42s, sc3, sc3m, sc3mn, hct, sApt, sFair, sWeekly, scovO, sGap)
         // `Evaluator.fullEval` と同じ契約: soft が桁を超えると HARD へ繰り上がり、必須の数を取り違える（黙って誤った値を返さない）。
         check(soft in 0 until SCORE_HARD_UNIT) { "soft=$soft が辞書式パックの桁(${SCORE_HARD_UNIT})を超えました。回数の設定か重みを見直してください" }
         return h1 * SCORE_HARD_UNIT + soft
@@ -211,8 +216,8 @@ class DeltaEvaluator(private val p: Problem) {
     /** SOFT の重み付き和。線形なので合計にも差分にも同じ式を使う（scoreFrom と previewMove の単一ソース）。 */
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
-        ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * w.c1 + c2 * w.c2 + c41 * w.c41 + c42 * w.c42 + c41s * w.c41s + c42s * w.c42s + c3 * w.c3 + c3m * w.c3m + c3mn * w.c3mn + ct + apt * w.apt + fair * w.fair + weekly * w.weekly + covO * w.covO
+        ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long, gap: Long,
+    ): Long = c1 * w.c1 + c2 * w.c2 + c41 * w.c41 + c42 * w.c42 + c41s * w.c41s + c42s * w.c42s + c3 * w.c3 + c3m * w.c3m + c3mn * w.c3mn + ct + apt * w.apt + fair * w.fair + weekly * w.weekly + covO * w.covO + gap * w.gap
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {
@@ -226,6 +231,7 @@ class DeltaEvaluator(private val p: Problem) {
         if (nw == old) {
             dC1 = 0; dC2 = 0; dC41 = 0; dC42 = 0; dC41s = 0; dC42s = 0; dC3 = 0; dC3n = 0; dC3m = 0; dC3mn = 0
             dPref = 0; dGrpV = 0; dCt = 0; dApt = 0; dFair = 0; dWeekly = 0; dCovO = 0; nCovU = covUTot
+            dGap = 0; gapPendN = 0
             return score()
         }
 
@@ -240,10 +246,18 @@ class DeltaEvaluator(private val p: Problem) {
         //   構造的に防ぐため try/finally で復元を保証する。プリミティブ var のみ＝ボクシング無し。
         setCell(i, j, nw)
         var aC1 = 0L; var aC3 = 0L; var aC3n = 0L; var aC3m = 0L; var aC3mn = 0L
+        dGap = 0L; gapPendN = 0
         try {
             aC1 = c1Local(i, j, old, nw); aC3 = c3After(i, j, 0, old, nw)
             aC3n = c3After(i, j, 1, old, nw); aC3m = c3After(i, j, 2, old, nw)
             aC3mn = c3After(i, j, 3, old, nw)
+            for (r in p.consGap.indices) {
+                val c = p.consGap[r]
+                if ((c.shiftIdx != old && c.shiftIdx != nw) || !p.c1Applies(i, c.shiftIdx)) continue
+                val v = GapRule.deficit(a[i], c.shiftIdx, c.days)
+                dGap += v - gapCur[r * S + i]
+                gapPendR[gapPendN] = r; gapPendV[gapPendN] = v; gapPendN++
+            }
         } finally {
             setCell(i, j, old)
         }
@@ -395,7 +409,7 @@ class DeltaEvaluator(private val p: Problem) {
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
         val dHard = dC3n + (nCovU - covUTot) + dPref + dGrpV + dC3w + dExt
-        val dSoft = weightedSoft(dC1, dC2, dC41, dC42, dC41s, dC42s, dC3, dC3m, dC3mn, dCt, dApt, dFair, dWeekly, dCovO)
+        val dSoft = weightedSoft(dC1, dC2, dC41, dC42, dC41s, dC42s, dC3, dC3m, dC3mn, dCt, dApt, dFair, dWeekly, dCovO, dGap)
         return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
 
@@ -422,6 +436,8 @@ class DeltaEvaluator(private val p: Problem) {
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
             hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hExt += dExt; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
+            for (t in 0 until gapPendN) gapCur[gapPendR[t] * S + i] = gapPendV[t]
+            sGap += dGap
             covUTot = nCovU
         } finally {
             // invalidate the stash so a stray double-commit cannot corrupt aggregates
@@ -472,6 +488,13 @@ class DeltaEvaluator(private val p: Problem) {
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
         hpref = prefAll(); hGrpV = groupViolAll(); hc3w = c3wAll(); hExt = extWishAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); sWeekly = weeklyAll(); scovO = covOAll()
         covUTot = covUAll()
+        sGap = 0L
+        for (r in p.consGap.indices) { val c = p.consGap[r]
+            for (i in 0 until S) {
+                val v = if (p.c1Applies(i, c.shiftIdx)) GapRule.deficit(a[i], c.shiftIdx, c.days) else 0
+                gapCur[r * S + i] = v; sGap += v
+            }
+        }
     }
 
     // ---- helpers ---------------------------------------------------------------

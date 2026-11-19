@@ -82,6 +82,7 @@ public:
         addCountsMaybe(f & 64u);
         if (f & 128u) addWeekly(); if (f & 256u) addCoverage();
         if (f & 512u) addFair(hint, opt);
+        if (f & 1024u) addGap();
     }
 
     const sat::LinearExpr& hardCount() const { return hardCount_; }
@@ -191,6 +192,24 @@ private:
                 auto f = cp_.NewIntVar({0, c.d2});
                 cp_.AddGreaterOrEqual(z + f, c.d2);
                 addSoft(f, p_.w.c1);
+            }
+        }
+    }
+
+    // シフトの間隔（GapRule）: 日 e と日 s（2 ≤ s−e < n）がどちらも x で、間に x が 1 日も無ければ、e で終わるかたまりと
+    //   s で始まるかたまりが近すぎる＝不足 n−(s−e)。v ≥ X(e)+X(s)−1−Σ間 X（0/1）で、組ごとに 1 つ。
+    void addGap() {
+        for (const auto& c : p_.consGap) for (int i = 0; i < S; i++) {
+            if (!p_.c1On(i, c.si)) continue;
+            for (int e = 0; e < T; e++) for (int s = e + 2; s < T && s - e < c.days; s++) {
+                sat::LinearExpr r = X(i, e, c.si) + X(i, s, c.si) - 1;
+                for (int t = e + 1; t < s; t++) r -= X(i, t, c.si);
+                const long long w = (long long)(c.days - (s - e)) * p_.w.gap;
+                long long cr;
+                if (isConst(r, cr)) { if (cr > 0) addSoft(sat::LinearExpr(1), w); continue; }
+                auto v = cp_.NewBoolVar();
+                cp_.AddGreaterOrEqual(v, r);
+                addSoft(v, w);
             }
         }
     }
@@ -751,7 +770,7 @@ namespace improve_detail {
 
 struct Score { long long hard, w; };
 inline Score scoreOf(const MagiProblem& p, const HardW& hw, const std::vector<int>& b) {
-    long long out[2], bd[21];
+    long long out[2], bd[kBreakdownCount];
     fullEvalParts(p, b.data(), out, bd);
     return {out[0], out[1] + bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish};
 }

@@ -48,6 +48,8 @@ object NativeEval {
         val capBans = ArrayList<Int>()
         if (p.dayCapZero != null) for (i in 0 until s) for (j in 0 until t) for (kk in 0 until k) if (p.dayCapBanned(i, j, kk)) { capBans.add(i); capBans.add(j); capBans.add(kk) }
         cons.add(capBans.size / 3); cons.addAll(capBans)
+        // シフトの間隔 [nGap,(si,days)*]（ABI 13）。
+        cons.add(p.consGap.size); p.consGap.forEach { cons.add(it.shiftIdx); cons.add(it.days) }
         val c3 = ArrayList<Int>(64)
         for (fam in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) {
             c3.add(fam.size)

@@ -18,7 +18,7 @@ static void setPriority(MagiProblem& p) {
     p.w.covO = p.w.weekly = 1; p.w.fair = 50; p.w.apt = p.w.c2 = 20;
 }
 static magi_cpsat::HardW hw;
-struct Sc { long long hard, w; long long bd[21]; };
+struct Sc { long long hard, w; long long bd[kBreakdownCount]; };
 static Sc score(const MagiProblem& p, const std::vector<int>& b) {
     Sc s; long long out[2]; fullEvalParts(p, b.data(), out, s.bd);
     s.hard = out[0];

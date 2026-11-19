@@ -11,7 +11,7 @@
 
 static void setPriority(MagiProblem& p) {   // Kotlin ObjectiveWeights の優先順位（T1 200 / T2 20 / T3 1・fair 50・c2 20・apt 20）
     p.w.low = p.w.c1 = p.w.high = p.w.c3mn = 200;
-    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = 20;
+    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = p.w.gap = 20;
     p.w.weekly = 1; p.w.covO = p.w.fair = 50; p.w.apt = p.w.c2 = 20;
 }
 
@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     if (argc <= 4 || atoi(argv[4]) == 1) setPriority(p);
     magi_cpsat::HardW hw;
     auto evalW = [&](const std::vector<int>& b, long long& hard, long long& wNoFair, long long& fairW) {
-        long long out[2], bd[21]; fullEvalParts(p, b.data(), out, bd);
+        long long out[2], bd[kBreakdownCount]; fullEvalParts(p, b.data(), out, bd);
         hard = out[0];
         long long hw2 = bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish;
         fairW = bd[17] * p.w.fair;
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
            r.status, r.wallSeconds, r.hard, r.hardBound, (int)r.hardProven, r.weighted, r.weightedBound, h1, w1, f1, w0, f0);
     if (!r.board.empty() && (h1 != r.hard || w1 != r.weighted)) {
         // 族ごとに盤面を固定したモデルとエンジンの内訳を比べる（不一致の切り分け）。
-        long long out[2], bd[21]; fullEvalParts(p, r.board.data(), out, bd);
+        long long out[2], bd[kBreakdownCount]; fullEvalParts(p, r.board.data(), out, bd);
         const char* names[9] = {"c1", "c2", "c41/c41s", "c42/c42s", "c3 族", "セル(pref/groupViol/c3w/ext)", "low/high/apt", "weekly", "covU/covO"};
         long long eng[9] = {bd[0] * p.w.c1, bd[1] * p.w.c2, bd[6] * p.w.c41 + bd[8] * p.w.c41s, bd[7] * p.w.c42 + bd[9] * p.w.c42s,
             bd[2] * p.w.c3 + bd[3] * hw.c3n + bd[4] * p.w.c3m + bd[5] * p.w.c3mn,
@@ -68,6 +68,12 @@ int main(int argc, char** argv) {
             magi_cpsat::Options fo; fo.fixToHint = true; fo.workers = 1; fo.maxSeconds = 20; fo.families = 1u << fam;
             auto rr = magi_cpsat::solve(p, r.board, fo, hw);
             printf("  FAMILY %-28s model=%lld engine=%lld %s\n", names[fam], rr.weighted, eng[fam], rr.weighted == eng[fam] ? "" : "<-- MISMATCH");
+        }
+        {
+            magi_cpsat::Options fo; fo.fixToHint = true; fo.workers = 1; fo.maxSeconds = 20; fo.families = 1024u;
+            auto rr = magi_cpsat::solve(p, r.board, fo, hw);
+            const long long eg = bd[21] * p.w.gap;
+            printf("  FAMILY %-28s model=%lld engine=%lld %s\n", "gap", rr.weighted, eg, rr.weighted == eg ? "" : "<-- MISMATCH");
         }
     }
     if (r.weightedBound >= 0) {

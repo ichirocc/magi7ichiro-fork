@@ -11,7 +11,7 @@ import java.io.File
  * 回数（職員×シフト）と位置なしの族は出ない。族を増やしたらここに分類を足す＝セルシートへの出し忘れに気づける。
  */
 class ViolationLocationPartitionTest {
-    private val cell = setOf("pref", "groupViol", "c3n", "c3w", "extWish", "c1", "c3", "c3m", "c3mn", "c42", "c42s")
+    private val cell = setOf("pref", "groupViol", "c3n", "c3w", "extWish", "c1", "c3", "c3m", "c3mn", "c42", "c42s", "gap")
     private val need = setOf("covU", "covO", "c41", "c41s")
     private val count = setOf("c2", "low", "high", "apt")
     private val none = setOf("fair", "weekly")

@@ -118,9 +118,10 @@ static inline long long c42PairCount(bool sameSet, long long n1, long long n2) {
 }
 struct C3r { std::vector<int> seq; bool singleRun; };
 struct C3wr { int wishK, prevK; };   // 希望で固定した wishK の前日に prevK を禁止（Kotlin C3w, HARD, 3.542.0）
+struct GapR { int si, days; };       // シフトの間隔（Kotlin Gap / GapRule, SOFT, 3.727.109）
 
 // [#50] 採点の SOFT の重み（Kotlin ObjectiveWeights.Soft と同じ並び）。既定は今の重み、優先順位の方式は nativeSetSoftWeights で差し替える。
-struct SoftW { long long c1 = 90, c2 = 4, c3 = 15, c3m = 6, c3mn = 25, c41 = 9, c42 = 9, c41s = 10, c42s = 10, covO = 10, low = 120, high = 50, apt = 4, fair = 5, weekly = 2; };
+struct SoftW { long long c1 = 90, c2 = 4, c3 = 15, c3m = 6, c3mn = 25, c41 = 9, c42 = 9, c41s = 10, c42s = 10, covO = 10, low = 120, high = 50, apt = 4, fair = 5, weekly = 2, gap = 15; };
 
 struct MagiProblem {
     int S = 0, T = 0, K = 0, G = 0, restIdx = 0, dow0 = 0;
@@ -138,6 +139,7 @@ struct MagiProblem {
     std::vector<C42r> cons42, cons42s;
     std::vector<C3r> cons3, cons3n, cons3m, cons3mn;
     std::vector<C3wr> cons3w;
+    std::vector<GapR> consGap;
     std::vector<uint8_t> c3wBan;             // S*T*K（cons3w が空なら空＝Kotlin Problem.c3wBan の null）。buildC3wBan で導出
     std::vector<uint8_t> extBan;             // S*T*K（拡張希望の禁止。空＝無し。採点（extWish, HARD）と盤面へ書く手の判定が読む）
     std::vector<uint8_t> capBan;             // S*T*K（日の上限 0 で置かないセル。空＝無し。盤面へ書く手の判定だけが読む＝採点は読まない）
@@ -412,12 +414,25 @@ long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& li
 }
 
 // [3.524.0/backlog#6] fullEvalParts の breakdown 引数のスロット順。Kotlin MirrorKeys.all と
-//   同じ21族・同じ並びにすること（native-parity host harness がこの並びで名前付き比較する）。
-static const char* const kBreakdownNames[21] = {
+//   同じ22族・同じ並びにすること（native-parity host harness がこの並びで名前付き比較する）。
+static const char* const kBreakdownNames[22] = {
     "c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s",
-    "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w", "extWish",
+    "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w", "extWish", "gap",
 };
-static constexpr int kBreakdownCount = 21;
+static constexpr int kBreakdownCount = 22;
+
+// シフトの間隔（Kotlin GapRule.deficit と同式）: かたまりの最後の日から次のかたまりの最初の日までの差が n 未満なら n − 差。
+inline long long gapDeficitN(const int* row, int T, int x, int n) {
+    long long sum = 0;
+    int lastEnd = -1, j = 0;
+    while (j < T) {
+        if (row[j] != x) { j++; continue; }
+        if (lastEnd >= 0) { const int g = j - lastEnd; if (g < n) sum += n - g; }
+        while (j < T && row[j] == x) j++;
+        lastEnd = j - 1;
+    }
+    return sum;
+}
 
 // Evaluator.fullEvalParts の忠実移植。a は S*T の平坦配列。out[0]=hard1, out[1]=soft。
 // [3.524.0/backlog#6] bd!=nullptr なら族別の生の違反量（重み適用前、kBreakdownNames順）も書く。
@@ -550,6 +565,12 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         for (int i = 0; i < S; i++) { const int* row = a + (size_t)i * T; for (int j = 0; j < T; j++) if (p.extWishBanned(i, j, row[j])) raw++; }
         hard1 += raw; if (bd) bd[20] += raw;
     }
+    // シフトの間隔（SOFT）。Kotlin Evaluator と同じく c1On（担当でき個人上限が 0 でない）の職員だけ。
+    if (!p.consGap.empty()) {
+        long long raw = 0;
+        for (const auto& c : p.consGap) for (int i = 0; i < S; i++) if (p.c1On(i, c.si)) raw += gapDeficitN(a + (size_t)i * T, T, c.si, c.days);
+        soft += raw * p.w.gap; if (bd) bd[21] += raw;
+    }
 
     // 回数行列 ssn（range/apt/fair が共有）
     std::vector<int> ssn((size_t)S * K, 0);
@@ -672,10 +693,10 @@ struct SaChunk {
     // deltaApply が旧/新シフトを含む規則だけを測るための索引（盤面非依存）。byK[k]＝k を参照する規則の添字、has[e*K+k]＝規則 e が k を参照するか。
     //   参照しない規則は (i,j) の old→nw 書換えで寄与が変わらない＝差分 0 なので、測らなくてもスコアは同じ。
     struct ShiftIndex { std::vector<std::vector<int>> byK; std::vector<uint8_t> has; };
-    ShiftIndex ix3[4], ix1, ix41, ix42, ix41s, ix42s;
+    ShiftIndex ix3[4], ix1, ix41, ix42, ix41s, ix42s, ixGap;
     std::vector<uint8_t> c3SeqOk[4];   // 規則の並びが全部 [0,K) か（ビット経路の可否。盤面非依存なので 1 回だけ数える）
     // 規則ごとの現在の寄与（resetBoard が全件、deltaApply が書き換えた行・日の該当規則を更新）。変更前の値を測り直さないため。
-    std::vector<long long> c1Cur, c3Cur[4];            // S*件数（職員 i・規則 e）
+    std::vector<long long> c1Cur, c3Cur[4], gapCur;    // S*件数（職員 i・規則 e）
     std::vector<long long> d41Cur, d42Cur, d41sCur, d42sCur;  // T*件数（日 j・規則 e）
     std::vector<long long> fairCur;   // G*K: contribFair の現在値
     // 手 1 つぶんの取り消し記録（trail）。[beginMove] から [deltaApply] が書き換えた表の値と盤面のセルを覚え、
@@ -721,6 +742,8 @@ struct SaChunk {
         }
         indexInit(ix1, p.cons1.size());
         for (size_t e = 0; e < p.cons1.size(); e++) indexAdd(ix1, (int)e, p.cons1[e].si);
+        indexInit(ixGap, p.consGap.size());
+        for (size_t e = 0; e < p.consGap.size(); e++) indexAdd(ixGap, (int)e, p.consGap[e].si);
         indexInit(ix41, p.cons41.size());
         for (size_t e = 0; e < p.cons41.size(); e++) indexAdd(ix41, (int)e, p.cons41[e].s);
         indexInit(ix41s, p.cons41s.size());
@@ -772,6 +795,7 @@ struct SaChunk {
         fairCur.assign((size_t)p.G * K, 0);
         for (int g = 0; g < p.G; g++) for (int k = 0; k < K; k++) fairCur[(size_t)g * K + k] = contribFair(g, k);
         c1Cur.assign((size_t)S * p.cons1.size(), 0);
+        gapCur.assign((size_t)S * p.consGap.size(), 0);
         for (int f = 0; f < 4; f++) c3Cur[f].assign((size_t)S * c3Fam(f).size(), 0);
         d41Cur.assign((size_t)T * p.cons41.size(), 0); d42Cur.assign((size_t)T * p.cons42.size(), 0);
         d41sCur.assign((size_t)T * p.cons41s.size(), 0); d42sCur.assign((size_t)T * p.cons42s.size(), 0);
@@ -794,6 +818,12 @@ struct SaChunk {
         long long v = visit(ix1, n1, old, nw, [&](int e) {
             long long& c = c1Cur[(size_t)i * n1 + e];
             if (fresh) { remember(c); c = contribC1(i, p.cons1[(size_t)e]); }
+            return c; });
+        const size_t nGap = p.consGap.size();
+        v += visit(ixGap, nGap, old, nw, [&](int e) {
+            long long& c = gapCur[(size_t)i * nGap + e];
+            if (fresh) { remember(c); const auto& g = p.consGap[(size_t)e];
+                c = p.c1On(i, g.si) ? gapDeficitN(a.data() + (size_t)i * T, T, g.si, g.days) * p.w.gap : 0; }
             return c; });
         for (int f = 0; f < 4; f++) {
             const auto& list = c3Fam(f); const size_t n = list.size();
@@ -2597,7 +2627,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 12;   // 12＝日の上限 0 で置かないセル（cons 末尾の [nCap,(i,j,k)*]）。11＝膜の細胞 LNS（nativeMembrane*）。10＝nativeFullEval が族別の量も返す（MAGI-003）
+    return 13;   // 13＝シフトの間隔（cons 末尾の [nGap,(si,days)*]・族別の量が 22）。12＝日の上限 0 で置かないセル（cons 末尾の [nCap,(i,j,k)*]）。11＝膜の細胞 LNS（nativeMembrane*）。10＝nativeFullEval が族別の量も返す（MAGI-003）
 }
 
 // 膜の細胞 LNS の 1 細胞ぶん（Kotlin MembraneCellLns.solveCell）。cell＝細胞の職員、rngState＝JavaLcg の内部状態。0=失敗。
@@ -2926,6 +2956,15 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
             p->capBan[((size_t)ci * T + cj) * K + ck] = 1;
         }
     }
+    // シフトの間隔 [nGap,(si,days)*]（ABI 13）。nCap の後ろ。無い入力（旧形式のツール）は空のまま。
+    if (parseOk && idx < cons.size()) {
+        int nGap = takeCount(2);
+        for (int r = 0; r < nGap && parseOk; r++) {
+            GapR g{next(), next()};
+            if (g.si < 0 || g.si >= K || g.days <= 0) { parseOk = false; break; }
+            p->consGap.push_back(g);
+        }
+    }
     if (!parseOk) { delete p; return 0; }
     // [3.409.23/監査G3] 群 index が負・シフト index が範囲外の制約行はハンドル生成ごと拒否する
     //   （0=native 不可→Kotlin へ安全退化＝sgrp/ssk 検証と同じ確立済みの契約）。判定は
@@ -3001,11 +3040,13 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeSetSoftWeights(JNIEnv* env, jclass, jlong handle, jlongArray arr) {
     auto* p = reinterpret_cast<MagiProblem*>(handle);
     if (p == nullptr || arr == nullptr || env->GetArrayLength(arr) < 15) return;
-    jlong v[15];
-    env->GetLongArrayRegion(arr, 0, 15, v);
+    const jsize n = env->GetArrayLength(arr);
+    jlong v[17] = {0};
+    env->GetLongArrayRegion(arr, 0, n < 17 ? n : 17, v);
     SoftW& w = p->w;
     w.c1 = v[0]; w.c2 = v[1]; w.c3 = v[2]; w.c3m = v[3]; w.c3mn = v[4]; w.c41 = v[5]; w.c42 = v[6]; w.c41s = v[7]; w.c42s = v[8];
     w.covO = v[9]; w.low = v[10]; w.high = v[11]; w.apt = v[12]; w.fair = v[13]; w.weekly = v[14];
+    if (n >= 17) w.gap = v[16];   // v[15] は covU（SOFT の重みではないので読まない）
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -3016,7 +3057,7 @@ Java_com_magi_app_v6_NativeBridge_nativeDestroyProblem(JNIEnv*, jclass, jlong ha
 // フル評価。schedule は S*T の平坦配列。戻り値 long[2] = {hard1, soft}（Evaluator.fullEvalParts と同値）。
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeFullEval(JNIEnv* env, jclass, jlong handle, jintArray schedArr) {
-    // [MAGI-003] 戻り値＝[hard1, soft, 族別の生の量 21（kBreakdownNames 順）]。実行時の照合が合計だけでなく族ごとにも比べる（ABI 10）。
+    // [MAGI-003] 戻り値＝[hard1, soft, 族別の生の量 22（kBreakdownNames 順）]。実行時の照合が合計だけでなく族ごとにも比べる（ABI 10）。
     auto* p = reinterpret_cast<MagiProblem*>(handle);
     jlongArray out = env->NewLongArray(2 + kBreakdownCount);
     long long v[2] = {-1, -1};

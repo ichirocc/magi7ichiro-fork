@@ -9,7 +9,7 @@
 
 static void setPriority(MagiProblem& p) {   // Kotlin ObjectiveWeights の優先順位（cpsat_bench.cpp と同じ）
     p.w.low = p.w.c1 = p.w.high = p.w.c3mn = 200;
-    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = 20;
+    p.w.c3 = p.w.c3m = p.w.c41 = p.w.c42 = p.w.c41s = p.w.c42s = p.w.gap = 20;
     p.w.weekly = 1; p.w.covO = p.w.fair = 50; p.w.apt = p.w.c2 = 20;
 }
 
@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
     magi_cpsat::HardW hw;
     // エンジンの採点: [必須の件数, 必須の重み込みの重み付き（fair 込み）, fair の重み]。
     auto actual = [&](const std::vector<int>& b, long long& hard, long long& w, long long& fairW) {
-        long long out[2], bd[21]; fullEvalParts(p, b.data(), out, bd);
+        long long out[2], bd[kBreakdownCount]; fullEvalParts(p, b.data(), out, bd);
         hard = out[0];
         fairW = bd[17] * p.w.fair;
         w = out[1] + bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish;

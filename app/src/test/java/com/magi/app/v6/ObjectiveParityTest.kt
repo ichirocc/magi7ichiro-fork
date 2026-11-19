@@ -110,6 +110,7 @@ class ObjectiveParityTest {
             cons41s = listOf(C41Row("K0", sym(1), "1", "1")),
             cons42s = listOf(C42Row("K0", "K1", sym(1), sym(if (k > 2) 2 else 1))),
             cons3w = listOf(C3wRow(sym(rng.nextInt(k)), sym(rng.nextInt(k)))),
+            consGap = listOf(com.magi.app.model.GapRow(sym(1), "4")),
             // [3.653.0] 拡張希望（必須の族 extWish）。日は期間の先頭 t 日から。
             extWishes = List(2) {
                 ExtWish(rng.nextInt(s), List(2) { java.time.LocalDate.parse("2026-03-02").plusDays(rng.nextInt(t).toLong()).toString() },

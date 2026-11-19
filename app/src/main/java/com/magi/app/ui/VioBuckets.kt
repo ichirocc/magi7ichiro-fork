@@ -23,6 +23,7 @@ internal val vioBuckets: List<VioBucket> = listOf(
     VioBucket("count", "回数", com.magi.app.v6.ConstraintCatalog.countKeys),
     VioBucket("group", "グループルール", setOf("groupViol", "c41", "c42", "c41s", "c42s")),
     VioBucket("window", "期間の制約", setOf("c1")),
+    VioBucket("gap", "シフトの間隔", setOf("gap")),
 )
 
 /**

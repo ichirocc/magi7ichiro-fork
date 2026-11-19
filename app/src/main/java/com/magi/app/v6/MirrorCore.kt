@@ -134,9 +134,10 @@ data class LightOptimizeResult(
 
 object MirrorKeys {
     val hard = listOf("groupViol", "c3n", "covU", "pref", "c3w", "extWish")
-    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair", "weekly")
+    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair", "weekly", "gap")
     // [3.542.0] c3w は末尾＝C++ kBreakdownNames / 言語跨ぎ期待値ファイルの添字を既存19族から動かさない。[3.653.0] extWish も同じく末尾。
-    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w", "extWish")
+    // シフトの間隔（gap、3.727.109）も末尾。
+    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w", "extWish", "gap")
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     // [HF77明示数値指示・全面見直し 3.522.0] tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定
@@ -151,6 +152,8 @@ object MirrorKeys {
         "c3" to 15.0, "c3m" to 6.0,
         "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
         "c2" to 4.0, "apt" to 4.0, "fair" to 5.0, "weekly" to 2.0,
+        // [3.727.109/HF77 明示指示「15（推奨の並び c3 と同じ）」] シフトの間隔。優先順位方式では T2（20）。
+        "gap" to 15.0,
     )
 
     // [表示優先度/HF77明示指示 2026-07-20] aptLow/aptHigh は apt の表示専用サブクラス（重み表(WeightTableCard)には
@@ -193,7 +196,7 @@ object UnifiedViolationChecker {
     private val classWeight: Map<String, Double> by lazy { vioClass.entries.associate { it.value to MirrorKeys.weightOf(it.key) } }
 
     private val vioClass = mapOf(
-        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n", "c3w" to "vio-c3w", "extWish" to "vio-extWish",
+        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n", "c3w" to "vio-c3w", "extWish" to "vio-extWish", "gap" to "vio-gap",
         "c3m" to "vio-c3m", "c3mn" to "vio-c3mn", "c41" to "vio-c41", "c42" to "vio-c42",
         "c41s" to "vio-c41s", "c42s" to "vio-c42s",
         "covU" to "vio-covU", "covO" to "vio-covO", "pref" to "vio-pref",
@@ -398,6 +401,12 @@ object UnifiedViolationChecker {
         // [3.653.0] 拡張希望の違反(extWish, HARD)。静的な禁止表でセル単位に数える＝extWishCells と同じ集合。
         if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
             if (p.extWishBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
+        }
+        // シフトの間隔(gap)。近すぎるかたまりの最初の日を違反箇所にする。
+        for (c in p.consGap) for (i in 0 until p.S) {
+            if (!p.c1Applies(i, c.shiftIdx)) continue
+            val d = GapRule.deficit(s[i], c.shiftIdx, c.days)
+            if (d > 0) { inc("gap", d); GapRule.violatingStarts(s[i], c.shiftIdx, c.days) { j -> mark(i, j, "gap") } }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {
