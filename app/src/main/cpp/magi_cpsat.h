@@ -17,6 +17,7 @@
 #include <mutex>
 #include <random>
 #include <thread>
+#include <unordered_set>
 
 namespace magi_cpsat {
 
@@ -729,7 +730,7 @@ struct ImproveResult {
     std::vector<int> board;          // 最良の盤面（改善が無ければ開始の盤面）
     long long hard = -1, weighted = -1;   // 最良の採点（必須の件数・必須の重み込みの重み付き、fair 込み）
     long long startWeighted = -1;
-    long long iters = 0, accepted = 0, optimal = 0;   // 解いた部分の数・採った数・最適まで解けた数
+    long long iters = 0, accepted = 0, optimal = 0, skipped = 0;   // 解いた部分の数・採った数・最適まで解けた数
     double wallSeconds = 0.0;
 };
 
@@ -742,6 +743,8 @@ struct ImproveOptions {
     std::atomic<bool>* stop = nullptr;
     // 最良が更新されるたびに呼ぶ（盤面・必須の件数・重み付き）。ロックの中から呼ぶ＝短く。
     std::function<void(const std::vector<int>&, long long, long long)> onBest;
+    // 同じ盤面で最適と証明済みの部分（自由にするマスの組）を解き直さない（解き直しても改善は出ない）。
+    bool skipProven = false;
 };
 
 namespace improve_detail {
@@ -864,17 +867,32 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
     std::vector<int> best = start;
     Score bestScore = scoreOf(p, hw, start);
     res.startWeighted = bestScore.w;
+    long long version = 0;
+    std::unordered_set<unsigned long long> proven;
+    auto regionKey = [](const std::vector<int>& force) {
+        unsigned long long h = 1469598103934665603ULL;
+        for (size_t c = 0; c < force.size(); c++) if (force[c] < 0) { h ^= (unsigned long long)c + 1; h *= 1099511628211ULL; }
+        return h;
+    };
     auto stopped = [&] { return (io.stop && io.stop->load()) || elapsed() >= io.maxSeconds; };
     auto work = [&](int t) {
         std::mt19937_64 rng((unsigned long long)io.randomSeed * 1000003ULL + (unsigned long long)t * 7919ULL + 1ULL);
         int kind = t % 5;
+        int skipRun = 0;
         while (!stopped()) {
-            std::vector<int> cur; Score curScore;
-            { std::lock_guard<std::mutex> g(mu); cur = best; curScore = bestScore; }
+            std::vector<int> cur; Score curScore; long long ver;
+            { std::lock_guard<std::mutex> g(mu); cur = best; curScore = bestScore; ver = version; }
             Options o;
             o.workers = 1; o.randomSeed = (long long)(rng() & 0x7fffffff); o.stop = io.stop; o.fairFixedRef = true;
             o.force = pickRegion(p, cur, kind, rng);
             kind = (kind + 1) % 5;
+            const unsigned long long key = regionKey(o.force);
+            // 小さい問題で全部が証明済みになっても空回りしないよう、続けて飛ばすのは 200 回まで。
+            if (io.skipProven && skipRun < 200) {
+                std::lock_guard<std::mutex> g(mu);
+                if (ver == version && proven.count(key)) { res.skipped++; skipRun++; continue; }
+            }
+            skipRun = 0;
             Model m(p, hw);
             m.build(cur, o);
             m.cp().AddLessOrEqual(m.hardCount(), curScore.hard);
@@ -894,8 +912,10 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
             std::lock_guard<std::mutex> g(mu);
             res.iters++;
             if (r.status() == sat::OPTIMAL) res.optimal++;
+            if (io.skipProven && r.status() == sat::OPTIMAL && ver == version && !better(ns, bestScore)) proven.insert(key);
             if (solved && better(ns, bestScore)) {
                 best = nb; bestScore = ns; res.accepted++;
+                version++; proven.clear();
                 if (io.onBest) io.onBest(best, bestScore.hard, bestScore.w);
             }
         }
