@@ -742,6 +742,7 @@ struct ImproveOptions {
     std::atomic<bool>* stop = nullptr;
     // 最良が更新されるたびに呼ぶ（盤面・必須の件数・重み付き）。ロックの中から呼ぶ＝短く。
     std::function<void(const std::vector<int>&, long long, long long)> onBest;
+    int kinds = 5;   // 回す近傍の種類の数（pickRegion の kind 0..kinds-1）
 };
 
 namespace improve_detail {
@@ -788,6 +789,7 @@ template <class Rng> inline int pickWeighted(const std::vector<long long>& w, Rn
 // 自由にするマスを決める（force＝固定する値、自由なマスは -1）。無作為 3 種＋狙う 2 種を順に回す。
 //   0 日の窓×職員（多い職場は 14 人まで）／1 職員 2〜3 人×全日／2 職員 4〜5 人×日の窓
 //   3 T1 の量が多い職員＋同じグループの 1〜2 人×全日／4 fair の偏りが大きいグループ×日の窓
+//   5 個人の下限割れ/上限超過のある職員＋同じシフトで逆向きの職員（グループを問わない）＋1 人×全日（kinds=6 のときだけ回る。測定中）
 template <class Rng> inline std::vector<int> pickRegion(const MagiProblem& p, const std::vector<int>& b, int kind, Rng& rng) {
     const int S = p.S, T = p.T, K = p.K;
     std::vector<int> force(b);
@@ -799,6 +801,35 @@ template <class Rng> inline std::vector<int> pickRegion(const MagiProblem& p, co
     std::vector<int> all((size_t)S); for (int i = 0; i < S; i++) all[i] = i;
     auto window = [&](int lo, int hi, int& j0, int& len) { len = std::min(T, ri(lo, hi)); j0 = ri(0, T - len); };
     int j0 = 0, len = T;
+    if (kind == 5) {
+        std::vector<int> cnt((size_t)S * K, 0);
+        for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) { const int k = b[(size_t)i * T + j]; if (k >= 0 && k < K) cnt[(size_t)i * K + k]++; }
+        auto under = [&](int i, int k) { const int lo = p.rangeLo[(size_t)i * K + k]; return lo != INT32_MIN && lo != 0 && p.cd(i, k) ? std::max(0, lo - cnt[(size_t)i * K + k]) : 0; };
+        auto over = [&](int i, int k) { const int hi = p.rangeHi[(size_t)i * K + k]; return hi != INT32_MAX ? std::max(0, cnt[(size_t)i * K + k] - hi) : 0; };
+        std::vector<long long> w((size_t)S * K, 0);
+        for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) w[(size_t)i * K + k] = under(i, k) + over(i, k);
+        const int x = pickWeighted(w, rng);
+        if (x >= 0) {
+            const int i0 = x / K, k = x % K;
+            const bool short0 = under(i0, k) > 0;
+            std::vector<long long> pw((size_t)S, 0);
+            for (int i = 0; i < S; i++) if (i != i0) pw[i] = short0 ? over(i, k) : under(i, k);
+            int i1 = pickWeighted(pw, rng);
+            if (i1 < 0) {
+                for (int i = 0; i < S; i++) pw[i] = i != i0 && p.cd(i, k) ? 1 : 0;
+                i1 = pickWeighted(pw, rng);
+            }
+            std::vector<int> staff{i0};
+            if (i1 >= 0) staff.push_back(i1);
+            std::vector<int> rest;
+            for (int i : all) if (std::find(staff.begin(), staff.end(), i) == staff.end()) rest.push_back(i);
+            rest = shuffled(rest);
+            if (!rest.empty()) staff.push_back(rest[0]);
+            freeCells(staff, 0, T);
+            return force;
+        }
+        kind = 3;
+    }
     if (kind == 3) {
         std::vector<long long> load((size_t)S); for (int i = 0; i < S; i++) load[i] = rowLoad(p, b, i);
         const int i0 = pickWeighted(load, rng);
@@ -867,14 +898,15 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
     auto stopped = [&] { return (io.stop && io.stop->load()) || elapsed() >= io.maxSeconds; };
     auto work = [&](int t) {
         std::mt19937_64 rng((unsigned long long)io.randomSeed * 1000003ULL + (unsigned long long)t * 7919ULL + 1ULL);
-        int kind = t % 5;
+        const int nk = std::max(1, io.kinds);
+        int kind = t % nk;
         while (!stopped()) {
             std::vector<int> cur; Score curScore;
             { std::lock_guard<std::mutex> g(mu); cur = best; curScore = bestScore; }
             Options o;
             o.workers = 1; o.randomSeed = (long long)(rng() & 0x7fffffff); o.stop = io.stop; o.fairFixedRef = true;
             o.force = pickRegion(p, cur, kind, rng);
-            kind = (kind + 1) % 5;
+            kind = (kind + 1) % nk;
             Model m(p, hw);
             m.build(cur, o);
             m.cp().AddLessOrEqual(m.hardCount(), curScore.hard);
