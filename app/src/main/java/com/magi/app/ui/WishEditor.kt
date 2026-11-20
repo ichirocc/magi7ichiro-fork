@@ -354,9 +354,11 @@ private fun ShiftButtonGrid(
                 val bg = hexToColor(colorHex.getOrElse(idx) { "" })
                 val fg = hexToColor(textHex.getOrElse(idx) { "" })
                 val borderColor = when { ng -> MagiAccent.red; sel -> cs.primary; else -> cs.outline }
+                // 1 つ選んだら他を薄くする（枠と小さな ✓ だけでは選んだシフトが見分けにくい）
+                val dim = selK >= 0 && !sel
                 Box(
                     Modifier.weight(1f).heightIn(min = 52.dp)
-                        .background(bg, MaterialTheme.shapes.small)
+                        .background(if (dim) bg.copy(alpha = 0.35f) else bg, MaterialTheme.shapes.small)
                         .border(if (sel) 3.dp else 2.dp, borderColor, MaterialTheme.shapes.small)
                         .clickable { onPick(idx) }
                         .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (ng) "・担当外" else "") + (if (sel) "・選択中" else "") }
@@ -364,9 +366,9 @@ private fun ShiftButtonGrid(
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+                        if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
                         Text((shifts.getOrNull(idx) ?: "") + if (ng) " ⚠" else "",
-                            color = fg, textAlign = TextAlign.Center,
+                            color = if (dim) cs.onSurfaceVariant else fg, textAlign = TextAlign.Center,
                             fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
