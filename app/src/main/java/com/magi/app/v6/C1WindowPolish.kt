@@ -170,6 +170,7 @@ internal object C1WindowPolish {
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
+        val screen = DeltaScreen(p)
         val before = UnifiedViolationChecker.check(state, work)
         if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
@@ -217,8 +218,9 @@ internal object C1WindowPolish {
                     val trial = work.copy2D()
                     trial[staff][d] = shift
                     // (a) 直接移動のみで改善（旧シフトに余裕がある場合）。
-                    val repDirect = UnifiedViolationChecker.check(state, trial)
-                    if (adoptionGate(p, work, trial, repDirect, bestRep, pinBlocks).accepted) {
+                    // 採用ゲートは良くならない候補を理由なしで断る＝差分評価で良くならないと分かれば正式検査を省く（出力不変）。
+                    val repDirect = screen.checkIfBetter(state, trial, bestRep)
+                    if (repDirect != null && adoptionGate(p, work, trial, repDirect, bestRep, pinBlocks).accepted) {
                         work = trial; bestRep = repDirect; applied++; adopted = true; break@windowLoop
                     }
                     // (b) 旧シフトを抜いて covU 穴が空くなら玉突き連鎖で埋め直す（exclude=本人で自己選択防止）。
@@ -227,8 +229,8 @@ internal object C1WindowPolish {
                         val chain = findCovUChain(p, trial, old, d, rng, wideC3n, exclude = staff)
                         if (chain != null && chain.none { p.extBanned(it[0], it[1], it[2]) }) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
-                            val repChain = UnifiedViolationChecker.check(state, trial)
-                            if (adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
+                            val repChain = screen.checkIfBetter(state, trial, bestRep)
+                            if (repChain != null && adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
                                 work = trial; bestRep = repChain; applied++; chainUsed++; adopted = true; break@windowLoop
                             }
                         }
