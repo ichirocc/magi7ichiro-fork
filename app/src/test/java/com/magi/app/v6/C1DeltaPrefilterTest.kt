@@ -127,10 +127,10 @@ class C1DeltaPrefilterTest {
 
     @Test
     fun c1DeltaIsNegativeWhenMoveResolvesWindow() {
-        // [Y,Y,Y] ルール「X 2日窓≥1」。day0→X で窓[0,1]を解消（[1,2]は残る）→ fires 2→1 = -1。
+        // [Y,Y,Y] ルール「X 2日窓≥1」。day0→X で窓[0,1]を解消（[1,2]は残る）→ 件数 (1+1)²=4 → 1² = -3（3.727.111 まとまりの 2 乗）。
         val s = single(3, 1, listOf(listOf(2, 2, 2)), cons1 = listOf(C1Row("2", "X", "1")))
         val p = Problem(s); val sc = s.schedule.toIntArray2D()
-        assertEquals(-1, C1DeltaPrefilter.c1Delta(p, sc, 0, 0, 1))
+        assertEquals(-3, C1DeltaPrefilter.c1Delta(p, sc, 0, 0, 1))
     }
 
     @Test

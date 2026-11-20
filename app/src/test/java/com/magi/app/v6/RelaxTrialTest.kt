@@ -133,7 +133,8 @@ class RelaxTrialTest {
         val board = st.schedule.toIntArray2D()
         val pS = st.shifts.indexOfFirst { it.kigou == "Pｼ" }; val cO = st.shifts.indexOfFirst { it.kigou == "Cｵ" }
         val r = RelaxTrial.firstWall(st, board) as RelaxTrial.Result
-        assertEquals(listOf(RelaxTrial.Relax(9, pS, 1), RelaxTrial.Relax(10, cO, 1)), r.relaxes)
+        // [3.727.111] c1 をまとまりの 2 乗で数えるようになり、緩める上限は Cｵ の 1 件で足りる（旧: Pｼ と Cｵ の 2 件）
+        assertEquals(listOf(RelaxTrial.Relax(10, cO, 1)), r.relaxes)
         assertEquals(5, r.h0); assertEquals(4, r.rr); assertEquals(1, r.att)
         assertEquals("手で置いた上限 0 は前提に分ける", RelaxTrial.handPlaced(st, board), r.prerequisite)
         val ns = RelaxTrial.apply(st, r.prerequisite + r.relaxes)

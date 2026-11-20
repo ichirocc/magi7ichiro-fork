@@ -107,6 +107,8 @@ internal object CheckerReferenceV0 {
                 val row = s[i]
                 var z = 0
                 for (l in 0 until c.day1) if (row[l] == c.shiftIdx) z++
+                // [3.727.111] 件数＝不足している窓が続くまとまりごとに「不足量の和」の 2 乗（本体の C1Cost とは別に書いた参照）。
+                var runSum = 0
                 while (j <= p.T - c.day1) {
                     if (j > 0) {
                         if (row[j - 1] == c.shiftIdx) z--
@@ -114,13 +116,13 @@ internal object CheckerReferenceV0 {
                     }
                     val viol = z < c.day2
                     if (viol) {
-                        inc("c1", c.day2 - z)
+                        runSum += c.day2 - z
                         if (!prevViol) { mark(i, j, "c1"); runStart = j }
-                    } else if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
+                    } else if (prevViol) { c1Runs.add(listOf(i, runStart, j - runStart, c.day1)); inc("c1", runSum * runSum); runSum = 0 }
                     prevViol = viol
                     j++
                 }
-                if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
+                if (prevViol) { c1Runs.add(listOf(i, runStart, j - runStart, c.day1)); inc("c1", runSum * runSum) }
             }
         }
 

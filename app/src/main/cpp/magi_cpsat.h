@@ -181,9 +181,9 @@ private:
         }
     }
 
-    // c1（C1Cost）: 窓 w の不足 f_w、まとまりの途中の和 r_w（不足の窓では r_w ≥ r_{w-1}+f_w、それ以外は 0 以上）、
-    //   まとまりの終わり e_w（nz_w かつ次の窓が不足でない）で r_w² を足す。最小化で r と e は真の値に落ちる
-    //   （nz を余分に立てるとまとまりがつながり (a+b)² ≥ a²+b² で損、e を余分に立てても損）。窓がすべて定数の行は C1Cost で直接。
+    // c1（C1Cost）: 窓 w の不足 f_w＝max(0, d2−回数)、nz_w＝f_w>0、まとまりの途中の和 r_w（nz なら r_{w−1}+f_w、でなければ 0）、
+    //   まとまりの終わり e_w＝nz_w かつ次の窓が不足でない、で r_w² を足す。どれも等式で縛る＝途中の解でも採点が C1Cost と一致する。
+    //   窓がすべて定数の行は C1Cost で直接。
     void addC1() {
         for (const auto& c : p_.cons1) for (int i = 0; i < S; i++) {
             if (!p_.c1On(i, c.si) || c.d1 <= 0 || c.d1 > T) continue;
@@ -198,7 +198,7 @@ private:
                 if (isConst(z, cz)) { fc[(size_t)j] = std::max(0LL, (long long)c.d2 - cz); f[(size_t)j] = sat::LinearExpr(fc[(size_t)j]); continue; }
                 allConst = false;
                 auto fv = cp_.NewIntVar({0, c.d2});
-                cp_.AddGreaterOrEqual(z + fv, c.d2);
+                cp_.AddMaxEquality(fv, {sat::LinearExpr(c.d2) - z, sat::LinearExpr(0)});
                 f[(size_t)j] = fv;
             }
             if (allConst) {
@@ -214,19 +214,30 @@ private:
             for (int j = 0; j < W; j++) {
                 if (fc[(size_t)j] == 0) nz[(size_t)j] = cp_.FalseVar();
                 else if (fc[(size_t)j] > 0) nz[(size_t)j] = cp_.TrueVar();
-                else { nz[(size_t)j] = cp_.NewBoolVar(); cp_.AddLessOrEqual(f[(size_t)j], c.d2 * nz[(size_t)j]); }
+                else {
+                    nz[(size_t)j] = cp_.NewBoolVar();
+                    cp_.AddLessOrEqual(f[(size_t)j], c.d2 * nz[(size_t)j]);
+                    cp_.AddGreaterOrEqual(f[(size_t)j], nz[(size_t)j]);
+                }
                 r[(size_t)j] = cp_.NewIntVar({0, rMax});
                 sat::LinearExpr prev = j > 0 ? sat::LinearExpr(r[(size_t)j - 1]) : sat::LinearExpr(0);
-                cp_.AddGreaterOrEqual(r[(size_t)j], prev + f[(size_t)j]).OnlyEnforceIf(nz[(size_t)j]);
+                cp_.AddEquality(r[(size_t)j], prev + f[(size_t)j]).OnlyEnforceIf(nz[(size_t)j]);
+                cp_.AddEquality(r[(size_t)j], 0).OnlyEnforceIf(nz[(size_t)j].Not());
             }
             for (int j = 0; j < W; j++) {
                 auto e = cp_.NewBoolVar();
-                if (j + 1 < W) cp_.AddGreaterOrEqual(e + nz[(size_t)j + 1], nz[(size_t)j]);
-                else cp_.AddGreaterOrEqual(e, nz[(size_t)j]);
+                if (j + 1 < W) {
+                    cp_.AddImplication(e, nz[(size_t)j]);
+                    cp_.AddImplication(e, nz[(size_t)j + 1].Not());
+                    cp_.AddBoolOr({nz[(size_t)j].Not(), nz[(size_t)j + 1], e});
+                } else {
+                    cp_.AddEquality(e, nz[(size_t)j]);
+                }
                 auto sq = cp_.NewIntVar({0, rMax * rMax});
                 cp_.AddMultiplicationEquality(sq, {r[(size_t)j], r[(size_t)j]});
                 auto cost = cp_.NewIntVar({0, rMax * rMax});
-                cp_.AddGreaterOrEqual(cost, sq).OnlyEnforceIf(e);
+                cp_.AddEquality(cost, sq).OnlyEnforceIf(e);
+                cp_.AddEquality(cost, 0).OnlyEnforceIf(e.Not());
                 addSoft(cost, p_.w.c1);
             }
         }
