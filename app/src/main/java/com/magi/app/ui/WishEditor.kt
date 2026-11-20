@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -301,7 +302,7 @@ private fun ExtWishPanel(
                     val fg = hexToColor(ui.shiftTextHex.getOrElse(idx) { "" })
                     Box(
                         Modifier.weight(1f).heightIn(min = 52.dp)
-                            .background(bg, MaterialTheme.shapes.small)
+                            .background(if (sel) bg.copy(alpha = 0.35f) else bg, MaterialTheme.shapes.small)
                             .border(if (sel) 3.dp else 2.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
                             .clickable { onToggle(idx) }
                             .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (sel) "・以外にする対象" else "") }
@@ -309,15 +310,18 @@ private fun ExtWishPanel(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (sel) Icon(Icons.Filled.Close, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
-                            Text(shifts.getOrNull(idx) ?: "", color = fg, textAlign = TextAlign.Center,
-                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                            // 選んだ＝この日に入れないシフト: 色を薄くし記号に取り消し線（枠の色だけでは選んだかどうか見分けにくい）
+                            if (sel) Icon(Icons.Filled.Close, contentDescription = null, tint = cs.onSurface, modifier = Modifier.size(20.dp))
+                            Text(shifts.getOrNull(idx) ?: "", color = if (sel) cs.onSurface else fg, textAlign = TextAlign.Center,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                textDecoration = if (sel) TextDecoration.LineThrough else null)
                         }
                     }
                 }
                 repeat(4 - rowIdxs.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+        extWishRemainText(shifts, selected)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
         if (usable.size < days.size) {
             Text("${wishDayList(ui.startDate, days.filter { it in wishDays }.sorted())}は希望のある日なので、拡張希望に入れられません。希望を消すと入れられます。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
