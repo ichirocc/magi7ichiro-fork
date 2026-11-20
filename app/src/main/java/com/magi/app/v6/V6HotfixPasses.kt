@@ -754,6 +754,10 @@ object V6HotfixPasses {
             PostStep(PostStages.WEEKLY_REBALANCE) { work ->
                 PostFold.Swap(CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = params.weeklyRebalancePasses, shouldStop = clusterStop))
             },
+            // シフトの間隔も同日 2 者スワップでは X を別の日へ動かせない → 同じ長方形交換で、起点を間隔の足りないかたまりにする。
+            PostStep(PostStages.GAP, enabled = { state.consGap.isNotEmpty() }) { work ->
+                PostFold.Swap(GapPolish.apply(state, work, shouldStop = clusterStop))
+            },
             // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
             PostStep(PostStages.ALTERNATING) { work ->
                 PostFold.Day(DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop))
