@@ -26,7 +26,7 @@ class DeltaEvaluator(private val p: Problem) {
     private val cntDay = Array(K) { IntArray(T) }     // per-shift per-day count
     // [統一weekly/3.345.0] per-staff × per-shift の曜日別カウント（休も1シフト＝特別扱いしない）。
     private val wdCnt = Array(S) { Array(K) { IntArray(7) } }
-    // 職員×シフトごとの勤務日ビット（bit j＝日 j がそのシフト）。窓の中の回数を popcount で数える（c1Local）。
+    // 職員×シフトごとの勤務日ビット（bit j＝日 j がそのシフト）。窓の中の回数を popcount で数える（c1At）。
     //   業務上限 31 日なので Long 1 語に収まる。T>63 は使わず従来の走査へ落とす。
     private val useBits = T <= 63
     private val bits = Array(S) { LongArray(K) }
@@ -48,6 +48,10 @@ class DeltaEvaluator(private val p: Problem) {
     private var sGap = 0L                             // シフトの間隔(gap)の running total（SOFT）
     // gapCur[r*S+i]＝規則 r の職員 i の不足日数。手は 1 行だけを動かすので、動くシフトの規則だけ行を数え直す。
     private val gapCur = IntArray(p.consGap.size * S)
+    // c1Cur[e*S+i]＝規則 e の職員 i の c1 件数（行全体＝C1Cost）。変更前は表を引き、変更後だけ数える（gapCur と同じ形）。
+    private val c1Cur = LongArray(p.cons1.size * S)
+    private val c1PendE = IntArray(p.cons1.size); private val c1PendV = LongArray(p.cons1.size)
+    private var c1PendN = 0
     private val gapPendR = IntArray(p.consGap.size); private val gapPendV = IntArray(p.consGap.size)
     private var gapPendN = 0; private var dGap = 0L
     private var covUTot = 0L   // [監査#4b] per-cell covU の総和（セル局所Δで維持）
@@ -231,16 +235,16 @@ class DeltaEvaluator(private val p: Problem) {
         if (nw == old) {
             dC1 = 0; dC2 = 0; dC41 = 0; dC42 = 0; dC41s = 0; dC42s = 0; dC3 = 0; dC3n = 0; dC3m = 0; dC3mn = 0
             dPref = 0; dGrpV = 0; dCt = 0; dApt = 0; dFair = 0; dWeekly = 0; dCovO = 0; nCovU = covUTot
-            dGap = 0; gapPendN = 0
+            dGap = 0; gapPendN = 0; c1PendN = 0
             return score()
         }
 
         // windowed families (c1, c3 family): before/after via temporary swap
-        val bC1 = c1Local(i, j, old, nw); val bC3 = c3Before(i, j, 0, old, nw)
+        val bC1 = c1Before(i, old, nw); val bC3 = c3Before(i, j, 0, old, nw)
         val bC3n = c3Before(i, j, 1, old, nw); val bC3m = c3Before(i, j, 2, old, nw)
         val bC3mn = c3Before(i, j, 3, old, nw)
         // [外部レビュー検証/例外安全性] a[i][j] を一時的に nw へ書き換えて after 側を測るこの窓は、
-        //   c1Local/c3Local が現行の不変条件下では例外を投げない（境界は min/max で常にクランプ済み）
+        //   c1After/c3Local が現行の不変条件下では例外を投げない（境界は min/max で常にクランプ済み）
         //   ため実害は未確認だが、将来の変更で throw する経路が増えても「復元されないまま盤面が
         //   壊れる」という最悪の失敗モード（クラッシュではなく以降の全差分計算が静かに狂う）を
         //   構造的に防ぐため try/finally で復元を保証する。プリミティブ var のみ＝ボクシング無し。
@@ -248,7 +252,7 @@ class DeltaEvaluator(private val p: Problem) {
         var aC1 = 0L; var aC3 = 0L; var aC3n = 0L; var aC3m = 0L; var aC3mn = 0L
         dGap = 0L; gapPendN = 0
         try {
-            aC1 = c1Local(i, j, old, nw); aC3 = c3After(i, j, 0, old, nw)
+            aC1 = c1After(i, old, nw); aC3 = c3After(i, j, 0, old, nw)
             aC3n = c3After(i, j, 1, old, nw); aC3m = c3After(i, j, 2, old, nw)
             aC3mn = c3After(i, j, 3, old, nw)
             for (r in p.consGap.indices) {
@@ -293,7 +297,7 @@ class DeltaEvaluator(private val p: Problem) {
 
         // [統一weekly/3.345.0] 曜日平準化 — シフト別なので old と nw の2バケットだけが動く（old==nw は不変）。
         //   範囲外セントネル(-1等)はそのバケットを持たないので、範囲ガードで片側だけ動かす。
-        // [3.445.0続/L-04経由で発見] ここも c1Local/c3Local の a[i][j] 窓と同型の一時書換え→測定→復元
+        // [3.445.0続/L-04経由で発見] ここも c1After/c3Local の a[i][j] 窓と同型の一時書換え→測定→復元
         //   パターン（b[wdIdx]-- ... b[wdIdx]++）で、復元前に例外が飛ぶと wdCnt が恒久的にずれる。
         //   weeklyDevOfBucket は現行不変条件下で例外を投げない純関数（配列を添字なしで走査するのみ・
         //   0除算は 7.0 固定なので発生しない）ため実害は未確認だが、previewMove 冒頭の a[i][j] と
@@ -437,6 +441,7 @@ class DeltaEvaluator(private val p: Problem) {
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
             hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hExt += dExt; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
             for (t in 0 until gapPendN) gapCur[gapPendR[t] * S + i] = gapPendV[t]
+            for (t in 0 until c1PendN) c1Cur[c1PendE[t] * S + i] = c1PendV[t]
             sGap += dGap
             covUTot = nCovU
         } finally {
@@ -517,15 +522,26 @@ class DeltaEvaluator(private val p: Problem) {
         return s
     }
 
-    private fun c1Local(i: Int, j: Int, old: Int, nw: Int): Long {
+    /** 変更前の c1（old か nw を数える規則）＝表の値の和。 */
+    private fun c1Before(i: Int, old: Int, nw: Int): Long {
         var tot = 0L
         val ix = c1Index
-        for (e in ix.byK[old]) tot += c1At(i, j, p.cons1[e])
-        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) tot += c1At(i, j, p.cons1[e])
+        for (e in ix.byK[old]) tot += c1Cur[e * S + i]
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) tot += c1Cur[e * S + i]
         return tot
     }
 
-    private fun c1At(i: Int, j: Int, c: C1): Long {
+    /** 変更後の c1（盤面は一時的に書き換え済み）。規則ごとの値は commit で表へ移す。 */
+    private fun c1After(i: Int, old: Int, nw: Int): Long {
+        var tot = 0L
+        c1PendN = 0
+        val ix = c1Index
+        for (e in ix.byK[old]) { val v = c1At(i, p.cons1[e]); c1PendE[c1PendN] = e; c1PendV[c1PendN] = v; c1PendN++; tot += v }
+        for (e in ix.byK[nw]) if (!ix.has[e * K + old]) { val v = c1At(i, p.cons1[e]); c1PendE[c1PendN] = e; c1PendV[c1PendN] = v; c1PendN++; tot += v }
+        return tot
+    }
+
+    private fun c1At(i: Int, c: C1): Long {
         if (!p.c1Applies(i, c.shiftIdx)) return 0L   // [統一] 担当不可は対象外(チェッカーと一致)
         // まとまりの 2 乗は日 j の外へつながるので、行全体の値（[C1Cost]）。前後の差が Δ になる。
         if (c.day1 <= 0 || c.day1 > T) return 0L
@@ -615,9 +631,12 @@ class DeltaEvaluator(private val p: Problem) {
 
     private fun c1All(): Long {
         var tot = 0L
-        for (c in p.cons1) for (i in 0 until S) {
-            if (!p.c1Applies(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
-            tot += C1Cost.rowCost(a[i], c.shiftIdx, c.day1, c.day2)
+        for (e in p.cons1.indices) { val c = p.cons1[e]
+            for (i in 0 until S) {
+                // [統一] 担当不可は対象外(チェッカーと一致)
+                val v = if (p.c1Applies(i, c.shiftIdx)) C1Cost.rowCost(a[i], c.shiftIdx, c.day1, c.day2) else 0L
+                c1Cur[e * S + i] = v; tot += v
+            }
         }
         return tot
     }
