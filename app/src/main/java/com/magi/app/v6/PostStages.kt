@@ -13,6 +13,7 @@ internal object PostStages {
     val HF66 = Stage("後処理 HF66 職員内再配分", "HF66IntraStaffRedistribution")
     val DAY_ASSIGN = Stage("後処理 厳密日割当", "DayAssignmentPolish")
     val WEEKLY_REBALANCE = Stage("後処理 曜日平準化(長方形交換)", "WeeklyRebalancePolish")
+    val GAP = Stage("後処理 シフトの間隔(gap)研磨(長方形交換)", "GapPolish")
     val ALTERNATING = Stage("後処理 交互最適化(日ブロック割当)", "AlternatingSoftPolish")
     val C1_JOINT_LNS = Stage("後処理 期間要件(c1)共同LNS", "C1共同LNS")
     val C1_EJECTION = Stage("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖")
@@ -43,5 +44,5 @@ internal object PostStages {
     val COMPONENT_REPAIR = Stage("後処理 違反連結成分修復", "ComponentRepair")   // 巡回: label に巡の印が付く
 
     /** 定義した段の一覧。 */
-    val ALL: List<Stage> = listOf(HF80, HF67, HF66, DAY_ASSIGN, WEEKLY_REBALANCE, ALTERNATING, C1_JOINT_LNS, C1_EJECTION, PERSONAL_LNS, COMPONENT_REPAIR_FINAL, EJECTION_PIPELINE, MEMBRANE_CELL, COVO_RELIEF, CYCLIC, C1_SAME_DAY, C1_INDEX, C1_TEMPORAL, C1_BEAM, C1_EXACT, C3_SEQUENCE, C3_ROTATE, C3MN, C3N, RANGE, C3_RUN, C3_PATTERN, ANCHORED_WINDOW, WISH_ISLAND, BLOCK_SWAP, COUNT_CHAIN, APT, FAIR, COMPONENT_REPAIR)
+    val ALL: List<Stage> = listOf(HF80, HF67, HF66, DAY_ASSIGN, WEEKLY_REBALANCE, GAP, ALTERNATING, C1_JOINT_LNS, C1_EJECTION, PERSONAL_LNS, COMPONENT_REPAIR_FINAL, EJECTION_PIPELINE, MEMBRANE_CELL, COVO_RELIEF, CYCLIC, C1_SAME_DAY, C1_INDEX, C1_TEMPORAL, C1_BEAM, C1_EXACT, C3_SEQUENCE, C3_ROTATE, C3MN, C3N, RANGE, C3_RUN, C3_PATTERN, ANCHORED_WINDOW, WISH_ISLAND, BLOCK_SWAP, COUNT_CHAIN, APT, FAIR, COMPONENT_REPAIR)
 }

@@ -26,6 +26,22 @@ object SmartInitialScheduler {
      */
     private const val MAX_DP_STATES = 200_000
 
+    /** ③〜⑤で、置くとシフトの間隔（gap）の不足が 1 日増えるごとに足す罰（個人上限超過 1000 より下、回数の偏り 1〜2 より上）。 */
+    private const val GAP_PENALTY = 10
+
+    /** (i,j) に k を置いたときに増える gap の不足日数（空きセル -1 は k でない扱い＝チェッカーと同じ式）。 */
+    private fun gapIncrease(p: Problem, row: IntArray, i: Int, j: Int, k: Int): Int {
+        var inc = 0
+        for (c in p.consGap) {
+            if (c.shiftIdx != k || !p.c1Applies(i, k)) continue
+            val before = GapRule.deficit(row, k, c.days)
+            val old = row[j]; row[j] = k
+            inc += GapRule.deficit(row, k, c.days) - before
+            row[j] = old
+        }
+        return inc
+    }
+
     fun generate(state: MagiState): ScheduleRunResult {
         val t0 = System.nanoTime()
         val p = Problem(state)
@@ -108,7 +124,9 @@ object SmartInitialScheduler {
                         if (schedule[i][j] >= 0 || !p.mayPlace(i, k) || p.extBanned(i, j, k)) continue
                         val hi = p.rangeHi[i][k]
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
-                        val penalty = (if (over) 1000 else 0) + counts[i][k] * 2
+                        // 間隔の不足は同点のときだけの決め手（人員の穴埋めの選び方を変えると後の日の必須が増える）
+                        val penalty = ((if (over) 1000 else 0) + counts[i][k] * 2) * 100 + gapIncrease(p, schedule[i], i, j, k) +
+                            (if (p.consGap.isNotEmpty() && p.makesForbiddenRun(schedule, i, j, k)) 50 else 0)
                         if (penalty < bestPenalty) { bestPenalty = penalty; bestI = i }
                     }
                     if (bestI < 0) break
@@ -130,10 +148,16 @@ object SmartInitialScheduler {
                 val lo = p.rangeLo[i][k].takeIf { it != Int.MIN_VALUE } ?: 0
                 var need = max(0, lo - counts[i][k])
                 while (need > 0 && pos < free.size) {
-                    // 拡張希望の禁止の日は飛ばす（禁止が無ければ q == pos で従来どおり）
+                    // 拡張希望の禁止の日は飛ばす（禁止が無ければ q == pos で従来どおり）。間隔の不足が増えない日があればそちらを先に
                     var q = pos
                     while (q < free.size && p.extBanned(i, free[q], k)) q++
                     if (q >= free.size) break
+                    if (p.consGap.isNotEmpty() && gapIncrease(p, schedule[i], i, free[q], k) > 0) {
+                        var r = q + 1
+                        while (r < free.size && (p.extBanned(i, free[r], k) || gapIncrease(p, schedule[i], i, free[r], k) > 0 ||
+                                p.makesForbiddenRun(schedule, i, free[r], k))) r++
+                        if (r < free.size) q = r
+                    }
                     if (q != pos) { val t = free[q]; free[q] = free[pos]; free[pos] = t }
                     val j = free[pos++]
                     schedule[i][j] = k
@@ -161,7 +185,9 @@ object SmartInitialScheduler {
                     val demandBonus = if (p.covUCell(k, j, covNow) > 0) -100 else 0
                     // [3.345.0] 休は通常のシフト種の一つ＝残り埋めで優先しない（旧: 休だけ -10 のボーナス）。
                     //   実データ3件で hard/covO/covU/low/high/c1 が全て同一＝この優先は実質不活性だった。
-                    val penalty = (if (over) 1000 else 0) + counts[i][k] + demandBonus
+                    // 間隔の不足を避けた先が禁止の並びにならないよう、禁止の並びを作る候補は間隔より重く避ける
+                    val penalty = (if (over) 1000 else 0) + counts[i][k] + demandBonus + GAP_PENALTY * gapIncrease(p, schedule[i], i, j, k) +
+                        (if (p.consGap.isNotEmpty() && p.makesForbiddenRun(schedule, i, j, k)) 500 else 0)
                     if (penalty < bestPenalty) { bestPenalty = penalty; bestK = k }
                 }
                 schedule[i][j] = bestK

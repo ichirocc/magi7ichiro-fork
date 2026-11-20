@@ -2196,6 +2196,13 @@ internal fun wishConflictLinkText(dayLabel: String): String = "${dayLabel}のぶ
 /** [3.707.0 3b-4] 希望の入力パネルのボタン。 */
 internal fun wishApplyButton(days: Int, symbol: String): String = "${days}日を${symbol}の希望にする"
 internal fun extWishApplyButton(days: Int): String = "${days}日を選んだシフト以外にする"
+/** 拡張希望で選んだ状態を文字で示す（選んだ＝入れないシフト）。何も選んでいなければ null。 */
+internal fun extWishRemainText(shifts: List<String>, selected: Set<Int>): String? {
+    if (selected.isEmpty()) return null
+    val remain = shifts.indices.filter { it !in selected }.map { shifts[it] }
+    return if (remain.isEmpty()) "すべて選ぶと、この日に入れるシフトがなくなります"
+    else "この日に入れるのは ${remain.joinToString("・")} だけ（×のシフトは入りません）"
+}
 internal const val CLEAR_SELECTION_BUTTON = "選択を外す"
 internal fun needApplyButton(days: Int): String = "${days}日に適用する"
 

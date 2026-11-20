@@ -426,6 +426,7 @@ AptPolish applied=0 rolledBack=false
 FairPolish applied=0 rolledBack=false
 ComponentRepair applied=0 rolledBack=false
 WeeklyRebalancePolish applied=1 rolledBack=false
+GapPolish applied=0 rolledBack=false
 AlternatingSoftPolish applied=0 rolledBack=false
 C1共同LNS applied=1 rolledBack=false
 個人回数共同LNS applied=1 rolledBack=false

@@ -895,7 +895,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                             .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
                             .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, MaterialTheme.shapes.small)
                             .selectable(selected = sel, role = Role.RadioButton) { picked = k }, contentAlignment = Alignment.Center) {
-                            Text((ui.shiftSymbols.getOrNull(k) ?: "$k") + (if (ng) " 外" else ""),
+                            Text((if (sel) "✓ " else "") + (ui.shiftSymbols.getOrNull(k) ?: "$k") + (if (ng) " 外" else ""),
                                 color = if (ng) cs.error else cs.onSurface, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
@@ -1023,7 +1023,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                             .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
                             .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
                             .selectable(selected = sel, role = Role.RadioButton) { picked = k }, contentAlignment = Alignment.Center) {
-                            Text(ui.shiftSymbols.getOrNull(k) ?: "$k",
+                            Text((if (sel) "✓ " else "") + (ui.shiftSymbols.getOrNull(k) ?: "$k"),
                                 color = ensureReadable(if (sel) cs.primaryContainer else cs.surface, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")), fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
