@@ -57,13 +57,13 @@ class C1RepairAnalysisTest {
 
     @Test
     fun exactSolveFindsPatchWhenNoPinOrForbiddenRunBlocksIt() {
-        // 回帰: 制約が無ければ従来どおり joint 2→1 の手を見つける。
+        // 回帰: 制約が無ければ従来どおり joint を 1 まで下げる手を見つける（不足 1 の窓が 2 つ続く＝(1+1)²＝4、3.727.111）。
         val s = pinFixture()
         val p = Problem(s); val sched = s.schedule.toIntArray2D()
-        assertEquals(2, UnifiedViolationChecker.check(s, sched).breakdown["c1"])
+        assertEquals(4, UnifiedViolationChecker.check(s, sched).breakdown["c1"])
         val v = C1RepairAnalysis.analyze(p, sched).first { it.staff == 0 }
         val r = C1RepairAnalysis.solveWindow(p, sched, v)
-        assertEquals("baseline は joint 2", 2, r.baselineJointC1)
+        assertEquals("baseline は joint 4", 4, r.baselineJointC1)
         assertEquals("coverage保存で joint 1 まで下げられる", 1, r.minJointC1)
         assertNotNull("改善手が出る", r.patch)
     }

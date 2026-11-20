@@ -421,6 +421,24 @@ static const char* const kBreakdownNames[22] = {
 };
 static constexpr int kBreakdownCount = 22;
 
+// 期間の制約（Kotlin C1Cost と同式）: 窓を 1 日ずつ滑らせ、不足している窓が続くまとまりの「不足量の和」を 2 乗して足す。
+struct C1Acc {
+    long long run = 0, tot = 0;
+    inline void add(int d) { if (d > 0) run += d; else { tot += run * run; run = 0; } }
+    inline long long end() { tot += run * run; run = 0; return tot; }
+};
+inline long long c1CostN(const int* row, int T, int x, int d1, int d2) {
+    if (d1 <= 0 || d1 > T) return 0;
+    C1Acc acc;
+    int z = 0;
+    for (int l = 0; l < d1; l++) if (row[l] == x) z++;
+    for (int j = 0; j <= T - d1; j++) {
+        if (j > 0) { if (row[j - 1] == x) z--; if (row[j + d1 - 1] == x) z++; }
+        acc.add(d2 - z);
+    }
+    return acc.end();
+}
+
 // シフトの間隔（Kotlin GapRule.deficit と同式）: かたまりの最後の日から次のかたまりの最初の日までの差が n 未満なら n − 差。
 inline long long gapDeficitN(const int* row, int T, int x, int n) {
     long long sum = 0;
@@ -442,18 +460,13 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
     long long hard1 = 0, soft = 0;
     if (bd) for (int i = 0; i < kBreakdownCount; i++) bd[i] = 0;
 
-    // c1（canDo ガード＋窓ごとの不足量×重み90、[3.522.0] 30→50、2026-10-26 50→90。経緯はdocs/history/3.4xx.md）
+    // c1（canDo ガード＋不足が続くまとまりの不足量の和の 2 乗×重み90、3.727.111。重みの経緯はdocs/history/3.4xx.md）
     {
         long long raw = 0;
         for (const auto& c : p.cons1) {
             for (int i = 0; i < S; i++) {
                 if (!p.c1On(i, c.si)) continue;
-                const int* row = a + (size_t)i * T;
-                for (int j = 0; j <= T - c.d1; j++) {
-                    int z = 0;
-                    for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                    if (z < c.d2) raw += c.d2 - z;
-                }
+                raw += c1CostN(a + (size_t)i * T, T, c.si, c.d1, c.d2);
             }
         }
         soft += raw * p.w.c1; if (bd) bd[0] += raw;
@@ -865,24 +878,14 @@ struct SaChunk {
     // [3.522.0] c1 重み30→50・c3mn重み30→90、2026-10-26 c1 50→90・c3mn 90→50。経緯はdocs/history/3.4xx.md。
     long long contribC1(int i, const C1r& c) const {
         if (!p.c1On(i, c.si)) return 0;
-        long long v = 0;
         if (useBits) {
             uint64_t rm = rowMask[(size_t)i * K + c.si];
             uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
-            for (int j = 0; j <= T - c.d1; j++)
-            {
-                const int z = __builtin_popcountll((rm >> j) & wmask);
-                if (z < c.d2) v += (c.d2 - z) * p.w.c1;
-            }
-            return v;
+            C1Acc acc;
+            for (int j = 0; j <= T - c.d1; j++) acc.add(c.d2 - __builtin_popcountll((rm >> j) & wmask));
+            return acc.end() * p.w.c1;
         }
-        const int* row = a.data() + (size_t)i * T;
-        for (int j = 0; j <= T - c.d1; j++) {
-            int z = 0;
-            for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-            if (z < c.d2) v += (c.d2 - z) * p.w.c1;
-        }
-        return v;
+        return c1CostN(a.data() + (size_t)i * T, T, c.si, c.d1, c.d2) * p.w.c1;
     }
     long long contribC2Row(int i) const {  // [3.522.0] c2 1→4
         long long v = 0;

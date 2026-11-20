@@ -307,13 +307,16 @@ object V6SanityPort {
             for (i in 0 until p.S) {
                 if (!p.c1Applies(i, x)) continue
                 val row = schedule.getOrNull(i) ?: continue
+                // 届かない不足を窓の順に並べ、c1 と同じくまとまりの和の 2 乗にする（実際の不足は各窓でこれ以上＝下限のまま）
+                val acc = C1Cost.Acc()
                 for (w in 0..p.T - c.day1) {
                     var reach = 0
                     for (j in w until w + c.day1) {
                         if (if (p.wishLocked(i, j)) row[j] == x else p.mayPlaceAt(i, j, x)) reach++
                     }
-                    if (reach < c.day2) n += c.day2 - reach
+                    acc.add(c.day2 - reach)
                 }
+                n += acc.end().toInt()
             }
         }
         return n
@@ -1949,13 +1952,8 @@ object V6SanityPort {
                     val ruleLabel = "${sym(c.shiftIdx)}(${c.day1}日窓≥${c.day2})"
                     for (i in 0 until p.S) {
                         if (!p.c1Applies(i, c.shiftIdx)) continue
-                        var j = 0
-                        while (j <= p.T - c.day1) {
-                            var z = 0
-                            for (l in 0 until c.day1) if (s[i][j + l] == c.shiftIdx) z++
-                            if (z < c.day2) perStaffRule.getOrPut(i) { LinkedHashMap() }.merge(ruleLabel, c.day2 - z, Int::plus)
-                            j++
-                        }
+                        val v = C1Cost.rowCost(s[i], c.shiftIdx, c.day1, c.day2).toInt()
+                        if (v > 0) perStaffRule.getOrPut(i) { LinkedHashMap() }.merge(ruleLabel, v, Int::plus)
                     }
                 }
                 if (perStaffRule.isNotEmpty()) {

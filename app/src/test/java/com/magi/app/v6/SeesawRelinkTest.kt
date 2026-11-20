@@ -40,7 +40,7 @@ class SeesawRelinkTest {
         assertFalse(SeesawRelink.dominates(a, a))
     }
 
-    /** C# の同名テストと同じ指紋＝言語跨ぎで同じ盤面と同じ候補の数を出す（この組では途中の盤面を採らず、交換の候補も出ない）。 */
+    /** C# の同名テストと同じ指紋＝言語跨ぎで同じ盤面と同じ候補の数を出す（この組では途中の盤面を採らず、交換の候補は 1 つ＝3.727.111）。 */
     @Test
     fun matchesCSharpOnSampleFixture() {
         val r = SeesawRelink.apply(state, best, alts(), maxMillis = 600_000L)
@@ -77,9 +77,9 @@ class SeesawRelinkTest {
     }
 
     companion object {
-        // [3.727.79] c1＝窓の不足量で 0/3/-1124469770 → 0/0/1395822771（C# の同名テストと同じ値）。
+        // [3.727.111] c1＝まとまりの不足量の和の 2 乗で 0/0/1395822771 → 0/1/1394130808。[3.727.79] c1＝窓の不足量で 0/3/-1124469770 → 0/0/1395822771（C# の同名テストと同じ値）。
         const val EXPECTED_APPLIED = 0
-        const val EXPECTED_TRADEOFFS = 0
-        const val EXPECTED_HASH = 1395822771
+        const val EXPECTED_TRADEOFFS = 1
+        const val EXPECTED_HASH = 1394130808
     }
 }

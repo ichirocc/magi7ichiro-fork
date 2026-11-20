@@ -92,14 +92,7 @@ internal object CountChainPolish {
             var v = 0.0
             for (c in p.cons1) {
                 if (!p.c1Applies(s, c.shiftIdx) || c.day1 > p.T) continue
-                var z = 0
-                for (l in 0 until c.day1) if (row[l] == c.shiftIdx) z++
-                var j = 0
-                while (j <= p.T - c.day1) {
-                    if (j > 0) { if (row[j - 1] == c.shiftIdx) z--; if (row[j + c.day1 - 1] == c.shiftIdx) z++ }
-                    if (z < c.day2) v += (c.day2 - z) * wC1
-                    j++
-                }
+                v += C1Cost.rowCost(row, c.shiftIdx, c.day1, c.day2) * wC1
             }
             fun fam(list: List<C3>, forbidden: Boolean, w: Double) {
                 for (c in list) {

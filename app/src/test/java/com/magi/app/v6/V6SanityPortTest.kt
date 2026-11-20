@@ -324,8 +324,9 @@ class V6SanityPortTest {
         // [3.282.0] 計数を「違反ラン先頭のみ」→ checker の inc と同じ「違反窓ごと」へ是正。
         //   この盤面は窓j=0(休0回＝不足2)とj=1(休1回＝不足1)が違反＝breakdown c1=3 と厳密に一致する
         //   （旧実装は連続窓を1ランとして「1件」と表示し breakdown と食い違う第3の計数だった）。
-        assertEquals("前提: 不足量の和は3", 3, report.breakdown["c1"])
-        assertTrue("s0が休(5日窓≥2)で3件（=breakdownと同じ不足量の計上）と表示されること", summary!!.contains("s0 休(5日窓≥2)3件"))
+        //   [3.727.111] 2 つの窓は続いているので 1 まとまり＝不足量の和 3 の 2 乗＝9 件。
+        assertEquals("前提: まとまりの不足量の和3の2乗＝9", 9, report.breakdown["c1"])
+        assertTrue("s0が休(5日窓≥2)で9件（=breakdownと同じ計上）と表示されること", summary!!.contains("s0 休(5日窓≥2)9件"))
         assertTrue("s1は違反なしのため内訳に出ないこと", !summary.contains("s1 "))
     }
 

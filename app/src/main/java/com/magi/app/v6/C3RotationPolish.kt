@@ -298,13 +298,8 @@ internal object C3RotationPolish {
         for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cnt[k]++ }
         for (c in p.cons1) {                                      // c1: d日窓で shiftIdx が day2 回未満
             if (!p.c1Applies(i, c.shiftIdx)) continue
-            var j = 0
-            while (j <= p.T - c.day1) {
-                var z = 0
-                for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
-                if (z < c.day2) { total += c.day2 - z; weighted += (c.day2 - z) * ObjectiveWeights.of("c1") }
-                j++
-            }
+            val v = C1Cost.rowCost(sched[i], c.shiftIdx, c.day1, c.day2)
+            total += v; weighted += v * ObjectiveWeights.of("c1")
         }
         for (c in p.cons2) if (p.canDo(i, c.shiftIdx) && cnt[c.shiftIdx] < c.count) { total++; weighted += ObjectiveWeights.of("c2") } // c2
         for (k in 0 until p.K) {                                  // low/high: 回数レンジ(不足/超過「量」を加算)

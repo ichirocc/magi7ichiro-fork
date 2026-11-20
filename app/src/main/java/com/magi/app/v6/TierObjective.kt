@@ -46,12 +46,7 @@ object TierObjective {
             if (c.day1 <= 0 || c.day1 > p.T) continue
             for (i in 0 until p.S) {
                 if (!p.c1Applies(i, c.shiftIdx)) continue
-                val row = schedule[i]
-                for (w in 0..p.T - c.day1) {
-                    var z = 0
-                    for (l in 0 until c.day1) if (row[w + l] == c.shiftIdx) z++
-                    if (z < c.day2) c1[i] += c.day2 - z
-                }
+                c1[i] += C1Cost.rowCost(schedule[i], c.shiftIdx, c.day1, c.day2).toInt()
             }
         }
         for (c in p.cons3mn) {

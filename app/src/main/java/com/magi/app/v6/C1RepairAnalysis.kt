@@ -235,13 +235,7 @@ object C1RepairAnalysis {
                 val i = m[mi]
                 for (c in rules) {
                     if (!p.c1Applies(i, c.shiftIdx)) continue
-                    var jj = 0
-                    while (jj <= p.T - c.day1) {
-                        var z = 0
-                        for (l in 0 until c.day1) if (rows[mi][jj + l] == c.shiftIdx) z++
-                        if (z < c.day2) total += c.day2 - z
-                        jj++
-                    }
+                    total += C1Cost.rowCost(rows[mi], c.shiftIdx, c.day1, c.day2).toInt()
                 }
             }
             return total
