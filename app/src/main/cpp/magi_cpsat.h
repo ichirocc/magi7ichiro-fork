@@ -181,25 +181,24 @@ private:
         }
     }
 
-    // c1（C1Cost）: 窓 w の不足 f_w＝max(0, d2−回数)、nz_w＝f_w>0、まとまりの途中の和 r_w（nz なら r_{w−1}+f_w、でなければ 0）、
-    //   まとまりの終わり e_w＝nz_w かつ次の窓が不足でない、で r_w² を足す。どれも等式で縛る＝途中の解でも採点が C1Cost と一致する。
-    //   窓がすべて定数の行は C1Cost で直接。
+    // c1（C1Cost）: まとまりの 2 乗は窓ごとの増分 f_w×(2r_{w−1}+f_w) の和（r＝まとまりの途中の和、不足の無い窓で 0）。
+    //   f_w を「不足が t 以上」の 0/1 b_{w,t}（t=1..d2）で表すと f² = Σ(2t−1)b、f×r = Σ y（y＝b なら r_{w−1}、でなければ 0）
+    //   で掛け算が要らず、目的が線形になる（3.727.111 で入れた掛け算の制約は部分の解き直しを約 4 倍遅くした）。どれも等式＝途中の解でも採点が一致。
     void addC1() {
         for (const auto& c : p_.cons1) for (int i = 0; i < S; i++) {
             if (!p_.c1On(i, c.si) || c.d1 <= 0 || c.d1 > T) continue;
             const int W = T - c.d1 + 1;
-            std::vector<sat::LinearExpr> f((size_t)W);
-            std::vector<long long> fc((size_t)W, -1);
+            const long long rMax = (long long)c.d2 * W;
             bool allConst = true;
+            std::vector<sat::LinearExpr> zs((size_t)W);
+            std::vector<long long> fc((size_t)W, -1);
             for (int j = 0; j < W; j++) {
                 sat::LinearExpr z;
                 for (int l = 0; l < c.d1; l++) z += X(i, j + l, c.si);
                 long long cz;
-                if (isConst(z, cz)) { fc[(size_t)j] = std::max(0LL, (long long)c.d2 - cz); f[(size_t)j] = sat::LinearExpr(fc[(size_t)j]); continue; }
-                allConst = false;
-                auto fv = cp_.NewIntVar({0, c.d2});
-                cp_.AddMaxEquality(fv, {sat::LinearExpr(c.d2) - z, sat::LinearExpr(0)});
-                f[(size_t)j] = fv;
+                if (isConst(z, cz)) fc[(size_t)j] = std::max(0LL, (long long)c.d2 - cz);
+                else allConst = false;
+                zs[(size_t)j] = z;
             }
             if (allConst) {
                 C1Acc acc;
@@ -208,37 +207,43 @@ private:
                 if (v > 0) addSoft(sat::LinearExpr(v), p_.w.c1);
                 continue;
             }
-            const long long rMax = (long long)c.d2 * W;
-            std::vector<sat::BoolVar> nz((size_t)W);
-            std::vector<sat::IntVar> r((size_t)W);
+            sat::LinearExpr prev(0);        // r_{w−1}
+            bool prevZero = true;           // r_{w−1} が定数 0
             for (int j = 0; j < W; j++) {
-                if (fc[(size_t)j] == 0) nz[(size_t)j] = cp_.FalseVar();
-                else if (fc[(size_t)j] > 0) nz[(size_t)j] = cp_.TrueVar();
-                else {
-                    nz[(size_t)j] = cp_.NewBoolVar();
-                    cp_.AddLessOrEqual(f[(size_t)j], c.d2 * nz[(size_t)j]);
-                    cp_.AddGreaterOrEqual(f[(size_t)j], nz[(size_t)j]);
-                }
-                r[(size_t)j] = cp_.NewIntVar({0, rMax});
-                sat::LinearExpr prev = j > 0 ? sat::LinearExpr(r[(size_t)j - 1]) : sat::LinearExpr(0);
-                cp_.AddEquality(r[(size_t)j], prev + f[(size_t)j]).OnlyEnforceIf(nz[(size_t)j]);
-                cp_.AddEquality(r[(size_t)j], 0).OnlyEnforceIf(nz[(size_t)j].Not());
-            }
-            for (int j = 0; j < W; j++) {
-                auto e = cp_.NewBoolVar();
-                if (j + 1 < W) {
-                    cp_.AddImplication(e, nz[(size_t)j]);
-                    cp_.AddImplication(e, nz[(size_t)j + 1].Not());
-                    cp_.AddBoolOr({nz[(size_t)j].Not(), nz[(size_t)j + 1], e});
+                sat::LinearExpr f(0);
+                std::vector<sat::BoolVar> bs;
+                if (fc[(size_t)j] >= 0) {
+                    f = sat::LinearExpr(fc[(size_t)j]);
+                    if (fc[(size_t)j] > 0) {
+                        addSoft(sat::LinearExpr(fc[(size_t)j] * fc[(size_t)j]), p_.w.c1);
+                        if (!prevZero) addSoft(2 * fc[(size_t)j] * prev, p_.w.c1);
+                    }
                 } else {
-                    cp_.AddEquality(e, nz[(size_t)j]);
+                    for (int t = 1; t <= c.d2; t++) {
+                        auto b = cp_.NewBoolVar();
+                        cp_.AddLessOrEqual(zs[(size_t)j], c.d2 - t).OnlyEnforceIf(b);
+                        cp_.AddGreaterOrEqual(zs[(size_t)j], c.d2 - t + 1).OnlyEnforceIf(b.Not());
+                        f += b;
+                        addSoft(sat::LinearExpr::Term(b, 2 * t - 1), p_.w.c1);
+                        if (!prevZero) {
+                            auto y = cp_.NewIntVar({0, rMax});
+                            cp_.AddEquality(y, prev).OnlyEnforceIf(b);
+                            cp_.AddEquality(y, 0).OnlyEnforceIf(b.Not());
+                            addSoft(2 * sat::LinearExpr(y), p_.w.c1);
+                        }
+                        bs.push_back(b);
+                    }
                 }
-                auto sq = cp_.NewIntVar({0, rMax * rMax});
-                cp_.AddMultiplicationEquality(sq, {r[(size_t)j], r[(size_t)j]});
-                auto cost = cp_.NewIntVar({0, rMax * rMax});
-                cp_.AddEquality(cost, sq).OnlyEnforceIf(e);
-                cp_.AddEquality(cost, 0).OnlyEnforceIf(e.Not());
-                addSoft(cost, p_.w.c1);
+                if (j + 1 == W) break;
+                // r_w: 不足の窓なら r_{w−1}+f_w、でなければ 0
+                if (fc[(size_t)j] == 0) { prev = sat::LinearExpr(0); prevZero = true; continue; }
+                auto r = cp_.NewIntVar({0, rMax});
+                if (fc[(size_t)j] > 0) cp_.AddEquality(r, prev + f);
+                else {
+                    cp_.AddEquality(r, prev + f).OnlyEnforceIf(bs[0]);
+                    cp_.AddEquality(r, 0).OnlyEnforceIf(bs[0].Not());
+                }
+                prev = sat::LinearExpr(r); prevZero = false;
             }
         }
     }

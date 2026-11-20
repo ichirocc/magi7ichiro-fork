@@ -53,7 +53,7 @@ min_encoding("low d>=0, d+n>=lo", zmax(0, lo - n), lambda y: z3.And(y >= 0, y + 
 min_encoding("high d>=0, d-n>=-hi", zmax(0, n - hi), lambda y: z3.And(y >= 0, y - n >= -hi), u, (n >= 0, hi >= 0))
 min_encoding("apt d>=|n-t|", z3.If(n >= t, n - t, t - n), lambda y: z3.And(y >= 0, y - n >= -t, y + n >= t), u, (n >= 0, t >= 0))
 
-# c1: 0<=f<=d, z + f >= d の最小 f は max(0, d−z)（窓の回数 z が最低数 d に足りない分）。
+# c1（3.727.79〜111 の窓ごとの不足量。3.727.112 からは末尾の線形符号化）: 0<=f<=d, z + f >= d の最小 f は max(0, d−z)。
 # c2: f∈{0,1}, z + d·f >= d の最小 f は [z < d]（回数 z が最低数 d 未満なら違反 1）。
 z, d, m, ul = z3.Ints("z d m ul")
 f = z3.Int("f")
@@ -190,6 +190,48 @@ def run_strong_proof(Lr):
 
 for Lr in range(2, 8):
     run_strong_proof(Lr)
+
+
+# c1（3.727.112）: まとまりの不足量の和の 2 乗（C1Cost）の線形符号化。窓 w の回数 z_w、b_{w,t}⇔z_w<=d−t、
+#   r_w＝b_{w,1} なら r_{w−1}+Σ_t b_{w,t} でなければ 0、y_{w,t}＝b_{w,t} なら r_{w−1} でなければ 0、
+#   目的＝Σ(2t−1)b_{w,t}+2y_{w,t}。どれも等式なので「条件を満たせば目的＝C1Cost」（①）と「条件を満たす割り当てがある」（②）を示す。
+def c1_linear_proof(W, dd):
+    zs = [z3.Int(f"c1z{w}") for w in range(W)]
+    pre = z3.And(*[zz >= 0 for zz in zs])
+    bs = [[z3.Bool(f"c1b{w}_{t}") for t in range(1, dd + 1)] for w in range(W)]
+    rs = [z3.Int(f"c1r{w}") for w in range(W)]
+    ys = [[z3.Int(f"c1y{w}_{t}") for t in range(1, dd + 1)] for w in range(W)]
+    def cond(bv, rv, yv):
+        cs = []
+        for w in range(W):
+            prev = rv[w - 1] if w > 0 else z3.IntVal(0)
+            fw = z3.Sum([z3.If(bb, 1, 0) for bb in bv[w]])
+            for t in range(1, dd + 1):
+                cs.append(z3.If(bv[w][t - 1], zs[w] <= dd - t, zs[w] >= dd - t + 1))
+                cs.append(yv[w][t - 1] == z3.If(bv[w][t - 1], prev, 0))
+            cs.append(rv[w] == z3.If(bv[w][0], prev + fw, 0))
+        return z3.And(*cs)
+    def obj(bv, yv):
+        return z3.Sum([z3.If(bv[w][t - 1], 2 * t - 1, 0) + 2 * yv[w][t - 1] for w in range(W) for t in range(1, dd + 1)])
+    # C1Cost: 不足 def_w＝max(0,d−z_w)、途中の和 R_w、まとまりの終わりで R_w²。
+    defs = [zmax(0, dd - zz) for zz in zs]
+    R = []
+    for w in range(W):
+        R.append(z3.If(defs[w] > 0, (R[w - 1] if w > 0 else 0) + defs[w], 0))
+    want = z3.Sum([z3.If(z3.And(defs[w] > 0, (defs[w + 1] <= 0) if w + 1 < W else z3.BoolVal(True)), R[w] * R[w], 0) for w in range(W)])
+    flat = [bb for row in bs for bb in row] + rs + [yy for row in ys for yy in row]
+    prove(f"c1 線形 W={W} d={dd}: 条件を満たせば目的＝C1Cost", z3.ForAll(flat, z3.Implies(z3.And(pre, cond(bs, rs, ys)), obj(bs, ys) == want)))
+    bv = [[zs[w] <= dd - t for t in range(1, dd + 1)] for w in range(W)]
+    rv = []
+    for w in range(W):
+        rv.append(z3.If(bv[w][0], (rv[w - 1] if w > 0 else 0) + z3.Sum([z3.If(bb, 1, 0) for bb in bv[w]]), 0))
+    yv = [[z3.If(bv[w][t - 1], rv[w - 1] if w > 0 else 0, 0) for t in range(1, dd + 1)] for w in range(W)]
+    prove(f"c1 線形 W={W} d={dd}: 達成（条件を満たす割り当てがある）", z3.Implies(pre, cond(bv, rv, yv)))
+
+
+for W in range(1, 9):
+    for dd in range(1, 4):
+        c1_linear_proof(W, dd)
 
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} PROVED")
