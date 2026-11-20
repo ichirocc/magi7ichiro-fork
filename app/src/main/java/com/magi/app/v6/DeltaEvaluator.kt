@@ -527,26 +527,16 @@ class DeltaEvaluator(private val p: Problem) {
 
     private fun c1At(i: Int, j: Int, c: C1): Long {
         if (!p.c1Applies(i, c.shiftIdx)) return 0L   // [統一] 担当不可は対象外(チェッカーと一致)
-        var tot = 0L
-        val js0 = maxOf(0, j - c.day1 + 1); val js1 = minOf(T - c.day1, j)
+        // まとまりの 2 乗は日 j の外へつながるので、行全体の値（[C1Cost]）。前後の差が Δ になる。
+        if (c.day1 <= 0 || c.day1 > T) return 0L
         if (useBits && c.day1 in 1..63 && c.shiftIdx in 0 until K) {
             val row = bits[i][c.shiftIdx]; val win = if (c.day1 == 63) Long.MAX_VALUE else (1L shl c.day1) - 1
-            var js = js0
-            while (js <= js1) {
-                val z = java.lang.Long.bitCount((row ushr js) and win)
-                if (z < c.day2) tot += c.day2 - z
-                js++
-            }
-            return tot
+            val acc = C1Cost.Acc()
+            var js = 0
+            while (js <= T - c.day1) { acc.add(c.day2 - java.lang.Long.bitCount((row ushr js) and win)); js++ }
+            return acc.end()
         }
-        var js = js0
-        while (js <= js1) {
-            var z = 0; var l = 0
-            while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
-            if (z < c.day2) tot += c.day2 - z
-            js++
-        }
-        return tot
+        return C1Cost.rowCost(a[i], c.shiftIdx, c.day1, c.day2)
     }
 
     /** 変更前の c3 族 [f] の寄与（old か nw を参照する規則）。表があれば行全体の値の和、無ければ窓の寄与。 */
@@ -627,13 +617,7 @@ class DeltaEvaluator(private val p: Problem) {
         var tot = 0L
         for (c in p.cons1) for (i in 0 until S) {
             if (!p.c1Applies(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
-            var js = 0
-            while (js <= T - c.day1) {
-                var z = 0; var l = 0
-                while (l < c.day1) { if (a[i][js + l] == c.shiftIdx) z++; l++ }
-                if (z < c.day2) tot += c.day2 - z
-                js++
-            }
+            tot += C1Cost.rowCost(a[i], c.shiftIdx, c.day1, c.day2)
         }
         return tot
     }

@@ -147,20 +147,14 @@ object C1DeltaPrefilter {
         return newFires - oldFires
     }
 
-    /** 職員 staff の row における全 cons1 窓の不足 fire 数（checker の c1 走査と同一意味論）。 */
+    /** 職員 staff の row における c1 の件数（checker と同じ [C1Cost]）。 */
     private fun staffC1Fires(p: Problem, row: IntArray, staff: Int): Int {
         var fires = 0
         for (c in p.cons1) {
             val x = c.shiftIdx
             if (x !in 0 until p.K || c.day1 !in 1..p.T || c.day2 < 1) continue
             if (!p.c1Applies(staff, x)) continue
-            var j = 0
-            while (j <= p.T - c.day1) {
-                var z = 0
-                for (l in 0 until c.day1) if (row[j + l] == x) z++
-                if (z < c.day2) fires += c.day2 - z
-                j++
-            }
+            fires += C1Cost.rowCost(row, x, c.day1, c.day2).toInt()
         }
         return fires
     }

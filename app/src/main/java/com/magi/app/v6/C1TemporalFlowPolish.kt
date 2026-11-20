@@ -75,16 +75,7 @@ internal object C1TemporalFlowPolish {
             for (c in p.cons1) {
                 val x = c.shiftIdx; val d = c.day1
                 if (x !in 0 until p.K || d <= 0 || d > p.T || !p.c1Applies(i, x)) continue
-                var count = 0
-                for (j in 0 until d) if (s[i][j] == x) count++
-                if (count < c.day2) out += c.day2 - count
-                var start = 1
-                while (start <= p.T - d) {
-                    if (s[i][start - 1] == x) count--
-                    if (s[i][start + d - 1] == x) count++
-                    if (count < c.day2) out += c.day2 - count
-                    start++
-                }
+                out += C1Cost.rowCost(s[i], x, d, c.day2).toInt()
             }
             return out
         }

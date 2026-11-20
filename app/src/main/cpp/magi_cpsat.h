@@ -181,17 +181,53 @@ private:
         }
     }
 
+    // c1（C1Cost）: 窓 w の不足 f_w、まとまりの途中の和 r_w（不足の窓では r_w ≥ r_{w-1}+f_w、それ以外は 0 以上）、
+    //   まとまりの終わり e_w（nz_w かつ次の窓が不足でない）で r_w² を足す。最小化で r と e は真の値に落ちる
+    //   （nz を余分に立てるとまとまりがつながり (a+b)² ≥ a²+b² で損、e を余分に立てても損）。窓がすべて定数の行は C1Cost で直接。
     void addC1() {
         for (const auto& c : p_.cons1) for (int i = 0; i < S; i++) {
-            if (!p_.c1On(i, c.si)) continue;
-            for (int j = 0; j <= T - c.d1; j++) {
+            if (!p_.c1On(i, c.si) || c.d1 <= 0 || c.d1 > T) continue;
+            const int W = T - c.d1 + 1;
+            std::vector<sat::LinearExpr> f((size_t)W);
+            std::vector<long long> fc((size_t)W, -1);
+            bool allConst = true;
+            for (int j = 0; j < W; j++) {
                 sat::LinearExpr z;
                 for (int l = 0; l < c.d1; l++) z += X(i, j + l, c.si);
                 long long cz;
-                if (isConst(z, cz)) { if (cz < c.d2) addSoft(sat::LinearExpr(c.d2 - cz), p_.w.c1); continue; }
-                auto f = cp_.NewIntVar({0, c.d2});
-                cp_.AddGreaterOrEqual(z + f, c.d2);
-                addSoft(f, p_.w.c1);
+                if (isConst(z, cz)) { fc[(size_t)j] = std::max(0LL, (long long)c.d2 - cz); f[(size_t)j] = sat::LinearExpr(fc[(size_t)j]); continue; }
+                allConst = false;
+                auto fv = cp_.NewIntVar({0, c.d2});
+                cp_.AddGreaterOrEqual(z + fv, c.d2);
+                f[(size_t)j] = fv;
+            }
+            if (allConst) {
+                C1Acc acc;
+                for (int j = 0; j < W; j++) acc.add((int)fc[(size_t)j]);
+                const long long v = acc.end();
+                if (v > 0) addSoft(sat::LinearExpr(v), p_.w.c1);
+                continue;
+            }
+            const long long rMax = (long long)c.d2 * W;
+            std::vector<sat::BoolVar> nz((size_t)W);
+            std::vector<sat::IntVar> r((size_t)W);
+            for (int j = 0; j < W; j++) {
+                if (fc[(size_t)j] == 0) nz[(size_t)j] = cp_.FalseVar();
+                else if (fc[(size_t)j] > 0) nz[(size_t)j] = cp_.TrueVar();
+                else { nz[(size_t)j] = cp_.NewBoolVar(); cp_.AddLessOrEqual(f[(size_t)j], c.d2 * nz[(size_t)j]); }
+                r[(size_t)j] = cp_.NewIntVar({0, rMax});
+                sat::LinearExpr prev = j > 0 ? sat::LinearExpr(r[(size_t)j - 1]) : sat::LinearExpr(0);
+                cp_.AddGreaterOrEqual(r[(size_t)j], prev + f[(size_t)j]).OnlyEnforceIf(nz[(size_t)j]);
+            }
+            for (int j = 0; j < W; j++) {
+                auto e = cp_.NewBoolVar();
+                if (j + 1 < W) cp_.AddGreaterOrEqual(e + nz[(size_t)j + 1], nz[(size_t)j]);
+                else cp_.AddGreaterOrEqual(e, nz[(size_t)j]);
+                auto sq = cp_.NewIntVar({0, rMax * rMax});
+                cp_.AddMultiplicationEquality(sq, {r[(size_t)j], r[(size_t)j]});
+                auto cost = cp_.NewIntVar({0, rMax * rMax});
+                cp_.AddGreaterOrEqual(cost, sq).OnlyEnforceIf(e);
+                addSoft(cost, p_.w.c1);
             }
         }
     }
@@ -789,11 +825,7 @@ inline long long rowLoad(const MagiProblem& p, const std::vector<int>& b, int i)
     }
     for (const auto& c : p.cons1) {
         if (!p.c1On(i, c.si)) continue;
-        for (int j = 0; j <= T - c.d1; j++) {
-            int z = 0;
-            for (int l = 0; l < c.d1; l++) if (b[(size_t)i * T + j + l] == c.si) z++;
-            if (z < c.d2) v += c.d2 - z;
-        }
+        v += c1CostN(b.data() + (size_t)i * T, T, c.si, c.d1, c.d2);
     }
     return v;
 }

@@ -71,7 +71,7 @@ class Evaluator(private val p: Problem) {
 
         // c1: every window of length day1 must contain >= day2 of shiftIdx
         // [統一] (1)担当不可スタッフは対象外(canDoガード=チェッカーと一致、解消不能な幻の違反を除去)、
-        //   (2)窓ごとの不足量 d2−z を計上（重みは下の集約）。
+        //   (2)不足が続くまとまりの不足量の和の 2 乗を計上（[C1Cost]、3.727.111。重みは下の集約）。
         // [外部レビューM2/コメントドリフト是正] 窓の要件(c1)の重みは
         //   4→5(2026-07-20)→15(2026-07-21)→30(3.409.24)とHF77明示数値指示で変遷。ここは実装(30L)は
         //   常に正しく、この行のコメント自体が旧値のまま取り残されていた（実害なし・記述のみ訂正）。
@@ -81,14 +81,7 @@ class Evaluator(private val p: Problem) {
                 val d1 = c.day1; val si = c.shiftIdx; val d2 = c.day2
                 for (i in 0 until S) {
                     if (!p.c1Applies(i, si)) continue
-                    var j = 0
-                    while (j <= T - d1) {
-                        var z = 0
-                        var l = 0
-                        while (l < d1) { if (a[i][j + l] == si) z++; l++ }
-                        if (z < d2) raw += d2 - z
-                        j++
-                    }
+                    raw += C1Cost.rowCost(a[i], si, d1, d2)
                 }
             }
             soft += raw * w.c1; record("c1", raw)

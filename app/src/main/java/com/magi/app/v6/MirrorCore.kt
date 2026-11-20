@@ -286,20 +286,23 @@ object UnifiedViolationChecker {
                 val row = s[i]
                 var z = 0
                 for (l in 0 until c.day1) if (row[l] == c.shiftIdx) z++
+                val acc = C1Cost.Acc()
                 while (j <= p.T - c.day1) {
                     if (j > 0) {
                         if (row[j - 1] == c.shiftIdx) z--
                         if (row[j + c.day1 - 1] == c.shiftIdx) z++
                     }
                     val viol = z < c.day2
+                    acc.add(c.day2 - z)
                     if (viol) {
-                        inc("c1", c.day2 - z)
                         if (!prevViol) { mark(i, j, "c1"); runStart = j }
                     } else if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
                     prevViol = viol
                     j++
                 }
                 if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
+                val cost = acc.end()
+                if (cost > 0) inc("c1", cost.toInt())
             }
         }
 
