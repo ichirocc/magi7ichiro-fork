@@ -2189,6 +2189,18 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
     }
 }
 
+/** グループ内の回数をそろえる（希望の反映と同じく押して上書きする操作。元に戻せる）。 */
+@Composable
+internal fun GroupEqualizeRow(ui: UiState, onEqualize: () -> Unit) {
+    if (!ui.loaded) return
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(GROUP_EQUALIZE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = onEqualize, enabled = !ui.running, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(GROUP_EQUALIZE_BUTTON) }
+        }
+    }
+}
+
 @Composable
 private fun PreDistRowView(r: PreDistRow) {
     val cs = MaterialTheme.colorScheme

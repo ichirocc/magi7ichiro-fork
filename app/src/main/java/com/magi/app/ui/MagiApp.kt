@@ -889,6 +889,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         val oos = vm.wishOutOfScopeCount()
                         if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
                     }, onBulk = { wishBulkOpen = true })
+                    GroupEqualizeRow(ui, onEqualize = { vm.equalizeGroupCounts() })
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav, stickyTopPx = viewportTopPx)

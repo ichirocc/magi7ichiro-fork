@@ -2204,6 +2204,10 @@ internal fun extWishRemainText(shifts: List<String>, selected: Set<Int>): String
     else "この日に入れるのは ${remain.joinToString("・")} だけ（×のシフトは入りません）"
 }
 internal const val CLEAR_SELECTION_BUTTON = "選択を外す"
+internal const val GROUP_EQUALIZE_BUTTON = "グループ内の回数をそろえる"
+internal const val GROUP_EQUALIZE_NOTE = "グループ内の回数（同じグループの人どうし・シフトごと）を、同じ日の入れ替えでそろえます。個人の下限・上限は外さず、必須違反は増やしません。要調整は増えることがあります。元に戻せます"
+internal const val GROUP_EQUALIZE_NONE = "グループ内の回数はこれ以上そろえられません（希望・固定・個人の上下限・必須違反の増加で入れ替えられません）"
+internal fun groupEqualizeDoneText(swaps: Int): String = "グループ内の回数をそろえました: 入れ替え ${swaps}件"
 internal fun needApplyButton(days: Int): String = "${days}日に適用する"
 
 /** [3.707.0 3b-5] 担当外のシフトを選んだときの注記。 */
