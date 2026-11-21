@@ -207,6 +207,7 @@ internal sealed interface MagiEvent {
         data class SetMembraneCellLns(val on: Boolean) : Settings
         data class SetSeesawRelink(val on: Boolean) : Settings
         data class SetCpsatResolve(val on: Boolean) : Settings
+        data class SetRogsController(val on: Boolean) : Settings
         data class SetFloorShortStall(val on: Boolean) : Settings
         data class SetC3nWallDeepCheck(val on: Boolean) : Settings
         data class SetNormalStallFraction(val fraction: Double) : Settings

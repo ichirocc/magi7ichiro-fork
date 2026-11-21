@@ -123,6 +123,7 @@ data class UiState(
     val seesawRelink: Boolean = true,  // PolishGate.seesawRelink（シーソーの交換の候補、docs/seesaw.md §6.3）。アプリの既定は ON（3.727.45）。保存しない
     val floorShortStall: Boolean = true,  // PolishGate.floorShortStall。保存しない
     val cpsatResolve: Boolean = false,  // PolishGate.cpsatResolve（探索の頭打ち後の解き直し、docs/cpsat_formal.md）。既定 OFF。保存しない
+    val rogsController: Boolean = false,  // PolishGate.rogsController（PORTFOLIO の役割を残り違反に合わせて選ぶ）。既定 OFF。保存しない
     val c3nWallDeepCheck: Boolean = false,  // PolishGate.c3nWallDeepCheck。保存しない
     val normalStallFraction: Double = 0.9,  // PolishGate.normalStallFraction（停滞閾値の割合、(0,1)）。保存しない
     val wishConflictFloorMode: com.magi.app.v6.WishFloorMode = com.magi.app.v6.WishFloorMode.OFF,  // PolishGate.wishConflictFloorMode。保存しない

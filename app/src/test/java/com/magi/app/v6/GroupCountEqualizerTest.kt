@@ -33,7 +33,7 @@ class GroupCountEqualizerTest {
         assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
         val d = (0..2).map { i -> r.schedule[i].count { it == 1 } }
         assertTrue("D の回数の差が 1 以内: $d", d.max() - d.min() <= 1)
-        assertEquals(sched[3], r.schedule[3].toList())   // 1 人だけのグループは動かさない
+        // 1 人だけのグループ（s3）は目標を持たないが、別のグループとの入れ替えの相手にはなる＝日ごとの人数だけ確かめる
     }
 
     @Test fun onlyPickedShiftsAreTargeted() {
@@ -88,6 +88,29 @@ class GroupCountEqualizerTest {
             assertEquals(setOf(1, 2, 3), (0..2).map { r.schedule[it][j] }.toSet())   // 日ごとの人数は不変
             assertTrue(r.schedule[0][j] != 3 && r.schedule[1][j] != 1 && r.schedule[2][j] != 2)   // 置けないシフトは入らない
         }
+    }
+
+    @Test fun crossGroupPartnerMovesCountsTheOwnGroupCannot() {
+        // 休・D・A・B。G0＝s0・s1・s2、G1＝s3。毎日 s0=D・s1=A・s2=A・s3=B。s1・s2 は B を置けず（上限 0）、s0 は A を置けない＝
+        // G0 の中ではどう入れ替えても D は s0 から動かない。G1 の s3 を介した 3 人の回し（s0←B・s3←A・s1←D）だけが D を渡せる。
+        val st = MagiState(
+            startDate = "2026-12-01", endDate = "2026-12-14",
+            shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("D", "D", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            groups = listOf(Group("G0", "G0"), Group("G1", "G1")), staff = (0..3).map { Staff("s$it", if (it < 3) 0 else 1, 0) },
+            use2Patterns = false, groupShift = listOf(List(4) { 1 }, List(4) { 1 }), groupShiftApt = listOf(List(4) { "" }, List(4) { "" }),
+            schedule = listOf(List(14) { 1 }, List(14) { 2 }, List(14) { 2 }, List(14) { 3 }), wishes = emptyMap(),
+            staffRange = mapOf("0,2" to Range("0", "0"), "1,3" to Range("0", "0"), "2,3" to Range("0", "0")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val b = st.schedule.map { it.toIntArray() }.toTypedArray()
+        assertEquals(0, GroupCountEqualizer.apply(st, b, setOf(1), annealIters = 0).swaps)
+        val r = GroupCountEqualizer.apply(st, b, setOf(1))
+        val d = (0..2).map { i -> r.schedule[i].count { it == 1 } }
+        assertTrue("G0 の D が 1 人に偏らない: $d", d.max() - d.min() < 14)
+        assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
+        for (j in 0 until 14) assertTrue(r.schedule[0][j] != 2 && r.schedule[1][j] != 3 && r.schedule[2][j] != 3)
     }
 
     @Test fun keepsWishesRangesAndNeverAddsHard() {

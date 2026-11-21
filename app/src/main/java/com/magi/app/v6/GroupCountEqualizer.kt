@@ -8,7 +8,8 @@ import com.magi.app.model.MagiState
  * 各人の目標（置ける人の平均を個人の下限・上限へ収めた値）からのずれの 2 乗和が最も減る入れ替えから当てる。当てない手:
  * 希望・手動固定のマス、置けないシフト（`mayPlaceAt`）、個人の下限・上限から外れる（すでに外れている側はそれ以上悪くしない）、必須違反が増える。
  * 要調整（c1・並び・曜日など）は悪くなってもよい（利用者決定）。[shifts] を渡すとそのシフトの回数だけをそろえる（ほかのシフトの回数は
- * 入れ替えで動くことがあるが、個人の下限・上限は守る）。1 組ずつ当てて止まったら、月全体の入れ替えを焼きなましで探す（[anneal]）。
+ * 入れ替えで動くことがあるが、個人の下限・上限は守る）。1 組ずつ当てて止まったら、月全体の入れ替えを焼きなましで探す（[anneal]、
+ * 別のグループの人との入れ替えも使う＝グループの合計が動くので、ずれはそのときの平均から測る [groupDev]）。
  */
 object GroupCountEqualizer {
     data class Result(val schedule: Array<IntArray>, val swaps: Int, val spreadBefore: Long, val spreadAfter: Long)
@@ -36,6 +37,37 @@ object GroupCountEqualizer {
         return t
     }
 
+    /** グループ×シフトごとの対象（置ける人・2 人以上）。シフトを選ばない・置ける人が 1 人以下なら null。 */
+    private fun eligible(p: Problem, shifts: Set<Int>?): Array<Array<IntArray?>> =
+        Array(p.groupMembers.size) { g ->
+            val m = p.groupMembers[g]
+            Array(p.K) { k ->
+                if (m.size < 2 || (shifts != null && k !in shifts)) null
+                else m.filter { p.mayPlace(it, k) }.toIntArray().takeIf { it.size >= 2 }
+            }
+        }
+
+    /** グループ g・シフト k のずれ＝各人の「いまの平均を個人の下限・上限へ収めた値」からの 2 乗和（別のグループとの入れ替えで平均が動くので毎回計算）。 */
+    private fun groupDev(p: Problem, el: IntArray, k: Int, cnt: Array<IntArray>): Double {
+        var sum = 0
+        for (i in el) sum += cnt[i][k]
+        val mean = sum.toDouble() / el.size
+        var d = 0.0
+        for (i in el) {
+            val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) 0 else it }.toDouble()
+            val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) Double.MAX_VALUE else it.toDouble() }
+            val e = cnt[i][k] - mean.coerceIn(lo, maxOf(lo, hi))
+            d += e * e
+        }
+        return d
+    }
+
+    private fun totalDev(p: Problem, elig: Array<Array<IntArray?>>, cnt: Array<IntArray>): Long {
+        var d = 0.0
+        for (g in elig.indices) for (k in 0 until p.K) elig[g][k]?.let { d += groupDev(p, it, k, cnt) }
+        return Math.round(d * 100)
+    }
+
     private const val ANNEAL_ITERS = 400_000
     private const val ANNEAL_RUNS = 3
 
@@ -44,9 +76,11 @@ object GroupCountEqualizer {
      * 途中は個人の範囲を外れても必須が増えてもよい（罰として数える）が、採るのは「各 (職員,シフト) の範囲からの外れ量が元以下・
      * 必須が元以下」の盤面のうち、目標からのずれがいちばん小さいものだけ。よりそろった盤面が見つかれば [work] を書き換えて true。
      */
-    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, tgt: Array<DoubleArray>, iters: Int, seed: Long): Boolean {
-        // 手は 1 手ごとに無作為に作る（全部を先に並べると 30 人・31 日で数十万件になる）: 同じグループの 2 人の同じ日の入れ替え・
-        // 3 人の回し・同じ 2 人の前後 2 日をまとめた入れ替えを等しい割合で。希望・手動固定のマスに当たる手は捨てる。日ごとの人数は変わらない。
+    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, elig: Array<Array<IntArray?>>, iters: Int, seed: Long): Boolean {
+        // 手は 1 手ごとに無作為に作る（全部を先に並べると 30 人・31 日で数十万件になる）: 2 人の同じ日の入れ替え・3 人の回し・
+        // 同じ 2 人の前後 2 日をまとめた入れ替えを等しい割合で。1 人目はグループから、相手は半分は同じグループ・半分は誰でも
+        // （同じグループの中だけでは禁止の並びや希望で動けない回数を、別のグループの人との入れ替えで動かす。12 月の実データで
+        // 厳密に解くと、同じグループだけの最小のずれ 719 に対し別のグループとも入れ替えると 119）。希望・手動固定のマスに当たる手は捨てる。日ごとの人数は変わらない。
         val groups = p.groupMembers.filter { it.size >= 2 }
         if (groups.isEmpty() || p.T == 0) return false
         val pairW = groups.map { it.size * (it.size - 1) / 2 }
@@ -55,11 +89,12 @@ object GroupCountEqualizer {
         fun lo(i: Int, k: Int) = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) 0 else it }
         fun out(i: Int, k: Int, n: Int) = maxOf(0, lo(i, k) - n) + p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) 0 else maxOf(0, n - it) }
         val out0 = Array(p.S) { i -> IntArray(p.K) { k -> out(i, k, cnt[i][k]) } }
-        fun sq(i: Int, k: Int, n: Int) = tgt[i][k].let { if (it.isNaN()) 0.0 else (n - it) * (n - it) }
+        val groupOf = IntArray(p.S) { -1 }.also { a -> p.groupMembers.forEachIndexed { g, m -> for (i in m) a[i] = g } }
         /** 範囲の外れ量のうち元を超えた分。 */
         fun excess(i: Int, k: Int, n: Int) = maxOf(0, out(i, k, n) - out0[i][k])
         var devCur = 0.0
-        for (i in 0 until p.S) for (k in 0 until p.K) devCur += sq(i, k, cnt[i][k])
+        for (g in elig.indices) for (k in 0 until p.K) elig[g][k]?.let { devCur += groupDev(p, it, k, cnt) }
+        val tg = IntArray(24); val tk = IntArray(24)   // この手で変わる (グループ,シフト)
         var exCur = 0
         var hardCur = 0   // 元からの必須の増減
         val cur = work.copy2D()
@@ -84,8 +119,10 @@ object GroupCountEqualizer {
             val n = if (kind == 1 && m.size >= 3) 3 else 2
             val who = if (n == 2) who2 else who3
             who[0] = m[rnd.nextInt(m.size)]
-            do { who[1] = m[rnd.nextInt(m.size)] } while (who[1] == who[0])
-            if (n == 3) do { who[2] = m[rnd.nextInt(m.size)] } while (who[2] == who[0] || who[2] == who[1])
+            val wide = rnd.nextBoolean()   // 相手を誰からでも選ぶ
+            fun pick() = if (wide) rnd.nextInt(p.S) else m[rnd.nextInt(m.size)]
+            do { who[1] = pick() } while (who[1] == who[0])
+            if (n == 3) do { who[2] = pick() } while (who[2] == who[0] || who[2] == who[1])
             val d1 = rnd.nextInt(p.T)
             val days = if (kind == 2 && p.T >= 2) {
                 var d2: Int
@@ -118,8 +155,21 @@ object GroupCountEqualizer {
             for (e in 0 until nc) {
                 val i = ci[e]; val k = ck[e]; val dd = cd[e]
                 if (dd == 0) continue
-                dDev += sq(i, k, cnt[i][k] + dd) - sq(i, k, cnt[i][k])
                 dEx += excess(i, k, cnt[i][k] + dd) - excess(i, k, cnt[i][k])
+            }
+            var nt = 0
+            for (e in 0 until nc) {
+                val g = groupOf[ci[e]]; val k = ck[e]
+                if (cd[e] == 0 || g < 0 || elig[g][k] == null) continue
+                var seen = false
+                for (q in 0 until nt) if (tg[q] == g && tk[q] == k) seen = true
+                if (!seen) { tg[nt] = g; tk[nt] = k; nt++ }
+            }
+            if (nt > 0) {
+                for (q in 0 until nt) dDev -= groupDev(p, elig[tg[q]][tk[q]]!!, tk[q], cnt)
+                for (e in 0 until nc) cnt[ci[e]][ck[e]] += cd[e]
+                for (q in 0 until nt) dDev += groupDev(p, elig[tg[q]][tk[q]]!!, tk[q], cnt)
+                for (e in 0 until nc) cnt[ci[e]][ck[e]] -= cd[e]
             }
             // その場で当てて、必須の差は変わった日だけ数える（同じ日の並べ替え＝日の人数は不変。2 日は 1 日ずつ当てて足す）
             var dHard = 0
@@ -157,12 +207,6 @@ object GroupCountEqualizer {
 
     private fun counts(p: Problem, s: Array<IntArray>) = Array(p.S) { i -> IntArray(p.K).also { c -> for (k in s[i]) if (k in 0 until p.K) c[k]++ } }
 
-    /** 目標からのずれの 2 乗和（×100 で整数に。小さいほどそろっている）。 */
-    private fun dev(t: Array<DoubleArray>, cnt: Array<IntArray>): Long {
-        var d = 0.0
-        for (i in t.indices) for (k in t[i].indices) if (!t[i][k].isNaN()) { val e = cnt[i][k] - t[i][k]; d += e * e }
-        return Math.round(d * 100)
-    }
 
     fun apply(state: MagiState, schedule: Array<IntArray>, shifts: Set<Int>? = null, maxSwaps: Int = 2_000,
               annealIters: Int = ANNEAL_ITERS, seed: Long = 1L): Result {
@@ -170,7 +214,8 @@ object GroupCountEqualizer {
         val work = normalizeSchedule(schedule, p)
         val cnt = counts(p, work)
         val tgt = targets(p, cnt, shifts)
-        val before = dev(tgt, cnt)
+        val elig = eligible(p, shifts)
+        val before = totalDev(p, elig, cnt)
         if (tgt.all { row -> row.all { it.isNaN() } }) return Result(work, 0, before, before)   // そろえる (職員,シフト) が無い
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)   // 希望固定と手動固定
         /** 回数 n→n+d で、個人の範囲からの外れ量が増えないか。 */
@@ -223,11 +268,11 @@ object GroupCountEqualizer {
             if (!done) break
         }
         // 焼きなましは乱数で行き着く先が揺れるので、種を変えて ANNEAL_RUNS 回走らせ、いちばんそろった盤面を採る
-        var bestRun: Array<IntArray>? = null; var bestRunDev = dev(tgt, cnt)
+        var bestRun: Array<IntArray>? = null; var bestRunDev = totalDev(p, elig, cnt)
         if (annealIters > 0) for (run in 0 until ANNEAL_RUNS) {
             val w = work.copy2D()
-            if (!anneal(p, w, cnt, tgt, annealIters, seed + run)) continue
-            val dv = dev(tgt, counts(p, w))
+            if (!anneal(p, w, cnt, elig, annealIters, seed + run)) continue
+            val dv = totalDev(p, elig, counts(p, w))
             if (dv < bestRunDev) { bestRunDev = dv; bestRun = w }
         }
         bestRun?.let { bb ->
@@ -237,6 +282,6 @@ object GroupCountEqualizer {
             for (i in 0 until p.S) bb[i].copyInto(work[i])
             for (i in 0 until p.S) { cnt[i].fill(0); for (k in work[i]) if (k in 0 until p.K) cnt[i][k]++ }
         }
-        return Result(work, swaps, before, dev(tgt, cnt))
+        return Result(work, swaps, before, totalDev(p, elig, cnt))
     }
 }
