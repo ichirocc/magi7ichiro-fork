@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -78,6 +79,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -2187,6 +2189,63 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
             }
         }
     }
+}
+
+/** グループ内の回数をそろえる（希望の反映と同じく押して上書きする操作。元に戻せる）。 */
+@Composable
+internal fun GroupEqualizeRow(ui: UiState, onEqualize: () -> Unit) {
+    if (!ui.loaded) return
+    Card(Modifier.fillMaxWidth(), colors = magiCardColors()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(GROUP_EQUALIZE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = onEqualize, enabled = !ui.running, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(GROUP_EQUALIZE_BUTTON) }
+        }
+    }
+}
+
+/** どのシフトの回数をそろえるかを選ぶ（3.727.116）。最初は全シフト。選んだシフトは ✓ と濃い色、外したシフトは薄い色。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun GroupEqualizeDialog(ui: UiState, onConfirm: (Set<Int>) -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val all = ui.shiftSymbols.indices.toSet()
+    var sel by remember { mutableStateOf(all) }
+    MagiAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { DialogHeader(GROUP_EQUALIZE_BUTTON, onDismiss) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(GROUP_EQUALIZE_PICK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ui.shiftSymbols.forEachIndexed { k, sym ->
+                        val on = k in sel
+                        val bg = hexToColor(ui.shiftColorHex.getOrElse(k) { "" })
+                        val fg = hexToColor(ui.shiftTextHex.getOrElse(k) { "" })
+                        Box(
+                            Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp)
+                                .background(if (on) bg else bg.copy(alpha = 0.35f), MaterialTheme.shapes.small)
+                                .border(if (on) 3.dp else 1.dp, if (on) cs.primary else cs.outline, MaterialTheme.shapes.small)
+                                .clickable { sel = if (on) sel - k else sel + k }
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text((if (on) "✓ " else "") + sym, color = if (on) fg else cs.onSurfaceVariant,
+                                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+                TextButton(onClick = { sel = if (sel.size == all.size) emptySet() else all }) {
+                    Text(if (sel.size == all.size) GROUP_EQUALIZE_NONE_PICK else GROUP_EQUALIZE_ALL_PICK)
+                }
+            }
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onConfirm(sel) }, enabled = sel.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { Text(groupEqualizeConfirmText(sel.size, all.size)) }
+                DialogDismissButton(onClick = onDismiss, text = "やめる")
+            }
+        },
+    )
 }
 
 @Composable

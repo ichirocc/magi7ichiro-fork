@@ -57,6 +57,8 @@ class Review3707Test {
         assertEquals("11/24(火)のぶつかる希望を見る", wishConflictLinkText("11/24(火)"))
         assertEquals("3日を夜の希望にする", wishApplyButton(3, "夜"))
         assertEquals("2日を選んだシフト以外にする", extWishApplyButton(2))
+        assertEquals("すべてのシフトをそろえる", groupEqualizeConfirmText(10, 10))
+        assertEquals("選んだ 2種類をそろえる", groupEqualizeConfirmText(2, 10))
         assertEquals(null, extWishRemainText(listOf("休", "日", "夜"), emptySet()))
         assertEquals("この日に入れるのは 日 だけ（×のシフトは入りません）", extWishRemainText(listOf("休", "日", "夜"), setOf(0, 2)))
         assertEquals("すべて選ぶと、この日に入れるシフトがなくなります", extWishRemainText(listOf("休", "日"), setOf(0, 1)))
