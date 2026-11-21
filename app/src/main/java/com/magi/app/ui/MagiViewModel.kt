@@ -2732,18 +2732,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * グループ内の回数をそろえる（[GroupCountEqualizer]）。希望の反映と同じく利用者が押して勤務表を上書きする操作＝採点で採否を決めない。
      * 必須違反は増やさず、個人の下限・上限は外さない。要調整は悪くなってもよい（利用者決定）。Undo・操作ログ付き。
      */
-    fun equalizeGroupCounts() {
+    fun equalizeGroupCounts(shifts: Set<Int>? = null) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
-        val r = com.magi.app.v6.GroupCountEqualizer.apply(st, sched)
+        val r = com.magi.app.v6.GroupCountEqualizer.apply(st, sched, shifts)
         if (r.swaps == 0) { postOpNotice(GROUP_EQUALIZE_NONE, undoable = false); return }
         pushUndo("グループ内の回数をそろえる")
         for (i in sched.indices) for (j in sched[i].indices) sched[i][j] = r.schedule[i][j]
         currentSchedule = sched
         state = st.withSchedule(sched)
         autoSave()
-        logOp("I", "グループ内の回数をそろえる: 入れ替え ${r.swaps}件（目標からのずれ ${r.spreadBefore}→${r.spreadAfter}）")
+        val which = shifts?.sorted()?.joinToString("・") { st.shifts.getOrNull(it)?.kigou ?: "$it" } ?: "全シフト"
+        logOp("I", "グループ内の回数をそろえる（$which）: 入れ替え ${r.swaps}件（目標からのずれ ${r.spreadBefore}→${r.spreadAfter}）")
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

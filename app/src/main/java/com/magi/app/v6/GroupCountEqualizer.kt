@@ -7,7 +7,8 @@ import com.magi.app.model.MagiState
  * 手は同じ日・同じ勤務グループの 2 人のシフトの入れ替えだけ＝日ごとのシフト別人数とグループのシフト別合計は変わらない。
  * 各人の目標（置ける人の平均を個人の下限・上限へ収めた値）からのずれの 2 乗和が最も減る入れ替えから当てる。当てない手:
  * 希望・手動固定のマス、置けないシフト（`mayPlaceAt`）、個人の下限・上限から外れる（すでに外れている側はそれ以上悪くしない）、必須違反が増える。
- * 要調整（c1・並び・曜日など）は悪くなってもよい（利用者決定）。
+ * 要調整（c1・並び・曜日など）は悪くなってもよい（利用者決定）。[shifts] を渡すとそのシフトの回数だけをそろえる（ほかのシフトの回数は
+ * 入れ替えで動くことがあるが、個人の下限・上限は守る）。
  */
 object GroupCountEqualizer {
     data class Result(val schedule: Array<IntArray>, val swaps: Int, val spreadBefore: Long, val spreadAfter: Long)
@@ -16,11 +17,12 @@ object GroupCountEqualizer {
      * 各人の目標回数: グループ×シフトごとに、そのシフトを置ける人（`mayPlace`）の平均を、その人の下限・上限へ収めた値。
      * 置けない人は対象外（NaN）。入れ替えはグループ内・置ける人どうしの合計を変えないので、目標は途中で動かない。
      */
-    private fun targets(p: Problem, cnt: Array<IntArray>): Array<DoubleArray> {
+    private fun targets(p: Problem, cnt: Array<IntArray>, shifts: Set<Int>?): Array<DoubleArray> {
         val t = Array(p.S) { DoubleArray(p.K) { Double.NaN } }
         for (m in p.groupMembers) {
             if (m.size < 2) continue
             for (k in 0 until p.K) {
+                if (shifts != null && k !in shifts) continue
                 val el = m.filter { p.mayPlace(it, k) }
                 if (el.size < 2) continue
                 val mean = el.sumOf { cnt[it][k] }.toDouble() / el.size
@@ -43,11 +45,11 @@ object GroupCountEqualizer {
         return Math.round(d * 100)
     }
 
-    fun apply(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 2_000): Result {
+    fun apply(state: MagiState, schedule: Array<IntArray>, shifts: Set<Int>? = null, maxSwaps: Int = 2_000): Result {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
         val cnt = counts(p, work)
-        val tgt = targets(p, cnt)
+        val tgt = targets(p, cnt, shifts)
         val before = dev(tgt, cnt)
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)   // 希望固定と手動固定
         /** 回数 n→n+d で、個人の範囲からの外れ量が増えないか。 */

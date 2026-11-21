@@ -36,6 +36,20 @@ class GroupCountEqualizerTest {
         assertEquals(sched[3], r.schedule[3].toList())   // 1 人だけのグループは動かさない
     }
 
+    @Test fun onlyPickedShiftsAreTargeted() {
+        // D だけ選ぶ: D の差は縮むが、A だけの偏りのための入れ替えはしない
+        val sched = listOf(List(14) { 1 }, List(14) { 0 }, List(14) { 2 }, List(14) { 0 })
+        val st = state(sched)
+        val b = sched.map { it.toIntArray() }.toTypedArray()
+        val onlyA = GroupCountEqualizer.apply(st, b, setOf(2))
+        val onlyD = GroupCountEqualizer.apply(st, b, setOf(1))
+        val d = (0..2).map { i -> onlyD.schedule[i].count { it == 1 } }
+        assertTrue("D の差が縮む: $d", d.max() - d.min() <= 1)
+        val a = (0..2).map { i -> onlyA.schedule[i].count { it == 2 } }
+        assertTrue("A の差が縮む: $a", a.max() - a.min() <= 1)
+        assertEquals(0, GroupCountEqualizer.apply(st, b, emptySet()).swaps)
+    }
+
     @Test fun keepsWishesRangesAndNeverAddsHard() {
         val rng = Random(11)
         repeat(30) {

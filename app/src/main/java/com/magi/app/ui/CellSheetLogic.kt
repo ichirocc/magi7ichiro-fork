@@ -2208,6 +2208,12 @@ internal const val GROUP_EQUALIZE_BUTTON = "グループ内の回数をそろえ
 internal const val GROUP_EQUALIZE_NOTE = "グループ内の回数（同じグループの人どうし・シフトごと）を、同じ日の入れ替えでそろえます。個人の下限・上限は外さず、必須違反は増やしません。要調整は増えることがあります。元に戻せます"
 internal const val GROUP_EQUALIZE_NONE = "グループ内の回数はこれ以上そろえられません（希望・固定・個人の上下限・必須違反の増加で入れ替えられません）"
 internal fun groupEqualizeDoneText(swaps: Int): String = "グループ内の回数をそろえました: 入れ替え ${swaps}件"
+internal const val GROUP_EQUALIZE_PICK_NOTE = "回数をそろえるシフトを選びます（複数選べます）。選んでいないシフトの回数は入れ替えで動くことがありますが、個人の下限・上限は守ります"
+internal const val GROUP_EQUALIZE_ALL_PICK = "すべて選ぶ"
+internal const val GROUP_EQUALIZE_NONE_PICK = "すべて外す"
+/** そろえるボタンの文言（全部選んでいれば「すべてのシフトをそろえる」）。 */
+internal fun groupEqualizeConfirmText(picked: Int, total: Int): String =
+    if (picked >= total) "すべてのシフトをそろえる" else "選んだ ${picked}種類をそろえる"
 internal fun needApplyButton(days: Int): String = "${days}日に適用する"
 
 /** [3.707.0 3b-5] 担当外のシフトを選んだときの注記。 */
