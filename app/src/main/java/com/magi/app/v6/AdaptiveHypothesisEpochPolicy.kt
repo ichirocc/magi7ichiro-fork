@@ -81,6 +81,13 @@ internal object AdaptiveHypothesisEpochPolicy {
         )
     }
 
+    /** [OpportunityController] が選ぶ候補（巡回と同じ 7 役割）。 */
+    fun escapeRoleList(): List<HypothesisEpochRole> = currentEscapeRoles().toList()
+
+    /** 役割を指定した割り当て（[OpportunityController] 用。強度は巡回と同じく再配属回数で上がる）。 */
+    fun assignmentOf(role: HypothesisEpochRole, reassignments: Int): HypothesisEpochAssignment =
+        HypothesisEpochAssignment(role = role, algorithm = algorithmFor(role), intensity = intensityFor(role, reassignments))
+
     fun algorithmFor(role: HypothesisEpochRole): V6Algorithm = when (role) {
         HypothesisEpochRole.DAY_BLOCK_ALNS,
         HypothesisEpochRole.LARGE_DESTROY_ALNS -> V6Algorithm.ALNS

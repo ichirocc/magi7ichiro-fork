@@ -25,6 +25,8 @@ data class EngineConfig(
     val mafs2Enabled: Boolean = false,
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
+    /** PORTFOLIO の役割を残り違反に合わせて選ぶ（[OpportunityController]、試験・既定 OFF）。 */
+    val rogsController: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
 ) {
     fun postParams() = V6HotfixPasses.PostOptimizationParams(

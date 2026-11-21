@@ -154,6 +154,7 @@ internal object PortfolioSearch {
         val globalImproves = java.util.concurrent.atomic.AtomicInteger(0)
         // 役割ごとの全体最良の更新（回数・減った必須・減った重み）。lock の中で足す＝役割別 worker 秒と並べて投入時間あたりの効きを見る
         val roleGains = LinkedHashMap<HypothesisEpochRole, LongArray>()
+        val rogs = if (options.config.rogsController) OpportunityController(AdaptiveHypothesisEpochPolicy.escapeRoleList()) else null
         fun creditRole(role: HypothesisEpochRole, before: ViolationReport, after: ViolationReport) {
             val g = roleGains.getOrPut(role) { LongArray(3) }
             g[0]++; g[1] += (before.hard - after.hard).toLong(); g[2] += Math.round(before.weightedScore - after.weightedScore)
@@ -202,6 +203,7 @@ internal object PortfolioSearch {
                 var eliteReport = initialReports[i]
                 var eliteLogs: List<MirrorLog> = emptyList()
                 var reassignments = 0
+                var roleOverride: HypothesisEpochRole? = null   // [rogs] 制御が選んだ役割（null＝従来の巡回）
                 var stagnantEpochs = 0
                 var improvedPrevious = false
                 var epoch = 0
@@ -247,8 +249,10 @@ internal object PortfolioSearch {
                         continue
                     }
                     try {
-                    val assignment = AdaptiveHypothesisEpochPolicy.assignmentFor(i, reassignments)
+                    val assignment = roleOverride?.let { AdaptiveHypothesisEpochPolicy.assignmentOf(it, reassignments) }
+                        ?: AdaptiveHypothesisEpochPolicy.assignmentFor(i, reassignments)
                     val epochT0 = nowMs()
+                    val phaseAtStart = rogs?.phaseOf(eliteReport)
                     val roleSeed = AdaptiveHypothesisEpochPolicy.epochSeed(baseSeed, i, epoch, reassignments)
                     // [3.282.0/新領域ログ監査] エポック改善の基準線＝エポック開始時点の自己エリート。
                     //   旧: `better(result, startReport)` で startReport は**破壊摂動済みの入口盤面**（escape系
@@ -432,6 +436,9 @@ internal object PortfolioSearch {
                     ) {
                         reassignments++
                         stagnantEpochs = 0
+                        // [rogs] W0・W4 以外は、いまの最良に残る違反の局面で 1 秒あたり最も前進した役割へ
+                        if (rogs != null && Math.floorMod(i, 8) != 0 && Math.floorMod(i, 8) != 4)
+                            roleOverride = synchronized(lock) { rogs.choose(rogs.phaseOf(eliteReport), assignment.role) }
                         // [3.308.1/敵対検証] 既定経路はこの分岐で常に基準量子へ戻していた（旧
                         //   `improvedPrevious = false`）。roleChanged=true はその挙動を保つための
                         //   引数であって「役割が必ず変わる」という主張ではない。実際 W4 は
@@ -456,6 +463,9 @@ internal object PortfolioSearch {
                     //   計2396s と数秒少なく出る（各ワーカーの最後の1回ぶん）。
                     roleRuns.merge(assignment.role, 1, Int::plus)
                     roleMillis.merge(assignment.role, nowMs() - epochT0, Long::plus)
+                    if (rogs != null && phaseAtStart != null) synchronized(lock) {
+                        rogs.record(phaseAtStart, assignment.role, (nowMs() - epochT0) / 1000.0, preEpochEliteReport, eliteReport)
+                    }
                     epoch++
                     } catch (ce: kotlinx.coroutines.CancellationException) {
                         throw ce
@@ -477,7 +487,7 @@ internal object PortfolioSearch {
                     elite = elite,
                     report = eliteReport,
                     logs = eliteLogs,
-                    lastRole = AdaptiveHypothesisEpochPolicy.assignmentFor(i, reassignments).role,
+                    lastRole = roleOverride ?: AdaptiveHypothesisEpochPolicy.assignmentFor(i, reassignments).role,
                     exitReason = exitReason,
                     exitAtSec = exitAtSec,
                     survivedStops = survivedStops,
@@ -581,7 +591,8 @@ internal object PortfolioSearch {
                 "非同期適応仮説 archive=${archive.size()} 圧縮elite=${compressedElites.size} " +
                 "ワーカー解=${outcomes.size}本(相異なる${distinctWorkers}本) 距離=$distanceNote / $exitNote / " +
                 "役割別worker秒(計${totalWorkerMs / 1000}s・実効外側並列=${"%.2f".format(outerParallelism)}): $budgetNote / " +
-                "役割別の最良更新(回数・減った必須・減った重み・worker 1 分あたりの重み): $gainNote / $roleNote" +
+                "役割別の最良更新(回数・減った必須・減った重み・worker 1 分あたりの重み): $gainNote / " +
+                (rogs?.let { r -> "役割の選び方(残り違反の局面ごとの試行・前進/秒): ${synchronized(lock) { r.summary() }} / " } ?: "") + roleNote +
                 (firstError.get()?.let { " / 一部例外=${it.message}" } ?: "") +
                 " / 採用 HARD=${globalReport.hard} total=${globalReport.total}",
         )
