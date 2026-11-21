@@ -46,8 +46,8 @@ internal class OpportunityController(private val roles: List<HypothesisEpochRole
     }
 
     companion object {
-        /** 必須 1 件を重みに直す値（必須の重みの桁＝covU 10000 に合わせる）。 */
-        const val HARD_UNIT = 10_000.0
+        /** 必須 1 件を重みに直す値（必須の重みの桁＝covU の重みに合わせる）。 */
+        val HARD_UNIT: Double = MirrorKeys.weightOf("covU")
         const val EXPLORE = 0.5
 
         /** 前進の量。重みは必須の重みを含むので、必須が減って要調整が増えた手（重みの差は負になり得る）は必須の減り×[HARD_UNIT] で数える。 */
