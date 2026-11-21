@@ -840,6 +840,18 @@ object V6FinalPort {
             V6NativeOptimizer.optimize(state, first.schedule, optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = plan.alnsSec), shouldStop, progressWatch, stopIsFinal)
         } else first
         val tChain1 = EngineClock.nowMs()
+        // [3.377.0/実機ログ起因] 停滞ウォッチドッグの遠隔測定は**探索フェーズの話**なのに、ログは
+        //   `lastBestImproveMs` を出力時（後処理・追加精製のあと）に読んでいた。ExtraRefine(3.102.0)の
+        //   改善も `progressWatch` を通るので lastBestImproveMs は tChain1 より後へ進み、
+        //   `tChain1 - lastImp` が負→0 に丸められて「最終改善=経過287s・探索終了時の停滞0s」（探索は274sで終了）
+        //   という**時間軸の混ざった自己矛盾**になっていた（読み手は「探索は一度も停滞していない」と誤読する）。
+        //   探索終了時点でスナップショットし、ウォッチドッグの数字は全てこの時刻基準で揃える。
+        val lastImpAtSearchEnd = wd.lastBestImproveMs.get()
+        val lastBeatInputAtSearchEnd = wd.lastBeatInputMs.get()
+        val lastPhaseAtSearchEnd = lastPhaseChangeMs.get()
+        val itersAtSearchEnd = observedIters.get()
+        val lastImpItersAtSearchEnd = wd.lastBestImproveIters.get()
+        //   解き直し（CP-SAT）の進捗もフェーズの時刻を進めるので、解き直しより前（探索の終わり）で写す（旧: 後ろで写して猶予が負になった）。
         // CP-SAT を止めて最良を読む。良ければ統合の起点にする（手動固定・希望固定を崩した盤面は使わない＝最終番兵と同じ多重防御）。
         // 解き直し: 探索の最良の一部だけを CP-SAT で解き直す（証明役の併走は続けたまま、残りのコアを 1 スレッドずつ）。探索の締切まで。
         val resolveThreads = (Runtime.getRuntime().availableProcessors() - CPSAT_WORKERS).coerceAtLeast(1)
@@ -867,17 +879,6 @@ object V6FinalPort {
         val cpsatStage = cpsatSnap?.board?.let { b -> StageCandidate("CP-SAT", b, UnifiedViolationChecker.check(state, b)) }
             ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
         val searchRoot = pickBestStage(listOfNotNull(StageCandidate("探索", chained.schedule, chained.report), cpsatStage, resolveStage)).sched
-        // [3.377.0/実機ログ起因] 停滞ウォッチドッグの遠隔測定は**探索フェーズの話**なのに、ログは
-        //   `lastBestImproveMs` を出力時（後処理・追加精製のあと）に読んでいた。ExtraRefine(3.102.0)の
-        //   改善も `progressWatch` を通るので lastBestImproveMs は tChain1 より後へ進み、
-        //   `tChain1 - lastImp` が負→0 に丸められて「最終改善=経過287s・探索終了時の停滞0s」（探索は274sで終了）
-        //   という**時間軸の混ざった自己矛盾**になっていた（読み手は「探索は一度も停滞していない」と誤読する）。
-        //   探索終了時点でスナップショットし、ウォッチドッグの数字は全てこの時刻基準で揃える。
-        val lastImpAtSearchEnd = wd.lastBestImproveMs.get()
-        val lastBeatInputAtSearchEnd = wd.lastBeatInputMs.get()
-        val lastPhaseAtSearchEnd = lastPhaseChangeMs.get()
-        val itersAtSearchEnd = observedIters.get()
-        val lastImpItersAtSearchEnd = wd.lastBestImproveIters.get()
 
         // [3.268.0/エリート統合] 旧「エリート再結合(Path Relinking)」を置換。8役の最終1解だけでなく、
         //   非同期適応ポートフォリオが全epochから保存した品質/距離/橋渡しエリート(lastFusionElites)を
