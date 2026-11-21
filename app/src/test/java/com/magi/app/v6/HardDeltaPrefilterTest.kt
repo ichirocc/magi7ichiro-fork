@@ -47,6 +47,10 @@ class HardDeltaPrefilterTest {
                 val expected = hard(st, work) - hard(st, before)
                 assertEquals("$res trial=$trial", expected, HardDelta.sameDayPermutationDelta(p, work, j, staff, old))
                 assertEquals("$res trial=$trial", expected, HardDelta.delta(p, before, work))
+                if (C3nBitScan.usable(p)) {
+                    val masks = Array(p.S) { C3nBitScan.buildRowMask(p, work[it]) }
+                    assertEquals("$res trial=$trial bits", expected, HardDelta.sameDayPermutationDeltaBits(p, work, masks, j, staff, old))
+                }
                 for (t in 0 until k) work[staff[t]][j] = old[t]
             }
         }

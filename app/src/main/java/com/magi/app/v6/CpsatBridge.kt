@@ -181,7 +181,7 @@ object CpsatResolve {
             .also { it.isDaemon = true; it.start() }
         var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
         val noBoard = IntArray(0)
-        var lastVersion = Long.MIN_VALUE
+        var lastVersion = 0L   // 作ったばかりの job の版（最良が良くなるたびに増える＝最初の読みで増えていれば改善）
         // 数え始め＝[sinceMs]（呼び出し側は探索の最後の改善の時刻を渡す＝探索と解き直しを通して最後の改善から数える）
         var lastChangeMs = sinceMs
         while (thread.isAlive) {
@@ -191,8 +191,7 @@ object CpsatResolve {
             if (stallStopMs > 0L && thread.isAlive) {
                 val ver = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard).firstOrNull() ?: lastVersion
                 val now = EngineClock.nowMs()
-                if (lastVersion == Long.MIN_VALUE) lastVersion = ver   // 初回は版を覚えるだけ（改善とは数えない）
-                else if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
+                if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
                 else if (now - lastChangeMs >= stallStopMs) { stalledOut = true; CpsatBridge.nativeCpsatStop(job) }
             }
             if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {

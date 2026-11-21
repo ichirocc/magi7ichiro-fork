@@ -87,4 +87,20 @@ internal object HardDelta {
         }
         return d
     }
+
+    /**
+     * [sameDayPermutationDelta] のビット版（同値）。[masks] は職員ごとの `C3nBitScan.buildRowMask` で、work と同じく適用後を持つ。
+     * 呼び出し前に [C3nBitScan.usable] を確かめる。
+     */
+    fun sameDayPermutationDeltaBits(p: Problem, work: Array<IntArray>, masks: Array<LongArray>, j: Int, staff: IntArray, old: IntArray): Int {
+        var d = 0
+        for (t in staff.indices) {
+            val i = staff[t]
+            val n = v(p, work[i][j]); val o = v(p, old[t])
+            if (n == o) continue
+            d += cellHard(p, i, j, n) - cellHard(p, i, j, o)
+            if (p.cons3n.isNotEmpty()) d += C3nBitScan.firesCoveringDelta(p, masks[i], j, o, n)
+        }
+        return d
+    }
 }

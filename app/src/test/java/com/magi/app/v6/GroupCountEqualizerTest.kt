@@ -65,6 +65,31 @@ class GroupCountEqualizerTest {
         assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
     }
 
+    @Test fun threePersonRotationWhenEveryPairSwapIsBlocked() {
+        // 休・D・A・B の 4 種。上限 0 で s0 は B 不可・s1 は D 不可・s2 は A 不可。毎日 s0=D・s1=A・s2=B
+        // → どの 2 人の入れ替えも誰かに置けないシフトが入る。3 人の回し（s0←A・s1←B・s2←D）だけが D を s0 から s2 へ渡せる。
+        val st = MagiState(
+            startDate = "2026-12-01", endDate = "2026-12-14",
+            shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("D", "D", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            groups = listOf(Group("G0", "G0")), staff = (0..2).map { Staff("s$it", 0, 0) },
+            use2Patterns = false, groupShift = listOf(List(4) { 1 }), groupShiftApt = listOf(List(4) { "" }),
+            schedule = listOf(List(14) { 1 }, List(14) { 2 }, List(14) { 3 }), wishes = emptyMap(),
+            staffRange = mapOf("0,3" to Range("0", "0"), "1,1" to Range("0", "0"), "2,2" to Range("0", "0")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val b = st.schedule.map { it.toIntArray() }.toTypedArray()
+        assertEquals(0, GroupCountEqualizer.apply(st, b, setOf(1), annealIters = 0).swaps)
+        val r = GroupCountEqualizer.apply(st, b, setOf(1))
+        val d = listOf(0, 2).map { i -> r.schedule[i].count { it == 1 } }
+        assertTrue("D の差が 1 以内: $d", kotlin.math.abs(d[0] - d[1]) <= 1)
+        for (j in 0 until 14) {
+            assertEquals(setOf(1, 2, 3), (0..2).map { r.schedule[it][j] }.toSet())   // 日ごとの人数は不変
+            assertTrue(r.schedule[0][j] != 3 && r.schedule[1][j] != 1 && r.schedule[2][j] != 2)   // 置けないシフトは入らない
+        }
+    }
+
     @Test fun keepsWishesRangesAndNeverAddsHard() {
         val rng = Random(11)
         repeat(30) {

@@ -45,25 +45,12 @@ object GroupCountEqualizer {
      * 必須が元以下」の盤面のうち、目標からのずれがいちばん小さいものだけ。よりそろった盤面が見つかれば [work] を書き換えて true。
      */
     private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, tgt: Array<DoubleArray>, iters: Int, seed: Long): Boolean {
-        /**
-         * 日 [d]（と [d2]≥0 なら日 d2 にも同時に）[who] の順でシフトを 1 つずつ回す（who[t] が who[t+1] のシフトを受け取る）。
-         * 2 人＝入れ替え、3 人＝3 人の回し。2 日＝前後の日の入れ替えを 1 手で（片方だけでは範囲を外れる組を通す）。日ごとの人数は変わらない。
-         */
-        class Mv(val who: IntArray, val d: Int, val d2: Int)
-        val moves = ArrayList<Mv>()
-        for (m in p.groupMembers) for (d in 0 until p.T) {
-            val free = m.filter { !p.wishLocked(it, d) }
-            for (ai in free.indices) for (bi in ai + 1 until free.size) {
-                val a = free[ai]; val b = free[bi]
-                moves.add(Mv(intArrayOf(a, b), d, -1))
-                for (d2 in d + 1 until p.T) if (!p.wishLocked(a, d2) && !p.wishLocked(b, d2)) moves.add(Mv(intArrayOf(a, b), d, d2))
-                for (ci in bi + 1 until free.size) {
-                    moves.add(Mv(intArrayOf(a, b, free[ci]), d, -1))
-                    moves.add(Mv(intArrayOf(a, free[ci], b), d, -1))
-                }
-            }
-        }
-        if (moves.isEmpty()) return false
+        // 手は 1 手ごとに無作為に作る（全部を先に並べると 30 人・31 日で数十万件になる）: 同じグループの 2 人の同じ日の入れ替え・
+        // 3 人の回し・同じ 2 人の前後 2 日をまとめた入れ替えを等しい割合で。希望・手動固定のマスに当たる手は捨てる。日ごとの人数は変わらない。
+        val groups = p.groupMembers.filter { it.size >= 2 }
+        if (groups.isEmpty() || p.T == 0) return false
+        val pairW = groups.map { it.size * (it.size - 1) / 2 }
+        val pairTotal = pairW.sum()
         val cnt = Array(p.S) { cnt0[it].copyOf() }
         fun lo(i: Int, k: Int) = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) 0 else it }
         fun out(i: Int, k: Int, n: Int) = maxOf(0, lo(i, k) - n) + p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) 0 else maxOf(0, n - it) }
@@ -75,29 +62,54 @@ object GroupCountEqualizer {
         for (i in 0 until p.S) for (k in 0 until p.K) devCur += sq(i, k, cnt[i][k])
         var exCur = 0
         var hardCur = 0   // 元からの必須の増減
-        val cur = work.copy2D(); val trial = work.copy2D()
+        val cur = work.copy2D()
+        val bits = C3nBitScan.usable(p)   // 64 日以内＝禁止の並びをビットで数える（30 人・31 日が業務の上限）
+        val masks = if (bits) Array(p.S) { C3nBitScan.buildRowMask(p, cur[it]) } else emptyArray()
+        val old2 = Array(2) { IntArray(2) }; val old3 = Array(2) { IntArray(3) }   // 日ごとの元の値（2 人・3 人）
         var bestDev = devCur
         var best: Array<IntArray>? = null
         val rnd = java.util.Random(seed)
         val t0 = 1.0; val t1 = 0.02
+        val cool = Math.pow(t1 / t0, 1.0 / iters); var temp = t0
         val wEx = 2.0; val wHard = 20.0
         val ci = IntArray(12); val ck = IntArray(12); val cd = IntArray(12)   // この手での (職員,シフト) ごとの回数の増減
+        val locked = BooleanArray(p.S * p.T) { p.wishLocked(it / p.T, it % p.T) }   // 希望・手動固定（毎手引くと重い）
+        val who2 = IntArray(2); val who3 = IntArray(3); val day1 = IntArray(1); val day2 = IntArray(2)
         for (step in 0 until iters) {
-            val mv = moves[rnd.nextInt(moves.size)]
-            val who = mv.who; val n = who.size
-            val days = if (mv.d2 >= 0) intArrayOf(mv.d, mv.d2) else intArrayOf(mv.d)
+            temp *= cool
+            var gi = rnd.nextInt(pairTotal); var g = 0
+            while (gi >= pairW[g]) { gi -= pairW[g]; g++ }
+            val m = groups[g]
+            val kind = rnd.nextInt(3)
+            val n = if (kind == 1 && m.size >= 3) 3 else 2
+            val who = if (n == 2) who2 else who3
+            who[0] = m[rnd.nextInt(m.size)]
+            do { who[1] = m[rnd.nextInt(m.size)] } while (who[1] == who[0])
+            if (n == 3) do { who[2] = m[rnd.nextInt(m.size)] } while (who[2] == who[0] || who[2] == who[1])
+            val d1 = rnd.nextInt(p.T)
+            val days = if (kind == 2 && p.T >= 2) {
+                var d2: Int
+                do { d2 = rnd.nextInt(p.T) } while (d2 == d1)
+                day2[0] = d1; day2[1] = d2; day2
+            } else { day1[0] = d1; day1 }
+            var lockHit = false
+            for (d in days) for (t in 0 until n) if (locked[who[t] * p.T + d]) lockHit = true
+            if (lockHit) continue
             var ok = true; var moved = false; var nc = 0
-            fun add(i: Int, k: Int, dd: Int) {
-                for (e in 0 until nc) if (ci[e] == i && ck[e] == k) { cd[e] += dd; return }
-                ci[nc] = i; ck[nc] = k; cd[nc] = dd; nc++
-            }
             for (d in days) {
                 for (t in 0 until n) {
                     val from = cur[who[t]][d]; val to = cur[who[(t + 1) % n]][d]
                     if (from !in 0 until p.K || to !in 0 until p.K) { ok = false; break }
                     if (from == to) continue
                     if (!p.mayPlaceAt(who[t], d, to)) { ok = false; break }
-                    add(who[t], from, -1); add(who[t], to, 1); moved = true
+                    for (q in 0..1) {
+                        val i = who[t]; val k = if (q == 0) from else to; val dd = if (q == 0) -1 else 1
+                        var e = 0
+                        while (e < nc && !(ci[e] == i && ck[e] == k)) e++
+                        if (e == nc) { ci[nc] = i; ck[nc] = k; cd[nc] = 0; nc++ }
+                        cd[e] += dd
+                    }
+                    moved = true
                 }
                 if (!ok) break
             }
@@ -109,19 +121,34 @@ object GroupCountEqualizer {
                 dDev += sq(i, k, cnt[i][k] + dd) - sq(i, k, cnt[i][k])
                 dEx += excess(i, k, cnt[i][k] + dd) - excess(i, k, cnt[i][k])
             }
-            for (d in days) for (t in 0 until n) trial[who[t]][d] = cur[who[(t + 1) % n]][d]
-            val dHard = HardDelta.delta(p, cur, trial)
+            // その場で当てて、必須の差は変わった日だけ数える（同じ日の並べ替え＝日の人数は不変。2 日は 1 日ずつ当てて足す）
+            var dHard = 0
+            for ((di, d) in days.withIndex()) {
+                val o = (if (n == 2) old2 else old3)[di]
+                for (t in 0 until n) o[t] = cur[who[t]][d]
+                for (t in 0 until n) {
+                    cur[who[t]][d] = o[(t + 1) % n]
+                    if (bits) C3nBitScan.move(p, masks[who[t]], d, o[t], o[(t + 1) % n])
+                }
+                dHard += if (bits) HardDelta.sameDayPermutationDeltaBits(p, cur, masks, d, who, o)
+                    else HardDelta.sameDayPermutationDelta(p, cur, d, who, o)
+            }
             val df = dDev + wEx * dEx + wHard * dHard
-            val temp = t0 * Math.pow(t1 / t0, step.toDouble() / iters)
             if (df <= 0 || rnd.nextDouble() < Math.exp(-df / temp)) {
-                for (d in days) for (t in 0 until n) cur[who[t]][d] = trial[who[t]][d]
                 for (e in 0 until nc) cnt[ci[e]][ck[e]] += cd[e]
                 devCur += dDev; exCur += dEx; hardCur += dHard
                 if (exCur == 0 && hardCur <= 0 && devCur < bestDev - 1e-9) {
                     bestDev = devCur
                     best = (best ?: Array(p.S) { IntArray(p.T) }).also { bb -> for (i in 0 until p.S) cur[i].copyInto(bb[i]) }
                 }
-            } else for (d in days) for (t in 0 until n) trial[who[t]][d] = cur[who[t]][d]
+            } else for (di in days.indices.reversed()) {
+                val d = days[di]; val o = (if (n == 2) old2 else old3)[di]
+                for (t in 0 until n) {
+                    if (bits) C3nBitScan.move(p, masks[who[t]], d, cur[who[t]][d], o[t])
+                    cur[who[t]][d] = o[t]
+                }
+            }
+            temp *= cool
         }
         val bb = best ?: return false
         for (i in 0 until p.S) bb[i].copyInto(work[i])
@@ -144,6 +171,7 @@ object GroupCountEqualizer {
         val cnt = counts(p, work)
         val tgt = targets(p, cnt, shifts)
         val before = dev(tgt, cnt)
+        if (tgt.all { row -> row.all { it.isNaN() } }) return Result(work, 0, before, before)   // そろえる (職員,シフト) が無い
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)   // 希望固定と手動固定
         /** 回数 n→n+d で、個人の範囲からの外れ量が増えないか。 */
         fun rangeOk(i: Int, k: Int, d: Int): Boolean {

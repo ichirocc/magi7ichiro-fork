@@ -163,7 +163,7 @@ class DeltaEvaluator(private val p: Problem) {
 
     /**
      * [3.372.0/レビュー修正] low/high を**別々の生 amount** で返す（検証専用・O(S×K) のフル再計算）。
-     * `rangeWeighted()` だけだと `120a+25b` が単射でない（異なる(low,high)の組が同じ加重和になり得る）ため、
+     * `rangeWeighted()` だけだと `120a+50b` が単射でない（異なる(low,high)の組が同じ加重和になり得る）ため、
      * 「low を1件見落として high を過剰に数える」型の取り違えを検出できない＝soft全族の完全差分という
      * 主張が low/high についてだけ成立していなかった。
      *

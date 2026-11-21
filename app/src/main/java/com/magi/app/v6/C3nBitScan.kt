@@ -142,6 +142,44 @@ internal object C3nBitScan {
         return days
     }
 
+    /** いまの [mask] の禁止連続のうち、窓が日 [j] を含むものの数（`HardDelta.c3nFiresCovering` と同値）。 */
+    fun firesCovering(p: Problem, mask: LongArray, j: Int): Int {
+        var n = 0
+        for (c in p.cons3n) {
+            val d = c.seq.size
+            if (d == 0 || d > p.T) continue
+            val cover = rangeMask((j - d + 1).coerceAtLeast(0), minOf(j, p.T - d))
+            if (cover != 0L) n += java.lang.Long.bitCount(matchMask(p, mask, c) and cover)
+        }
+        return n
+    }
+
+    /** 日 [j] が [oldK]→[newK]（[mask] はすでに newK）で、j を含む窓の禁止連続の数の増減。[mask] は呼び出し前後で不変。 */
+    fun firesCoveringDelta(p: Problem, mask: LongArray, j: Int, oldK: Int, newK: Int): Int {
+        if (oldK == newK || j !in 0 until p.T) return 0
+        var d = 0
+        for (c in p.cons3n) {
+            val seq = c.seq
+            val len = seq.size
+            if (len == 0 || len > p.T) continue
+            // 日 j が oldK でも newK でもない並びは、j の書き換えで成否が変わらない
+            var uses = false
+            for (x in seq) if (x == oldK || x == newK) { uses = true; break }
+            if (!uses) continue
+            val cover = rangeMask((j - len + 1).coerceAtLeast(0), minOf(j, p.T - len))
+            if (cover == 0L) continue
+            val after = java.lang.Long.bitCount(matchMask(p, mask, c) and cover)
+            setCell(p, mask, j, newK, oldK)
+            val before = java.lang.Long.bitCount(matchMask(p, mask, c) and cover)
+            setCell(p, mask, j, oldK, newK)
+            d += after - before
+        }
+        return d
+    }
+
+    /** [mask] の日 [j] を [oldK]→[newK] に書き換える（呼び出し側が行と一緒に保つ）。 */
+    fun move(p: Problem, mask: LongArray, j: Int, oldK: Int, newK: Int) = setCell(p, mask, j, oldK, newK)
+
     /** [lo]..[hi]（両端含む）の bit を立てたマスク。lo>hi は 0。 */
     fun rangeMask(lo: Int, hi: Int): Long {
         if (lo > hi) return 0L
