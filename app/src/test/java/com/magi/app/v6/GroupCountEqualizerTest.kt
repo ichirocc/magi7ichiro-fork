@@ -50,6 +50,21 @@ class GroupCountEqualizerTest {
         assertEquals(0, GroupCountEqualizer.apply(st, b, emptySet()).swaps)
     }
 
+    @Test fun monthWideChainWhenSingleSwapsAreBlocked() {
+        // 休は 2 人とも 7 回固定。偶数日の D↔休 は 1 組では休の範囲を外れ、奇数日の 休↔A は D が動かない
+        // → 偶数日と奇数日の 2 組を合わせて初めて D がそろう（焼きなまし）。s2 は D 不可・A 14 回固定で動かない。
+        val sched = listOf(List(14) { if (it % 2 == 0) 1 else 0 }, List(14) { if (it % 2 == 0) 0 else 2 }, List(14) { 2 })
+        val range = mapOf("0,0" to Range("7", "7"), "1,0" to Range("7", "7"), "2,1" to Range("0", "0"), "2,2" to Range("14", "14"))
+        val st = state(sched, range)
+        val b = sched.map { it.toIntArray() }.toTypedArray()
+        assertEquals(0, GroupCountEqualizer.apply(st, b, setOf(1), annealIters = 0).swaps)
+        val r = GroupCountEqualizer.apply(st, b, setOf(1))
+        val d = (0..1).map { i -> r.schedule[i].count { it == 1 } }
+        assertTrue("D の差が 1 以内: $d", kotlin.math.abs(d[0] - d[1]) <= 1)
+        assertEquals(listOf(7, 7), (0..1).map { i -> r.schedule[i].count { it == 0 } })
+        assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
+    }
+
     @Test fun keepsWishesRangesAndNeverAddsHard() {
         val rng = Random(11)
         repeat(30) {

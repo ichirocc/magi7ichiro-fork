@@ -160,10 +160,14 @@ object CpsatResolve {
     /** 直前の [run] が `stallStopMs` で止まったか（ログ用）。 */
     @Volatile var stalledOut: Boolean = false
         private set
+    /** 直前の [run] に渡した `stallStopMs`（ログ用）。 */
+    @Volatile var lastStallStopMs: Long = 0L
+        private set
 
     /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
-            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, shouldStop: () -> Boolean): Outcome? {
+            onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, sinceMs: Long = EngineClock.nowMs(),
+            shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -172,12 +176,14 @@ object CpsatResolve {
         val flat = NativeEval.flatten(start)
         var stats: LongArray? = null
         stalledOut = false
+        lastStallStopMs = stallStopMs
         val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
             .also { it.isDaemon = true; it.start() }
         var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
         val noBoard = IntArray(0)
         var lastVersion = Long.MIN_VALUE
-        var lastChangeMs = EngineClock.nowMs()
+        // 数え始め＝[sinceMs]（呼び出し側は探索の最後の改善の時刻を渡す＝探索と解き直しを通して最後の改善から数える）
+        var lastChangeMs = sinceMs
         while (thread.isAlive) {
             if (shouldStop()) CpsatBridge.nativeCpsatStop(job)
             thread.join(200L)
@@ -185,7 +191,8 @@ object CpsatResolve {
             if (stallStopMs > 0L && thread.isAlive) {
                 val ver = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard).firstOrNull() ?: lastVersion
                 val now = EngineClock.nowMs()
-                if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
+                if (lastVersion == Long.MIN_VALUE) lastVersion = ver   // 初回は版を覚えるだけ（改善とは数えない）
+                else if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
                 else if (now - lastChangeMs >= stallStopMs) { stalledOut = true; CpsatBridge.nativeCpsatStop(job) }
             }
             if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {

@@ -2730,13 +2730,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * グループ内の回数をそろえる（[GroupCountEqualizer]）。希望の反映と同じく利用者が押して勤務表を上書きする操作＝採点で採否を決めない。
-     * 必須違反は増やさず、個人の下限・上限は外さない。要調整は悪くなってもよい（利用者決定）。Undo・操作ログ付き。
+     * 必須違反は増やさず、個人の下限・上限は外さない。要調整は悪くなってもよい（利用者決定）。月全体の入れ替えを裏で計算する。Undo・操作ログ付き。
      */
     fun equalizeGroupCounts(shifts: Set<Int>? = null) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
-        val r = com.magi.app.v6.GroupCountEqualizer.apply(st, sched, shifts)
+        val snap = sched.map { it.copyOf() }.toTypedArray()
+        // 月全体の焼きなましで 1〜数秒かかるので画面を止めない。計算中に勤務表が変わったら当てない。
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st, snap, shifts) }
+            if (state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) return@launch
+            applyGroupEqualize(st, sched, shifts, r)
+        }
+    }
+
+    private fun applyGroupEqualize(st: MagiState, sched: Array<IntArray>, shifts: Set<Int>?, r: com.magi.app.v6.GroupCountEqualizer.Result) {
         if (r.swaps == 0) { postOpNotice(GROUP_EQUALIZE_NONE, undoable = false); return }
         pushUndo("グループ内の回数をそろえる")
         for (i in sched.indices) for (j in sched[i].indices) sched[i][j] = r.schedule[i][j]
