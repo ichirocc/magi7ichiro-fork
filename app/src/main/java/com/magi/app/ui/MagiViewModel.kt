@@ -1481,6 +1481,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 頭打ちのあと一部を解き直す → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setRogsController(on: Boolean) {
+        com.magi.app.v6.PolishGate.rogsController = on
+        _ui.update { it.copy(rogsController = on) }
+        logOp("I", "設定変更: $ROGS_LABEL → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setFloorShortStall(on: Boolean) {
         com.magi.app.v6.PolishGate.floorShortStall = on
         _ui.update { it.copy(floorShortStall = on) }

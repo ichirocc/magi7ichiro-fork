@@ -413,6 +413,13 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Switch(checked = ui.cpsatResolve, onCheckedChange = null, enabled = !ui.running)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.rogsController, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetRogsController(it)) }).semantics(mergeDescendants = true) {}) {
+            Column(Modifier.weight(1f)) {
+                Text(ROGS_LABEL, style = MaterialTheme.typography.bodyMedium)
+                Text(ROGS_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.rogsController, onCheckedChange = null, enabled = !ui.running)
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.c3nWallDeepCheck, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetC3nWallDeepCheck(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("禁止の並びの壁を 1 手探索で確かめる", style = MaterialTheme.typography.bodyMedium)
@@ -473,6 +480,8 @@ internal fun wishFloorModeLabel(m: com.magi.app.v6.WishFloorMode): String = when
 }
 internal const val MEMBRANE_TOGGLE_LABEL = "最後に職員をまとめて組み直す"
 internal const val MEMBRANE_TOGGLE_NOTE = "違反の多い職員と同じグループの 5 名を全期間まとめて組み直し、良くなったときだけ採ります（膜の細胞 LNS、既定 ON・最長 8 秒）"
+internal const val ROGS_LABEL = "残りの違反に合わせて探し方を選ぶ"
+internal const val ROGS_NOTE = "探し方を替えるとき、いま残っている違反の種類で速く良くした探し方を選びます（211 秒以上の作成で使う並列の探し方）。試験中の機能です。"
 internal const val CPSAT_RESOLVE_NOTE = "探索が 10 秒良くならなければ探索を終え、残りの時間で勤務表の一部（職員数人・数日）を解き直します。良くなったときだけ採ります。試験中の機能です。"
 internal const val SEESAW_RELINK_NOTE = "仕上げのあと、他の案へ向けて少しずつ入れ替え、良くなれば採ります。どこかの項目が今より少ない勤務表は「他の案」に残します（最大 3 秒）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"

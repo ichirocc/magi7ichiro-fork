@@ -25,7 +25,7 @@ data class EngineConfig(
     val mafs2Enabled: Boolean = false,
     /** 禁止連続の崩し範囲を広げる（探索の強さ「じっくり」。探索の奥 `breakableDaysFor` まで引数で渡す）。 */
     val wideC3nBreakDays: Boolean = false,
-    /** PORTFOLIO の役割を残り違反に合わせて選ぶ（[OpportunityController]、試験・既定 OFF）。 */
+    /** PORTFOLIO の役割を残り違反に合わせて選ぶ（[PolishGate.rogsController] の写し、[OpportunityController]）。 */
     val rogsController: Boolean = false,
     val ejection: EjectionFlags = EjectionFlags(),
 ) {
@@ -56,6 +56,7 @@ data class EngineConfig(
             cpsatResolve = PolishGate.cpsatResolve,
             mafs2Enabled = PolishGate.mafs2Enabled,
             wideC3nBreakDays = PolishGate.wideC3nBreakDays,
+            rogsController = PolishGate.rogsController,
             ejection = EjectionFlags(
                 c1Chain = PolishGate.c1EjectionChain,
                 allFamilyChain = PolishGate.allFamilyEjectionChain,
