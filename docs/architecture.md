@@ -100,6 +100,7 @@ MagiRoot（唯一の合成ルート）
 | `Problem` | Engine-Model | `MagiState` から構築する最適化問題（次元・制約・重み）。盤面へ書く経路の縛り＝`wishLocked`/`lockTo`（手動固定＞実現可能な希望、backlog #41）、希望の意味＝`wishFixed` |
 | `V6NativeOptimizer` | Engine-Core | **公開入口**（`optimize`・`softPolishOnly`）と方針（アルゴリズム）の選択（全面改修 P10 で約 20KB に） |
 | `PortfolioSearch` / `AlnsSearch` / `RsiSearch` | Engine-Search | 探索器: 適応ポートフォリオ・多ワーカー・停止の確認／V5 の SA 多点・ALNS（GLS・Tabu を含む）／RSI・RSI++（P10b） |
+| `OpportunityController` | Engine-Search | PORTFOLIO の役割を、いまの最良に残る違反の局面で 1 秒あたり最も前進した役割から選ぶ（ROGS の最小版、`EngineConfig.rogsController`・既定 OFF、3.727.122） |
 | `SearchPolish` | Engine-Polish | 探索直後の研磨 `hf80PostPolish`（後処理チェーンとは別、P10c） |
 | `OptimizerRuntime` | Engine-Runtime | 実行状態（`RunSlot`・最良盤面のライブ公開・他の案・エリート・充足困難な族・計測の始まり、P10a） |
 | `EngineConfig` / `TimeBudget` | Engine-Config | 実行の開始時に 1 回だけ作る設定の写し（`PolishGate` を読むのはここだけ＝T-7 `PolishGateAccessTest`）／時間予算と取り分（`BudgetShare`、P3） |
@@ -111,6 +112,7 @@ MagiRoot（唯一の合成ルート）
 | `mapParallel`（`MirrorCore.kt`） | Util | 純関数を並列に適用し**入力順**で返す。後処理の共同 LNS 2 本が候補の評価だけをこれへ配る（生成・採否は逐次＝決定論モードの結果は不変、3.569.0） |
 | `V6SearchOperators` / `V6LateOperators` / `V6SwapSuggester` | Engine-Operators | 近傍・交換・修復などの探索手 |
 | `SmartInitialScheduler` / `GreedyMirrorScheduler` | Engine-Seed | 初期解の生成（後者はテスト専用の旧生成器） |
+| `GroupCountEqualizer` | Engine-Edit | 画面の［グループ内の回数をそろえる］。同じ日の入れ替え（別のグループの人も相手にする）で、グループ×シフトの回数を個人の範囲内の平均へ寄せる。必須・範囲は元以下（3.727.115〜123） |
 | `V6SanityPort` / `V6FinalPort` / `V6PortAnalyzer` | Engine-Facade | 事前診断・UI 向けファサード・分析層 |
 | `ShiftAppearance` | UI-Support | シフト記号→表示色 と 違反キー→重大度 の唯一の解決元（3.393.0 に `V6WebCompat` から切り出し） |
 | `ScheduleCsvBridge` | IO-CSV | 勤務表 / 希望 CSV ↔ `MagiState`（文字コード自動判定） |
