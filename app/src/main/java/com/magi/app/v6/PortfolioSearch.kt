@@ -152,6 +152,12 @@ internal object PortfolioSearch {
         //   「終盤まで刻み続けた」のかがログから読めなかった（Watchdog 行が出すのは最終改善の時刻だけ）。
         //   改善が確定した分岐で数えるだけ＝ホットパスに追加コストなし。
         val globalImproves = java.util.concurrent.atomic.AtomicInteger(0)
+        // 役割ごとの全体最良の更新（回数・減った必須・減った重み）。lock の中で足す＝役割別 worker 秒と並べて投入時間あたりの効きを見る
+        val roleGains = LinkedHashMap<HypothesisEpochRole, LongArray>()
+        fun creditRole(role: HypothesisEpochRole, before: ViolationReport, after: ViolationReport) {
+            val g = roleGains.getOrPut(role) { LongArray(3) }
+            g[0]++; g[1] += (before.hard - after.hard).toLong(); g[2] += Math.round(before.weightedScore - after.weightedScore)
+        }
         val lastGlobalImproveMs = java.util.concurrent.atomic.AtomicLong(started)
         val archive = AdaptiveEliteArchive()
         val p = cachedProblem(state)
@@ -289,6 +295,7 @@ internal object PortfolioSearch {
                     synchronized(lock) {
                         sharedTrajectories[i] = start.copy2D()
                         if (better(startReport, globalReport) && p.keepsExtBan(globalBest, start)) {
+                            creditRole(assignment.role, globalReport, startReport)
                             globalBest = start.copy2D(); globalReport = startReport
                             globalLogs = eliteLogs   // [3.278.0] 同上: グローバル側の stale ログも同期
                             startImprovedGlobal = true
@@ -379,6 +386,7 @@ internal object PortfolioSearch {
                         synchronized(lock) {
                             sharedTrajectories[i] = result.schedule.copy2D()
                             if (better(result.report, globalReport) && p.keepsExtBan(globalBest, result.schedule)) {
+                                creditRole(assignment.role, globalReport, result.report)
                                 globalBest = result.schedule.copy2D()
                                 globalReport = result.report
                                 globalLogs = result.phaseLogs
@@ -541,6 +549,15 @@ internal object PortfolioSearch {
         val budgetNote = roleTotals.entries.sortedByDescending { it.value }.joinToString(" ") { e ->
             "${e.key.name}=${e.value / 1000}s(${e.value * 100 / totalWorkerMs}%)"
         }
+        // 役割別の全体最良の更新＝worker 秒と並べて「投入時間あたりの効き」を読む（入口の盤面で最良を更新した分も、その役割に数える）。
+        //   最初の更新は入力からの差なので、どの役割でも大きく出やすい。
+        val gainNote = synchronized(lock) {
+            if (roleGains.isEmpty()) "なし" else roleGains.entries.sortedByDescending { it.value[2] }.joinToString(" ") { (r, g) ->
+                val sec = (roleTotals[r] ?: 0L) / 1000.0
+                val perMin = if (sec > 0) "${"%.0f".format(g[2] * 60.0 / sec)}/分" else "-"
+                "${r.name}=${g[0]}回(必須-${g[1]}・重み-${g[2]}・$perMin)"
+            }
+        }
         // [3.346.0/実機ログ] 締切前に離脱したワーカーを1行で明示する。`shouldStop` は単調でないため
         //   一瞬の停滞シグナルでポーリングが当たったワーカーだけが恒久的に抜け、残りは走り続ける
         //   （実機 2026-08-03: 8本中4本が 115〜116s で離脱＝残り159秒を半分の並列度で走っていた）。
@@ -563,7 +580,8 @@ internal object PortfolioSearch {
             message = "合計iter=${outcomes.sumOf { it.iterations }} 全体最良更新=${globalImproves.get()}回 / " +
                 "非同期適応仮説 archive=${archive.size()} 圧縮elite=${compressedElites.size} " +
                 "ワーカー解=${outcomes.size}本(相異なる${distinctWorkers}本) 距離=$distanceNote / $exitNote / " +
-                "役割別worker秒(計${totalWorkerMs / 1000}s・実効外側並列=${"%.2f".format(outerParallelism)}): $budgetNote / $roleNote" +
+                "役割別worker秒(計${totalWorkerMs / 1000}s・実効外側並列=${"%.2f".format(outerParallelism)}): $budgetNote / " +
+                "役割別の最良更新(回数・減った必須・減った重み・worker 1 分あたりの重み): $gainNote / $roleNote" +
                 (firstError.get()?.let { " / 一部例外=${it.message}" } ?: "") +
                 " / 採用 HARD=${globalReport.hard} total=${globalReport.total}",
         )
