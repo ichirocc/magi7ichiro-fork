@@ -50,6 +50,32 @@ class SmartInitialSchedulerTest {
         assertTrue("既存の簡易作成はC1を考慮しないため違反が残るはず", (naive.report.breakdown["c1"] ?: 0) > 0)
     }
 
+    /** 休・X・Y の 3 種。Y は個人上限 0（担当はできるが置かない）。 */
+    private fun threeShiftState(groupShift: List<Int>, ext: List<com.magi.app.model.ExtWish>) = blankState().copy(
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        groupShift = listOf(groupShift), groupShiftApt = listOf(listOf("", "", "")),
+        staffRange = mapOf("0,2" to Range("0", "0")), extWishes = ext,
+    )
+
+    @Test
+    fun allPlaceableBannedFallsBackToLeastBadShift() {
+        // 3 日目に 休・X を拡張希望で禁止 → 置けるシフトはすべて禁止。必須の拡張希望違反より、上限 0 の Y（上限超過＝要調整）を置く
+        val st = threeShiftState(listOf(1, 1, 1), listOf(com.magi.app.model.ExtWish(0, listOf("2026-01-03"), listOf("休", "X"))))
+        val r = SmartInitialScheduler.generate(st)
+        assertEquals(2, r.newScheduleXAt(0, 2))
+        assertEquals(0, r.report.breakdown["extWish"] ?: 0)
+        assertEquals(0, r.report.hard)
+    }
+
+    @Test
+    fun noPlaceableShiftAvoidsRestWhenRestIsNotAllowed() {
+        // 休を担当できず、置けるシフトも無い（X 不可・Y は上限 0）→ 休（グループ外＝必須）でなく担当できる Y を置く
+        val st = threeShiftState(listOf(0, 0, 1), emptyList())
+        val r = SmartInitialScheduler.generate(st)
+        assertTrue((0 until 11).all { r.newScheduleXAt(0, it) == 2 })
+        assertEquals(0, r.report.breakdown["groupViol"] ?: 0)
+    }
+
     @Test
     fun respectsFeasibleWish() {
         val st = blankState(cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")))

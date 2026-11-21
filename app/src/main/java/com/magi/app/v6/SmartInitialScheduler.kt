@@ -173,10 +173,10 @@ object SmartInitialScheduler {
             val allowed = p.allowedShiftsForStaff(i)
             for (j in 0 until p.T) {
                 if (schedule[i][j] >= 0) continue
-                var bestK = allowed.firstOrNull() ?: restK
+                var bestK = restK
                 var bestPenalty = Int.MAX_VALUE
                 for (k in allowed) {
-                    if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない（全部禁止なら従来の値）
+                    if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない（全部禁止なら fallbackShift）
                     val hi = p.rangeHi[i][k]
                     val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                     var covNow = 0
@@ -190,6 +190,7 @@ object SmartInitialScheduler {
                         (if (p.consGap.isNotEmpty() && p.makesForbiddenRun(schedule, i, j, k)) 500 else 0)
                     if (penalty < bestPenalty) { bestPenalty = penalty; bestK = k }
                 }
+                if (bestPenalty == Int.MAX_VALUE) bestK = fallbackShift(p, i, j, restK)
                 schedule[i][j] = bestK
                 counts[i][bestK]++
             }
@@ -324,5 +325,19 @@ object SmartInitialScheduler {
         }
         val chosen = best ?: return null
         return BooleanArray(t) { day -> ((chosen.bits ushr day) and 1L) != 0L }
+    }
+
+    /**
+     * 置けるシフトがどれも禁止（拡張希望・日の上限 0）か、置けるシフトが無いマスに置くシフト。空欄にはできないので、違反のいちばん軽いものを選ぶ:
+     * 担当できて拡張希望にも日の上限 0 にも当たらないシフト（個人上限 0 なら上限超過＝要調整）→ 日の上限 0 だけに当たるシフト（人員過剰＝要調整）→
+     * 置けるシフトのうち拡張希望に当たるもの（必須）→ 担当できるシフト → 休（担当できるシフトが無い職員だけ＝グループ外は避けられない）。
+     */
+    internal fun fallbackShift(p: Problem, i: Int, j: Int, restK: Int): Int {
+        val can = (0 until p.K).filter { p.canDo(i, it) }
+        return can.firstOrNull { !p.extWishBanned(i, j, it) && !p.dayCapBanned(i, j, it) }
+            ?: can.firstOrNull { !p.extWishBanned(i, j, it) }
+            ?: p.allowedShiftsForStaff(i).firstOrNull()
+            ?: can.firstOrNull()
+            ?: restK
     }
 }
