@@ -34,9 +34,6 @@ object GroupCountEqualizer {
         return Math.round(d)
     }
 
-    /** 測定用（一時）: true＝旧来の 1 手で 2 回冷やす（有効な手は 2 回・`continue` した手は 1 回）、false＝1 手 1 回で t1 に届く。 */
-    @Volatile internal var annealDoubleCool = false
-
     private const val ANNEAL_ITERS = 400_000
     private const val ANNEAL_RUNS = 3
 
@@ -45,7 +42,7 @@ object GroupCountEqualizer {
      * 途中は個人の範囲を外れても必須が増えてもよい（罰として数える）が、採るのは「各 (職員,シフト) の範囲からの外れ量が元以下・
      * 必須が元以下」の盤面のうち、目標からのずれがいちばん小さいものだけ。よりそろった盤面が見つかれば [work] を書き換えて true。
      */
-    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, elig: Array<Array<IntArray?>>, iters: Int, seed: Long): Boolean {
+    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, elig: Array<Array<IntArray?>>, iters: Int, seed: Long, fastCool: Boolean): Boolean {
         // 手は 1 手ごとに無作為に作る（全部を先に並べると 30 人・31 日で数十万件になる）: 2 人の同じ日の入れ替え・3 人の回し・
         // 同じ 2 人の前後 2 日をまとめた入れ替えを等しい割合で。1 人目はグループから、相手は半分は同じグループ・半分は誰でも
         // （同じグループの中だけでは禁止の並びや希望で動けない回数を、別のグループの人との入れ替えで動かす。12 月の実データで
@@ -167,7 +164,7 @@ object GroupCountEqualizer {
                     cur[who[t]][d] = o[t]
                 }
             }
-            if (annealDoubleCool) temp *= cool
+            if (fastCool) temp *= cool
         }
         val bb = best ?: return false
         for (i in 0 until p.S) bb[i].copyInto(work[i])
@@ -243,11 +240,12 @@ object GroupCountEqualizer {
             }
             if (!done) break
         }
-        // 焼きなましは乱数で行き着く先が揺れるので、種を変えて ANNEAL_RUNS 回走らせ、いちばんそろった盤面を採る
+        // 焼きなましは乱数で行き着く先が揺れるので、種を変えて ANNEAL_RUNS 回走らせ、いちばんそろった盤面を採る。冷やし方は 2 通り
+        //   （速く冷やす＝有効な手で 2 回、ゆっくり＝1 手 1 回で t1 に届く）を両方走らせる。速いほうを先に走らせ同点は先を残す＝速いほうだけより悪くならない。
         var bestRun: Array<IntArray>? = null; var bestRunDev = totalDev(p, elig, cnt)
-        if (annealIters > 0) for (run in 0 until ANNEAL_RUNS) {
+        if (annealIters > 0) for (run in 0 until ANNEAL_RUNS) for (fastCool in listOf(true, false)) {
             val w = work.copy2D()
-            if (!anneal(p, w, cnt, elig, annealIters, seed + run)) continue
+            if (!anneal(p, w, cnt, elig, annealIters, seed + run, fastCool)) continue
             val dv = totalDev(p, elig, counts(p, w))
             if (dv < bestRunDev) { bestRunDev = dv; bestRun = w }
         }
