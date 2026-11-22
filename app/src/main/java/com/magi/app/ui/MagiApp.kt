@@ -891,14 +891,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }, onBulk = { wishBulkOpen = true })
                     var equalizeOpen by rememberSaveable { mutableStateOf(false) }
                     GroupEqualizeRow(ui, onEqualize = { equalizeOpen = true })
+                    // 1 つのボタン＝そろえたあと回数を固定して日を組み直す。CP-SAT が使えないビルドはそろえるだけ。
+                    val canResolve = com.magi.app.v6.CpsatBridge.available
                     if (equalizeOpen) GroupEqualizeDialog(ui, onConfirm = { sel ->
                         equalizeOpen = false
-                        vm.equalizeGroupCounts(sel.takeIf { it.size < ui.shiftSymbols.size })
-                    }, onDismiss = { equalizeOpen = false },
-                        onResolve = if (com.magi.app.v6.CpsatBridge.available) ({ sel ->
-                            equalizeOpen = false
-                            vm.equalizeAndResolve(sel.takeIf { it.size < ui.shiftSymbols.size })
-                        }) else null)
+                        val picked = sel.takeIf { it.size < ui.shiftSymbols.size }
+                        if (canResolve) vm.equalizeAndResolve(picked) else vm.equalizeGroupCounts(picked)
+                    }, onDismiss = { equalizeOpen = false }, resolves = canResolve)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav, stickyTopPx = viewportTopPx)

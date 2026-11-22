@@ -2217,8 +2217,7 @@ internal fun groupEqualizeConfirmText(picked: Int, total: Int): String =
     if (picked >= total) "すべてのシフトをそろえる" else "選んだ ${picked}種類をそろえる"
 /** ［そろえて組み直す］CP-SAT で組み直す持ち時間（秒）。 */
 internal const val GROUP_EQUALIZE_RESOLVE_SEC = 60.0
-internal const val GROUP_EQUALIZE_RESOLVE_BUTTON = "そろえて組み直す"
-internal const val GROUP_EQUALIZE_RESOLVE_NOTE = "「そろえて組み直す」は、そろえた回数を各人そのままに固定して、どの日に入るかを組み直します（約1分・停止できます）。7日に休2回や並びのズレが減ります"
+internal const val GROUP_EQUALIZE_RESOLVE_NOTE = "そろえたあと、その回数を各人そのままに固定して、どの日に入るかを組み直します（約1分・停止できます）。7日に休2回や並びのズレが減ります"
 internal const val GROUP_EQUALIZE_RESOLVING = "回数をそろえて組み直しています…（約1分）"
 internal const val GROUP_EQUALIZE_RESOLVE_STOPPED = "停止しました。そろえる前の勤務表に戻しています"
 internal const val GROUP_EQUALIZE_RESOLVE_FAILED = "回数をそろえて組み直せませんでした。そろえる前の勤務表に戻しています（詳しくは設定＞詳細設定＞ログ）"
