@@ -192,13 +192,14 @@ object GroupCountEqualizer {
             return out(n + d) <= out(n)
         }
         val groupOf = IntArray(p.S) { -1 }.also { a -> p.groupMembers.forEachIndexed { g, m -> for (i in m) a[i] = g } }
+        val devNow = Array(elig.size) { DoubleArray(p.K) }   // 1 巡ごとのグループ×シフトのずれ（入れ替え前）
         /** a・b（同じグループ）の同じ日の入れ替え x↔y で、そのグループの x・y のずれ（fair）がどれだけ変わるか（負＝そろう）。 */
         fun swapGain(a: Int, b: Int, x: Int, y: Int): Double {
             val g = groupOf[a]
             if (g < 0) return 0.0
             val ks = listOf(x, y).filter { elig[g][it] != null }
             if (ks.isEmpty()) return 0.0
-            var before = 0.0; for (k in ks) before += groupDev(p, g, k, cnt)
+            var before = 0.0; for (k in ks) before += devNow[g][k]
             cnt[a][x]--; cnt[a][y]++; cnt[b][x]++; cnt[b][y]--
             var after = 0.0; for (k in ks) after += groupDev(p, g, k, cnt)
             cnt[a][x]++; cnt[a][y]--; cnt[b][x]--; cnt[b][y]++
@@ -207,6 +208,7 @@ object GroupCountEqualizer {
         data class Cand(val gain: Double, val a: Int, val b: Int, val d: Int)
         var swaps = 0
         while (swaps < maxSwaps) {
+            for (g in elig.indices) for (k in 0 until p.K) devNow[g][k] = if (elig[g][k] != null) groupDev(p, g, k, cnt) else 0.0
             val cands = ArrayList<Cand>()
             for (m in p.groupMembers) {
                 if (m.size < 2) continue
@@ -261,19 +263,23 @@ object GroupCountEqualizer {
 
     /** [board] の [shifts]（null は全シフト）の各人の回数を固定して CP-SAT で解き直す（`magi_cpsat::Options::fixCounts`）。
      *  開始の盤面より悪くはならない。CP-SAT が使えないビルド・作れない問題では null。 */
+    /** 固定する回数（S×K、-1 は固定しない）。fair が数える組（2 人以上のグループ×担当のシフト）だけ＝1 人のグループの人まで固定しても
+     *  fair は変わらず組み直しの余地だけ減る。 */
+    internal fun fixedCounts(p: Problem, board: Array<IntArray>, shifts: Set<Int>?): IntArray {
+        val fix = IntArray(p.S * p.K) { -1 }
+        val cnt = counts(p, board)
+        for ((g, m) in p.groupMembers.withIndex()) {
+            if (m.size < 2) continue
+            for (k in p.bucket[g]) if (shifts == null || k in shifts) for (i in m) fix[i * p.K + k] = cnt[i][k]
+        }
+        return fix
+    }
+
     fun resolveKeepingCounts(state: MagiState, board: Array<IntArray>, shifts: Set<Int>?, maxSeconds: Double,
                              threads: Int, seed: Long = 1L, shouldStop: () -> Boolean): Resolved? {
         val p = cachedProblem(state)
         val start = normalizeSchedule(board, p)
-        val fix = IntArray(p.S * p.K) { -1 }
-        for (i in 0 until p.S) for (j in 0 until p.T) {
-            val k = start[i][j]
-            if (k !in 0 until p.K || (shifts != null && k !in shifts)) continue
-            if (fix[i * p.K + k] < 0) fix[i * p.K + k] = 0
-            fix[i * p.K + k]++
-        }
-        // 選んだシフトで 0 回の人も 0 回に固定する（新しく入れると回数が変わる）。
-        for (i in 0 until p.S) for (k in 0 until p.K) if ((shifts == null || k in shifts) && fix[i * p.K + k] < 0) fix[i * p.K + k] = 0
+        val fix = fixedCounts(p, start, shifts)
         val before = UnifiedViolationChecker.check(state, start)
         val t0 = EngineClock.nowMs()
         val out = CpsatResolve.run(p, start, maxSeconds, threads, seed, fixCounts = fix, shouldStop = shouldStop) ?: return null

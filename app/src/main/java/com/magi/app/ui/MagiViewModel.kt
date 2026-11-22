@@ -2810,7 +2810,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 logOp("W", "回数をそろえて組み直す 失敗: ${e.javaClass.simpleName}: ${e.message}")
                 terminalLogged = true
                 withContext(NonCancellable) {
-                    currentSchedule = sched0.copy2D(); state = st0.withSchedule(currentSchedule!!)
+                    val kept = sched0.copy2D()
+                    currentSchedule = kept; resultSchedule = kept; state = st0.withSchedule(kept)
                     _ui.update { it.copy(running = false, messageIsError = true, message = GROUP_EQUALIZE_RESOLVE_FAILED,
                         schedule = sched0.map { r -> r.toList() }) }
                 }

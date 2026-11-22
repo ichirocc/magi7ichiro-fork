@@ -148,4 +148,17 @@ class GroupCountEqualizerTest {
             assertTrue(name, after.hard <= before.hard)
         }
     }
+
+    @Test fun resolveFixesOnlyMultiMemberGroups() {
+        // G0＝s0〜s2（3 人）、G1＝s3（1 人）。固定するのは G0 の人の D・A・休 だけ、s3 は固定しない。D だけ選べば D だけ。
+        val sched = listOf(List(14) { 1 }, List(14) { 0 }, List(14) { 2 }, List(14) { 1 })
+        val st = state(sched)
+        val p = Problem(st)
+        val b = sched.map { it.toIntArray() }.toTypedArray()
+        val all = GroupCountEqualizer.fixedCounts(p, b, null)
+        assertEquals(14, all[0 * k + 1]); assertEquals(0, all[1 * k + 1]); assertEquals(14, all[2 * k + 2])
+        for (kk in 0 until k) assertEquals(-1, all[3 * k + kk])
+        val onlyD = GroupCountEqualizer.fixedCounts(p, b, setOf(1))
+        assertEquals(14, onlyD[0 * k + 1]); assertEquals(-1, onlyD[0 * k + 0]); assertEquals(-1, onlyD[0 * k + 2])
+    }
 }
