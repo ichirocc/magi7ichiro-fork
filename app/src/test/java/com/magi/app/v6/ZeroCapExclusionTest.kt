@@ -11,28 +11,28 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private fun state(wishes: Map<String, Int> = emptyMap(), extraRange: Map<String, Range> = emptyMap()): MagiState {
+    val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""))
+    val groups = listOf(Group("G0", "G0"))
+    val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("Z", 0))
+    return MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-04",
+        shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+        schedule = listOf(listOf(1, 1, 1, 1), listOf(0, 0, 0, 0), listOf(0, 0, 0, 0)), wishes = wishes,
+        staffRange = mapOf("0,1" to Range("0", "0")) + extraRange,
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = emptyList(), cons42 = emptyList(),
+    )
+}
+
+private fun countA(sched: Array<IntArray>, i: Int) = sched[i].count { it == 1 }
+
 /** [3.507.0] 個人上限 0 のシフトは最適化器が置かない（`Problem.mayPlace`）。評価・表示は不変。
  *  盤面: 休/A、A は毎日 1 名必要。X は A 上限 0、Y/Z は制限なし。入力は X が全日 A（上限超過 4 だが被覆は満たす）。 */
 class ZeroCapExclusionTest {
-    private fun state(wishes: Map<String, Int> = emptyMap(), extraRange: Map<String, Range> = emptyMap()): MagiState {
-        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""))
-        val groups = listOf(Group("G0", "G0"))
-        val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("Z", 0))
-        return MagiState(
-            startDate = "2026-08-01", endDate = "2026-08-04",
-            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
-            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
-            schedule = listOf(listOf(1, 1, 1, 1), listOf(0, 0, 0, 0), listOf(0, 0, 0, 0)), wishes = wishes,
-            staffRange = mapOf("0,1" to Range("0", "0")) + extraRange,
-            needDay1 = emptyMap(), needDay2 = emptyMap(),
-            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
-            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
-            cons41 = emptyList(), cons42 = emptyList(),
-        )
-    }
-
-    private fun countA(sched: Array<IntArray>, i: Int) = sched[i].count { it == 1 }
-
     @Test
     fun mayPlaceExcludesCappedShiftButCanDoAndUiListsAreUnchanged() {
         val p = cachedProblem(state(extraRange = mapOf("1,0" to Range("0", "0"))))   // Y の休も上限 0（休は除外しない）
@@ -64,79 +64,6 @@ class ZeroCapExclusionTest {
         assertEquals(3, n)
         assertEquals(listOf(0, 0, 1, 0), cleared[0].toList())
         assertEquals("入力は変えない", listOf(1, 1, 1, 1), input[0].toList())
-    }
-
-    @Test
-    fun optimizerMovesCoverageOffTheCappedStaff() = runBlocking {
-        val s = state()
-        val r = V6NativeOptimizer.optimize(s, options = V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = 2, workers = 1,
-            softPolish = false, restarts = 0, seed = 7L, postPolish = false))
-        assertEquals(0, countA(r.schedule, 0))
-        assertEquals("被覆は Y/Z が引き受ける", 0, UnifiedViolationChecker.check(s, r.schedule).hard)
-    }
-
-    @Test
-    fun handleOptimizeReturnsZeroCappedCellsAndDoesNotRevertToInput() = runBlocking {
-        val s = state()
-        val res = V6FinalPort.handleOptimize(s, secondsRaw = 2, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
-        assertEquals(0, countA(res.schedule, 0))
-        assertEquals(0, res.report.hard)
-        assertTrue("入口で外した件数をログに出す", res.logs.any { it.tag == "CapZero" && it.message.contains("4件") })
-        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
-        // [3.643.0] 終わり方の要約: 予算と残る必須は結果と同じ値。締切で終わったときだけ種別が DEADLINE
-        assertEquals(2 to 0, res.stop!!.budgetSec to res.stop!!.remainingHard)
-        assertEquals(!res.stop!!.earlyStop, res.stop!!.kind == V6FinalPort.StopKind.DEADLINE)
-        assertFalse("外した入力を基準にするので番兵は発火しない", res.logs.any { it.tag == "Sentinel" })
-    }
-
-    /** [3.512.1/回帰] `handleOptimize` は本番2箇所（MagiViewModel/OptimizationWorker）から
-     *  `onProgress` を**末尾の名前なしトレーリングラムダ**で渡される。`quantitativeRangeEval`
-     *  （backlog #12(a)）を `onProgress` の**後**に追加していたため、トレーリングラムダが
-     *  `quantitativeRangeEval`（Boolean）へ誤束縛され Android ビルドだけが壊れていた
-     *  （host JVM は UI 層を含まないため検出不能だった＝v6-engine-check で発覚）。
-     *  同じ呼出形をホストで固定し、次に同じ順序ミスが起きたらここでコンパイルが落ちる。 */
-    @Test
-    fun handleOptimizeAcceptsOnProgressAsTrailingLambdaLikeProductionCallers() = runBlocking {
-        val s = state()
-        var progressCalls = 0
-        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true) { phase, _, _, _ ->
-            if (phase.isNotEmpty()) progressCalls++
-        }
-        assertTrue("onProgressがString/ViolationReport?/Long/Longとして正しく呼ばれる", progressCalls > 0)
-        assertEquals(0, res.report.hard)
-    }
-
-    @Test
-    fun handleOptimizeSeedReachesOptimizerOptionsAndDefaultKeepsZero() = runBlocking {
-        val s = state()
-        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true, seed = 42L)
-        assertEquals(42L, V6FinalPort.lastOptimizerSeed)
-        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
-        assertEquals("既定 null は従来の 0（時刻由来）", 0L, V6FinalPort.lastOptimizerSeed)
-    }
-
-    @Test
-    fun wishForCappedShiftStaysPinnedAndIsTheOnlyPlacement() = runBlocking {
-        val s = state(wishes = mapOf("0,1" to 1))
-        val r = V6NativeOptimizer.optimize(s, options = V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = 2, workers = 1,
-            softPolish = false, restarts = 0, seed = 7L, postPolish = false))
-        assertEquals(1, r.schedule[0][1])
-        assertEquals(1, countA(r.schedule, 0))
-    }
-
-    /** 上限0のセルだけが被覆を担っていた盤面: 入口で外すと必須が増え、ログと結果に前後の件数が出る。 */
-    @Test
-    fun capZeroNoticeReportsHardRiseWhenCappedCellsCarriedCoverage() = runBlocking {
-        val s = state(extraRange = mapOf("1,1" to Range("0", "0"), "2,1" to Range("0", "0")))
-        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
-        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
-        assertTrue(res.logs.any { it.tag == "CapZero" && it.message ==
-            "入口: 個人上限0のセル4件を外しました（必須 0→4）。最適化は上限0の勤務を置かないため、入力の必須0件に戻らないことがあります" })
-        assertEquals("今の勤務表には個人の上限0のシフトが4件入っています（だれのどの日かはホームの『設定の見直し』に出ます）。" +
-            "最適化は上限0の勤務を置かないため、必須0件まで戻らないことがあります。" +
-            "編集タブの『年間マスター』の『③ 回数（1人あたり）』で上限を見直すか、このまま使えます",
-            res.capZero?.keptNote())
-        assertEquals(null, V6FinalPort.CapZeroNotice(4, 0, 0).keptNote())
     }
 
     /** 上限0のセルを含む段は捨てずに、そのセルを外した盤面を候補に足す（入力・上限0なしの段は足さない）。 */
@@ -191,5 +118,84 @@ class ZeroCapExclusionTest {
         )
         val out = HardRepairCore.hf67HardRepair(s, s.schedule.map { it.toIntArray() }.toTypedArray(), java.util.Random(1)).schedule
         assertEquals(listOf(listOf(2, 0, 1, 2), listOf(2, 1, 0, 2), listOf(0, 1, 0, 0)), out.map { it.toList() })
+    }
+}
+
+/** [ZeroCapExclusionTest] から分けた（重いテストを別のクラスへ＝JUnit の並列で別の JVM に載る）。 */
+class ZeroCapOptimizeTest {
+    @Test
+    fun optimizerMovesCoverageOffTheCappedStaff() = runBlocking {
+        val s = state()
+        val r = V6NativeOptimizer.optimize(s, options = V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = 2, workers = 1,
+            softPolish = false, restarts = 0, seed = 7L, postPolish = false))
+        assertEquals(0, countA(r.schedule, 0))
+        assertEquals("被覆は Y/Z が引き受ける", 0, UnifiedViolationChecker.check(s, r.schedule).hard)
+    }
+
+    @Test
+    fun handleOptimizeReturnsZeroCappedCellsAndDoesNotRevertToInput() = runBlocking {
+        val s = state()
+        val res = V6FinalPort.handleOptimize(s, secondsRaw = 2, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
+        assertEquals(0, countA(res.schedule, 0))
+        assertEquals(0, res.report.hard)
+        assertTrue("入口で外した件数をログに出す", res.logs.any { it.tag == "CapZero" && it.message.contains("4件") })
+        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
+        // [3.643.0] 終わり方の要約: 予算と残る必須は結果と同じ値。締切で終わったときだけ種別が DEADLINE
+        assertEquals(2 to 0, res.stop!!.budgetSec to res.stop!!.remainingHard)
+        assertEquals(!res.stop!!.earlyStop, res.stop!!.kind == V6FinalPort.StopKind.DEADLINE)
+        assertFalse("外した入力を基準にするので番兵は発火しない", res.logs.any { it.tag == "Sentinel" })
+    }
+
+    /** [3.512.1/回帰] `handleOptimize` は本番2箇所（MagiViewModel/OptimizationWorker）から
+     *  `onProgress` を**末尾の名前なしトレーリングラムダ**で渡される。`quantitativeRangeEval`
+     *  （backlog #12(a)）を `onProgress` の**後**に追加していたため、トレーリングラムダが
+     *  `quantitativeRangeEval`（Boolean）へ誤束縛され Android ビルドだけが壊れていた
+     *  （host JVM は UI 層を含まないため検出不能だった＝v6-engine-check で発覚）。
+     *  同じ呼出形をホストで固定し、次に同じ順序ミスが起きたらここでコンパイルが落ちる。 */
+    @Test
+    fun handleOptimizeAcceptsOnProgressAsTrailingLambdaLikeProductionCallers() = runBlocking {
+        val s = state()
+        var progressCalls = 0
+        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true) { phase, _, _, _ ->
+            if (phase.isNotEmpty()) progressCalls++
+        }
+        assertTrue("onProgressがString/ViolationReport?/Long/Longとして正しく呼ばれる", progressCalls > 0)
+        assertEquals(0, res.report.hard)
+    }
+}
+
+/** [ZeroCapExclusionTest] から分けた（重いテストを別のクラスへ＝JUnit の並列で別の JVM に載る）。 */
+class ZeroCapOptimizeWishTest {
+    @Test
+    fun handleOptimizeSeedReachesOptimizerOptionsAndDefaultKeepsZero() = runBlocking {
+        val s = state()
+        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true, seed = 42L)
+        assertEquals(42L, V6FinalPort.lastOptimizerSeed)
+        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
+        assertEquals("既定 null は従来の 0（時刻由来）", 0L, V6FinalPort.lastOptimizerSeed)
+    }
+
+    @Test
+    fun wishForCappedShiftStaysPinnedAndIsTheOnlyPlacement() = runBlocking {
+        val s = state(wishes = mapOf("0,1" to 1))
+        val r = V6NativeOptimizer.optimize(s, options = V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = 2, workers = 1,
+            softPolish = false, restarts = 0, seed = 7L, postPolish = false))
+        assertEquals(1, r.schedule[0][1])
+        assertEquals(1, countA(r.schedule, 0))
+    }
+
+    /** 上限0のセルだけが被覆を担っていた盤面: 入口で外すと必須が増え、ログと結果に前後の件数が出る。 */
+    @Test
+    fun capZeroNoticeReportsHardRiseWhenCappedCellsCarriedCoverage() = runBlocking {
+        val s = state(extraRange = mapOf("1,1" to Range("0", "0"), "2,1" to Range("0", "0")))
+        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
+        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
+        assertTrue(res.logs.any { it.tag == "CapZero" && it.message ==
+            "入口: 個人上限0のセル4件を外しました（必須 0→4）。最適化は上限0の勤務を置かないため、入力の必須0件に戻らないことがあります" })
+        assertEquals("今の勤務表には個人の上限0のシフトが4件入っています（だれのどの日かはホームの『設定の見直し』に出ます）。" +
+            "最適化は上限0の勤務を置かないため、必須0件まで戻らないことがあります。" +
+            "編集タブの『年間マスター』の『③ 回数（1人あたり）』で上限を見直すか、このまま使えます",
+            res.capZero?.keptNote())
+        assertEquals(null, V6FinalPort.CapZeroNotice(4, 0, 0).keptNote())
     }
 }

@@ -17,47 +17,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
+private fun sample(): MagiState =
+    StateParser.parse(ManualPinTest::class.java.getResourceAsStream("/sample_state_v6.json")!!.bufferedReader().readText())!!
+
+/** 実データ（sample）に手動固定を置く: 各職員の 4 日おき＋希望と違う値で固定した未反映の希望セル 1 つ（手動＞希望）。 */
+private data class Fixture(val st: MagiState, val board: Array<IntArray>, val conflict: Pair<Int, Int>)
+
+private fun fixture(): Fixture {
+    val st0 = sample()
+    val p0 = Problem(st0)
+    val board = p0.initialAssignment()
+    val (ci, cj) = (0 until p0.S).flatMap { i -> (0 until p0.T).map { j -> i to j } }
+        .first { (i, j) -> p0.wishFixed(i, j) && p0.allowedShiftsForStaff(i).any { it != p0.wish[i][j] } }
+    board[ci][cj] = p0.allowedShiftsForStaff(ci).first { it != p0.wish[ci][cj] }
+    val pins = LinkedHashMap<Pair<Int, Int>, ManualPin>()
+    for (i in 0 until p0.S) for (j in (i % 4) until p0.T step 4) pins[i to j] = ManualPin(i, j, board[i][j])
+    pins[ci to cj] = ManualPin(ci, cj, board[ci][cj])
+    val st = st0.copy(schedule = board.map { it.toList() }, manualPins = pins.values.toList())
+    return Fixture(st, board, ci to cj)
+}
+
+private fun assertPinsHeld(msg: String, st: MagiState, s: Array<IntArray>) {
+    for (m in st.manualPins) assertEquals("$msg: (${m.staff},${m.day})", m.shift, s[m.staff][m.day])
+}
+
+private fun VioKeyish(i: Int, j: Int) = "$i,$j"
+
 /**
  * [#41] 手動固定: 最適化器・後処理・1 手の提案・S5/S6 は固定セルを書き換えない。手の編集は可で値が追従する。
  * 採点（hard/soft/pref/weighted）は固定の有無で変わらない。手動固定＞規則 A の「希望へ戻す」＞通常の書き換え。
  */
 class ManualPinTest {
-    private fun sample(): MagiState =
-        StateParser.parse(javaClass.getResourceAsStream("/sample_state_v6.json")!!.bufferedReader().readText())!!
-
-    /** 実データ（sample）に手動固定を置く: 各職員の 4 日おき＋希望と違う値で固定した未反映の希望セル 1 つ（手動＞希望）。 */
-    private data class Fixture(val st: MagiState, val board: Array<IntArray>, val conflict: Pair<Int, Int>)
-
-    private fun fixture(): Fixture {
-        val st0 = sample()
-        val p0 = Problem(st0)
-        val board = p0.initialAssignment()
-        val (ci, cj) = (0 until p0.S).flatMap { i -> (0 until p0.T).map { j -> i to j } }
-            .first { (i, j) -> p0.wishFixed(i, j) && p0.allowedShiftsForStaff(i).any { it != p0.wish[i][j] } }
-        board[ci][cj] = p0.allowedShiftsForStaff(ci).first { it != p0.wish[ci][cj] }
-        val pins = LinkedHashMap<Pair<Int, Int>, ManualPin>()
-        for (i in 0 until p0.S) for (j in (i % 4) until p0.T step 4) pins[i to j] = ManualPin(i, j, board[i][j])
-        pins[ci to cj] = ManualPin(ci, cj, board[ci][cj])
-        val st = st0.copy(schedule = board.map { it.toList() }, manualPins = pins.values.toList())
-        return Fixture(st, board, ci to cj)
-    }
-
-    private fun assertPinsHeld(msg: String, st: MagiState, s: Array<IntArray>) {
-        for (m in st.manualPins) assertEquals("$msg: (${m.staff},${m.day})", m.shift, s[m.staff][m.day])
-    }
-
-    // 受け入れ 1・3: 最適化（入口→探索→後処理→最終番兵）のあとも固定の値のまま。アルゴリズムを問わない。
-    @Test fun optimizeKeepsPinnedValuesAcrossAlgorithms() = runBlocking {
-        val f = fixture()
-        for (algo in listOf(V6Algorithm.V5, V6Algorithm.ALNS)) {
-            val res = V6FinalPort.handleOptimize(f.st, f.board.copy2D(), secondsRaw = 2, workers = 1,
-                requestedAlgorithm = algo, allowImpossible = true, seed = 11L)
-            assertPinsHeld("$algo", f.st, res.schedule)
-            val (ci, cj) = f.conflict
-            assertTrue("手動固定は希望へ戻さない", res.schedule[ci][cj] != Problem(f.st).wish[ci][cj])
-        }
-    }
-
     @Test fun deterministicPostProcessingAndEntryRepairKeepPins() {
         val f = fixture()
         val moved = f.board.copy2D().also { it[f.conflict.first][f.conflict.second] = Problem(f.st).wish[f.conflict.first][f.conflict.second] }
@@ -187,6 +177,19 @@ class ManualPinTest {
         assertEquals("消したシフトの固定は外れ、後ろは詰める", listOf(ManualPin(0, 1, 0), ManualPin(2, 30, 2)), Ws1Ops.removeShift(st, sched, 1).state.manualPins)
         assertEquals("期間の外は落とす", 2, Ws1Ops.resizeDays(st, sched, 30).state.manualPins.size)
     }
+}
 
-    private fun VioKeyish(i: Int, j: Int) = "$i,$j"
+/** [ManualPinTest] から分けた（重いテストを別のクラスへ＝JUnit の並列で別の JVM に載る）。 */
+class ManualPinOptimizeTest {
+    // 受け入れ 1・3: 最適化（入口→探索→後処理→最終番兵）のあとも固定の値のまま。アルゴリズムを問わない。
+    @Test fun optimizeKeepsPinnedValuesAcrossAlgorithms() = runBlocking {
+        val f = fixture()
+        for (algo in listOf(V6Algorithm.V5, V6Algorithm.ALNS)) {
+            val res = V6FinalPort.handleOptimize(f.st, f.board.copy2D(), secondsRaw = 2, workers = 1,
+                requestedAlgorithm = algo, allowImpossible = true, seed = 11L)
+            assertPinsHeld("$algo", f.st, res.schedule)
+            val (ci, cj) = f.conflict
+            assertTrue("手動固定は希望へ戻さない", res.schedule[ci][cj] != Problem(f.st).wish[ci][cj])
+        }
+    }
 }
