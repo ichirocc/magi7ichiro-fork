@@ -760,6 +760,8 @@ object V6FinalPort {
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
+        // 併走の CP-SAT が必須の最少を証明し、いまの最良がその件数＝必須はもう減らない（ほかの床と同じく頭打ちとみなす）。
+        val cpsatHardFloorReached = java.util.concurrent.atomic.AtomicBoolean(false)
         // CP-SAT が自分の前の盤面より良い勤務表を出した最後の時刻。停滞は探索と CP-SAT の両方が改善しなくなってから（3.727.63）。
         //   良し悪しはチェッカーで採点して比べる（CP-SAT の返す重みは fair を含まず、目的の fair 近似とも物差しが違う）。
         val cpsatImprovedAt = java.util.concurrent.atomic.AtomicLong(0L)
@@ -779,6 +781,7 @@ object V6FinalPort {
                 }
             }
             val best = wd.bestReport ?: return@synchronized false
+            cpsatHardFloorReached.set(snap.hardProven && snap.hardBound >= 0 && best.hard.toLong() == snap.hardBound)
             if (!snap.hardProven || best.hard.toLong() != snap.hardBound) return@synchronized false
             val g = CpsatCoRun.gap(best.weightedScore, snap.weightedBound) ?: return@synchronized false
             if (g <= CPSAT_GAP_STOP) cpsatGapHit = true
@@ -800,7 +803,7 @@ object V6FinalPort {
             // c3n 壁での短縮は 3.673.0 で既定 OFF・P2d で撤去（c3nWallProven=false）。
             val effStall = effectiveStallMs(
                 wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), false, stallHardMs, stallMs,
-                wd.bestHard.get() == wishFloorLogged && bestWishReached(),
+                (wd.bestHard.get() == wishFloorLogged && bestWishReached()) || (config.floorShortStall && cpsatHardFloorReached.get()),
                 floorShort = config.floorShortStall,
             )
             when {
@@ -872,7 +875,8 @@ object V6FinalPort {
                 progressWatch("解き直し（CP-SAT） 必須${hard} 重み${weighted}（残り${((searchDeadlineMs - now) / 1000L).coerceAtLeast(0L)}秒）", null, 0L, now - startMs)
             },
                 // 停滞とみなす長さ（設定）を解き直しにも効かせる＝探索の最後の改善から数えて改善が無ければ打ち切る（試験 mafs2Enabled は従来の 30 秒・解き直しの開始から）。
-                stallStopMs = if (config.mafs2Enabled) RESOLVE_STALL_STOP_MS else stallMs,
+                stallStopMs = if (config.mafs2Enabled) RESOLVE_STALL_STOP_MS
+                    else if (config.floorShortStall && cpsatHardFloorReached.get()) stallHardMs else stallMs,
                 sinceMs = if (config.mafs2Enabled) EngineClock.nowMs() else maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()),
             ) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         }
@@ -1121,7 +1125,8 @@ object V6FinalPort {
                     "入力超えの最終改善=${if (lastBeatInputAtSearchEnd < 0) "なし" else "経過${((lastBeatInputAtSearchEnd - startMs) / 1000).coerceAtLeast(0)}s"}・" +
                     "探索終了時の停滞${endStallS}s(探索の最終改善から)・実効閾値($kind)・" +
                     "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${wd.bestHard.get()})・" +
-                    "covU床${hardFloor}=${if (wd.bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (wd.stagnationFired.get()) "あり" else "なし"}" +
+                    "covU床${hardFloor}=${if (wd.bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・" +
+                    "CP-SAT の必須の最少=${if (cpsatHardFloorReached.get()) "到達" else "未到達"}・発火=${if (wd.stagnationFired.get()) "あり" else "なし"}" +
                     // [3.375.0] 時刻に加えて反復数も出す（「回していない」のか「回しても改善しない」のかの区別）。
                     "・反復(進捗報告ぶん・目安)=最終改善時${fmtIter(lastImpItersAtSearchEnd)}→" +
                     "探索終了時${fmtIter(itersAtSearchEnd)}（無改善のまま約${fmtIter(itersAtSearchEnd - lastImpItersAtSearchEnd)}転・" +
