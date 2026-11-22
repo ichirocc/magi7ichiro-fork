@@ -48,7 +48,7 @@ struct Options {
     int linearizationLevel = 2;
     // 使う探索役（空なら CP-SAT の既定の並び）。少ないワーカーでも下限を担う役（max_lp など）を必ず入れるため。
     std::vector<std::string> subsolvers;
-    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage,9 fair）。
+    // 族ごとの組み立てを切る（検証用。bit: 0 c1,1 c2,2 c41,3 c42,4 c3,5 cells,6 counts,7 weekly,8 coverage,9 fair,10 gap）。
     unsigned families = ~0u;
     // 第 1 段の持ち時間の上限（秒）。
     double phase1MaxSeconds = 6.0;

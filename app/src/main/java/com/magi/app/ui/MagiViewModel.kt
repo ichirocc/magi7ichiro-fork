@@ -2746,7 +2746,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 月全体の焼きなましで 1〜数秒かかるので画面を止めない。計算中に勤務表が変わったら当てない。
         viewModelScope.launch {
             val r = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st, snap, shifts) }
-            if (state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) {
+            // 計算中（1〜数秒）に作成が始まっていたら当てない＝作成中の盤面をその場で書き換えない。
+            if (optimizeInFlight() || state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) {
                 postOpNotice(GROUP_EQUALIZE_STALE, undoable = false); return@launch
             }
             applyGroupEqualize(st, sched, shifts, r)

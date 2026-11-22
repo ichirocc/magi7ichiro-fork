@@ -1189,6 +1189,7 @@ object V6FinalPort {
                 CpsatCoRun.gap(finalReport.weightedScore, s.weightedBound).takeIf { finalReport.hard.toLong() == s.hardBound }, cpsatGapHit)
         }
         val cpsatLog = (cpsatSnap?.let { s -> listOf(MirrorLog(level = "I", tag = "CP-SAT", message = cpsatLogLine(s, boundSummary, cpsatStage, chained.report, outOfDomain = !boundApplies))) } ?: emptyList()) +
+            (if (cpsat?.lingered == true) listOf(MirrorLog(level = "W", tag = "CP-SAT", message = "併走の CP-SAT が止める合図から 10 秒で止まらなかった（解放は止まったあと）")) else emptyList()) +
             listOfNotNull(
                 if (resolveOut != null && resolveStart != null) MirrorLog(level = "I", tag = "CP-SAT",
                     message = resolveLogLine(resolveOut, resolveThreads, resolveStage, resolveStart, resolveStallHit.get(), (tChain1 - startMs) / 1000))

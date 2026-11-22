@@ -14,7 +14,7 @@ internal class OpportunityController(private val roles: List<HypothesisEpochRole
     /** 局面: 必須が残れば重みが最大の必須の種類、無ければ重みの寄与が最大の要調整の種類。 */
     fun phaseOf(r: ViolationReport): String {
         val keys = if (r.hard > 0) MirrorKeys.hard else r.breakdown.keys.filter { it !in MirrorKeys.hard }
-        val top = keys.maxByOrNull { (r.breakdown[it] ?: 0) * MirrorKeys.weightOf(it) }
+        val top = keys.maxByOrNull { (r.breakdown[it] ?: 0) * ObjectiveWeights.of(it) }   // 採点の重み（方式で切り替わる）
         return if (top == null || (r.breakdown[top] ?: 0) == 0) (if (r.hard > 0) "hard" else "soft") else top
     }
 
