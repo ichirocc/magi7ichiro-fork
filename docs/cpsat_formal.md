@@ -103,6 +103,11 @@ CBMC（C の有界モデル検査）はエンジンの C++（標準ライブラ�
 - 気づき（未調査）: 第 2 段が持ち時間より早く FEASIBLE で戻ることがある（30 秒の指定で 19 秒、60 秒で 49〜55 秒。段の有無によらない）。
 - このホストでも CP-SAT は組める（OR-Tools C++ v9.12 の配布物 `or-tools_amd64_ubuntu-24.04_cpp_v9.12.4544.tar.gz` を展開、下の「再実行」）。
 
+## 回数を固定した解き直し（3.727.124、2026-11-22）
+［そろえて組み直す］用。`Options::fixCounts`／`ImproveOptions::fixCounts`（S×K、-1 は固定しない）を渡すと、`Model::addFixedCounts` が
+(職員, シフト) の回数の式 `cnt_` に等式を足す。開始の盤面がその回数を満たしていれば各部分のヒントは実行可能＝解き直しの性質（開始より悪くならない）は変わらない。
+JNI `nativeCpsatImproveFixedCounts`、Kotlin `CpsatResolve.run(fixCounts=)`。
+
 ## 解き直し（3.727.89、2026-11-16）
 利用者指示（測定・時間比較は省いて実装を優先、既定 OFF のスイッチ、「推奨で。mainにマージする」）。
 

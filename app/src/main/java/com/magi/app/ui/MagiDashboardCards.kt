@@ -2206,7 +2206,7 @@ internal fun GroupEqualizeRow(ui: UiState, onEqualize: () -> Unit) {
 /** どのシフトの回数をそろえるかを選ぶ（3.727.116）。最初は全シフト。選んだシフトは ✓ と濃い色、外したシフトは薄い色。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun GroupEqualizeDialog(ui: UiState, onConfirm: (Set<Int>) -> Unit, onDismiss: () -> Unit) {
+internal fun GroupEqualizeDialog(ui: UiState, onConfirm: (Set<Int>) -> Unit, onDismiss: () -> Unit, onResolve: ((Set<Int>) -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     val all = ui.shiftSymbols.indices.toSet()
     var sel by remember { mutableStateOf(all) }
@@ -2237,11 +2237,15 @@ internal fun GroupEqualizeDialog(ui: UiState, onConfirm: (Set<Int>) -> Unit, onD
                 TextButton(onClick = { sel = if (sel.size == all.size) emptySet() else all }) {
                     Text(if (sel.size == all.size) GROUP_EQUALIZE_NONE_PICK else GROUP_EQUALIZE_ALL_PICK)
                 }
+                if (onResolve != null) Text(GROUP_EQUALIZE_RESOLVE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onConfirm(sel) }, enabled = sel.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { Text(groupEqualizeConfirmText(sel.size, all.size)) }
+                if (onResolve != null) Button(onClick = { onResolve(sel) }, enabled = sel.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { Text(GROUP_EQUALIZE_RESOLVE_BUTTON) }
+                val confirm: @Composable () -> Unit = { Text(groupEqualizeConfirmText(sel.size, all.size)) }
+                if (onResolve != null) OutlinedButton(onClick = { onConfirm(sel) }, enabled = sel.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { confirm() }
+                else Button(onClick = { onConfirm(sel) }, enabled = sel.isNotEmpty(), modifier = Modifier.heightIn(min = 48.dp)) { confirm() }
                 DialogDismissButton(onClick = onDismiss, text = "やめる")
             }
         },

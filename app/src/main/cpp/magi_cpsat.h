@@ -55,6 +55,8 @@ struct Options {
     // fair の基準（達成率の基準・従来方式の平均）を hint の盤面の値に固定する（解き直し [improve] 用）。中央値を式で決めるより速く、
     //   hint の近くでは実際の fair と一致する。実際の値以下とは限らない＝下限の計算（[solve]）では使わない。
     bool fairFixedRef = false;
+    // (職員, シフト) ごとの月の回数を固定する（S*K、-1 は固定しない）。［そろえて組み直す］でそろえた回数を守る。
+    std::vector<int> fixCounts;
 };
 
 struct Result {
@@ -80,6 +82,7 @@ public:
         if (f & 1u) addC1(); if (f & 2u) addC2(); if (f & 4u) addC41(); if (f & 8u) addC42(); if (f & 16u) addC3All();
         if (f & 32u) addCells();
         addCountsMaybe(f & 64u);
+        addFixedCounts(opt);
         if (f & 128u) addWeekly(); if (f & 256u) addCoverage();
         if (f & 512u) addFair(hint, opt);
         if (f & 1024u) addGap();
@@ -465,6 +468,12 @@ private:
         }
     }
 
+    void addFixedCounts(const Options& opt) {
+        if (opt.fixCounts.size() != (size_t)S * K) return;
+        for (size_t c = 0; c < opt.fixCounts.size(); c++)
+            if (opt.fixCounts[c] >= 0) cp_.AddEquality(cnt_[c], opt.fixCounts[c]);
+    }
+
     // weekly: Σ_d |7 w_d − c| を 7 で割った切り捨て。7q >= Σe − 6 の最小 q。
     void addWeekly() {
         if (p_.w.weekly == 0) return;
@@ -816,6 +825,8 @@ struct ImproveOptions {
     std::function<void(const std::vector<int>&, long long, long long)> onBest;
     // 同じ盤面で最適と証明済みの部分（自由にするマスの組）を解き直さない（解き直しても改善は出ない）。浮いた時間で別の部分を解く。
     bool skipProven = false;
+    // Options::fixCounts と同じ（部分ごとのモデルへ渡す）。開始の盤面がこの回数を満たしていること。
+    std::vector<int> fixCounts;
 };
 
 namespace improve_detail {
@@ -951,6 +962,7 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
             { std::lock_guard<std::mutex> g(mu); cur = best; curScore = bestScore; ver = version; }
             Options o;
             o.workers = 1; o.randomSeed = (long long)(rng() & 0x7fffffff); o.stop = io.stop; o.fairFixedRef = true;
+            o.fixCounts = io.fixCounts;
             o.force = pickRegion(p, cur, kind, rng);
             kind = (kind + 1) % 5;
             const unsigned long long key = regionKey(o.force);

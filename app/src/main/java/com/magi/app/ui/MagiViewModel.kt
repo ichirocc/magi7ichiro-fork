@@ -2753,6 +2753,76 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** ［そろえて組み直す］そろえたあと選んだシフトの各人の回数を固定して CP-SAT で解き直す（[GroupCountEqualizer.resolveKeepingCounts]）。
+     *  停止は [stop]（[job] の取り消し）で、止めたらそろえる前の盤面へ戻す。 */
+    fun equalizeAndResolve(shifts: Set<Int>? = null) {
+        val st0 = state ?: return
+        val sched0 = currentSchedule ?: return
+        if (runBlockedByInFlight("回数をそろえて組み直す")) return
+        if (!ensureValidForRun(st0, sched0, "回数をそろえて組み直す")) return
+        val which = shifts?.sorted()?.joinToString("・") { st0.shifts.getOrNull(it)?.kigou ?: "$it" } ?: "全シフト"
+        pushUndo("回数をそろえて組み直す")
+        _ui.update { it.copy(messageIsError = false, running = true, fixSuggestions = emptyList(), message = GROUP_EQUALIZE_RESOLVING) }
+        logOp("I", "回数をそろえて組み直す 開始（$which・最大${GROUP_EQUALIZE_RESOLVE_SEC.toInt()}秒）")
+        val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)
+        beginFgRunGuard("回数をそろえて組み直す")
+        startRunClock(System.currentTimeMillis())
+        job = viewModelScope.launch {
+            var terminalLogged = false
+            try {
+                val eq = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st0, sched0.copy2D(), shifts) }
+                val threads = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 7)
+                val res = withContext(Dispatchers.Default) {
+                    val ctx = coroutineContext
+                    com.magi.app.v6.GroupCountEqualizer.resolveKeepingCounts(st0, eq.schedule, shifts, GROUP_EQUALIZE_RESOLVE_SEC, threads) { !ctx.isActive }
+                }
+                val finalSched = (res?.board ?: eq.schedule).copy2D()
+                val finalReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, finalSched) }
+                currentSchedule = finalSched
+                resultSchedule = finalSched
+                state = st0.withSchedule(finalSched)
+                autoSave()
+                val eqTotal = res?.before?.total ?: finalReport.total
+                pushReport(state ?: st0, finalSched, finalReport, runLabel = "回数をそろえて組み直す") { it.copy(
+                    messageIsError = false, running = false, hasResult = true,
+                    relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
+                    message = groupEqualizeResolveText(eq.swaps, eqTotal, finalReport.total, res != null),
+                ) }
+                logOp("I", "回数をそろえて組み直す 完了（$which）: 入れ替え ${eq.swaps}件（目標からのずれ ${eq.spreadBefore}→${eq.spreadAfter}）・" +
+                    (if (res == null) "CP-SAT が使えないため組み直しなし" else "組み直し 合計 ${res.before.total}→${res.after.total}・重み ${res.before.weightedScore.toInt()}→${res.after.weightedScore.toInt()}（採った部分 ${res.accepted}・${res.wallMs / 1000}秒）") +
+                    " 必須=${finalReport.hard}")
+                terminalLogged = true
+            } catch (e: CancellationException) {
+                withContext(NonCancellable) {
+                    val kept = sched0.copy2D()
+                    currentSchedule = kept
+                    resultSchedule = kept
+                    state = st0.withSchedule(kept)
+                    runCatching {
+                        val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, kept) }
+                        pushReport(state ?: st0, kept, rep, nonCancellable = true) { it.copy(messageIsError = false, running = false, message = GROUP_EQUALIZE_RESOLVE_STOPPED) }
+                    }.onFailure { _ui.update { it.copy(running = false, messageIsError = false, message = GROUP_EQUALIZE_RESOLVE_STOPPED) } }
+                    logOp("I", "回数をそろえて組み直す 停止: そろえる前の勤務表へ戻した")
+                    terminalLogged = true
+                }
+                throw e
+            } catch (e: Throwable) {
+                logOp("W", "回数をそろえて組み直す 失敗: ${e.javaClass.simpleName}: ${e.message}")
+                terminalLogged = true
+                withContext(NonCancellable) {
+                    currentSchedule = sched0.copy2D(); state = st0.withSchedule(currentSchedule!!)
+                    _ui.update { it.copy(running = false, messageIsError = true, message = GROUP_EQUALIZE_RESOLVE_FAILED,
+                        schedule = sched0.map { r -> r.toList() }) }
+                }
+            } finally {
+                endFgRunGuard()
+                if (!terminalLogged) logOp("W", "回数をそろえて組み直す 終了: 完了・停止・失敗のいずれも記録されませんでした")
+                endBoardJob(boardToken)
+                if (_ui.value.running) _ui.update { it.copy(running = false) }
+            }
+        }
+    }
+
     private fun applyGroupEqualize(st: MagiState, sched: Array<IntArray>, shifts: Set<Int>?, r: com.magi.app.v6.GroupCountEqualizer.Result) {
         if (r.swaps == 0) { postOpNotice(GROUP_EQUALIZE_NONE, undoable = false); return }
         pushUndo("グループ内の回数をそろえる")

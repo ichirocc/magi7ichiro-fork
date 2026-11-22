@@ -2215,6 +2215,18 @@ internal const val GROUP_EQUALIZE_NONE_PICK = "すべて外す"
 /** そろえるボタンの文言（全部選んでいれば「すべてのシフトをそろえる」）。 */
 internal fun groupEqualizeConfirmText(picked: Int, total: Int): String =
     if (picked >= total) "すべてのシフトをそろえる" else "選んだ ${picked}種類をそろえる"
+/** ［そろえて組み直す］CP-SAT で組み直す持ち時間（秒）。 */
+internal const val GROUP_EQUALIZE_RESOLVE_SEC = 60.0
+internal const val GROUP_EQUALIZE_RESOLVE_BUTTON = "そろえて組み直す"
+internal const val GROUP_EQUALIZE_RESOLVE_NOTE = "「そろえて組み直す」は、そろえた回数を各人そのままに固定して、どの日に入るかを組み直します（約1分・停止できます）。7日に休2回や並びのズレが減ります"
+internal const val GROUP_EQUALIZE_RESOLVING = "回数をそろえて組み直しています…（約1分）"
+internal const val GROUP_EQUALIZE_RESOLVE_STOPPED = "停止しました。そろえる前の勤務表に戻しています"
+internal const val GROUP_EQUALIZE_RESOLVE_FAILED = "回数をそろえて組み直せませんでした。そろえる前の勤務表に戻しています（詳しくは設定＞詳細設定＞ログ）"
+internal fun groupEqualizeResolveText(swaps: Int, eqTotal: Int, finalTotal: Int, resolved: Boolean): String = when {
+    swaps == 0 && !resolved -> GROUP_EQUALIZE_NONE
+    !resolved -> "グループ内の回数をそろえました: 入れ替え ${swaps}件（この端末では組み直しを使えません）"
+    else -> "回数をそろえて組み直しました: 入れ替え ${swaps}件・違反の合計 ${eqTotal}→${finalTotal}（元に戻せます）"
+}
 internal fun needApplyButton(days: Int): String = "${days}日に適用する"
 
 /** [3.707.0 3b-5] 担当外のシフトを選んだときの注記。 */
