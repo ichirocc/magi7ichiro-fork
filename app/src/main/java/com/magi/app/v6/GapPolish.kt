@@ -3,18 +3,18 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /**
- * シフトの間隔（gap）の研磨。同日 2 者の交換（CyclicSwap）は X を別の日へ動かせないので、被覆保存の手を 2 つ使う:
- * ①2 職員×2 日 長方形交換＝職員 i が日 d で X・日 d' で y、相手 i' が日 d で z・日 d' で X のとき、i: d→z / d'→X、i': d→X / d'→y と入れ替える
- * （各日の各シフト人数と、i・i' の X の回数は変わらない）。
- * ②区間の入れ替え＝間隔の足りないかたまりを前後 0〜[SEG_EXT] 日広げた区間と、別の 1〜[SEG_MAX_LEN] 日の区間で、i と i' の行を丸ごと入れ替える
- * （各日の人数は不変）。①は X を 1 マスだけ動かすため、X の後に続くべき並び（夜勤→休 など）を崩して禁止の並び（必須）を作りやすい＝
- * 夜勤のように前後の並びが決まったシフトでは候補のほぼ全部が必須増で採れない。②は並びごと動かす。
- * 起点は間隔が足りないかたまりの組（前のかたまりと近すぎる後のかたまり）。採否は他の研磨と同じ keep-best。
+ * シフトの間隔（gap）の研磨。同日 2 者の交換（CyclicSwap）は X を別の日へ動かせないので、2 職員 i・i' の行を 2 つの区間で丸ごと入れ替える
+ * （各日の各シフト人数は不変）。区間 A は間隔の足りないかたまりを前後 0〜[EXT] 日広げたもの、区間 W は別の 1〜[MAX_LEN] 日（無しも可）。
+ * 長方形交換（i の X 1 マスと i' の X 1 マスの入れ替え）は A・W とも長さ 1 の場合にあたる。
+ *
+ * 移動できる箇所を先に見つけてから動かす: 区間ごとに「入れ替えても禁止の並び・希望の前日の禁止を作らず、固定（希望）と置けないシフトに
+ * 触れない」かを先に判定し、合格した区間どうしの組だけを、i の間隔の不足が減るときに採点する。夜勤のように後ろの並びが決まったシフトを
+ * 1 マスだけ動かす手は禁止の並び（必須）を作るので、並びごと動く区間だけが残る。採否は他の研磨と同じ keep-best。
  */
 internal object GapPolish {
-    private const val SEG_EXT = 2
-    private const val SEG_MAX_LEN = 5
-    /** false＝②区間の入れ替えを使わない（測定の対照腕）。 */
+    private const val EXT = 3
+    private const val MAX_LEN = 7
+    /** false＝区間 W の長さを 1（長方形交換と同じ近傍）に絞る（測定の対照腕）。 */
     @Volatile var segmentSwap: Boolean = true
 
     fun apply(
@@ -30,18 +30,39 @@ internal object GapPolish {
         var bestRep = before
         val screen = DeltaScreen(p)
         var applied = 0
-        var appliedSeg = 0
         var tried = 0
-        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
+        var slots = 0
+        val maxLen = if (segmentSwap) MAX_LEN else 1
+        val maxExt = if (segmentSwap) EXT else 0
 
-        /** 盤面を書き換えた後に呼ぶ。良くなれば採って true、だめなら false（呼び出し側が戻す）。 */
-        fun tryAdopt(prev: Array<IntArray>): Boolean {
-            tried++
-            val rep = screen.checkIfBetter(state, work, bestRep) ?: return false
-            if (!adoptionGate(p, prev, work, rep, bestRep, pinBlocks).accepted) return false
-            bestRep = rep
-            applied++
+        fun swap(i: Int, ip: Int, a: Int, b: Int) {
+            for (j in a..b) { val t = work[i][j]; work[i][j] = work[ip][j]; work[ip][j] = t }
+        }
+
+        /** 入れ替えた後の行で、変わったマスが禁止の並び・希望の前日の禁止を作らないか（[swap] 済みの盤面で見る）。 */
+        fun cleanAfterSwap(i: Int, ip: Int, a: Int, b: Int): Boolean {
+            for (j in a..b) {
+                if (work[i][j] == work[ip][j]) continue
+                if (p.makesForbiddenRun(work, i, j, work[i][j]) || p.makesForbiddenRun(work, ip, j, work[ip][j])) return false
+            }
             return true
+        }
+
+        /** 区間 [a, b] で i と i' を入れ替えられるか（固定・置けないシフト・新しい禁止の並び）。 */
+        fun slotOk(i: Int, ip: Int, a: Int, b: Int): Boolean {
+            var differs = false
+            for (j in a..b) {
+                val u = work[i][j]; val v = work[ip][j]
+                if (u == v) continue
+                differs = true
+                if (p.wishLocked(i, j) || p.wishLocked(ip, j)) return false
+                if (!p.mayPlaceAt(i, j, v) || !p.mayPlaceAt(ip, j, u)) return false
+            }
+            if (!differs) return false
+            swap(i, ip, a, b)
+            val ok = cleanAfterSwap(i, ip, a, b)
+            swap(i, ip, a, b)
+            return ok
         }
 
         /** 間隔が足りないかたまりの組（前のかたまり＋後のかたまり）。各要素は [開始, 終了]。 */
@@ -63,42 +84,7 @@ internal object GapPolish {
             return out
         }
 
-        fun rectanglePass(): Boolean {
-            for (c in p.consGap) {
-                val x = c.shiftIdx
-                for (i in 0 until p.S) {
-                    if (shouldStop()) return false
-                    if (!p.c1Applies(i, x)) continue
-                    for (bl in violatingBlocks(work[i], x, c.days)) for (d in bl[0]..bl[1]) {
-                        if (work[i][d] != x || !movable(i, d)) continue
-                        for (dp in 0 until p.T) {
-                            if (shouldStop()) return false
-                            val y = work[i][dp]
-                            if (dp == d || y == x || y !in 0 until p.K || !movable(i, dp)) continue
-                            for (ip in 0 until p.S) {
-                                if (ip == i || !movable(ip, d) || !movable(ip, dp) || work[ip][dp] != x) continue
-                                val z = work[ip][d]
-                                if (z == x || z !in 0 until p.K) continue
-                                if (!p.mayPlace(i, z) || !p.mayPlace(ip, y)) continue
-                                if (p.extBanned(i, d, z) || p.extBanned(i, dp, x) || p.extBanned(ip, d, x) || p.extBanned(ip, dp, y)) continue
-                                val prev = work.copy2D()
-                                work[i][d] = z; work[i][dp] = x; work[ip][d] = x; work[ip][dp] = y
-                                if (tryAdopt(prev)) return true
-                                work[i][d] = x; work[i][dp] = y; work[ip][d] = z; work[ip][dp] = x
-                            }
-                        }
-                    }
-                }
-            }
-            return false
-        }
-
-        fun swapDays(i: Int, ip: Int, a: Int, b: Int, cs: Int, ce: Int) {
-            for (j in a..b) { val t = work[i][j]; work[i][j] = work[ip][j]; work[ip][j] = t }
-            for (j in cs..ce) { val t = work[i][j]; work[i][j] = work[ip][j]; work[ip][j] = t }
-        }
-
-        fun segmentPass(): Boolean {
+        fun onePass(): Boolean {
             for (c in p.consGap) {
                 val x = c.shiftIdx
                 for (i in 0 until p.S) {
@@ -106,25 +92,36 @@ internal object GapPolish {
                     if (!p.c1Applies(i, x)) continue
                     val deficit0 = GapRule.deficit(work[i], x, c.days)
                     if (deficit0 == 0) continue
-                    for (bl in violatingBlocks(work[i], x, c.days)) for (lx in 0..SEG_EXT) for (rx in 0..SEG_EXT) {
-                        val a = bl[0] - lx; val b = bl[1] + rx
-                        if (a < 0 || b >= p.T) continue
-                        if ((a..b).any { !movable(i, it) }) continue
-                        for (len in 1..SEG_MAX_LEN) for (cs in 0..p.T - len) {
-                            if (shouldStop()) return false
-                            val ce = cs + len - 1
-                            if (ce >= a - 1 && cs <= b + 1) continue   // 重なる・隣り合う区間は 1 区間の入れ替えと同じ
-                            if ((cs..ce).any { !movable(i, it) }) continue
-                            for (ip in 0 until p.S) {
-                                if (ip == i) continue
-                                if ((a..b).any { !movable(ip, it) } || (cs..ce).any { !movable(ip, it) }) continue
-                                if ((a..b).all { work[i][it] == work[ip][it] } && (cs..ce).all { work[i][it] == work[ip][it] }) continue
-                                if ((a..b).any { !p.mayPlaceAt(i, it, work[ip][it]) || !p.mayPlaceAt(ip, it, work[i][it]) }) continue
-                                if ((cs..ce).any { !p.mayPlaceAt(i, it, work[ip][it]) || !p.mayPlaceAt(ip, it, work[i][it]) }) continue
+                    for (ip in 0 until p.S) {
+                        if (ip == i) continue
+                        // 区間 A（違反のかたまりを含む）と区間 W（他の場所）の候補を先に見つける。
+                        val anchors = ArrayList<IntArray>()
+                        for (bl in violatingBlocks(work[i], x, c.days)) for (lx in 0..maxExt) for (rx in 0..maxExt) {
+                            val a = bl[0] - lx; val b = bl[1] + rx
+                            if (a >= 0 && b < p.T && anchors.none { it[0] == a && it[1] == b } && slotOk(i, ip, a, b)) anchors.add(intArrayOf(a, b))
+                        }
+                        if (anchors.isEmpty()) continue
+                        val others = ArrayList<IntArray>()
+                        for (len in 1..maxLen) for (cs in 0..p.T - len) if (slotOk(i, ip, cs, cs + len - 1)) others.add(intArrayOf(cs, cs + len - 1))
+                        slots += anchors.size + others.size
+                        for (aw in anchors) {
+                            val a = aw[0]; val b = aw[1]
+                            for (w in others.asSequence().filter { it[1] < a - 1 || it[0] > b + 1 } + sequenceOf(null)) {
+                                if (shouldStop()) return false
+                                if (w == null && segmentSwap.not()) continue
                                 val prev = work.copy2D()
-                                swapDays(i, ip, a, b, cs, ce)
-                                if (GapRule.deficit(work[i], x, c.days) < deficit0 && tryAdopt(prev)) { appliedSeg++; return true }
-                                swapDays(i, ip, a, b, cs, ce)
+                                swap(i, ip, a, b); if (w != null) swap(i, ip, w[0], w[1])
+                                val clean = GapRule.deficit(work[i], x, c.days) < deficit0 &&
+                                    (w == null || (cleanAfterSwap(i, ip, a, b) && cleanAfterSwap(i, ip, w[0], w[1])))
+                                if (clean) {
+                                    tried++
+                                    val rep = screen.checkIfBetter(state, work, bestRep)
+                                    if (rep != null && adoptionGate(p, prev, work, rep, bestRep, pinBlocks).accepted) {
+                                        bestRep = rep; applied++
+                                        return true
+                                    }
+                                }
+                                if (w != null) swap(i, ip, w[0], w[1]); swap(i, ip, a, b)
                             }
                         }
                     }
@@ -136,13 +133,12 @@ internal object GapPolish {
         var pass = 0
         while (pass < maxPasses && !shouldStop()) {
             var improved = false
-            while (!shouldStop() && rectanglePass()) improved = true
-            while (segmentSwap && !shouldStop() && segmentPass()) improved = true
+            while (!shouldStop() && onePass()) improved = true
             pass++
             if (!improved) break
         }
         val logs = listOf(MirrorLog(tag = "GapPolish",
-            message = "シフトの間隔(gap)研磨(長方形交換＋区間の入れ替え): gap ${before.breakdown["gap"] ?: 0}->${bestRep.breakdown["gap"] ?: 0} / total ${before.total}->${bestRep.total} 採用${applied}回(区間${appliedSeg}) 試行${tried}"))
+            message = "シフトの間隔(gap)研磨(2人の区間入れ替え・移動先を先に探す): gap ${before.breakdown["gap"] ?: 0}->${bestRep.breakdown["gap"] ?: 0} / total ${before.total}->${bestRep.total} 採用${applied}回 移動できる区間${slots} 採点${tried}"))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 }
