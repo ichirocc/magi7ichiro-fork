@@ -112,7 +112,7 @@ MagiRoot（唯一の合成ルート）
 | `mapParallel`（`MirrorCore.kt`） | Util | 純関数を並列に適用し**入力順**で返す。後処理の共同 LNS 2 本が候補の評価だけをこれへ配る（生成・採否は逐次＝決定論モードの結果は不変、3.569.0） |
 | `V6SearchOperators` / `V6LateOperators` / `V6SwapSuggester` | Engine-Operators | 近傍・交換・修復などの探索手 |
 | `SmartInitialScheduler` / `GreedyMirrorScheduler` | Engine-Seed | 初期解の生成（後者はテスト専用の旧生成器） |
-| `GroupCountEqualizer` | Engine-Edit | 画面の［グループ内の回数をそろえる］。同じ日の入れ替え（別のグループの人も相手にする）で、グループ×シフトの回数を個人の範囲内の平均へ寄せる。必須・範囲は元以下（3.727.115〜123） |
+| `GroupCountEqualizer` | Engine-Edit | 画面の［グループ内の回数をそろえる］。同じ日の入れ替え（別のグループの人も相手にする）で、グループ×シフトの回数を個人の範囲内の平均へ寄せる。必須・範囲は元以下（3.727.115〜123）。［そろえて組み直す］は選んだシフトの各人の回数を固定して CP-SAT で解き直す `resolveKeepingCounts`（3.727.124） |
 | `V6SanityPort` / `V6FinalPort` / `V6PortAnalyzer` | Engine-Facade | 事前診断・UI 向けファサード・分析層 |
 | `ShiftAppearance` | UI-Support | シフト記号→表示色 と 違反キー→重大度 の唯一の解決元（3.393.0 に `V6WebCompat` から切り出し） |
 | `ScheduleCsvBridge` | IO-CSV | 勤務表 / 希望 CSV ↔ `MagiState`（文字コード自動判定） |

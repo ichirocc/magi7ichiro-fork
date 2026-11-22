@@ -19,6 +19,8 @@ object CpsatBridge {
     @JvmStatic external fun nativeCpsatSolve(handle: Long, hint: IntArray, maxSeconds: Double, workers: Int, seed: Long, hardCap: Long): LongArray
     /** 一部だけ解き直す。戻り値 [iters, accepted, optimal, hard, weighted, startWeighted, wallMillis]。終わるまで戻らない。最良の盤面は [nativeCpsatPoll]。 */
     @JvmStatic external fun nativeCpsatImprove(handle: Long, start: IntArray, maxSeconds: Double, threads: Int, seed: Long): LongArray
+    /** [nativeCpsatImprove] に (職員, シフト) の回数の固定（S*K、-1 は固定しない）を足したもの。［そろえて組み直す］用。 */
+    @JvmStatic external fun nativeCpsatImproveFixedCounts(handle: Long, start: IntArray, maxSeconds: Double, threads: Int, seed: Long, fixCounts: IntArray): LongArray
     /** 戻り値 [version, hard, weighted, weightedBound, hardBound, hardProven]。version が [knownVersion] と違えば [out] に最良の盤面。 */
     @JvmStatic external fun nativeCpsatPoll(handle: Long, knownVersion: Long, out: IntArray): LongArray
     /** 戻り値 [核の数, 各核: minimal, 件数, 件数×(kind, i, j, k, rule)]。[HardCauses.decode] で読む。 */
@@ -167,7 +169,7 @@ object CpsatResolve {
     /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
             onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, sinceMs: Long = EngineClock.nowMs(),
-            shouldStop: () -> Boolean): Outcome? {
+            fixCounts: IntArray? = null, shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -177,7 +179,10 @@ object CpsatResolve {
         var stats: LongArray? = null
         stalledOut = false
         lastStallStopMs = stallStopMs
-        val thread = Thread({ stats = runCatching { CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed) }.getOrNull() }, "magi-cpsat-resolve")
+        val thread = Thread({ stats = runCatching {
+            if (fixCounts != null) CpsatBridge.nativeCpsatImproveFixedCounts(job, flat, maxSeconds, threads, seed, fixCounts)
+            else CpsatBridge.nativeCpsatImprove(job, flat, maxSeconds, threads, seed)
+        }.getOrNull() }, "magi-cpsat-resolve")
             .also { it.isDaemon = true; it.start() }
         var nextTick = EngineClock.nowMs() + RESOLVE_TICK_MS
         val noBoard = IntArray(0)

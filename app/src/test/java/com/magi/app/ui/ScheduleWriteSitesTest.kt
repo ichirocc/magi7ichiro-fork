@@ -20,6 +20,7 @@ class ScheduleWriteSitesTest {
         "init",                                                   // 背景結果の反映に失敗したとき、今の勤務表を表示に戻す（init の購読）
         "generateSmartInitial", "applyAlternative", "applyWishes", // 下書き・別案・希望の反映
         "applyGroupEqualize", // グループ内の回数をそろえる（希望の反映と同じ、押して上書きする操作。equalizeGroupCounts が裏で計算して呼ぶ）
+        "equalizeAndResolve", // そろえて組み直す（runSoftPolish と同じ前景ジョブ。停止・失敗でそろえる前へ戻す）
         "applyStructure", "applyStructureWithMessage",            // 編集タブ
         "relaxAndApply", "restoreBeforeRelax", "restore",         // 設定の緩和と、その事後確認・保存失敗の復旧（restore＝RelaxRollback の控え）
         "applyFixSuggestion", "commitFixBoard",                   // 改善手（FixApplyGate を通る）。commitFixBoard は applyFixSuggestion だけが呼ぶ（下の検査）

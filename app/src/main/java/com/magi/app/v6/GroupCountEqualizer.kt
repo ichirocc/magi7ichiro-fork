@@ -284,4 +284,36 @@ object GroupCountEqualizer {
         }
         return Result(work, swaps, before, totalDev(p, elig, cnt))
     }
+
+    /** ［そろえて組み直す］の結果。[board]＝組み直した盤面（改善が無ければ開始の盤面）、[accepted]＝CP-SAT で採った部分の数。 */
+    class Resolved(val board: Array<IntArray>, val before: ViolationReport, val after: ViolationReport, val accepted: Long, val wallMs: Long)
+
+    /** [board] の [shifts]（null は全シフト）の各人の回数を固定して CP-SAT で解き直す（`magi_cpsat::Options::fixCounts`）。
+     *  開始の盤面より悪くはならない。CP-SAT が使えないビルド・作れない問題では null。 */
+    fun resolveKeepingCounts(state: MagiState, board: Array<IntArray>, shifts: Set<Int>?, maxSeconds: Double,
+                             threads: Int, seed: Long = 1L, shouldStop: () -> Boolean): Resolved? {
+        val p = cachedProblem(state)
+        val start = normalizeSchedule(board, p)
+        val fix = IntArray(p.S * p.K) { -1 }
+        for (i in 0 until p.S) for (j in 0 until p.T) {
+            val k = start[i][j]
+            if (k !in 0 until p.K || (shifts != null && k !in shifts)) continue
+            if (fix[i * p.K + k] < 0) fix[i * p.K + k] = 0
+            fix[i * p.K + k]++
+        }
+        // 選んだシフトで 0 回の人も 0 回に固定する（新しく入れると回数が変わる）。
+        for (i in 0 until p.S) for (k in 0 until p.K) if ((shifts == null || k in shifts) && fix[i * p.K + k] < 0) fix[i * p.K + k] = 0
+        val before = UnifiedViolationChecker.check(state, start)
+        val t0 = EngineClock.nowMs()
+        val out = CpsatResolve.run(p, start, maxSeconds, threads, seed, fixCounts = fix, shouldStop = shouldStop) ?: return null
+        val cand = out.board
+        val after = UnifiedViolationChecker.check(state, cand)
+        // CP-SAT の採否はチェッカーと同値の採点だが、回数の一致と悪化なしをここでも確かめる（多重防御）。
+        val keeps = (0 until p.S).all { i ->
+            val c = IntArray(p.K); for (k in cand[i]) if (k in 0 until p.K) c[k]++
+            (0 until p.K).all { k -> fix[i * p.K + k] < 0 || c[k] == fix[i * p.K + k] }
+        }
+        return if (keeps && !betterReport(before, after)) Resolved(cand, before, after, out.accepted, EngineClock.nowMs() - t0)
+        else Resolved(start, before, before, 0L, EngineClock.nowMs() - t0)
+    }
 }
