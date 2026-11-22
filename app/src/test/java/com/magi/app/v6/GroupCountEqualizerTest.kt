@@ -133,4 +133,19 @@ class GroupCountEqualizerTest {
             assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
         }
     }
+
+    @Test fun lowersCheckerFairOnRealData() {
+        // ずれは採点の fair と同じ物差し＝押したあとチェッカーの fair が増えない・必須が増えない
+        for (name in listOf("golden_state.json", "oct2026_grid_state.json")) {
+            val st = com.magi.app.model.StateParser.parse(javaClass.classLoader!!.getResource(name)!!.readText())!!
+            val b = normalizeSchedule(st.schedule.map { it.toIntArray() }.toTypedArray(), Problem(st))
+            val before = UnifiedViolationChecker.check(st, b)
+            val t0 = System.currentTimeMillis()
+            val r = GroupCountEqualizer.apply(st, b)
+            val after = UnifiedViolationChecker.check(st, r.schedule)
+            println("$name fair ${before.breakdown["fair"]}->${after.breakdown["fair"]} spread ${r.spreadBefore}->${r.spreadAfter} swaps ${r.swaps} ${System.currentTimeMillis() - t0}ms")
+            assertTrue(name, (after.breakdown["fair"] ?: 0) <= (before.breakdown["fair"] ?: 0))
+            assertTrue(name, after.hard <= before.hard)
+        }
+    }
 }

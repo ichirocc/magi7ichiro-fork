@@ -2788,7 +2788,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                     message = groupEqualizeResolveText(eq.swaps, eqTotal, finalReport.total, res != null),
                 ) }
-                logOp("I", "回数をそろえて組み直す 完了（$which）: 入れ替え ${eq.swaps}件（目標からのずれ ${eq.spreadBefore}→${eq.spreadAfter}）・" +
+                logOp("I", "回数をそろえて組み直す 完了（$which）: 入れ替え ${eq.swaps}件（グループ内の偏り ${eq.spreadBefore}→${eq.spreadAfter}）・" +
                     (if (res == null) "CP-SAT が使えないため組み直しなし" else "組み直し 合計 ${res.before.total}→${res.after.total}・重み ${res.before.weightedScore.toInt()}→${res.after.weightedScore.toInt()}（採った部分 ${res.accepted}・${res.wallMs / 1000}秒）") +
                     " 必須=${finalReport.hard}")
                 terminalLogged = true
@@ -2831,7 +2831,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = st.withSchedule(sched)
         autoSave()
         val which = shifts?.sorted()?.joinToString("・") { st.shifts.getOrNull(it)?.kigou ?: "$it" } ?: "全シフト"
-        logOp("I", "グループ内の回数をそろえる（$which）: 入れ替え ${r.swaps}件（目標からのずれ ${r.spreadBefore}→${r.spreadAfter}）")
+        logOp("I", "グループ内の回数をそろえる（$which）: 入れ替え ${r.swaps}件（グループ内の偏り ${r.spreadBefore}→${r.spreadAfter}）")
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

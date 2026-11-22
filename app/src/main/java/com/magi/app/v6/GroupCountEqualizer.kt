@@ -3,69 +3,35 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /**
- * グループ内の回数を、採点に関係なくそろえる（画面の「グループ内の回数をそろえる」、希望の反映と同じく利用者が押して上書きする操作）。
+ * グループ内の回数を、採点の fair と同じ物差しでそろえる（画面の「グループ内の回数をそろえる」、希望の反映と同じく利用者が押して上書きする操作）。
  * 手は同じ日・同じ勤務グループの 2 人のシフトの入れ替えだけ＝日ごとのシフト別人数とグループのシフト別合計は変わらない。
- * 各人の目標（置ける人の平均を個人の下限・上限へ収めた値）からのずれの 2 乗和が最も減る入れ替えから当てる。当てない手:
+ * ずれは採点の fair と同じ値（達成率＝個人の範囲・適切回数の目標の中の位置をそろえる）。最も減る入れ替えから当てる。当てない手:
  * 希望・手動固定のマス、置けないシフト（`mayPlaceAt`）、個人の下限・上限から外れる（すでに外れている側はそれ以上悪くしない）、必須違反が増える。
  * 要調整（c1・並び・曜日など）は悪くなってもよい（利用者決定）。[shifts] を渡すとそのシフトの回数だけをそろえる（ほかのシフトの回数は
  * 入れ替えで動くことがあるが、個人の下限・上限は守る）。1 組ずつ当てて止まったら、月全体の入れ替えを焼きなましで探す（[anneal]、
- * 別のグループの人との入れ替えも使う＝グループの合計が動くので、ずれはそのときの平均から測る [groupDev]）。
+ * 別のグループの人との入れ替えも使う＝グループの合計が動くので、ずれは毎回数え直す [groupDev]）。
  */
 object GroupCountEqualizer {
     data class Result(val schedule: Array<IntArray>, val swaps: Int, val spreadBefore: Long, val spreadAfter: Long)
-
-    /**
-     * 各人の目標回数: グループ×シフトごとに、そのシフトを置ける人（`mayPlace`）の平均を、その人の下限・上限へ収めた値。
-     * 置けない人は対象外（NaN）。入れ替えはグループ内・置ける人どうしの合計を変えないので、目標は途中で動かない。
-     */
-    private fun targets(p: Problem, cnt: Array<IntArray>, shifts: Set<Int>?): Array<DoubleArray> {
-        val t = Array(p.S) { DoubleArray(p.K) { Double.NaN } }
-        for (m in p.groupMembers) {
-            if (m.size < 2) continue
-            for (k in 0 until p.K) {
-                if (shifts != null && k !in shifts) continue
-                val el = m.filter { p.mayPlace(it, k) }
-                if (el.size < 2) continue
-                val mean = el.sumOf { cnt[it][k] }.toDouble() / el.size
-                for (i in el) {
-                    val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) 0 else it }.toDouble()
-                    val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) Double.MAX_VALUE else it.toDouble() }
-                    t[i][k] = mean.coerceIn(lo, maxOf(lo, hi))
-                }
-            }
-        }
-        return t
-    }
 
     /** グループ×シフトごとの対象（置ける人・2 人以上）。シフトを選ばない・置ける人が 1 人以下なら null。 */
     private fun eligible(p: Problem, shifts: Set<Int>?): Array<Array<IntArray?>> =
         Array(p.groupMembers.size) { g ->
             val m = p.groupMembers[g]
             Array(p.K) { k ->
-                if (m.size < 2 || (shifts != null && k !in shifts)) null
+                if (m.size < 2 || (shifts != null && k !in shifts) || k !in p.bucket[g]) null
                 else m.filter { p.mayPlace(it, k) }.toIntArray().takeIf { it.size >= 2 }
             }
         }
 
-    /** グループ g・シフト k のずれ＝各人の「いまの平均を個人の下限・上限へ収めた値」からの 2 乗和（別のグループとの入れ替えで平均が動くので毎回計算）。 */
-    private fun groupDev(p: Problem, el: IntArray, k: Int, cnt: Array<IntArray>): Double {
-        var sum = 0
-        for (i in el) sum += cnt[i][k]
-        val mean = sum.toDouble() / el.size
-        var d = 0.0
-        for (i in el) {
-            val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) 0 else it }.toDouble()
-            val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) Double.MAX_VALUE else it.toDouble() }
-            val e = cnt[i][k] - mean.coerceIn(lo, maxOf(lo, hi))
-            d += e * e
-        }
-        return d
-    }
+    /** グループ g・シフト k のずれ＝採点の fair と同じ値（`Problem.fairDevOfBucket`）。 */
+    private fun groupDev(p: Problem, g: Int, k: Int, cnt: Array<IntArray>): Double =
+        p.fairDevOfBucket(g, k, members = false) { x -> cnt[x][k] }.total.toDouble()
 
     private fun totalDev(p: Problem, elig: Array<Array<IntArray?>>, cnt: Array<IntArray>): Long {
         var d = 0.0
-        for (g in elig.indices) for (k in 0 until p.K) elig[g][k]?.let { d += groupDev(p, it, k, cnt) }
-        return Math.round(d * 100)
+        for (g in elig.indices) for (k in 0 until p.K) if (elig[g][k] != null) d += groupDev(p, g, k, cnt)
+        return Math.round(d)
     }
 
     private const val ANNEAL_ITERS = 400_000
@@ -93,7 +59,7 @@ object GroupCountEqualizer {
         /** 範囲の外れ量のうち元を超えた分。 */
         fun excess(i: Int, k: Int, n: Int) = maxOf(0, out(i, k, n) - out0[i][k])
         var devCur = 0.0
-        for (g in elig.indices) for (k in 0 until p.K) elig[g][k]?.let { devCur += groupDev(p, it, k, cnt) }
+        for (g in elig.indices) for (k in 0 until p.K) if (elig[g][k] != null) devCur += groupDev(p, g, k, cnt)
         val tg = IntArray(24); val tk = IntArray(24)   // この手で変わる (グループ,シフト)
         var exCur = 0
         var hardCur = 0   // 元からの必須の増減
@@ -166,9 +132,9 @@ object GroupCountEqualizer {
                 if (!seen) { tg[nt] = g; tk[nt] = k; nt++ }
             }
             if (nt > 0) {
-                for (q in 0 until nt) dDev -= groupDev(p, elig[tg[q]][tk[q]]!!, tk[q], cnt)
+                for (q in 0 until nt) dDev -= groupDev(p, tg[q], tk[q], cnt)
                 for (e in 0 until nc) cnt[ci[e]][ck[e]] += cd[e]
-                for (q in 0 until nt) dDev += groupDev(p, elig[tg[q]][tk[q]]!!, tk[q], cnt)
+                for (q in 0 until nt) dDev += groupDev(p, tg[q], tk[q], cnt)
                 for (e in 0 until nc) cnt[ci[e]][ck[e]] -= cd[e]
             }
             // その場で当てて、必須の差は変わった日だけ数える（同じ日の並べ替え＝日の人数は不変。2 日は 1 日ずつ当てて足す）
@@ -213,10 +179,9 @@ object GroupCountEqualizer {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
         val cnt = counts(p, work)
-        val tgt = targets(p, cnt, shifts)
         val elig = eligible(p, shifts)
         val before = totalDev(p, elig, cnt)
-        if (tgt.all { row -> row.all { it.isNaN() } }) return Result(work, 0, before, before)   // そろえる (職員,シフト) が無い
+        if (elig.all { row -> row.all { it == null } }) return Result(work, 0, before, before)   // そろえる (グループ,シフト) が無い
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)   // 希望固定と手動固定
         /** 回数 n→n+d で、個人の範囲からの外れ量が増えないか。 */
         fun rangeOk(i: Int, k: Int, d: Int): Boolean {
@@ -226,12 +191,18 @@ object GroupCountEqualizer {
             val n = cnt[i][k]
             return out(n + d) <= out(n)
         }
-        /** (i,k) の回数を d だけ変えたときのずれの 2 乗の変化（対象外は 0）。 */
-        fun dsq(i: Int, k: Int, d: Int): Double {
-            val t = tgt[i][k]
-            if (t.isNaN()) return 0.0
-            val a = cnt[i][k] - t; val b = a + d
-            return b * b - a * a
+        val groupOf = IntArray(p.S) { -1 }.also { a -> p.groupMembers.forEachIndexed { g, m -> for (i in m) a[i] = g } }
+        /** a・b（同じグループ）の同じ日の入れ替え x↔y で、そのグループの x・y のずれ（fair）がどれだけ変わるか（負＝そろう）。 */
+        fun swapGain(a: Int, b: Int, x: Int, y: Int): Double {
+            val g = groupOf[a]
+            if (g < 0) return 0.0
+            val ks = listOf(x, y).filter { elig[g][it] != null }
+            if (ks.isEmpty()) return 0.0
+            var before = 0.0; for (k in ks) before += groupDev(p, g, k, cnt)
+            cnt[a][x]--; cnt[a][y]++; cnt[b][x]++; cnt[b][y]--
+            var after = 0.0; for (k in ks) after += groupDev(p, g, k, cnt)
+            cnt[a][x]++; cnt[a][y]--; cnt[b][x]--; cnt[b][y]++
+            return after - before
         }
         data class Cand(val gain: Double, val a: Int, val b: Int, val d: Int)
         var swaps = 0
@@ -246,7 +217,7 @@ object GroupCountEqualizer {
                         if (x == y || x !in 0 until p.K || y !in 0 until p.K || !movable(a, d) || !movable(b, d)) continue
                         if (!p.mayPlaceAt(a, d, y) || !p.mayPlaceAt(b, d, x)) continue
                         // a: x−1・y+1、b: x+1・y−1（負＝目標へ近づく）
-                        val gain = dsq(a, x, -1) + dsq(a, y, 1) + dsq(b, x, 1) + dsq(b, y, -1)
+                        val gain = swapGain(a, b, x, y)
                         if (gain > -1e-9) continue
                         if (!rangeOk(a, x, -1) || !rangeOk(a, y, 1) || !rangeOk(b, x, 1) || !rangeOk(b, y, -1)) continue
                         cands.add(Cand(gain, a, b, d))
