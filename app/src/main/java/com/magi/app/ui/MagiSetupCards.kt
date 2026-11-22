@@ -300,16 +300,9 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        // ネイティブ加速・仕上げ最適化・膜の細胞 LNS・他の案を手がかりに・早めに終えるは測って既定 ON＝画面から外し ON で固定（3.727.126）。
         // [3.719.0 読み上げ] スイッチの行は行ごと toggleable（role=Switch）＋ mergeDescendants＝TalkBack が「名前・説明・ON/OFF」を 1 つに読む。
         //   Switch 自身は onCheckedChange=null（行が受ける）。以下のスイッチの行はすべて同じ形。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeAccel, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }).semantics(mergeDescendants = true) {}) {
-            Column(Modifier.weight(1f)) {
-                Text("ネイティブ加速（C++）", style = MaterialTheme.typography.bodyMedium)
-                Text("内側の計算を高速版で行います。結果は常に照合し、食い違えば従来方式に戻ります。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.nativeAccel, onCheckedChange = null, enabled = !ui.running)
-        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.nativeParity, enabled = !ui.running && ui.nativeAccel, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetNativeParity(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text("Kotlin照合", style = MaterialTheme.typography.bodyMedium, color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
@@ -327,10 +320,6 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
         // スイッチは他の行と同じく右端（Apple の設定の形。2 行だけ左にあった）。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.softPolish, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) }).semantics(mergeDescendants = true) {}) {
-            Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Switch(checked = ui.softPolish, onCheckedChange = null, enabled = !ui.running)
-        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.agentAuto, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetAgentAuto(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
                 Text(AGENT_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
@@ -384,27 +373,6 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("1回あたりの上限時間（残り時間の半分を超えません）", style = MaterialTheme.typography.bodyMedium)
             MagiSegmentedControl(EJECTION_CHAIN_SECONDS.map { "${it}秒" }, EJECTION_CHAIN_SECONDS.indexOf(ui.ejectionChainSeconds),
                 { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(EJECTION_CHAIN_SECONDS[it])) }, enabled = chainOn)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.membraneCellLns, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetMembraneCellLns(it)) }).semantics(mergeDescendants = true) {}) {
-            Column(Modifier.weight(1f)) {
-                Text(MEMBRANE_TOGGLE_LABEL, style = MaterialTheme.typography.bodyMedium)
-                Text(MEMBRANE_TOGGLE_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.membraneCellLns, onCheckedChange = null, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.seesawRelink, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetSeesawRelink(it)) }).semantics(mergeDescendants = true) {}) {
-            Column(Modifier.weight(1f)) {
-                Text("他の案を手がかりに仕上げる", style = MaterialTheme.typography.bodyMedium)
-                Text(SEESAW_RELINK_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.seesawRelink, onCheckedChange = null, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.floorShortStall, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetFloorShortStall(it)) }).semantics(mergeDescendants = true) {}) {
-            Column(Modifier.weight(1f)) {
-                Text("必須が下限に届いたら早めに終える", style = MaterialTheme.typography.bodyMedium)
-                Text(FLOOR_SHORT_STALL_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.floorShortStall, onCheckedChange = null, enabled = !ui.running)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = ui.cpsatResolve, enabled = !ui.running, role = Role.Switch, onValueChange = { onEvent(MagiEvent.Settings.SetCpsatResolve(it)) }).semantics(mergeDescendants = true) {}) {
             Column(Modifier.weight(1f)) {
@@ -467,7 +435,6 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val FLOOR_SHORT_STALL_NOTE = "必須の違反がこれ以上減らせない下限に届いたら、改善が止まった時点で早めに終えます（既定 ON）。OFF は時間いっぱい粘ります"
 internal const val C3N_WALL_DEEP_NOTE = "残った禁止の並びを「崩せない壁」と判定する前に、直し方の探索（最長 2 秒）でも減らせないかを確かめます。判定と表示だけに効き、探索の時間は変わりません（測定中・既定 OFF）"
 internal const val NORMAL_STALL_NOTE = "必須が残っているとき、改善がこの長さ（組む時間に対する割合）止まったら終えます。短いほど早く終わり、粘りは減ります"
 internal val NORMAL_STALL_FRACTIONS = listOf(0.5, 0.7, 0.9)
@@ -478,12 +445,9 @@ internal fun wishFloorModeLabel(m: com.magi.app.v6.WishFloorMode): String = when
     com.magi.app.v6.WishFloorMode.E0A -> "打ち切る"
     com.magi.app.v6.WishFloorMode.E0B -> "打ち切って仕上げも省く"
 }
-internal const val MEMBRANE_TOGGLE_LABEL = "最後に職員をまとめて組み直す"
-internal const val MEMBRANE_TOGGLE_NOTE = "違反の多い職員と同じグループの 5 名を全期間まとめて組み直し、良くなったときだけ採ります（膜の細胞 LNS、既定 ON・最長 8 秒）"
 internal const val ROGS_LABEL = "残りの違反に合わせて探し方を選ぶ"
 internal const val ROGS_NOTE = "探し方を替えるとき、いま残っている違反の種類で速く良くした探し方を選びます（211 秒以上の作成で使う並列の探し方）。試験中の機能です。"
 internal const val CPSAT_RESOLVE_NOTE = "探索が 10 秒良くならなければ探索を終え、残りの時間で勤務表の一部（職員数人・数日）を解き直します。良くなったときだけ採ります。試験中の機能です。"
-internal const val SEESAW_RELINK_NOTE = "仕上げのあと、他の案へ向けて少しずつ入れ替え、良くなれば採ります。どこかの項目が今より少ない勤務表は「他の案」に残します（最大 3 秒）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足など必須の違反からも玉突きを試します（「見込みのある所だけ」のとき）"
 internal const val EJECTION_CHAIN_NOTE ="「見込みのある所だけ」は浅く試して直せた所だけを深く探します。ほかの 2 つは広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
