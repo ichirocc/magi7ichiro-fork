@@ -33,7 +33,7 @@ object TierObjective {
         return TierKey(excess, lex, dis, fairDeviations(p, schedule).sortedDescending())
     }
 
-    /** T1 の族ごとの職員ごとの量（族→長さ S の配列）。チェッカーの low/high（amount）・c1（窓の数）・c3mn（窓の数）と同じ数え方。 */
+    /** T1 の族ごとの職員ごとの量（族→長さ S の配列）。チェッカーの low/high（amount）・c1（`C1Cost`＝不足のまとまりの 2 乗）・c3mn（窓の数）と同じ数え方。 */
     fun t1PerStaff(p: Problem, schedule: Array<IntArray>): Map<String, IntArray> {
         val low = IntArray(p.S); val high = IntArray(p.S); val c1 = IntArray(p.S); val c3mn = IntArray(p.S)
         val counts = countMatrix(p, schedule)

@@ -11,7 +11,7 @@ import kotlin.math.max
  * ②のC1充足は`C1TemporalDp`（既存の月内最適配置DP）を流用したいが、あちらは「対象シフトの
  * 月間回数を厳密保存しつつ限られた移設数で再配置する」ポリッシュ専用（既存回数0=ゼロからの
  * 構築には使えない）。そのため本ファイルに`solveConstructionDp`を新設: 回数保存・移設数上限を
- * 課さず、希望で確定済みの日(forced)だけ固定し、窓ごとの不足量の和(最優先。c1 の件数と同じ式)→対象日数(次点、他制約への
+ * 課さず、希望で確定済みの日(forced)だけ固定し、窓ごとの不足量の和(最優先。c1 の件数＝不足のまとまりの 2 乗とは別の式で、和が最小でも 2 乗が最小とは限らない)→対象日数(次点、他制約への
  * 自由度を残すため最小化)の順で最適な対象/非対象の月内配置をビットマスクDPで直接求める。
  *
  * 生成した解はそのまま`currentSchedule`を置き換える下書き。以降の本最適化(SA/ALNS)や後段研磨は
@@ -329,13 +329,14 @@ object SmartInitialScheduler {
 
     /**
      * 置けるシフトがどれも禁止（拡張希望・日の上限 0）か、置けるシフトが無いマスに置くシフト。空欄にはできないので、違反のいちばん軽いものを選ぶ:
-     * 担当できて拡張希望にも日の上限 0 にも当たらないシフト（個人上限 0 なら上限超過＝要調整）→ 日の上限 0 だけに当たるシフト（人員過剰＝要調整）→
+     * 拡張希望に当たらないもののうち、個人上限 0（上限超過）と日の上限 0（人員過剰）は採点の重みの軽いほうを先に（どちらも要調整）→
      * 置けるシフトのうち拡張希望に当たるもの（必須）→ 担当できるシフト → 休（担当できるシフトが無い職員だけ＝グループ外は避けられない）。
      */
     internal fun fallbackShift(p: Problem, i: Int, j: Int, restK: Int): Int {
         val can = (0 until p.K).filter { p.canDo(i, it) }
-        return can.firstOrNull { !p.extWishBanned(i, j, it) && !p.dayCapBanned(i, j, it) }
-            ?: can.firstOrNull { !p.extWishBanned(i, j, it) }
+        val noExt = can.filter { !p.extWishBanned(i, j, it) }
+        fun cost(k: Int) = (if (!p.mayPlace(i, k)) ObjectiveWeights.of("high") else 0.0) + (if (p.dayCapBanned(i, j, k)) ObjectiveWeights.of("covO") else 0.0)
+        return noExt.minByOrNull { cost(it) }
             ?: p.allowedShiftsForStaff(i).firstOrNull()
             ?: can.firstOrNull()
             ?: restK

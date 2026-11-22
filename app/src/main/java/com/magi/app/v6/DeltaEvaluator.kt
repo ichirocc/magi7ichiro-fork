@@ -169,7 +169,7 @@ class DeltaEvaluator(private val p: Problem) {
      *
      * ホットパスの [rangeViol] は重み適用済みの1本(`hct`)で持つ設計（性能上の意図的な選択）なので、
      * ここは同じ述語を書き下したフル再計算にしてある。両者のドリフトは、テストが
-     * `rangeRaw().first*120 + rangeRaw().second*25 == rangeWeighted()` を毎手つき合わせることで検出する
+     * `rangeRaw().first*120 + rangeRaw().second*50 == rangeWeighted()` を毎手つき合わせることで検出する
      * （左辺=フル再計算・右辺=差分維持なので、この等式は同時に増分整合性の検査にもなる）。
      */
     internal fun rangeRaw(): Pair<Long, Long> {

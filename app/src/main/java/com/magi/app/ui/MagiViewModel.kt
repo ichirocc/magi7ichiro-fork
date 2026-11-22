@@ -2746,7 +2746,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 月全体の焼きなましで 1〜数秒かかるので画面を止めない。計算中に勤務表が変わったら当てない。
         viewModelScope.launch {
             val r = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st, snap, shifts) }
-            if (state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) {
+            // 計算中（1〜数秒）に作成が始まっていたら当てない＝作成中の盤面をその場で書き換えない。
+            if (optimizeInFlight() || state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) {
                 postOpNotice(GROUP_EQUALIZE_STALE, undoable = false); return@launch
             }
             applyGroupEqualize(st, sched, shifts, r)
@@ -2788,7 +2789,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                     message = groupEqualizeResolveText(eq.swaps, eqTotal, finalReport.total, res != null),
                 ) }
-                logOp("I", "回数をそろえて組み直す 完了（$which）: 入れ替え ${eq.swaps}件（目標からのずれ ${eq.spreadBefore}→${eq.spreadAfter}）・" +
+                logOp("I", "回数をそろえて組み直す 完了（$which）: 入れ替え ${eq.swaps}件（グループ内の偏り ${eq.spreadBefore}→${eq.spreadAfter}）・" +
                     (if (res == null) "CP-SAT が使えないため組み直しなし" else "組み直し 合計 ${res.before.total}→${res.after.total}・重み ${res.before.weightedScore.toInt()}→${res.after.weightedScore.toInt()}（採った部分 ${res.accepted}・${res.wallMs / 1000}秒）") +
                     " 必須=${finalReport.hard}")
                 terminalLogged = true
@@ -2810,7 +2811,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 logOp("W", "回数をそろえて組み直す 失敗: ${e.javaClass.simpleName}: ${e.message}")
                 terminalLogged = true
                 withContext(NonCancellable) {
-                    currentSchedule = sched0.copy2D(); state = st0.withSchedule(currentSchedule!!)
+                    val kept = sched0.copy2D()
+                    currentSchedule = kept; resultSchedule = kept; state = st0.withSchedule(kept)
                     _ui.update { it.copy(running = false, messageIsError = true, message = GROUP_EQUALIZE_RESOLVE_FAILED,
                         schedule = sched0.map { r -> r.toList() }) }
                 }
@@ -2831,7 +2833,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = st.withSchedule(sched)
         autoSave()
         val which = shifts?.sorted()?.joinToString("・") { st.shifts.getOrNull(it)?.kigou ?: "$it" } ?: "全シフト"
-        logOp("I", "グループ内の回数をそろえる（$which）: 入れ替え ${r.swaps}件（目標からのずれ ${r.spreadBefore}→${r.spreadAfter}）")
+        logOp("I", "グループ内の回数をそろえる（$which）: 入れ替え ${r.swaps}件（グループ内の偏り ${r.spreadBefore}→${r.spreadAfter}）")
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

@@ -40,14 +40,18 @@ object HardCauses {
     data class Core(val causes: List<Cause>, val minimal: Boolean)
 
     fun decode(flat: IntArray): List<Core> {
-        if (flat.isEmpty()) return emptyList()
+        if (flat.isEmpty() || flat[0] < 0) return emptyList()
         val out = ArrayList<Core>(flat[0])
         var x = 1
         repeat(flat[0]) {
+            // JNI の境界: 長さや種類が足りない配列は捨てる（例外で原因の説明ごと落とさない）。
+            if (x + 2 > flat.size) return emptyList()
             val minimal = flat[x++] == 1
             val n = flat[x++]
+            if (n < 0 || x + 5L * n > flat.size) return emptyList()
             val causes = List(n) {
-                val c = Cause(Kind.entries[flat[x]], flat[x + 1], flat[x + 2], flat[x + 3], flat[x + 4]); x += 5; c
+                val kind = Kind.entries.getOrNull(flat[x]) ?: return emptyList()
+                val c = Cause(kind, flat[x + 1], flat[x + 2], flat[x + 3], flat[x + 4]); x += 5; c
             }
             out += Core(causes, minimal)
         }
@@ -98,8 +102,8 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
         return true
     }
 
-    /** いまの最良と下限（盤面は更新があったときだけ写す）。 */
-    fun poll(): Snapshot {
+    /** いまの最良と下限（盤面は更新があったときだけ写す）。共有の [buf] を使うので直列化する。 */
+    @Synchronized fun poll(): Snapshot {
         if (job == 0L) return last
         val v = CpsatBridge.nativeCpsatPoll(job, version, buf)
         val board = if (v[0] != version && v[1] >= 0) NativeEval.unflatten(buf.copyOf(), problem.S, problem.T) else last.board
@@ -108,17 +112,30 @@ class CpsatCoRun(private val state: MagiState, private val problem: Problem) {
         return last
     }
 
-    /** 止めて待ち、最後の値を返す。ハンドルはここで解放する。 */
-    fun finish(): Snapshot {
+    /** 直前の [finish] で 10 秒待っても止まらず、ハンドルの解放をスレッドの終わりまで後回しにしたか（ログ用）。 */
+    @Volatile var lingered: Boolean = false
+        private set
+
+    /** 止めて待ち、最後の値を返す。ハンドルは解くスレッドが終わってから必ず解放する（止まり切らなければ後始末のスレッドが待つ）。 */
+    @Synchronized fun finish(): Snapshot {
         if (job == 0L) return last
         CpsatBridge.nativeCpsatStop(job)
         thread?.join(10_000L)
         val s = poll()
-        if (thread?.isAlive != true) {
-            CpsatBridge.nativeCpsatDestroy(job)
-            NativeBridge.nativeDestroyProblem(problemHandle)
+        val t = thread
+        val j = job; val ph = problemHandle
+        if (t?.isAlive != true) {
+            CpsatBridge.nativeCpsatDestroy(j)
+            NativeBridge.nativeDestroyProblem(ph)
+        } else {
+            lingered = true
+            Thread({
+                runCatching { t.join() }
+                CpsatBridge.nativeCpsatDestroy(j)
+                NativeBridge.nativeDestroyProblem(ph)
+            }, "magi-cpsat-reaper").also { it.isDaemon = true; it.start() }
         }
-        job = 0L; problemHandle = 0L
+        job = 0L; problemHandle = 0L; thread = null
         return s
     }
 
@@ -158,7 +175,6 @@ object CpsatResolve {
     /** [board]＝最良の盤面（改善なしなら開始の盤面と同じ内容）、[parts]＝解いた部分の数、[accepted]＝採った数、[optimal]＝最適まで解けた数。 */
     class Outcome(val board: Array<IntArray>, val parts: Long, val accepted: Long, val optimal: Long, val wallMs: Long)
 
-    /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。 */
     /** 直前の [run] が `stallStopMs` で止まったか（ログ用）。 */
     @Volatile var stalledOut: Boolean = false
         private set
@@ -166,7 +182,8 @@ object CpsatResolve {
     @Volatile var lastStallStopMs: Long = 0L
         private set
 
-    /** [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
+    /** [shouldStop] が真になるか [maxSeconds] が過ぎるまで解き直す。使えないビルド・作れない問題では null。
+     *  [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
             onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, sinceMs: Long = EngineClock.nowMs(),
             fixCounts: IntArray? = null, shouldStop: () -> Boolean): Outcome? {

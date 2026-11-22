@@ -2205,9 +2205,9 @@ internal fun extWishRemainText(shifts: List<String>, selected: Set<Int>): String
 }
 internal const val CLEAR_SELECTION_BUTTON = "選択を外す"
 internal const val GROUP_EQUALIZE_BUTTON = "グループ内の回数をそろえる"
-internal const val GROUP_EQUALIZE_NOTE = "グループ内の回数（同じグループの人どうし・シフトごと）を、同じ日の入れ替え（別のグループの人も使います）でそろえます。個人の下限・上限は外さず、必須違反は増やしません。要調整は増えることがあります。元に戻せます"
+internal const val GROUP_EQUALIZE_NOTE = "グループ内の回数（同じグループの人どうし・シフトごと）を、同じ日の入れ替え（別のグループの人も使います）でそろえます。個人の範囲や適切回数の目標がある人は、その範囲の中の位置でそろえます（範囲が少なめの人は少なめのまま）。個人の下限・上限は外さず、必須違反は増やしません。要調整は増えることがあります。元に戻せます"
 internal const val GROUP_EQUALIZE_NONE = "グループ内の回数はこれ以上そろえられません（希望・固定・個人の上下限・必須違反の増加で入れ替えられません）"
-internal const val GROUP_EQUALIZE_STALE = "計算中に勤務表が変わったので、回数はそろえませんでした。もう一度押してください"
+internal const val GROUP_EQUALIZE_STALE = "計算中に勤務表が変わったか作成が始まったので、回数はそろえませんでした。もう一度押してください"
 internal fun groupEqualizeDoneText(swaps: Int): String = "グループ内の回数をそろえました: 入れ替え ${swaps}件"
 internal const val GROUP_EQUALIZE_PICK_NOTE = "回数をそろえるシフトを選びます（複数選べます）。選んでいないシフトの回数は入れ替えで動くことがありますが、個人の下限・上限は守ります"
 internal const val GROUP_EQUALIZE_ALL_PICK = "すべて選ぶ"
@@ -2217,8 +2217,7 @@ internal fun groupEqualizeConfirmText(picked: Int, total: Int): String =
     if (picked >= total) "すべてのシフトをそろえる" else "選んだ ${picked}種類をそろえる"
 /** ［そろえて組み直す］CP-SAT で組み直す持ち時間（秒）。 */
 internal const val GROUP_EQUALIZE_RESOLVE_SEC = 60.0
-internal const val GROUP_EQUALIZE_RESOLVE_BUTTON = "そろえて組み直す"
-internal const val GROUP_EQUALIZE_RESOLVE_NOTE = "「そろえて組み直す」は、そろえた回数を各人そのままに固定して、どの日に入るかを組み直します（約1分・停止できます）。7日に休2回や並びのズレが減ります"
+internal const val GROUP_EQUALIZE_RESOLVE_NOTE = "そろえたあと、その回数を各人そのままに固定して、どの日に入るかを組み直します（約1分・停止できます）。7日に休2回や並びのズレが減ります"
 internal const val GROUP_EQUALIZE_RESOLVING = "回数をそろえて組み直しています…（約1分）"
 internal const val GROUP_EQUALIZE_RESOLVE_STOPPED = "停止しました。そろえる前の勤務表に戻しています"
 internal const val GROUP_EQUALIZE_RESOLVE_FAILED = "回数をそろえて組み直せませんでした。そろえる前の勤務表に戻しています（詳しくは設定＞詳細設定＞ログ）"

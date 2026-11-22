@@ -15,11 +15,10 @@ import java.util.Random
  *      (既選択優先→kd 最多保持)との同日交換で一括充足し窓を割る(最大6者=i1+5ドナー)。
  *
  * 採否ゲート [HF537 同等]:
- *  base  = (hard減) or (hard同 かつ soft減)
- *  boost = base不成立でも Δc1<0 ∧ Δhard<=0 ∧ Δ(200*high+120*low)<=0 ∧ ΔSOFT<=0 なら採用
- *  ※ native 採点では LimMin/LimMax(low/high)=hard2 のため lim 節は hard 条件に実質内包されるが、
- *    Web ゲート(HF151系 200/120)との同値性を明示するため breakdown の low/high で同式を保持する。
- *  ※ native の SOFT は無重み合計(soft)。Web の weighted ΔSOFT に対する保守的同等条件として ΔSOFT<=0 を用いる。
+ *  base  = betterReport（hard→weightedScore→total）
+ *  boost = base不成立でも Δc1<0 ∧ Δhard<=0 ∧ ΔweightedScore<=0 ∧ Δ(200*high+120*low)<=0 ∧ ΔSOFT件数<=0 なら採用
+ *  ※ low/high は要調整（SOFT）。lim 節（Web ゲート HF151 系の 200/120、採点の重みとは別の比）は weightedScore 非増に重ねる
+ *    追加の制約で、条件を厳しくする側にしか働かない。
  *  不採用は全 revert。Web の _lockActive/_separable(ロック機能)は native 未実装のため対象外(全員 active)。
  *
  * 統合点: V6NativeOptimizer の RSI 系(runRsi 各ラウンド後 / RSI++ Refine 後)。Web の
@@ -97,7 +96,7 @@ object V6LateOperators {
             //   捨てていた。boost 側の soft<= ガードは「生カウントも悪化させない」追加条件として従来どおり残す。
             val base = betterReport(nv, cur)
             // [3.336.0/敵対レビュー H3] boost に weightedScore 非増を要求する。`lim` は 200×high+120×low で
-            //   **目的関数の重み(high45 < low90)と大小が逆**なので、high−1/low+1 の入れ替えは lim を下げつつ
+            //   **目的関数の重み(high < low、いまは 50 < 120)と大小が逆**なので、high−1/low+1 の入れ替えは lim を下げつつ
             //   weighted を +45 悪化させられた。反例: c1 5→4・high 2→1・low 1→2 は
             //   lim 520→440 ✓ / soft件数 8→7 ✓ / c1 減 ✓ を全部満たしつつ weighted 255→285。
             //   これで boost は「hard・weighted・件数のどれも悪化させずに c1 だけ減らす」横移動に限定される。
@@ -131,7 +130,11 @@ object V6LateOperators {
             val v = ArrayList<Int>()
             for (i in 0 until sN) {
                 var bad = false
-                for (kk in 0 until kN) if (ssn[i][kk] < p.rangeLo[i][kk] || ssn[i][kk] > p.rangeHi[i][kk]) { bad = true; break }
+                for (kk in 0 until kN) {
+                    // チェッカーの low/high と同じ判定（下限は 0 と未設定を数えず、担当できないシフトの下限割れは数えない）。
+                    val lo = p.rangeLo[i][kk]; val hi = p.rangeHi[i][kk]; val n = ssn[i][kk]
+                    if ((lo != Int.MIN_VALUE && lo != 0 && p.canDo(i, kk) && n < lo) || (hi != Int.MAX_VALUE && n > hi)) { bad = true; break }
+                }
                 if (bad) v.add(i)
             }
             return v

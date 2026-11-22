@@ -8,7 +8,7 @@ enum class ObjectiveMethod { WEIGHTS, PRIORITY }
  * 違反の色・重なりの優先（表示）は方式に関わらず [MirrorKeys.weights] のまま（2026-11-06 ユーザー決定「色は今のまま」）。
  *
  * PRIORITY の重み（2026-11-06 ユーザー確定、HF77）: 必須（T0）は今のまま、T1（low・c1・high・c3mn）＝200、
- * T2（c3・c3m・c41・c42・c41s・c42s）＝20、T3（covO・weekly）＝1、fair＝50（3.727.80、旧 20）、c2・apt＝20（3.727.87、旧 1）。根拠は §7.5 の 2 腕比較。
+ * T2（c3・c3m・c41・c42・c41s・c42s・gap）＝20、T3（weekly）＝1、fair＝50（3.727.80、旧 20）、c2・apt＝20（3.727.87、旧 1）、covO＝50（3.727.97、段は T3 のまま）。根拠は §7.5 の 2 腕比較。
  */
 object ObjectiveWeights {
     @Volatile var method: ObjectiveMethod = ObjectiveMethod.WEIGHTS

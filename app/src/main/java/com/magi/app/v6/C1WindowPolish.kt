@@ -16,7 +16,8 @@ internal fun inDeficientC1Window(p: Problem, work: Array<IntArray>, i: Int, x: I
     return false
 }
 
-/** 職員 i の c1 fire 総数（全 cons1・canDo ガード。checker/MirrorCore と同一のスライド窓意味論）。 */
+/** 職員 i の窓ごとの不足量の和（全 cons1・`c1Applies` のふるい）。手の候補のふるいと選択の目安で、採点の c1（`C1Cost`＝不足のまとまりの 2 乗）とは別の式。
+ *  `C1Cost` へ替える案は測って否決（docs/history 3.727.125）。 */
 
 internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
     var fires = 0
