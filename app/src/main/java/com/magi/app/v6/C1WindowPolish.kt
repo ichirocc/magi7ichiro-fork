@@ -16,22 +16,25 @@ internal fun inDeficientC1Window(p: Problem, work: Array<IntArray>, i: Int, x: I
     return false
 }
 
-/** 職員 i の c1 fire 総数（全 cons1・canDo ガード。checker/MirrorCore と同一のスライド窓意味論）。 */
+/** 測定用（一時）: true＝採点と同じ `C1Cost`、false＝旧来の窓ごとの不足量の和。 */
+@Volatile internal var c1PolishSquared = true
 
-internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
-    var fires = 0
+/** 職員 i の c1 の件数（全 cons1・`c1Applies` のふるい。採点と同じ `C1Cost`＝不足のまとまりの 2 乗）。手の候補のふるいと選択に使う。 */
+internal fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Long {
+    var cost = 0L
     for (c in p.cons1) {
         val x = c.shiftIdx; val d = c.day1; val n = c.day2
-        if (x !in 0 until p.K || d <= 0 || !p.c1Applies(i, x)) continue
+        if (x !in 0 until p.K || d <= 0 || d > p.T || !p.c1Applies(i, x)) continue
+        if (c1PolishSquared) { cost += C1Cost.rowCost(work[i], x, d, n); continue }
         var w = 0
         while (w <= p.T - d) {
             var z = 0
             for (l in 0 until d) if (work[i][w + l] == x) z++
-            if (z < n) fires += n - z
+            if (z < n) cost += n - z
             w++
         }
     }
-    return fires
+    return cost
 }
 
 
@@ -542,7 +545,7 @@ internal object C1WindowPolish {
                 val ho = (0 until p.T).filter { work[i][it] in 0 until p.K && work[i][it] != x && movable(i, it) }
                 if (hx.isEmpty() || ho.isEmpty()) { recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_NO_REPACK); continue }
                 val fires0 = c1RowFires(p, work, i)
-                var bestGain = 0; var bestJx = -1; var bestJo = -1
+                var bestGain = 0L; var bestJx = -1; var bestJo = -1
                 for (jx in hx) {
                     if (shouldStop()) break
                     for (jo in ho) {

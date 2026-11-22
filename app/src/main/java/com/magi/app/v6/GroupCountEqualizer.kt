@@ -34,6 +34,9 @@ object GroupCountEqualizer {
         return Math.round(d)
     }
 
+    /** 測定用（一時）: true＝旧来の 1 手で 2 回冷やす（有効な手は 2 回・`continue` した手は 1 回）、false＝1 手 1 回で t1 に届く。 */
+    @Volatile internal var annealDoubleCool = false
+
     private const val ANNEAL_ITERS = 400_000
     private const val ANNEAL_RUNS = 3
 
@@ -164,7 +167,7 @@ object GroupCountEqualizer {
                     cur[who[t]][d] = o[t]
                 }
             }
-            temp *= cool
+            if (annealDoubleCool) temp *= cool
         }
         val bb = best ?: return false
         for (i in 0 until p.S) bb[i].copyInto(work[i])
