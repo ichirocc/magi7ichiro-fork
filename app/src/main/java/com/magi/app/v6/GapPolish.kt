@@ -14,6 +14,8 @@ import com.magi.app.model.MagiState
 internal object GapPolish {
     private const val EXT = 3
     private const val MAX_LEN = 7
+    /** 却下の主因を数えるためにチェッカーを全部回す手の上限（ログ用）。 */
+    private const val DIAG_CAP = 300
     /** false＝区間 W の長さを 1（長方形交換と同じ近傍）に絞る（測定の対照腕）。 */
     @Volatile var segmentSwap: Boolean = true
 
@@ -32,6 +34,11 @@ internal object GapPolish {
         var applied = 0
         var tried = 0
         var slots = 0
+        // 引き分け（採用 0）の理由: 区間ごとの不合格の内訳・組が間隔を減らさない・採点で却下（主因）。
+        var slotLocked = 0; var slotCannotPlace = 0; var slotForbidden = 0
+        var noGapDrop = 0; var comboForbidden = 0
+        val culprits = RejectCulpritStats()
+        var diagnosed = 0
         val maxLen = if (segmentSwap) MAX_LEN else 1
         val maxExt = if (segmentSwap) EXT else 0
 
@@ -55,13 +62,14 @@ internal object GapPolish {
                 val u = work[i][j]; val v = work[ip][j]
                 if (u == v) continue
                 differs = true
-                if (p.wishLocked(i, j) || p.wishLocked(ip, j)) return false
-                if (!p.mayPlaceAt(i, j, v) || !p.mayPlaceAt(ip, j, u)) return false
+                if (p.wishLocked(i, j) || p.wishLocked(ip, j)) { slotLocked++; return false }
+                if (!p.mayPlaceAt(i, j, v) || !p.mayPlaceAt(ip, j, u)) { slotCannotPlace++; return false }
             }
             if (!differs) return false
             swap(i, ip, a, b)
             val ok = cleanAfterSwap(i, ip, a, b)
             swap(i, ip, a, b)
+            if (!ok) slotForbidden++
             return ok
         }
 
@@ -111,14 +119,20 @@ internal object GapPolish {
                                 if (w == null && segmentSwap.not()) continue
                                 val prev = work.copy2D()
                                 swap(i, ip, a, b); if (w != null) swap(i, ip, w[0], w[1])
-                                val clean = GapRule.deficit(work[i], x, c.days) < deficit0 &&
-                                    (w == null || (cleanAfterSwap(i, ip, a, b) && cleanAfterSwap(i, ip, w[0], w[1])))
+                                val gapDrops = GapRule.deficit(work[i], x, c.days) < deficit0
+                                val clean = gapDrops && (w == null || (cleanAfterSwap(i, ip, a, b) && cleanAfterSwap(i, ip, w[0], w[1])))
+                                if (!gapDrops) noGapDrop++ else if (!clean) comboForbidden++
                                 if (clean) {
                                     tried++
                                     val rep = screen.checkIfBetter(state, work, bestRep)
-                                    if (rep != null && adoptionGate(p, prev, work, rep, bestRep, pinBlocks).accepted) {
+                                    val gate = rep?.let { adoptionGate(p, prev, work, it, bestRep, pinBlocks) }
+                                    if (rep != null && gate!!.accepted) {
                                         bestRep = rep; applied++
                                         return true
+                                    }
+                                    if (diagnosed < DIAG_CAP) {
+                                        diagnosed++
+                                        culprits.record(rep ?: UnifiedViolationChecker.check(state, work), bestRep, pinBroken = gate?.pinBad == true)
                                     }
                                 }
                                 if (w != null) swap(i, ip, w[0], w[1]); swap(i, ip, a, b)
@@ -137,8 +151,13 @@ internal object GapPolish {
             pass++
             if (!improved) break
         }
+        val residual = p.consGap.flatMap { c -> (0 until p.S).filter { p.c1Applies(it, c.shiftIdx) && GapRule.deficit(work[it], c.shiftIdx, c.days) > 0 }
+            .map { "${state.staff.getOrNull(it)?.name ?: it} ${state.shifts.getOrNull(c.shiftIdx)?.kigou ?: c.shiftIdx}(不足${GapRule.deficit(work[it], c.shiftIdx, c.days)})" } }
+        val why = if ((bestRep.breakdown["gap"] ?: 0) == 0) "" else
+            " [残った理由: 区間の不合格 固定${slotLocked}・置けない${slotCannotPlace}・禁止の並び${slotForbidden} / 組 間隔が減らない${noGapDrop}・組で禁止の並び${comboForbidden} /${culprits.summary().ifEmpty { " 採点で却下0件" }}]" +
+                (if (residual.isEmpty()) "" else " 残存: ${residual.joinToString(", ")}")
         val logs = listOf(MirrorLog(tag = "GapPolish",
-            message = "シフトの間隔(gap)研磨(2人の区間入れ替え・移動先を先に探す): gap ${before.breakdown["gap"] ?: 0}->${bestRep.breakdown["gap"] ?: 0} / total ${before.total}->${bestRep.total} 採用${applied}回 移動できる区間${slots} 採点${tried}"))
+            message = "シフトの間隔(gap)研磨(2人の区間入れ替え・移動先を先に探す): gap ${before.breakdown["gap"] ?: 0}->${bestRep.breakdown["gap"] ?: 0} / total ${before.total}->${bestRep.total} 採用${applied}回 移動できる区間${slots} 採点${tried}$why"))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 }
