@@ -2,6 +2,7 @@ package com.magi.app.v6
 
 import com.magi.app.model.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
@@ -79,6 +80,9 @@ class DeltaEvaluatorTest {
             cons1 = cons1, cons2 = cons2, cons3 = cons3, cons3n = cons3n,
             cons3m = cons3m, cons3mn = cons3mn, cons41 = cons41, cons42 = cons42,
             skillGroups = skillGroups, cons41s = cons41s, cons42s = cons42s, cons3w = cons3w,
+            // gap と extWish の Δ も通す（無いと網羅の確認で 2 族が未発火のまま通っていた）。
+            consGap = listOf(GapRow("A", "4")),                                         // A のまとまりの間を 4 日以上
+            extWishes = listOf(ExtWish(4, listOf("2025-01-02", "2025-01-04"), listOf("A"))), // s4 は 2 日・4 日に A 以外
         )
     }
 
@@ -259,14 +263,12 @@ class DeltaEvaluatorTest {
             assertAgainstChecker("move#$idx")
         }
 
-        // [3.337.0と同じ規律] 「重みがずれても緑」にならないよう、族の網羅を数字で確認する。
-        //   全19族のうち何が非ゼロを観測できたかを記録（未発火の族があっても失敗にはしない＝
-        //   このフィクスチャの構造上の限界を正直に記録するだけ。実発火は18/19族=covUのみ
-        //   このフィクスチャの初期状態では発生しにくい、と判明した場合はコメントで明示する）。
-        val missing = MirrorKeys.all.filterNot { it in everNonZero }
+        // [3.337.0と同じ規律] 「重みがずれても緑」にならないよう、族の網羅を確かめる。未発火を許すのは名前で決めた族だけ
+        //   （件数で「2 つまで」と許すと、ほかの族が黙って抜けても通る）。
+        val missing = MirrorKeys.all.filterNot { it in everNonZero }.toSet()
         org.junit.Assert.assertTrue(
-            "族の網羅が乏しすぎる（発火した族: ${everNonZero.size}/${MirrorKeys.all.size}、未発火: $missing）",
-            everNonZero.size >= MirrorKeys.all.size - 2,
+            "未発火の族が許した一覧の外にある（未発火: $missing、許す: $FAMILIES_ALLOWED_SILENT）",
+            FAMILIES_ALLOWED_SILENT.containsAll(missing),
         )
     }
 
@@ -285,8 +287,16 @@ class DeltaEvaluatorTest {
             val predicted = de.previewMove(i, j, nw)
             val after = de.apply(i, j, nw)
             assertEquals("previewMove($i,$j,$nw)", after, predicted)
-            for ((k, v) in de.familyRaw()) if (k in fams && v != before[k]) moved += k
+            for ((k, v) in de.familyRaw()) if (v != before[k]) moved += k
         }
-        assertEquals("族の Δ が通っていない", fams, moved)
+        // 戻り値の一致（上の assertEquals）は全族の合計で毎手確かめている。ここは各族の Δ が実際に通ったかの網羅。
+        assertTrue("族の Δ が通っていない: ${fams - moved}", moved.containsAll(fams))
+        val silent = de.familyRaw().keys - moved
+        assertTrue("Δ が一度も動かなかった族が許した一覧の外にある: $silent", FAMILIES_ALLOWED_SILENT.containsAll(silent))
+    }
+
+    private companion object {
+        /** このフィクスチャでは起きにくく、乱択の手でも動かないと分かっている族（名前で許す。増やすときは理由を書く）。 */
+        val FAMILIES_ALLOWED_SILENT = setOf("covU")
     }
 }

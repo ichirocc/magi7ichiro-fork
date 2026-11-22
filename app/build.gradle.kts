@@ -80,6 +80,14 @@ android {
     // Compose Compiler の独立プラグイン化(Kotlin 2.0+)で不要（版数は root build.gradle.kts の
     // org.jetbrains.kotlin.plugin.compose(2.3.21) が管理）。
     buildFeatures { compose = true }
+    // JUnit をコア数の JVM へ振り分ける（1 本だと v6-engine-check のテストが約 19 分。ホストの hosttest.sh も同じく JVM を分けて回す）。
+    //   JVM ごとに別プロセスなので、グローバルな設定（ObjectiveWeights.method・PolishGate 等）を書き換えるテストどうしも干渉しない。
+    testOptions {
+        unitTests.all {
+            it.maxParallelForks = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+            it.maxHeapSize = "2g"
+        }
+    }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") } }
 
     // This release variant is a personal-test APK signed with the fixed CI key or the debug key (see signingConfigs),
