@@ -201,7 +201,7 @@ canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ �
 
 残存分析（`residualLog`）の「証明済みの壁」は、最終盤面の内容で鍵をとった診断（約 20 ms、`C3nWallProof.diagnoseBoard`。探索中と同じ `BoardKeyedFlag` を共有するので、最後に診断した生存盤面と同じ内容ならその判定を返す）で、探索中の時点の判定とは別の根拠（3.642.0）。
 
-終わり方の要約（3.643.0、`V6FinalPort.StopSummary`、`ActionResult.stop`）: 早期終了の有無（`stagnationFired`）・種別 `StopKind`・使用秒・予算秒・探索終了時の無改善秒（Watchdog 行と同じ `tChain1 − lastImpAtSearchEnd`）・残る必須件数。種別の条件と順序は Watchdog 行の「実効閾値の種別」と同じ（Watchdog 行の複合ラベル「plateau+希望衝突の床」は PLATEAU_FLOOR に畳む）: 発火なし → DEADLINE、`bestHard ≤ hardFloor ∧ nonCovUHard == 0` → PLATEAU_FLOOR、`wishOn ∧ wishReachedEnd` → WISH_FLOOR、`stagnationWall ∧ nonCovUAllC3n` → 最終盤面の `diagnoseForbiddenRuns(...).allBlockedCertified` で C3N_WALL_CERTIFIED か C3N_WALL_EMPIRICAL（`c3nWallDeepCheck` と無関係に常に分ける。壁で止まったときだけ診断する）、それ以外 → NORMAL_STALL。ログ `StopSummary` に同じ値を 1 行出す。画面は `ui/StopExplanation.kt`（Windows は `StopExplanation.cs`）が一文と次の一手に変換してホームの結果カードに出す。採否・探索・停止には配線しない＝出力（盤面）不変。
+終わり方の要約（3.643.0、`V6FinalPort.StopSummary`、`ActionResult.stop`）: 早期終了の有無（`stagnationFired`）・種別 `StopKind`・使用秒・予算秒・探索終了時の無改善秒（Watchdog 行と同じ `tChain1 − lastImpAtSearchEnd`）・残る必須件数。種別の条件と順序は Watchdog 行の「実効閾値の種別」と同じ（Watchdog 行の複合ラベル「plateau+希望衝突の床」は PLATEAU_FLOOR に畳む）: 発火なし → DEADLINE、`bestHard ≤ hardFloor ∧ nonCovUHard == 0` → PLATEAU_FLOOR、`wishOn ∧ wishReachedEnd` → WISH_FLOOR、併走の CP-SAT が必須の最少を証明し最良がその件数（`cpsatHardFloorReached`）→ HARD_FLOOR_PROVEN（3.727.128。希望・必要人数・担当で消せない必須を「改善が無かった」と書かない）、`stagnationWall ∧ nonCovUAllC3n` → 最終盤面の `diagnoseForbiddenRuns(...).allBlockedCertified` で C3N_WALL_CERTIFIED か C3N_WALL_EMPIRICAL（`c3nWallDeepCheck` と無関係に常に分ける。壁で止まったときだけ診断する）、それ以外 → NORMAL_STALL。ログ `StopSummary` に同じ値を 1 行出す。画面は `ui/StopExplanation.kt`（Windows は `StopExplanation.cs`）が一文と次の一手に変換してホームの結果カードに出す。採否・探索・停止には配線しない＝出力（盤面）不変。
 
 ### 5.7 DEFAULT の既知のギャップ（欠陥ではなく仕様の歪み）
 
@@ -420,7 +420,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | `AdaptivePortfolio` | B | 再配属回数・合計 iter |
 | `RunMAGI_RSI` | C | 改善したラウンドと最終ラウンド、末尾「戦略変更」1 行に focus の遷移、N4 の早期終了 |
 | `HF80`（`PostPolish` 行）／`ExtraRefine` | B（RSI_PLUS の Phase 4）・softPolish／追加精製 | 停滞早期終了の有無、走らなかった理由。チェーンの `HF80`（`SO applied=` 行）は E で、採用の有無とサイクル数だけ |
-| `StopSummary` | A（出力） | 終わり方の種別（DEADLINE／PLATEAU_FLOOR／WISH_FLOOR／C3N_WALL_CERTIFIED／C3N_WALL_EMPIRICAL／NORMAL_STALL）・早期終了の有無・使用秒／予算秒・探索終了時の無改善秒・残る必須件数＝画面の説明と同じ値（3.643.0） |
+| `StopSummary` | A（出力） | 終わり方の種別（DEADLINE／PLATEAU_FLOOR／WISH_FLOOR／HARD_FLOOR_PROVEN／C3N_WALL_CERTIFIED／C3N_WALL_EMPIRICAL／NORMAL_STALL）・早期終了の有無・使用秒／予算秒・探索終了時の無改善秒・残る必須件数＝画面の説明と同じ値（3.643.0） |
 | `設定の効き`（`TuningTelemetry.summary`） | 横断 | トグルがその実行で何をしたか。毎回「観測なし」のトグルは消してよい |
 | `設定の開始時`（操作ログ、`TuningTelemetry.startSettings`） | 横断 | 実行の開始点で VM が読んだ 9 トグルの ON/OFF（「（設定）」＝利用者の選択。語と並びは `設定の効き` と同じ `toggleWords`）。停止・失敗の実行にも残る。`設定の効き` との差は実行中の設定変更（3.694.0） |
 | `容認採用`（`TuningTelemetry.toleratedLines`） | 横断 | 公平化/適切回数の他ソフト許容(6%) で採った手の 族・件数・合計・必須・容認量・素の差・実効差（先頭 5 件＋「ほか N 件」）。`設定の効き` の直後、handleOptimize の終端を通った実行だけ（3.694.0） |

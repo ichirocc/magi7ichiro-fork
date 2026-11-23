@@ -101,7 +101,7 @@ object V6FinalPort {
     )
 
     /** 探索がどう終わったか（画面の説明用、3.643.0）。採否・探索・早期終了には配線しない。種別は Watchdog 行の「実効閾値の種別」と同じ条件。 */
-    enum class StopKind { DEADLINE, PLATEAU_FLOOR, WISH_FLOOR, C3N_WALL_CERTIFIED, C3N_WALL_EMPIRICAL, NORMAL_STALL }
+    enum class StopKind { DEADLINE, PLATEAU_FLOOR, WISH_FLOOR, HARD_FLOOR_PROVEN, C3N_WALL_CERTIFIED, C3N_WALL_EMPIRICAL, NORMAL_STALL }
     data class StopSummary(val earlyStop: Boolean, val kind: StopKind, val usedSec: Int, val budgetSec: Int, val stalledSec: Int, val remainingHard: Int)
 
     data class ActionResult(
@@ -1081,6 +1081,7 @@ object V6FinalPort {
                 config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
+                config.floorShortStall && cpsatHardFloorReached.get() -> "CP-SAT の必須の最少=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
@@ -1503,6 +1504,7 @@ object V6FinalPort {
                     !fired -> StopKind.DEADLINE
                     config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
                     wishReachedEnd -> StopKind.WISH_FLOOR
+                    config.floorShortStall && cpsatHardFloorReached.get() -> StopKind.HARD_FLOOR_PROVEN
                     wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
                         if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL
                     else -> StopKind.NORMAL_STALL
