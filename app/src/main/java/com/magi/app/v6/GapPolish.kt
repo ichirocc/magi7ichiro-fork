@@ -117,13 +117,16 @@ internal object GapPolish {
                             for (w in others.asSequence().filter { it[1] < a - 1 || it[0] > b + 1 } + sequenceOf(null)) {
                                 if (shouldStop()) return false
                                 if (w == null && segmentSwap.not()) continue
-                                val prev = work.copy2D()
                                 swap(i, ip, a, b); if (w != null) swap(i, ip, w[0], w[1])
                                 val gapDrops = GapRule.deficit(work[i], x, c.days) < deficit0
                                 val clean = gapDrops && (w == null || (cleanAfterSwap(i, ip, a, b) && cleanAfterSwap(i, ip, w[0], w[1])))
                                 if (!gapDrops) noGapDrop++ else if (!clean) comboForbidden++
                                 if (clean) {
                                     tried++
+                                    val prev = work.copy2D().also { bd ->
+                                        if (w != null) for (j in w[0]..w[1]) { val t = bd[i][j]; bd[i][j] = bd[ip][j]; bd[ip][j] = t }
+                                        for (j in a..b) { val t = bd[i][j]; bd[i][j] = bd[ip][j]; bd[ip][j] = t }
+                                    }
                                     val rep = screen.checkIfBetter(state, work, bestRep)
                                     val gate = rep?.let { adoptionGate(p, prev, work, it, bestRep, pinBlocks) }
                                     if (rep != null && gate!!.accepted) {
