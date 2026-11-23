@@ -28,6 +28,9 @@ class Review3718Test {
     @Test fun panelHeightIsOneThirdOfScreen() {
         assertEquals(305, panelMaxHeightDp(915))
         assertEquals(246, panelMaxHeightDp(740))
+        // セルの札: ちら見は 1/3、広げたとき（詳しく・希望の登録）は 3/4。
+        assertEquals(305, cellSheetMaxHeightDp(915, expanded = false))
+        assertEquals(686, cellSheetMaxHeightDp(915, expanded = true))
         assertEquals("一覧へ", PANEL_LIST_BUTTON)
         assertEquals("要調整 3件", softRowsHeading(3))
         assertNull(softRowsHeading(0))

@@ -485,6 +485,10 @@ internal fun panelModeOf(listOpen: Boolean, cellOpen: Boolean): PanelMode =
 /** 勤務表の前に出す画面の高さの上限＝画面の 1/3（ちら見・全体・一覧とも。2026-10-18 ユーザー決定「1/3固定・今の閉じ方のまま」）。 */
 internal fun panelMaxHeightDp(screenHeightDp: Int): Int = screenHeightDp / 3
 
+/** セルの札の高さの上限。ちら見は表を隠さない 1/3、広げたとき（「詳しく」・希望の登録）は 3/4＝シフトの一覧と操作が入る。 */
+internal fun cellSheetMaxHeightDp(screenHeightDp: Int, expanded: Boolean): Int =
+    if (expanded) screenHeightDp * 3 / 4 else panelMaxHeightDp(screenHeightDp)
+
 internal const val PANEL_LIST_BUTTON = "一覧へ"
 
 /** 問題一覧の 1 行。必須は巡回の何件目か（[tourAt]）を持ち、要調整は null。押すと [cell]（関連セルは [days]）へ表を送る。 */

@@ -235,8 +235,8 @@ internal fun CellEditSheet(
                     }
                     SheetListButton(onList)
                     SheetUndoButton(canUndo, onUndo)
-                    // 下の固定部に［閉じる］がある段では ✕ を出さない（1 画面に同じ操作を 2 つ置かない）。
-                    if (mode == 0 && step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+                    // 下の固定部に［閉じる］がある段（割当の 1 段目）では ✕ を出さない（1 画面に同じ操作を 2 つ置かない）。希望の画面は ✕ だけ。
+                    if (mode == 1 || step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     badge?.let { MagiTagChip(it, if (status.severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }
@@ -429,7 +429,7 @@ internal fun CellEditSheet(
                 }
             }
             // 上段が画面に入りきらないとき、送れることを見せる（行の途中で切れて下が空く＝続きがあると分からなかった、2026-10-27 実機）。
-            if (upperScroll.canScrollForward) MagiTextButton(
+            if (mode == 0 && upperScroll.canScrollForward) MagiTextButton(
                 onClick = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } },
                 modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterHorizontally),
             ) { Text(CELL_SHEET_MORE_BELOW) }
@@ -511,9 +511,6 @@ internal fun CellEditSheet(
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1)
                 }
-            }
-            if (mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
-                MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
             // 画面下端のジェスチャー帯の上に、押せるものを置かない 32dp。
             Spacer(Modifier.height(32.dp))
