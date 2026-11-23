@@ -778,6 +778,8 @@ object V6FinalPort {
                 val r = runCatching { UnifiedViolationChecker.check(state, board) }.getOrNull()
                 if (r != null && cpsatSeenReport.let { it == null || betterReport(r, it) }) {
                     cpsatSeenReport = r; cpsatImprovedAt.set(now); cpsatClockResets.incrementAndGet()
+                    // 途中経過（と kill 復旧の退避）へ。探索の最良より良いときだけ置き換わる（publishLiveBest が比べる）
+                    if (isActive && baseProblem.holdsManualPins(board) && baseProblem.keepsWishPins(cappedInput, board)) OptimizerRuntime.publishLiveBest(r, board)
                 }
             }
             val best = wd.bestReport ?: return@synchronized false
@@ -878,6 +880,10 @@ object V6FinalPort {
                 stallStopMs = if (config.mafs2Enabled) RESOLVE_STALL_STOP_MS
                     else if (config.floorShortStall && cpsatHardFloorReached.get()) stallHardMs else stallMs,
                 sinceMs = if (config.mafs2Enabled) EngineClock.nowMs() else maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()),
+                onImproved = { b ->
+                    if (isActive && baseProblem.holdsManualPins(b) && baseProblem.keepsWishPins(cappedInput, b))
+                        runCatching { OptimizerRuntime.publishLiveBest(UnifiedViolationChecker.check(state, b), b) }
+                },
             ) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         }
         val tResolve1 = EngineClock.nowMs()
@@ -1136,7 +1142,7 @@ object V6FinalPort {
         }
         val stagnationLog = if (wd.stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
-            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 主探索を${(tChain1 - startMs) / 1000}sで停止・後処理の終了${(tPost1 - startMs) / 1000}s・" +
+            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 主探索を${(tChain1 - startMs) / 1000}sで停止${if (tChain1 >= searchDeadlineMs - 1_000L) "＝探索の締切と同時で時間の節約なし" else ""}・後処理の終了${(tPost1 - startMs) / 1000}s・" +
                 "発火時点の停滞${wd.stagnationDurationMs.get() / 1000}s無改善(探索とCP-SATの両方)" +
                 (if (cpsatClockResets.get() > 0) "・CP-SAT が自分の前の解より良くなり停滞の時計を戻した${cpsatClockResets.get()}回(最終 経過${(cpsatImprovedAt.get() - startMs) / 1000}s)" else "") +
                 // [3.375.0] 何回転ぶん空回りしたか（時間だけでは実施量が読めない）。
@@ -1495,7 +1501,8 @@ object V6FinalPort {
         val stopSummary = run {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
-            val fired = wd.stagnationFired.get()
+            // 発火しても探索が締切まで走った（発火が締切の直前で、離脱の確認窓のあいだに締切が来た）なら時間は節約されていない＝締切どおりの終わり方。
+            val fired = wd.stagnationFired.get() && tChain1 < searchDeadlineMs - 1_000L
             // 壁で止まったときだけ最終盤面を診断する（約 20 ms）。残存分析の `wallProof.diagnoseBoard` とは別＝そちらは変えない。
             fun wallCertified() = runCatching { V6PortAnalyzer.diagnoseForbiddenRuns(state, finalSched).allBlockedCertified }.getOrDefault(false)
             StopSummary(
