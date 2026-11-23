@@ -229,6 +229,48 @@ class ConstraintMusTest {
         assertEquals(1, ConstraintMus.analyzeStaffConflicts(Problem(st1)).size)
     }
 
+    /** 31 日・休の上限 9・「休 7日で2回以上」。休の希望 4・5・12〜14 日と、別のシフトの希望 10・11 日（1 始まり）。 */
+    private fun restWindowState(restHi: String) = state(
+        days = 31,
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
+        wishes = mapOf("0,3" to 0, "0,4" to 0, "0,11" to 0, "0,12" to 0, "0,13" to 0, "0,9" to 1, "0,10" to 1),
+        staffRange = mapOf("0,0" to Range(restHi, restHi)),
+        cons1 = listOf(C1Row("7", "休", "2")),
+    )
+
+    @Test
+    fun windowMinimumCountsWishPositions() {
+        // 位置を見ない最少は 8 回（上限 9 に収まる）。希望の日付を含めると 10 回要る＝上限 9 と期間の制約と希望は両立しない。
+        assertEquals(8, SmartInitialScheduler.minDaysForFullCompliance(31, listOf(7 to 2)))
+        val p = Problem(restWindowState("9"))
+        val core = ConstraintMus.analyzeStaffConflicts(p).single().core
+        assertTrue(core.any { it is ConstraintMus.RangeCap && it.shift == 0 && it.hi == 9 })
+        assertTrue(core.any { it is ConstraintMus.WindowRule && it.shift == 0 })
+        assertTrue(core.any { it is ConstraintMus.WishPin })
+        assertEquals("希望・固定の日付を含めると、期間の制約を満たすには「休」が最少10回要ります。上限は9回です",
+            V6SanityPort.staffConflictReason(p, core) { if (it == 0) "休" else "X" })
+        // 全部の希望を見ても 10 回＝上限 10 なら両立する（誤検知しない）。
+        val allPins = (0 until 31).mapNotNull { j -> p.wish[0][j].takeIf { it >= 0 }?.let { ConstraintMus.WishPin(0, j, it) } }
+        assertEquals(10, ConstraintMus.windowNeed(p, 0, listOf(ConstraintMus.WindowRule(0, 7, 2)) + allPins))
+        assertTrue(ConstraintMus.analyzeStaffConflicts(Problem(restWindowState("10"))).isEmpty())
+    }
+
+    @Test
+    fun windowBlockedByOtherWishesIsAConflict() {
+        // 「休 4日で1回以上」の 4 日がすべて別のシフトの希望＝その窓は満たせない（上限が無くても矛盾）。
+        val st = state(
+            days = 10,
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
+            wishes = mapOf("0,2" to 1, "0,3" to 1, "0,4" to 1, "0,5" to 1),
+            cons1 = listOf(C1Row("4", "休", "1")),
+        )
+        val p = Problem(st)
+        val sc = ConstraintMus.analyzeStaffConflicts(p).single()
+        assertEquals(1, sc.core.countOf(ConstraintMus.WindowRule::class.java))
+        assertEquals(4, sc.core.countOf(ConstraintMus.WishPin::class.java))
+        assertEquals(null, ConstraintMus.windowNeed(p, 0, sc.core))
+    }
+
     @Test
     fun noConflictYieldsNothing() {
         val st = state(

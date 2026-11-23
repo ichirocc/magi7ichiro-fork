@@ -636,6 +636,17 @@ object V6SanityPort {
         return if (l > h) l to h else null
     }
 
+    /** 職員 1 人の矛盾のコアに期間の制約が入るときの理由の一文（位置まで見た最少回数が上限を超える・固定の日だけで満たせない）。無ければ null。 */
+    internal fun staffConflictReason(p: Problem, core: List<ConstraintMus.Item>, sym: (Int) -> String): String? =
+        core.filterIsInstance<ConstraintMus.WindowRule>().map { it.shift }.distinct().firstNotNullOfOrNull { x ->
+            val cap = core.filterIsInstance<ConstraintMus.RangeCap>().firstOrNull { it.shift == x }?.hi
+            val withPins = if (core.any { it is ConstraintMus.WishPin }) "希望・固定の日付を含めると、" else ""
+            when (val need = ConstraintMus.windowNeed(p, x, core)) {
+                null -> "希望・固定の日で埋まり、期間の制約「${sym(x)}」を満たせない期間があります"
+                else -> if (cap != null && need > cap) "${withPins}期間の制約を満たすには「${sym(x)}」が最少${need}回要ります。上限は${cap}回です" else null
+            }
+        }
+
     /** [T] 日のどの [w] 日の窓にも [r] 回以上入れるのに要る最少回数（窓ごとに足りない分を窓の後ろから置く貪欲＝最適）。 */
     internal fun c1MinCount(t: Int, w: Int, r: Int): Int {
         if (w <= 0 || w > t || r <= 0) return 0
@@ -1589,8 +1600,9 @@ object V6SanityPort {
                     val name = staffName(sc.staff)
                     val labels = sc.core.joinToString(" ・ ") { itemLabel(it) }
                     val hints = sc.core.take(2).joinToString(" / ") { "${relaxPlace(it)}で${relaxHint(it)}" }
+                    val why = staffConflictReason(p, sc.core, ::sym)
                     out.add(SettingIssue(IssueKind.WISH, "${name}さんの希望と条件の組合せ",
-                        "次の${sc.core.size}件は同時に成立しません: $labels",
+                        "次の${sc.core.size}件は同時に成立しません${why?.let { "（$it）" } ?: ""}: $labels",
                         "${Place.TAB}で、いずれか1件を緩めてください（例: $hints）"))
                 }
                 // 日別の証明（ConstraintMus の canServe）はコアで固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
