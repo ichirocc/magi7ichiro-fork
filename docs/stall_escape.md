@@ -366,7 +366,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | 機構 | 既定 | 本体と分けて読む点 |
 |---|---|---|
 | `PolishGate.stallPolishInjection` | false（設定タブからは 3.628.0 で非表示） | 全体最良の最終改善と最終試行の遅い方（`max(lastGlobalImproveMs, lastTryMs)`）から `max(20 000, budgetSec×100)` ms 経ったとき、最良の写しへ後処理を 6 000 ms 上限で当て、良ければ全体最良へ。回数 3 未満・探索残り 8 000 ms 以上が条件（`StallPolishInjection.shouldInject`） |
-| `PolishGate.wishConflictFloorMode` | OFF | 希望床の短縮終了（E0A）／E0B は最小後処理へ |
+| `PolishGate.wishConflictFloorMode` | OFF | 床での短縮終了は上限0込みの床で常に有効＝OFF と E0A は同じ動き（画面は OFF／E0B の 2 択、3.727.129）。E0B は希望衝突の床または CP-SAT の必須の最少の証明で発火したとき最小後処理へ |
 | `PolishGate.floorCountsUpperZero` | **true**（3.709.0〜） | 頭打ちの床に上限0を含める。床へ届くと短い閾値へ移る＝`wishConflictFloorMode` が OFF でも E0A 相当の短縮（§5.4 の `wishReached`） |
 | `PolishGate.floorShortStall` | true（UI なし） | 床に届いたときの短い閾値を使う。測定の切り分け用 |
 | `extraRefineRequirePostHardDrop` | false（引数） | 残存 HARD が §4 の床のときだけ追加精製を省く。実質 A/A で信号なし（backlog #35） |

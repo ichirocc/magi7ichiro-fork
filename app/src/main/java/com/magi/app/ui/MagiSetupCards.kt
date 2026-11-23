@@ -410,12 +410,12 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
         }
         Column(Modifier.fillMaxWidth()) {
-            Text("希望どうしの衝突で必須が止まったら", style = MaterialTheme.typography.titleSmall)
+            Text("必須がこれ以上減らないと分かったら", style = MaterialTheme.typography.titleSmall)
             Text(WISH_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                com.magi.app.v6.WishFloorMode.entries.forEach { m ->
+                WISH_FLOOR_MODES_SHOWN.forEach { m ->
                     val label = wishFloorModeLabel(m)
-                    if (ui.wishConflictFloorMode == m) {
+                    if (ui.wishConflictFloorMode == m || (m == com.magi.app.v6.WishFloorMode.OFF && ui.wishConflictFloorMode == com.magi.app.v6.WishFloorMode.E0A)) {
                         Button(onClick = { onEvent(MagiEvent.Settings.SetWishConflictFloorMode(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
                     } else {
                         OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetWishConflictFloorMode(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
@@ -439,12 +439,13 @@ internal const val C3N_WALL_DEEP_NOTE = "残った禁止の並びを「崩せな
 internal const val NORMAL_STALL_NOTE = "必須が残っているとき、改善がこの長さ（組む時間に対する割合）止まったら終えます。短いほど早く終わり、粘りは減ります"
 internal val NORMAL_STALL_FRACTIONS = listOf(0.5, 0.7, 0.9)
 internal fun normalStallFractionLabel(f: Double): String = "${(f * 100).toInt()}%" + if (f == 0.9) "（既定）" else ""
-internal const val WISH_FLOOR_NOTE = "希望どうしがぶつかって必須がこれ以上減らないとき、そこで打ち切るか。画面を開いて作るときだけ効き、閉じている間の作成には効きません（測定中・既定は打ち切らない）"
+internal const val WISH_FLOOR_NOTE = "希望どうしの衝突や必須の最少の証明で、必須がこれ以上減らないと分かったら、いつも早めに終えます。「仕上げも省く」は後処理の研磨も省いて、さらに早く返します（画面を開いて作るときだけ・測定中）"
 internal fun wishFloorModeLabel(m: com.magi.app.v6.WishFloorMode): String = when (m) {
-    com.magi.app.v6.WishFloorMode.OFF -> "打ち切らない（既定）"
-    com.magi.app.v6.WishFloorMode.E0A -> "打ち切る"
-    com.magi.app.v6.WishFloorMode.E0B -> "打ち切って仕上げも省く"
+    com.magi.app.v6.WishFloorMode.OFF, com.magi.app.v6.WishFloorMode.E0A -> "早めに終える（既定）"
+    com.magi.app.v6.WishFloorMode.E0B -> "早めに終えて仕上げも省く"
 }
+/** 床に届いたら短い閾値で終えるのは常に有効（P2d）＝OFF と E0A はエンジン上同じ動き。画面は違いのある 2 つだけ出す。 */
+internal val WISH_FLOOR_MODES_SHOWN = listOf(com.magi.app.v6.WishFloorMode.OFF, com.magi.app.v6.WishFloorMode.E0B)
 internal const val ROGS_LABEL = "残りの違反に合わせて探し方を選ぶ"
 internal const val ROGS_NOTE = "探し方を替えるとき、いま残っている違反の種類で速く良くした探し方を選びます（211 秒以上の作成で使う並列の探し方）。試験中の機能です。"
 internal const val CPSAT_RESOLVE_NOTE = "探索が 10 秒良くならなければ探索を終え、残りの時間で勤務表の一部（職員数人・数日）を解き直します。良くなったときだけ採ります。試験中の機能です。"

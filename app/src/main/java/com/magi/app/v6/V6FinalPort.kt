@@ -816,7 +816,7 @@ object V6FinalPort {
                     val fired = synchronized(progressLock) {
                         wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = false)
                     }
-                    if (fired) e0Fired.set(wd.bestHard.get() == wishFloorLogged && bestWishReached())
+                    if (fired) e0Fired.set((wd.bestHard.get() == wishFloorLogged && bestWishReached()) || (config.floorShortStall && cpsatHardFloorReached.get()))
                     fired
                 }
                 else -> false
@@ -1143,7 +1143,7 @@ object V6FinalPort {
                 (if (wd.stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・${if (wd.stagnationByOverride.get()) "段の切替直後の猶予中だが無改善が閾値の${STALL_OVERRIDE_FACTOR}倍を超えたので発火" else "無改善が閾値に達したので発火"}・解は最良を維持）" +
-                (if (e0Fired.get()) "（希望衝突の床に到達＝${if (wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
+                (if (e0Fired.get()) "（必須の下限に到達＝${if (cpsatHardFloorReached.get()) "CP-SAT の証明" else "希望衝突の床"}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが限定した手（1マス・玉突き・隣接日）では崩せないと判定。希望固定=証明相当/それ以外=探索で改善が見つかっていないだけ）" else ""),
         )) else emptyList()
