@@ -212,7 +212,7 @@ ViewModel ハブ
 - `ObjectiveWeights.kt` — **採点の重みの方式**（3.727.37）。`WEIGHTS`＝`MirrorKeys.weights`（エンジン単体の既定）／`PRIORITY`＝T1 200・T2 20・T3 1（アプリの既定、3.727.40）。評価器・差分評価・チェッカーの weightedScore・研磨/修復の見積り（`PenaltyWeights`・`ObjectiveWeights.of`）・C++（`SoftW`、`nativeSetSoftWeights`）が読む。表示の重み（色・重なり）は `MirrorKeys.weights` のまま。
 - `TierObjective.kt` — **重みを使わない目的関数の P1**（3.727.36、`docs/weightless_objective.md` §4・§8）。段の鍵（許容ライン 0）・T1 の職員ごとの不満・fair の leximin を出し、作成の終わりのログ「段の鍵」に並べる。**採否には使わない**（出力不変）。職員ごとの量はチェッカーと同じ数え方（`TierObjectiveTest` が合計の一致を固定）。
 - `MembraneCellLns.kt` — **膜の細胞 LNS**（3.727.19、3.727.20 で既定 ON＝`PolishGate.membraneCellLns`）。個人の違反が多い職員＋同じグループの職員 5 名×全期間を細胞にして焼きなまし、`betterReport` で良いときだけ書き戻す後処理の最終段。設計と測定は `docs/membrane_search.md` §10・§11。
-- `SeesawRelink.kt` — **シーソーの Path Relinking**（3.727.22、既定 OFF＝`PolishGate.seesawRelink`、`docs/seesaw.md` §6.3）。後処理の結果から「他の案」の各盤面へ歩き、`betterReport` で良ければ本命を差し替え、本命に優越されない交換の盤面を「他の案」にする（`V6FinalPort` が後処理の直後に呼ぶ）。
+- `SeesawRelink.kt` — **シーソーの Path Relinking**（3.727.22。アプリの既定は ON＝3.727.45、3.727.126 で設定画面から外して常に ON。エンジン単体の既定は OFF＝`PolishGate.seesawRelink`、`docs/seesaw.md` §6.3）。後処理の結果から「他の案」の各盤面へ歩き、`betterReport` で良ければ本命を差し替え、交換の候補（`isTradeoff`＝必須の件数が本命と同じ・本命に優越されない・件数が違う）を「他の案」にする（`V6FinalPort` が後処理の直後に呼ぶ）。
 - `CovOReliefPolish.kt` — **人員過剰(covO)の退避研磨**（3.554.0）。過剰セルの在勤者を、受け皿のある担当可シフト（B4 のような需要 0 の
   シフトを含む）へ 1 セルずつ動かし、正式チェッカーの `betterReport` で採る。`V6PortAnalyzer.diagnoseSurpluses` が「移すだけで良くなる」と
   見つける手と同じ探索を修復として行う。後処理チェーンの最終段（成分修復の後・HF70 の前）＝後続パスが無いので旧チェーンの結果より
