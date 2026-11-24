@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.filled.Warning
@@ -214,30 +215,25 @@ internal fun CellEditSheet(
             relatedDays = (partners + j).distinct().sorted().takeIf { it.size >= 2 }.orEmpty(),
             pinned = pinned,
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
-            // [3.727.85] 戻る・小さく表示は札のいちばん上の行に固定する（縦に送る部分・下の固定部の外）。旧: 勤務を選ぶ段では下のボタン群が
-            //   高さの上限いっぱいに伸び、末尾の「元の画面に戻る」と上段の ✕ が両方とも札の外へ押し出されて戻れなかった（2026-11-14 実機）。
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (mode == 0 && step == 1) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 元の画面に戻る", maxLines = 1) }
-                Spacer(Modifier.weight(1f))
-                MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp)) {
-                    DisclosureText("小さく表示", open = true)
+            // [3.727.85] 戻る・題の行は縦に送る部分の外に固定する（押し出されて戻れなかった、2026-11-14 実機）。
+            if (mode == 0 && step == 1) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 元の画面に戻る", maxLines = 1) }
+            // ［小さく表示］は題の行の右端の ▾（2026-11-24 利用者の配置案）。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
+                if (tourNext != null && step == 0) {
+                    MagiTextButton(onClick = tourNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                 }
+                SheetListButton(onList)
+                SheetUndoButton(canUndo, onUndo)
+                // 割当の 1 段目は閉じるを置かない（2026-11-24 利用者「閉じるボタンは不要」＝端末の戻る）。
+                if (mode == 1 || step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+                IconButton(onClick = onToggleExpand) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "小さく表示") }
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
             val upperScroll = rememberScrollState()
             Column(Modifier.weight(1f, fill = false).verticalScroll(upperScroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
-                    if (tourNext != null && step == 0) {
-                        MagiTextButton(onClick = tourNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
-                    }
-                    SheetListButton(onList)
-                    SheetUndoButton(canUndo, onUndo)
-                    // 下の固定部に［閉じる］がある段（割当の 1 段目）では ✕ を出さない（1 画面に同じ操作を 2 つ置かない）。希望の画面は ✕ だけ。
-                    if (mode == 1 || step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
-                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     badge?.let { MagiTagChip(it, if (status.severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }
                     Text(target, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2), overflow = TextOverflow.Ellipsis)
