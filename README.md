@@ -51,6 +51,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-24（測定: シーソーの SpprcGridFixingLns を机上検証＋数え上げ＝SPPRC は作らない、不一致セルの区間は既存の解き直しに 2 勝 4 敗）
 **最終更新**：2026-11-24（測定・否決: シーソー S3 の外側の歩き＝本命の更新 0 回で作らない）
 **最終更新**：2026-11-24（測定・否決: シーソーの 1 組の手を Range・Apt・Fair へ広げる案＝埋め直しで採れる手 0 件で作らない）
 **最終更新**：2026-11-24（3.727.134: シーソーの 3 人 × 2 日の巡回を既定 OFF の後処理の最終段に（`CycleSwapPolish`）・採れる手の数え上げ）
