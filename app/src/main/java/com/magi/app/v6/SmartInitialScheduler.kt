@@ -126,7 +126,7 @@ object SmartInitialScheduler {
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                         // 間隔の不足は同点のときだけの決め手（人員の穴埋めの選び方を変えると後の日の必須が増える）
                         val penalty = ((if (over) 1000 else 0) + counts[i][k] * 2) * 100 + gapIncrease(p, schedule[i], i, j, k) +
-                            (if (p.consGap.isNotEmpty() && p.makesForbiddenRun(schedule, i, j, k)) 50 else 0)
+                            (if (p.makesForbiddenRun(schedule, i, j, k)) 50 else 0)
                         if (penalty < bestPenalty) { bestPenalty = penalty; bestI = i }
                     }
                     if (bestI < 0) break
@@ -185,9 +185,9 @@ object SmartInitialScheduler {
                     val demandBonus = if (p.covUCell(k, j, covNow) > 0) -100 else 0
                     // [3.345.0] 休は通常のシフト種の一つ＝残り埋めで優先しない（旧: 休だけ -10 のボーナス）。
                     //   実データ3件で hard/covO/covU/low/high/c1 が全て同一＝この優先は実質不活性だった。
-                    // 間隔の不足を避けた先が禁止の並びにならないよう、禁止の並びを作る候補は間隔より重く避ける
+                    // 禁止の並び（必須）を作る候補は、間隔の規則の有無に関わらず後回し（3.727.129: 6 データ中 5 件で下書きの必須が減り悪化なし）
                     val penalty = (if (over) 1000 else 0) + counts[i][k] + demandBonus + GAP_PENALTY * gapIncrease(p, schedule[i], i, j, k) +
-                        (if (p.consGap.isNotEmpty() && p.makesForbiddenRun(schedule, i, j, k)) 500 else 0)
+                        (if (p.makesForbiddenRun(schedule, i, j, k)) 500 else 0)
                     if (penalty < bestPenalty) { bestPenalty = penalty; bestK = k }
                 }
                 if (bestPenalty == Int.MAX_VALUE) bestK = fallbackShift(p, i, j, restK)

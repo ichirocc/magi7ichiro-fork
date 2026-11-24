@@ -2354,7 +2354,7 @@ private fun NoFixBlock(
         val st = focus.staff; val d = focus.day
         val prev = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d - 1) else null
         val next = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d + 1) else null
-        // 前後の日へはシートの固定部の ◀ ▶ で行く（ここに同じボタンを重ねない）。
+        // 前後の日は文で示すだけ（移るのは表のセルを押す。ボタンは置かない）。
         Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall)
         if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
         return
