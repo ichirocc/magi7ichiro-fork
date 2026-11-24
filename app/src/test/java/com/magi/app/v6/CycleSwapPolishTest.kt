@@ -40,4 +40,16 @@ class CycleSwapPolishTest {
         val r = CycleSwapPolish.apply(st, CycleSwapPolish.apply(st, board()).newSchedule)
         assertEquals(0, r.applied)
     }
+
+    @Test fun keepsExactPinnedCounts() {
+        // s0 の休を下限＝上限＝1 回に固定すると、巡回は s0 の休を 2 回にする＝固定から遠ざかるので採らない（ほかの研磨と同じ守り）
+        val pinned = st.copy(staffRange = st.staffRange + ("0,0" to Range("1", "1")))
+        val r = CycleSwapPolish.apply(pinned, board())
+        assertEquals(0, r.applied)
+    }
+
+    @Test fun stopsAtEvaluationCap() {
+        assertEquals(0, CycleSwapPolish.apply(st, board(), maxEvaluations = 0).applied)
+    }
 }
+
