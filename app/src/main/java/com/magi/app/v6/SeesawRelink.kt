@@ -6,7 +6,7 @@ import com.magi.app.model.MagiState
  * シーソーの S3（`docs/seesaw.md` §6.3）。本命から「他の案」の各盤面へ、違うセルを違反セルから先に 1 つずつ（同じ日に値を交換し合う 2 人は対で）
  * 写して歩く Path Relinking。必須が増える手は取り消す（3.727.42）。途中の盤面が `betterReport` で本命より良く固定（厳密ピン）も破らなければ本命を差し替え、必須の件数が同じで本命に
  * 優越されない盤面は**交換の候補**として残す（S4 の「他の案」に出す）。採否は `betterReport` だけ（I2）。
- * 既定 OFF（[PolishGate.seesawRelink]）＝測ってから採否。
+ * エンジン単体の既定は OFF、アプリは起動時に `MagiViewModel` が [PolishGate.seesawRelink] を ON にする。
  */
 object SeesawRelink {
 
@@ -38,6 +38,10 @@ object SeesawRelink {
         }
         return strict
     }
+
+    /** 交換の候補になれるか。優越は必須の件数が同じ盤面どうしでだけ比べる（`docs/seesaw.md` I1）。 */
+    fun isTradeoff(best: ViolationReport, r: ViolationReport): Boolean =
+        r.hard == best.hard && !dominates(best, r) && r.breakdown != best.breakdown
 
     fun apply(
         state: MagiState,
@@ -93,7 +97,7 @@ object SeesawRelink {
                 curRep = rep
                 if (betterReport(rep, bestRep)) {
                     best = cur.copy2D(); bestRep = rep; applied++
-                } else if (rep.hard == bestRep.hard && !dominates(bestRep, rep) && rep.breakdown != bestRep.breakdown) {
+                } else if (isTradeoff(bestRep, rep)) {
                     pool.add(cur.copy2D() to rep)
                 }
             }
@@ -109,7 +113,7 @@ object SeesawRelink {
      * 並びは重み付きの点数の低い順（本命から譲る量が小さい順）で、本命より良くなる族の組が違うものを優先して最大 [MAX_TRADEOFFS]。
      */
     internal fun pickTradeoffs(best: ViolationReport, pool: List<Pair<Array<IntArray>, ViolationReport>>): List<Pair<Array<IntArray>, ViolationReport>> {
-        val ok = pool.filter { (_, r) -> r.hard == best.hard && !dominates(best, r) && r.breakdown != best.breakdown }
+        val ok = pool.filter { (_, r) -> isTradeoff(best, r) }
         val nd = ok.filter { (_, r) -> ok.none { (_, o) -> o !== r && dominates(o, r) } }
             .distinctBy { (_, r) -> MirrorKeys.all.map { r.breakdown[it] ?: 0 } }
             .sortedBy { it.second.weightedScore }

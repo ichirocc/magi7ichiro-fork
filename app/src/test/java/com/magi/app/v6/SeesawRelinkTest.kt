@@ -40,6 +40,22 @@ class SeesawRelinkTest {
         assertFalse(SeesawRelink.dominates(a, a))
     }
 
+    /** 交換の候補は必須の件数が本命と同じ盤面だけ（I1）。 */
+    @Test
+    fun tradeoffNeedsTheSameHardCount() {
+        val a = UnifiedViolationChecker.check(state, init)
+        val soft = MirrorKeys.all.filter { it !in MirrorKeys.hard }
+        val down = soft.first { (a.breakdown[it] ?: 0) > 0 }
+        val up = soft.first { it != down }
+        fun moved(vararg d: Pair<String, Int>) = a.breakdown + d.map { (f, x) -> f to (a.breakdown[f] ?: 0) + x }
+        val trade = a.copy(breakdown = moved(down to -1, up to 1))
+        assertTrue(SeesawRelink.isTradeoff(a, trade))
+        val h = MirrorKeys.hard.first()
+        assertFalse(SeesawRelink.isTradeoff(a, a.copy(breakdown = moved(down to -1, up to 1, h to 1), hard = a.hard + 1)))
+        assertFalse(SeesawRelink.isTradeoff(a, a.copy(breakdown = moved(up to 1))))
+        assertFalse(SeesawRelink.isTradeoff(a, a))
+    }
+
     /** C# の同名テストと同じ指紋＝言語跨ぎで同じ盤面と同じ候補の数を出す（この組では途中の盤面を採らず、交換の候補は 1 つ＝3.727.111）。 */
     @Test
     fun matchesCSharpOnSampleFixture() {
