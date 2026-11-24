@@ -32,7 +32,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/cpsat_formal.md`](./docs/cpsat_formal.md) | **CP-SAT による根拠ある最適化（下限・ギャップ・説明）と形式的な検証**（Z3 の証明・有界の全数検証、2026-11-10） |
 | [`docs/cpsat_relay.md`](./docs/cpsat_relay.md) | **CP-SAT の使い方の作り直し（設計・未実装）**: 実機で CP-SAT が探索に負ける理由の測定（CPU 不足で T1 寄りのまま打ち切られる）と、証明役・改善役・探索との受け渡し・コアの配分の案（2026-11-16） |
 | [`docs/delta_cpp_unification.md`](./docs/delta_cpp_unification.md) | **差分計算の C++ 一本化・高速化と並列処理**（仕様＝ユーザー提示の方針 5 点・変えてはならないもの・§12 並列処理、現行コードの対応・残りの段・テスト、2026-11-10） |
-| [`docs/seesaw.md`](./docs/seesaw.md) | **シーソー（族のあいだの違反の移動）の仕様**（2026-11-24 に他社 AI 向けに書き直し）。定義・してはいけないこと（I1〜I9）・採否の規則・測定済みの事実 F1〜F8・判定の手順・コードの地図・S1〜S5 と 1 組の手の状態・否決した案・利用者の判断が要るもの |
+| [`docs/seesaw.md`](./docs/seesaw.md) | **シーソー（族のあいだの違反の移動）の仕様**（2026-11-24 に他社 AI 向けに書き直し、K 人の組の厳密スイープの結果を反映）。定義・してはいけないこと（I1〜I9）・採否の規則・測定済みの事実 F1〜F10・判定の手順・コードの地図・S1〜S5 と 1 組の手の状態・否決した案・利用者の判断が要るもの |
 | [`docs/seesaw_detail.md`](./docs/seesaw_detail.md) | シーソーの詳細記録（旧本文、節番号はそのまま＝コードの「seesaw.md §N」はここを指す）。論文の見直し §11・ドッグフーディング §13・実装の記録 §14 |
 | [`docs/membrane_search.md`](./docs/membrane_search.md) | **膜計算（組織様 P システム）を改良拡張した頭打ち盤面の探索の設計書**（2026-11-01 設計、M0 は 13/13 で改善、3.727.19 で `MembraneCellLns`、3.727.20 で既定 ON。設計時の要点:細胞＝残る違反から作る職員×日の部分問題、通信＝ずらせる余裕を透過性にした交換・移動、阻んだ必須の位置で融合・分裂、細胞の中は厳密解、「この範囲では減らせない」の記録、M0 の測定で採否） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
@@ -51,6 +51,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-24（文書のみ: シーソーの仕様書に K 人の組の厳密スイープの結果と 9 か所の訂正を反映 `docs/seesaw.md`）
 **最終更新**：2026-11-24（文書のみ: シーソーの仕様書を他社 AI 向けに書き直し `docs/seesaw.md`、旧本文は `docs/seesaw_detail.md`）
 **最終更新**：2026-11-23（3.727.129: 必須の最少が証明済みで止まった実行の終わり方を「証明済み」と案内）
 **最終更新**：2026-11-23（3.727.128: 個人の上限と期間の制約の衝突を、希望の日付の位置まで見て設定の見直しで知らせる）

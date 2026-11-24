@@ -10,5 +10,4 @@
 再現: `OptBoards.kt` はホストの main のクラス（`tools/host/hosttest.sh` の出力）に対してコンパイルして実行。C++ の 3 本は
 `docs/cpsat_formal.md`「再実行」の CP-SAT 込みの組み方（`-pthread`）。数値の読みは `docs/cpsat_formal.md`「K 人の組の厳密スイープ」。
 
-`seesaw_fixed.md`: 利用者が貼ったシーソー仕様書の追加（総当たりオラクル等）を照合して 9 か所を直した版。土台は `claude/review-fixes`（b4da2a1c）の
-`docs/seesaw.md`。あちらが main に入ったら `docs/seesaw.md` へ重ねる（それまではこの写しが正）。
+シーソー仕様書の直した版（利用者が貼った追加（総当たりオラクル等）を照合して 9 か所を直したもの）は、2026-11-24 に `docs/seesaw.md` へ反映した（写しは削除）。
