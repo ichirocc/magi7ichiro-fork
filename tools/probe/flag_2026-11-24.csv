@@ -1,0 +1,17 @@
+fixture,seed,arm,ms,hard,weighted,total,gap,fair,c1,hash
+golden_state,1,off,162943,0,51191,514,0,5,221,9d3c2947
+golden_state,1,resolve,199792,0,43384,469,0,4,175,d2c6ea5f
+golden_state,2,off,183781,0,47169,489,0,6,196,57571300
+golden_state,2,resolve,199165,0,44412,467,0,2,176,2df83293
+sept2026_state,1,off,177969,1,76369,638,0,19,281,b25adc9
+sept2026_state,1,resolve,198206,1,62817,557,0,15,214,8b51e131
+sept2026_state,2,off,198160,1,73647,616,0,14,265,32e06327
+sept2026_state,2,resolve,199480,1,62718,545,0,20,212,36b9cada
+oct2026_grid_state,1,off,198609,9,101083,420,0,47,44,1db27140
+oct2026_grid_state,1,resolve,111816,9,100326,418,0,49,37,9efb9f65
+oct2026_grid_state,2,off,147671,9,102351,443,0,55,49,3c4252cc
+oct2026_grid_state,2,resolve,121414,9,100497,429,0,54,37,854a7fcf
+sample_state_v6,1,off,128308,1,12370,274,0,2,1,62b514b6
+sample_state_v6,1,resolve,99420,1,12361,259,0,0,0,5468be66
+sample_state_v6,2,off,142065,1,12252,251,0,2,1,fff3c70
+sample_state_v6,2,resolve,129526,1,12259,258,0,2,1,976557ce
