@@ -41,6 +41,7 @@ import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
 import com.magi.app.v6.canDoShiftsForStaff
 import com.magi.app.v6.canDo
+import com.magi.app.v6.c1Applies
 import com.magi.app.v6.mayPlace
 import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
@@ -3402,7 +3403,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             "vio-c3n" -> forbiddenRunAt(p, sched, i, j, p.cons3n)?.let { (seq, j0) -> return j0 to (j0 + seq.size - 1) }
             "vio-c3w" -> return j to minOf(j + 1, p.T - 1)
             "vio-c1" -> for (c in p.cons1) {
-                if (!p.canDo(i, c.shiftIdx) || j + c.day1 > p.T) continue
+                if (!p.c1Applies(i, c.shiftIdx) || j + c.day1 > p.T) continue
                 var z = 0
                 for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
                 if (z < c.day2) return j to (j + c.day1 - 1)

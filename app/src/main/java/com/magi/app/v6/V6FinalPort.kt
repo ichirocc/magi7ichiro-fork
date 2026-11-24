@@ -142,18 +142,30 @@ object V6FinalPort {
     /** 採用した勤務表の根拠: 必須の件数の下限（証明済みか）と、重み（weightedScore）の下限・ギャップ。下限は fair を実際の値以下の近似で数える＝必ず実際の値以下。 */
     data class BoundSummary(val hardBound: Long, val hardProven: Boolean, val weightedBound: Long, val adoptedWeighted: Double, val gap: Double?, val stoppedByGap: Boolean)
 
-    /** 入口で個人上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。 */
-    data class CapZeroNotice(val count: Int, val hardBefore: Int, val hardAfter: Int) {
+    /** 入口で上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。件数の内訳は
+     *  [aptZero]＝実効の目安 0、[dayCap]＝日の上限人数 0、残り＝個人上限 0。 */
+    data class CapZeroNotice(val count: Int, val hardBefore: Int, val hardAfter: Int, val aptZero: Int = 0, val dayCap: Int = 0) {
         val raisedHard: Boolean get() = hardAfter > hardBefore
+        private val personal get() = count - aptZero - dayCap
+        private val what get() = listOfNotNull(
+            personal.takeIf { it > 0 }?.let { "個人上限0のセル${it}件" },
+            aptZero.takeIf { it > 0 }?.let { "目安0のセル${it}件" },
+            dayCap.takeIf { it > 0 }?.let { "日の上限人数0のセル${it}件" },
+        ).joinToString("・")
 
         fun logLine(): String =
-            if (raisedHard) "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置かないため、入力の必須${hardBefore}件に戻らないことがあります"
-            else "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置きません（表示・重みは不変）"
+            if (raisedHard) "入口: ${what}を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置かないため、入力の必須${hardBefore}件に戻らないことがあります"
+            else "入口: ${what}を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置きません（表示・重みは不変）"
 
         fun keptNote(): String? = if (!raisedHard) null else
-            "今の勤務表には個人の上限0のシフトが${count}件入っています（だれのどの日かはホームの『設定の見直し』に出ます）。" +
+            (if (personal == count) "今の勤務表には個人の上限0のシフトが${count}件入っています"
+            else "今の勤務表には上限0のシフトが${count}件（${what}）入っています") +
+                "（だれのどの日かはホームの『設定の見直し』に出ます）。" +
                 "最適化は上限0の勤務を置かないため、必須${hardBefore}件まで戻らないことがあります。" +
-                "編集タブの『年間マスター』の『③ 回数（1人あたり）』で上限を見直すか、このまま使えます"
+                listOfNotNull(
+                    if (personal + aptZero > 0) "編集タブの『年間マスター』の『③ 回数（1人あたり）』" else null,
+                    if (dayCap > 0) "その日の必要人数の『上限人数』" else null,
+                ).joinToString("か") + "で上限を見直すか、このまま使えます"
     }
 
     fun buildBusyDetail(state: MagiState, algorithm: String, overrides: Map<String, String> = emptyMap()): BusyDetail {
@@ -529,8 +541,15 @@ object V6FinalPort {
         //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
         val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput)
         val inputReport = UnifiedViolationChecker.check(state, cappedInput)
-        val capZero = if (cappedCount > 0) CapZeroNotice(cappedCount,
-            UnifiedViolationChecker.check(state, normInput).hard, inputReport.hard) else null
+        val capZero = if (cappedCount > 0) {
+            var aptZero = 0; var dayCap = 0
+            for (i in 0 until baseProblem.S) for (j in 0 until baseProblem.T) {
+                val k = normInput[i][j]
+                if (!baseProblem.isCapZeroCell(i, j, k)) continue
+                if (baseProblem.mayPlace(i, k)) dayCap++ else if (baseProblem.rangeHi[i][k] != 0) aptZero++
+            }
+            CapZeroNotice(cappedCount, UnifiedViolationChecker.check(state, normInput).hard, inputReport.hard, aptZero, dayCap)
+        } else null
         val cappedLog = if (capZero != null) listOf(MirrorLog(tag = "CapZero", message = capZero.logLine())) else emptyList()
         val label = runLabel(requestedAlgorithm, seconds)
         val plan = optimizationPlan(seconds)
@@ -1176,7 +1195,11 @@ object V6FinalPort {
         val safeStages = extSafeStages.filter { baseProblem.keepsWishPins(cappedInput, it.sched) }
         val wishLog = (extSafeStages - safeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が希望固定のセルを希望でない値へ変えていたため候補から外しました（多重防御）") }
-        val bestStage = pickBestStage(safeStages)
+        // 入力が上限 0 の日に置いて必須を減らした盤面なら、それを残した入力も候補に（入口で外した入力より必須が少ないときだけ）。
+        val dayCapKept = HardRepairCore.dayCapKeptBaseline(state, normInput, inputReport)
+            ?.let { (s, r) -> StageCandidate("入力（上限0の日を保つ）", s, r) }
+            ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsExtBan(cappedInput, it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
+        val bestStage = pickBestStage(safeStages + listOfNotNull(dayCapKept))
         // 上限 0 の日を守るせいで残る必須違反は、その日に置いて減らす（必須が減るときだけ）。
         val relief = DayCapHardRelief.apply(state, bestStage.sched, bestStage.report, EngineClock.nowMs() + DAYCAP_RELIEF_MS)
         val finalSched = relief.schedule

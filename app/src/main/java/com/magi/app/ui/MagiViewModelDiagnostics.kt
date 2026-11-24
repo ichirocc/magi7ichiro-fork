@@ -99,10 +99,14 @@ internal suspend fun MagiViewModel.analyzeParallel(
  * @param nonCancellable 停止(keep-best)経路から呼ぶ場合 true＝スコープキャンセル後も解析を完了させる。
  */
 
-/** 個人上限0のセル（希望固定を除く）を外した盤面の採点。外すセルが無ければ null（呼出側は生の盤面の採点を使う）。 */
+/** 上限 0 のセル（個人上限 0・目安 0・日の上限 0。希望固定を除く）を外した盤面の採点＝エンジンの最終番兵と同じ基準。
+ *  日の上限 0 のセルを残すほうが必須が少なければそちら（[com.magi.app.v6.HardRepairCore.dayCapKeptBaseline]）。
+ *  外すセルが無ければ null（呼出側は生の盤面の採点を使う）。 */
 internal fun MagiViewModel.capZeroClearedReport(st: MagiState, sched: Array<IntArray>): ViolationReport? {
     val (cleared, n) = com.magi.app.v6.HardRepairCore.clearCappedCells(st, sched)
-    return if (n > 0) UnifiedViolationChecker.check(st, cleared) else null
+    if (n == 0) return null
+    val full = UnifiedViolationChecker.check(st, cleared)
+    return com.magi.app.v6.HardRepairCore.dayCapKeptBaseline(st, sched, full)?.second ?: full
 }
 internal suspend fun MagiViewModel.pushReport(
     st: MagiState,
