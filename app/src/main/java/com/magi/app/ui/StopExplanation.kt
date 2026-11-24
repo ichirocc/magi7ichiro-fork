@@ -23,6 +23,8 @@ internal fun stopExplanationOf(s: V6FinalPort.StopSummary, breakdown: Map<String
             StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は担当できる職員が足りない人員不足です。担当条件か職員を見直してください。", StopNext.REVIEW_STAFFING)
         V6FinalPort.StopKind.WISH_FLOOR ->
             StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は同時に満たせない希望によるものです。希望の調整が必要です。", StopNext.REVIEW_WISHES)
+        V6FinalPort.StopKind.HARD_FLOOR_PROVEN ->
+            StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}はこれ以上減らせないと証明済みです（希望・必要人数・担当の組み合わせで同時に満たせない）。希望の調整が必要です。", StopNext.REVIEW_WISHES)
         V6FinalPort.StopKind.C3N_WALL_CERTIFIED ->
             StopExplanation("${s.usedSec} 秒で終えました。残る必須違反 ${hard}は希望で固定された禁止の並びです。希望の調整が必要です。", StopNext.REVIEW_WISHES)
         V6FinalPort.StopKind.C3N_WALL_EMPIRICAL ->

@@ -101,7 +101,7 @@ object V6FinalPort {
     )
 
     /** 探索がどう終わったか（画面の説明用、3.643.0）。採否・探索・早期終了には配線しない。種別は Watchdog 行の「実効閾値の種別」と同じ条件。 */
-    enum class StopKind { DEADLINE, PLATEAU_FLOOR, WISH_FLOOR, C3N_WALL_CERTIFIED, C3N_WALL_EMPIRICAL, NORMAL_STALL }
+    enum class StopKind { DEADLINE, PLATEAU_FLOOR, WISH_FLOOR, HARD_FLOOR_PROVEN, C3N_WALL_CERTIFIED, C3N_WALL_EMPIRICAL, NORMAL_STALL }
     data class StopSummary(val earlyStop: Boolean, val kind: StopKind, val usedSec: Int, val budgetSec: Int, val stalledSec: Int, val remainingHard: Int)
 
     data class ActionResult(
@@ -778,6 +778,8 @@ object V6FinalPort {
                 val r = runCatching { UnifiedViolationChecker.check(state, board) }.getOrNull()
                 if (r != null && cpsatSeenReport.let { it == null || betterReport(r, it) }) {
                     cpsatSeenReport = r; cpsatImprovedAt.set(now); cpsatClockResets.incrementAndGet()
+                    // 途中経過（と kill 復旧の退避）へ。探索の最良より良いときだけ置き換わる（publishLiveBest が比べる）
+                    if (isActive && baseProblem.holdsManualPins(board) && baseProblem.keepsWishPins(cappedInput, board)) OptimizerRuntime.publishLiveBest(r, board)
                 }
             }
             val best = wd.bestReport ?: return@synchronized false
@@ -816,7 +818,7 @@ object V6FinalPort {
                     val fired = synchronized(progressLock) {
                         wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = false)
                     }
-                    if (fired) e0Fired.set(wd.bestHard.get() == wishFloorLogged && bestWishReached())
+                    if (fired) e0Fired.set((wd.bestHard.get() == wishFloorLogged && bestWishReached()) || (config.floorShortStall && cpsatHardFloorReached.get()))
                     fired
                 }
                 else -> false
@@ -878,6 +880,10 @@ object V6FinalPort {
                 stallStopMs = if (config.mafs2Enabled) RESOLVE_STALL_STOP_MS
                     else if (config.floorShortStall && cpsatHardFloorReached.get()) stallHardMs else stallMs,
                 sinceMs = if (config.mafs2Enabled) EngineClock.nowMs() else maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()),
+                onImproved = { b ->
+                    if (isActive && baseProblem.holdsManualPins(b) && baseProblem.keepsWishPins(cappedInput, b))
+                        runCatching { OptimizerRuntime.publishLiveBest(UnifiedViolationChecker.check(state, b), b) }
+                },
             ) { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         }
         val tResolve1 = EngineClock.nowMs()
@@ -1081,6 +1087,7 @@ object V6FinalPort {
                 config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
+                config.floorShortStall && cpsatHardFloorReached.get() -> "CP-SAT の必須の最少=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
@@ -1135,14 +1142,14 @@ object V6FinalPort {
         }
         val stagnationLog = if (wd.stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
-            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 主探索を${(tChain1 - startMs) / 1000}sで停止・後処理の終了${(tPost1 - startMs) / 1000}s・" +
+            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 主探索を${(tChain1 - startMs) / 1000}sで停止${if (tChain1 >= searchDeadlineMs - 1_000L) "＝探索の締切と同時で時間の節約なし" else ""}・後処理の終了${(tPost1 - startMs) / 1000}s・" +
                 "発火時点の停滞${wd.stagnationDurationMs.get() / 1000}s無改善(探索とCP-SATの両方)" +
                 (if (cpsatClockResets.get() > 0) "・CP-SAT が自分の前の解より良くなり停滞の時計を戻した${cpsatClockResets.get()}回(最終 経過${(cpsatImprovedAt.get() - startMs) / 1000}s)" else "") +
                 // [3.375.0] 何回転ぶん空回りしたか（時間だけでは実施量が読めない）。
                 (if (wd.stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・${if (wd.stagnationByOverride.get()) "段の切替直後の猶予中だが無改善が閾値の${STALL_OVERRIDE_FACTOR}倍を超えたので発火" else "無改善が閾値に達したので発火"}・解は最良を維持）" +
-                (if (e0Fired.get()) "（希望衝突の床に到達＝${if (wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
+                (if (e0Fired.get()) "（必須の下限に到達＝${if (cpsatHardFloorReached.get()) "CP-SAT の証明" else "希望衝突の床"}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが限定した手（1マス・玉突き・隣接日）では崩せないと判定。希望固定=証明相当/それ以外=探索で改善が見つかっていないだけ）" else ""),
         )) else emptyList()
@@ -1494,7 +1501,8 @@ object V6FinalPort {
         val stopSummary = run {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
-            val fired = wd.stagnationFired.get()
+            // 発火しても探索が締切まで走った（発火が締切の直前で、離脱の確認窓のあいだに締切が来た）なら時間は節約されていない＝締切どおりの終わり方。
+            val fired = wd.stagnationFired.get() && tChain1 < searchDeadlineMs - 1_000L
             // 壁で止まったときだけ最終盤面を診断する（約 20 ms）。残存分析の `wallProof.diagnoseBoard` とは別＝そちらは変えない。
             fun wallCertified() = runCatching { V6PortAnalyzer.diagnoseForbiddenRuns(state, finalSched).allBlockedCertified }.getOrDefault(false)
             StopSummary(
@@ -1503,6 +1511,7 @@ object V6FinalPort {
                     !fired -> StopKind.DEADLINE
                     config.floorShortStall && wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
                     wishReachedEnd -> StopKind.WISH_FLOOR
+                    config.floorShortStall && cpsatHardFloorReached.get() -> StopKind.HARD_FLOOR_PROVEN
                     wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
                         if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL
                     else -> StopKind.NORMAL_STALL

@@ -186,7 +186,7 @@ object CpsatResolve {
      *  [onTick] は [RESOLVE_TICK_MS] ごとに、いまの最良（必須の件数・重み付き）で呼ぶ＝画面と操作ログの進捗。 */
     fun run(problem: Problem, start: Array<IntArray>, maxSeconds: Double, threads: Int, seed: Long,
             onTick: ((hard: Long, weighted: Long) -> Unit)? = null, stallStopMs: Long = 0L, sinceMs: Long = EngineClock.nowMs(),
-            fixCounts: IntArray? = null, shouldStop: () -> Boolean): Outcome? {
+            fixCounts: IntArray? = null, onImproved: ((Array<IntArray>) -> Unit)? = null, shouldStop: () -> Boolean): Outcome? {
         if (!CpsatBridge.available || maxSeconds <= 0.0) return null
         val problemHandle = runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L)
         if (problemHandle == 0L) return null
@@ -213,7 +213,14 @@ object CpsatResolve {
             if (stallStopMs > 0L && thread.isAlive) {
                 val ver = CpsatBridge.nativeCpsatPoll(job, -1L, noBoard).firstOrNull() ?: lastVersion
                 val now = EngineClock.nowMs()
-                if (ver != lastVersion) { lastVersion = ver; lastChangeMs = now }
+                if (ver != lastVersion) {
+                    lastVersion = ver; lastChangeMs = now
+                    if (onImproved != null) {
+                        val b = IntArray(problem.S * problem.T)
+                        val pv = CpsatBridge.nativeCpsatPoll(job, -1L, b)
+                        if (pv.size >= 2 && pv[1] >= 0) onImproved(NativeEval.unflatten(b, problem.S, problem.T))
+                    }
+                }
                 else if (now - lastChangeMs >= stallStopMs) { stalledOut = true; CpsatBridge.nativeCpsatStop(job) }
             }
             if (onTick != null && thread.isAlive && EngineClock.nowMs() >= nextTick) {

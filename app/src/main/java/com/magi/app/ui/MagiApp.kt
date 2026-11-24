@@ -1144,7 +1144,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         if (to != null) goTourItem(to) else moveTo(c)
                     },
                     onDismiss = closeSheet,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
+                    modifier = Modifier.fillMaxWidth().heightIn(max = cellSheetMaxHeightDp(LocalConfiguration.current.screenHeightDp, sheetExpanded).dp)
+                        .onSizeChanged { sheetPx = it.height.toFloat() },
                     fixNav = fixNav,
                     tourNext = if (tourActive) tour.next?.let { to -> { goTourItem(to) } } else null,
                     tourHeading = if (tourActive) tour.at?.let { tourHeading(tourItems, it) } else null,
@@ -1159,7 +1160,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     onShowRelax = { relaxFrom = cell; vm.openRelaxFlow() },
                     onRetryRelax = { vm.retryRelaxTrial() },
                     mode = sheetMode,
-                    onMode = { sheetMode = it },
+                    // 希望はシフトの一覧から選ぶ＝ちら見（4 つまで）では選べないので広げて開く。
+                    onMode = { sheetMode = it; if (it == 1) sheetExpanded = true },
                     expanded = sheetExpanded,
                     onToggleExpand = { sheetExpanded = !sheetExpanded },
                     tourPrev = if (tourActive) tour.prev?.let { to -> { goTourItem(to) } } else null,

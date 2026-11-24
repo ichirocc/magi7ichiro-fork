@@ -34,6 +34,7 @@ class StopExplanationTest {
         assertEquals(StopNext.MORE_TIME, stopExplanationOf(s(StopKind.DEADLINE, 2, early = false))!!.next)
         assertEquals(StopNext.REVIEW_STAFFING, stopExplanationOf(s(StopKind.PLATEAU_FLOOR, 2))!!.next)
         assertEquals(StopNext.REVIEW_WISHES, stopExplanationOf(s(StopKind.WISH_FLOOR, 1))!!.next)
+        assertEquals(StopNext.REVIEW_WISHES, stopExplanationOf(s(StopKind.HARD_FLOOR_PROVEN, 3))!!.next)
         assertEquals(StopNext.REVIEW_WISHES, stopExplanationOf(s(StopKind.C3N_WALL_CERTIFIED, 1))!!.next)
         assertEquals(StopNext.FIND_FIX, stopExplanationOf(s(StopKind.C3N_WALL_EMPIRICAL, 1))!!.next)
         assertEquals(StopNext.FIND_FIX, stopExplanationOf(s(StopKind.NORMAL_STALL, 3))!!.next)

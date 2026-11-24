@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.filled.Warning
@@ -214,30 +215,25 @@ internal fun CellEditSheet(
             relatedDays = (partners + j).distinct().sorted().takeIf { it.size >= 2 }.orEmpty(),
             pinned = pinned,
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
-            // [3.727.85] 戻る・小さく表示は札のいちばん上の行に固定する（縦に送る部分・下の固定部の外）。旧: 勤務を選ぶ段では下のボタン群が
-            //   高さの上限いっぱいに伸び、末尾の「元の画面に戻る」と上段の ✕ が両方とも札の外へ押し出されて戻れなかった（2026-11-14 実機）。
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (mode == 0 && step == 1) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 元の画面に戻る", maxLines = 1) }
-                Spacer(Modifier.weight(1f))
-                MagiTextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp)) {
-                    DisclosureText("小さく表示", open = true)
+            // [3.727.85] 戻る・題の行は縦に送る部分の外に固定する（押し出されて戻れなかった、2026-11-14 実機）。
+            if (mode == 0 && step == 1) MagiTextButton(onClick = { step = 0 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹ 元の画面に戻る", maxLines = 1) }
+            // ［小さく表示］は題の行の右端の ▾（2026-11-24 利用者の配置案）。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
+                if (tourNext != null && step == 0) {
+                    MagiTextButton(onClick = tourNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                 }
+                SheetListButton(onList)
+                SheetUndoButton(canUndo, onUndo)
+                // 割当の 1 段目は閉じるを置かない（2026-11-24 利用者「閉じるボタンは不要」＝端末の戻る）。
+                if (mode == 1 || step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+                IconButton(onClick = onToggleExpand) { Icon(Icons.Filled.ArrowDropDown, contentDescription = "小さく表示") }
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
             val upperScroll = rememberScrollState()
             Column(Modifier.weight(1f, fill = false).verticalScroll(upperScroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(CELL_SHEET_TITLE, style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
-                    if (tourNext != null && step == 0) {
-                        MagiTextButton(onClick = tourNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
-                    }
-                    SheetListButton(onList)
-                    SheetUndoButton(canUndo, onUndo)
-                    // 下の固定部に［閉じる］がある段では ✕ を出さない（1 画面に同じ操作を 2 つ置かない）。
-                    if (mode == 0 && step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
-                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     badge?.let { MagiTagChip(it, if (status.severity == CellSeverity.HARD) cs.error else MagiAccent.orange) }
                     Text(target, style = MaterialTheme.typography.bodyMedium, maxLines = a11yMaxLines(LocalDensity.current.fontScale, base = 2), overflow = TextOverflow.Ellipsis)
@@ -429,8 +425,10 @@ internal fun CellEditSheet(
                 }
             }
             // 上段が画面に入りきらないとき、送れることを見せる（行の途中で切れて下が空く＝続きがあると分からなかった、2026-10-27 実機）。
-            if (upperScroll.canScrollForward) MagiTextButton(
-                onClick = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } },
+            val readMore: () -> Unit = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } }
+            // 1 段目は［続きを読む］と［自分で勤務を選ぶ］を 1 行に（2026-11-24 利用者の配置案）。ほかの段は単独の行。
+            if (mode == 0 && step != 0 && upperScroll.canScrollForward) MagiTextButton(
+                onClick = readMore,
                 modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterHorizontally),
             ) { Text(CELL_SHEET_MORE_BELOW) }
             if (mode == 1) {
@@ -444,19 +442,12 @@ internal fun CellEditSheet(
             }
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
-                if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
-                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。前後の日は外枠（文字だけではボタンに見えなかった）。
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
-                    val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
-                    val next = adjacentDayLabel(ui.startDate, ui.days, j + 1)
-                    OutlinedButton(onClick = { onMove(i to j - 1) }, enabled = prev != null, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        Text("◀ ${prev ?: "前日"}", maxLines = 1)
-                    }
-                    OutlinedButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        Text("${next ?: "翌日"} ▶", maxLines = 1)
-                    }
-                    MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+                val canChoose = !dilemma || dilemmaChoice == 2
+                if (canChoose || upperScroll.canScrollForward) Row(Modifier.padding(top = 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (upperScroll.canScrollForward) MagiTextButton(onClick = readMore, modifier = Modifier.heightIn(min = 48.dp)) { Text(CELL_SHEET_MORE_BELOW, maxLines = 1) }
+                    if (canChoose) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ", maxLines = 1) }
                 }
+                // 前日・翌日・閉じるの行は置かない（2026-11-24 利用者「前後の日付と閉じるボタンは不要」）。日は表のセルを押して移り、閉じるのは端末の戻る。
                 // 板挟みの選択肢はこの固定部に置く（上の読むところは縦に送るので、長いと画面の外に隠れた）。
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
@@ -511,9 +502,6 @@ internal fun CellEditSheet(
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1)
                 }
-            }
-            if (mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
-                MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
             // 画面下端のジェスチャー帯の上に、押せるものを置かない 32dp。
             Spacer(Modifier.height(32.dp))
