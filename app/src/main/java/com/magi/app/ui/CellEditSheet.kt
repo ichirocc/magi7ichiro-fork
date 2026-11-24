@@ -445,18 +445,7 @@ internal fun CellEditSheet(
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
                 if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
-                // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。閉じるも同じ行。前後の日は外枠（文字だけではボタンに見えなかった）。
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
-                    val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
-                    val next = adjacentDayLabel(ui.startDate, ui.days, j + 1)
-                    OutlinedButton(onClick = { onMove(i to j - 1) }, enabled = prev != null, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        Text("◀ ${prev ?: "前日"}", maxLines = 1)
-                    }
-                    OutlinedButton(onClick = { onMove(i to j + 1) }, enabled = next != null, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        Text("${next ?: "翌日"} ▶", maxLines = 1)
-                    }
-                    MagiTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
-                }
+                // 前日・翌日・閉じるの行は置かない（2026-11-24 利用者「前後の日付と閉じるボタンは不要」）。日は表のセルを押して移り、閉じるのは端末の戻る。
                 // 板挟みの選択肢はこの固定部に置く（上の読むところは縦に送るので、長いと画面の外に隠れた）。
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }

@@ -338,10 +338,6 @@ internal fun fitsTwoLines(text: String, emPerLine: Double): Boolean {
     return lines <= 2
 }
 
-/** 日送りボタンの日付「10/7(水)」（範囲外は null＝押せない）。 */
-internal fun adjacentDayLabel(startDate: String, days: Int, j: Int): String? =
-    j.takeIf { it in 0 until days }?.let { DayText.full(startDate, it) }
-
 /** 希望タブの現在値の注記。 */
 internal fun wishTabState(wish: Int?, current: Int): String = when {
     wish == null -> "未登録"

@@ -213,9 +213,6 @@ class CellSheetLogicTest {
         println("count line 職員${i + 1}: $line")
         assertTrue(line, line.contains("▼") || line.contains("▲"))
         assertEquals("", staffCountShort(st, p, s, i, emptyMap()))
-        assertEquals("10/7(水)", adjacentDayLabel("2026-10-01", 31, 6))
-        assertEquals(null, adjacentDayLabel("2026-10-01", 31, 31))
-        assertEquals(null, adjacentDayLabel("2026-10-01", 31, -1))
         assertEquals("職員01さんの 10/3(土) を A4 に変更しました", cellChangedMessage("職員01", "2026-10-01", 2, "A4"))
     }
 
