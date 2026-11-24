@@ -1195,11 +1195,13 @@ object V6FinalPort {
         val safeStages = extSafeStages.filter { baseProblem.keepsWishPins(cappedInput, it.sched) }
         val wishLog = (extSafeStages - safeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が希望固定のセルを希望でない値へ変えていたため候補から外しました（多重防御）") }
-        // 入力が上限 0 の日に置いて必須を減らした盤面なら、それを残した入力も候補に（入口で外した入力より必須が少ないときだけ）。
-        val dayCapKept = HardRepairCore.dayCapKeptBaseline(state, normInput, inputReport)
-            ?.let { (s, r) -> StageCandidate("入力（上限0の日を保つ）", s, r) }
-            ?.takeIf { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsExtBan(cappedInput, it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
-        val bestStage = pickBestStage(safeStages + listOfNotNull(dayCapKept))
+        // 入力・各段が上限 0 の日に置いて必須を減らした盤面なら、それを残した版も候補に（全部外した版より必須が少ないときだけ）。
+        //   日の上限 0 のセルは [keepsExtBan] では禁止に数えるので、救済と同じく拡張希望の禁止だけで検査する（[keepsExtWishBan]）。
+        val dayCapKept = (listOfNotNull(HardRepairCore.dayCapKeptBaseline(state, normInput, inputReport)
+            ?.let { (s, r) -> StageCandidate("入力（上限0の日を保つ）", s, r) }) +
+            dayCapKeptStages(state, baseProblem, pinSafeStages))
+            .filter { baseProblem.holdsManualPins(it.sched) && baseProblem.keepsExtWishBan(cappedInput, it.sched) && baseProblem.keepsWishPins(cappedInput, it.sched) }
+        val bestStage = pickBestStage(safeStages + dayCapKept)
         // 上限 0 の日を守るせいで残る必須違反は、その日に置いて減らす（必須が減るときだけ）。
         val relief = DayCapHardRelief.apply(state, bestStage.sched, bestStage.report, EngineClock.nowMs() + DAYCAP_RELIEF_MS)
         val finalSched = relief.schedule
@@ -1632,6 +1634,20 @@ object V6FinalPort {
             if (p.capZeroCells(cleared).isNotEmpty() || !p.holdsManualPins(cleared)) null
             else StageCandidate("${st.label}（上限0を外す）", cleared,
                 UnifiedViolationChecker.check(state, cleared))
+        }
+
+    /** 上限 0 のセルを含む段（入力以外）ごとに、日の上限 0 のセルだけ残した盤面（[HardRepairCore.dayCapKeptBaseline]）を、
+     *  全部外した盤面より必須が少ないときだけ候補に足す。外した盤面を土台に [DayCapHardRelief] が同じセルを置き直すと、土台が
+     *  探索の段に偏り後処理の良い盤面を取りこぼしていた（sept2026: 後処理 w21,773 でなく探索 w24,718 を採用）。入力は呼び出し側の
+     *  dayCapKept が扱う。手動固定・拡張希望の禁止（日の上限 0 は除く）・希望固定の検査は呼び出し側。 */
+    internal fun dayCapKeptStages(
+        state: MagiState, p: Problem, stages: List<StageCandidate>,
+    ): List<StageCandidate> =
+        stages.drop(1).filter { p.capZeroCells(it.sched).isNotEmpty() }.mapNotNull { st ->
+            val cleared = HardRepairCore.clearCappedCells(state, st.sched).first
+            HardRepairCore.dayCapKeptBaseline(state, st.sched, UnifiedViolationChecker.check(state, cleared))
+                ?.takeIf { (s, _) -> p.holdsManualPins(s) }
+                ?.let { (s, r) -> StageCandidate("${st.label}（上限0の日を保つ）", s, r) }
         }
 
     /** [excludeCapZeroStages] で外した段ごとの W ログ（違反セルは先頭 5 件）。 */
