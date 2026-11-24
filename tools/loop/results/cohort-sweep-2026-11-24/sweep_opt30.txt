@@ -1,0 +1,12 @@
+SWEEP json/golden_state.opt.flat K=2 組=45 K最適と証明=3 良くなる組=42 未決=0 入力 必須0・重み145726 最良 必須0・重み122372 5.8秒
+SWEEP json/sample_state_v6.opt.flat K=2 組=45 K最適と証明=19 良くなる組=26 未決=0 入力 必須1・重み15017 最良 必須1・重み14380 3.8秒
+SWEEP json/sept2026_state.opt.flat K=2 組=45 K最適と証明=30 良くなる組=15 未決=0 入力 必須0・重み100493 最良 必須0・重み65793 3.9秒
+SWEEP json/oct2026_grid_state.opt.flat K=2 組=55 K最適と証明=52 良くなる組=3 未決=0 入力 必須9・重み104872 最良 必須9・重み104014 9.6秒
+SWEEP json/blocked_covu_state.opt.flat K=2 組=45 K最適と証明=20 良くなる組=25 未決=0 入力 必須4・重み91726 最良 必須4・重み73431 7.6秒
+SWEEP json/full_coverage_state.opt.flat K=2 組=15 K最適と証明=8 良くなる組=7 未決=0 入力 必須0・重み1999 最良 必須0・重み1979 0.8秒
+SWEEP json/golden_state.opt.flat K=3 組=120 K最適と証明=0 良くなる組=120 未決=0 入力 必須0・重み145726 最良 必須0・重み106959 64.2秒
+SWEEP json/sample_state_v6.opt.flat K=3 組=120 K最適と証明=25 良くなる組=95 未決=0 入力 必須1・重み15017 最良 必須1・重み13741 41.0秒
+SWEEP json/sept2026_state.opt.flat K=3 組=120 K最適と証明=29 良くなる組=91 未決=0 入力 必須0・重み100493 最良 必須0・重み48083 25.0秒
+SWEEP json/oct2026_grid_state.opt.flat K=3 組=165 K最適と証明=133 良くなる組=32 未決=0 入力 必須9・重み104872 最良 必須9・重み103376 81.0秒
+SWEEP json/blocked_covu_state.opt.flat K=3 組=120 K最適と証明=14 良くなる組=106 未決=0 入力 必須4・重み91726 最良 必須4・重み66476 90.4秒
+SWEEP json/full_coverage_state.opt.flat K=3 組=20 K最適と証明=4 良くなる組=16 未決=0 入力 必須0・重み1999 最良 必須0・重み1962 24.3秒

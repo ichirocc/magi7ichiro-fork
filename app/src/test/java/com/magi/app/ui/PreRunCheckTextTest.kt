@@ -15,7 +15,7 @@ class PreRunCheckTextTest {
 
     @Test fun realData_sheetRows() {
         val t = preRunSheetText(PreRunCheck.build(st, board), ui)
-        assertEquals("何度つくっても残る（9件）", t.floorHeader)
+        assertEquals("何度つくっても残る（10件）", t.floorHeader)
         assertEquals(listOf(
             "職員01 10/25・10/26・10/27 本人の希望「休→休→休」が禁止の並びに当たっています",
             "職員03 10/1「Dﾃ」→ 10/2「休」 本人の希望どうしが希望の前日の禁止に当たっています",
@@ -26,6 +26,7 @@ class PreRunCheckTextTest {
             "10/11(日) 必要人数と本人の希望の衝突（9件は同時に成立しません）（入れないシフトの指定が関係）",
             "10/29(木) 必要人数と本人の希望の衝突（7件は同時に成立しません）（入れないシフトの指定が関係）",
             "職員04 本人の希望と条件の組合せ（4件は同時に成立しません）",
+            "職員11 本人の希望と条件の組合せ（7件は同時に成立しません）",
         ), t.floorRows.map { it.text })
         assertTrue(t.hasWishRows)
         assertEquals(PRE_RUN_ZERO_CAP_NOTE, t.zeroCapNote)
