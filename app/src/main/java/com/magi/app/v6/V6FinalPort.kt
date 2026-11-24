@@ -36,6 +36,11 @@ const val TIME_POST_TOP_N = 3
 /** 解き直しへ移る条件。ほかの早期終了と同じく最短実行（[minRunMs]）を待ってから、探索が [CPSAT_RESOLVE_STALL_MS] 改善しないときだけ。 */
 internal fun resolveStallReached(now: Long, startMs: Long, minRunMs: Long, lastImproveMs: Long): Boolean =
     now - startMs >= minRunMs && now - lastImproveMs >= CPSAT_RESOLVE_STALL_MS
+
+/** 解き直しへ移ってよいか: 併走の CP-SAT の最良が探索の最良と同じ必須の件数まで来ていること（来ていない＝そのデータでは CP-SAT が
+ *  探索に追いつけていない。sept2026 は併走が必須 1 のまま、探索は 30 秒以降も伸び、切り替えると重み +43〜52%）。併走が無いときは従来どおり。 */
+internal fun resolveCoRunCaughtUp(coRunHard: Int?, searchBestHard: Int, coRunEnabled: Boolean): Boolean =
+    !coRunEnabled || (coRunHard != null && coRunHard <= searchBestHard)
 /** 下限とのギャップがこの割合以下なら予算の途中でも探索を終える（2026-11-10 ユーザー指示「差 1% 以下」＝HF77 明示数値）。 */
 const val CPSAT_GAP_STOP = 0.01
 
@@ -776,6 +781,8 @@ object V6FinalPort {
         // 解き直し（既定 OFF）: 探索が [CPSAT_RESOLVE_STALL_MS] 改善しなければ探索を終え、残りの探索の持ち時間を解き直しに使う。
         val resolveOn = config.cpsatResolve && CpsatBridge.available
         val resolveStallHit = java.util.concurrent.atomic.AtomicBoolean(false)
+        // 探索は止まったが、併走の CP-SAT が探索の必須の件数に届いていないので切り替えなかった（ログ用）。
+        val resolveGateHeld = java.util.concurrent.atomic.AtomicBoolean(false)
         val cpsatLock = Any()
         var cpsatPolledAt = 0L
         var cpsatGapHit = false
@@ -830,7 +837,9 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 cpsatGapReached(now) -> true
-                resolveOn && resolveStallReached(now, startMs, minRunMs, wd.lastBestImproveMs.get()) -> { resolveStallHit.set(true); true }
+                resolveOn && resolveStallReached(now, startMs, minRunMs, wd.lastBestImproveMs.get()) &&
+                    resolveCoRunCaughtUp(synchronized(cpsatLock) { cpsatSeenReport?.hard }, wd.bestHard.get(), cpsat != null)
+                    .also { if (!it) resolveGateHeld.set(true) } -> { resolveStallHit.set(true); true }
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs,
                     maxOf(wd.lastBestImproveMs.get(), cpsatImprovedAt.get()), effStall) -> {
                     // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
@@ -1227,6 +1236,7 @@ object V6FinalPort {
                     message = resolveLogLine(resolveOut, resolveThreads, resolveStage, resolveStart, resolveStallHit.get(), (tChain1 - startMs) / 1000))
                 else if (resolveOn) MirrorLog(level = "I", tag = "CP-SAT", message = "解き直し: 走らせなかった（" + when {
                     cpsatGapHit -> "ギャップ ${(CPSAT_GAP_STOP * 100).toInt()}% 以下で探索を終えた"
+                    resolveLeftSec < 2.0 && resolveGateHeld.get() -> "探索が止まっても併走の CP-SAT が探索の最良の必須の件数に届かなかったので、探索を締切まで続けた"
                     resolveLeftSec < 2.0 -> "探索の締切まで ${"%.1f".format(resolveLeftSec.coerceAtLeast(0.0))} 秒しか残っていなかった"
                     else -> "中止された・または CP-SAT を始められなかった"
                 } + "）" + if (resolveStallHit.get()) "。探索は ${CPSAT_RESOLVE_STALL_MS / 1000} 秒改善が無く ${(tChain1 - startMs) / 1000} 秒で終えた" else "") else null,
@@ -1527,7 +1537,9 @@ object V6FinalPort {
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
             // 発火しても探索が締切まで走った（発火が締切の直前で、離脱の確認窓のあいだに締切が来た）なら時間は節約されていない＝締切どおりの終わり方。
-            val fired = wd.stagnationFired.get() && tChain1 < searchDeadlineMs - 1_000L
+            // 解き直しが停滞で打ち切られて締切より早く終えたときも、停滞で早めに終えた（通常の停滞）として数える（旧: DEADLINE と出ていた）。
+            val resolveStalledEarly = resolveOut != null && CpsatResolve.stalledOut && tResolve1 < searchDeadlineMs - 1_000L
+            val fired = (wd.stagnationFired.get() && tChain1 < searchDeadlineMs - 1_000L) || resolveStalledEarly
             // 壁で止まったときだけ最終盤面を診断する（約 20 ms）。残存分析の `wallProof.diagnoseBoard` とは別＝そちらは変えない。
             fun wallCertified() = runCatching { V6PortAnalyzer.diagnoseForbiddenRuns(state, finalSched).allBlockedCertified }.getOrDefault(false)
             StopSummary(

@@ -1,0 +1,5 @@
+fixture,seed,arm,ms,hard,weighted,total,gap,fair,c1,hash
+sept2026_state,1,resolve,199208,0,26682,455,0,16,82,c8742c02
+sept2026_state,2,resolve,199187,0,24950,432,0,14,77,2b791420
+golden_state,1,resolve,172068,0,49336,489,0,4,210,3bf34f36
+golden_state,2,resolve,130376,0,45041,485,0,6,185,23857286

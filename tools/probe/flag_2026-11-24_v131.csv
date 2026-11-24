@@ -1,0 +1,17 @@
+fixture,seed,arm,ms,hard,weighted,total,gap,fair,c1,hash
+sept2026_state,1,off,198857,0,25119,435,0,17,76,4e3d74de
+sept2026_state,1,resolve,199080,0,38051,481,0,18,139,6a9d3aa7
+sept2026_state,2,off,199335,0,31472,484,0,24,101,f7c7cc76
+sept2026_state,2,resolve,199420,0,45156,531,0,15,175,5a8c2794
+golden_state,1,off,136853,0,54352,530,0,4,236,921e05f3
+golden_state,1,resolve,155722,0,46645,494,0,2,193,51c130cb
+golden_state,2,off,199244,0,45996,477,0,4,194,fadd740e
+golden_state,2,resolve,198966,0,41549,467,0,8,164,522bced6
+oct2026_grid_state,1,off,110671,9,101435,421,0,53,40,a971b97b
+oct2026_grid_state,1,resolve,151933,9,99634,413,0,46,35,8c7dbf9b
+oct2026_grid_state,2,off,141729,9,102200,425,0,49,47,5df21112
+oct2026_grid_state,2,resolve,120867,9,100201,419,0,47,36,e309b3ae
+sample_state_v6,1,off,156254,1,12364,262,0,0,1,55cdc7
+sample_state_v6,1,resolve,100630,1,12385,267,0,4,1,dd2e5243
+sample_state_v6,2,off,122062,1,12300,280,0,2,1,94e37cd5
+sample_state_v6,2,resolve,105565,1,12464,267,0,0,0,4712c7af

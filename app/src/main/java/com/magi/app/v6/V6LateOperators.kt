@@ -321,7 +321,8 @@ object V6LateOperators {
                     var dJd = -1
                     if (violators.contains(i1) && rng.nextDouble() < 0.7) {
                         var dKd = -1
-                        for (kk in 0 until k) if (ssn[i1][kk] < p.rangeLo[i1][kk]) { dKd = kk; break }
+                        // 不足しているシフトは、置けるもの（mayPlace）だけ数える＝置けないシフトに下限があるとそれを狙って打ち切り、本来の不足を逃していた。
+                        for (kk in 0 until k) if (ssn[i1][kk] < p.rangeLo[i1][kk] && p.mayPlace(i1, kk)) { dKd = kk; break }
                         if (dKd >= 0) {
                             var bestC = -1
                             val st0 = rng.nextInt(s)

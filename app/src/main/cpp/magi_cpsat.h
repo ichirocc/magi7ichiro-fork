@@ -14,6 +14,7 @@
 #include <cmath>
 #include <functional>
 #include <numeric>
+#include <memory>
 #include <mutex>
 #include <random>
 #include <thread>
@@ -709,12 +710,33 @@ inline sat::SatParameters params(const Options& opt, double seconds) {
     return prm;
 }
 
-// 外からの停止を段ごとの停止に結ぶ。CP-SAT は解き終えると 1 つ目の停止フラグを自分で立てる＝段ごとに別のフラグを渡し、
-//   呼び出し側のフラグは 2 つ目（読むだけ）として登録する（共有すると第 2 段が始まった瞬間に止まっていた）。
-inline void linkStop(sat::Model& env, std::atomic<bool>& phaseStop, const Options& opt) {
-    auto* tl = env.GetOrCreate<operations_research::TimeLimit>();
-    tl->RegisterExternalBooleanAsLimit(&phaseStop);
-    if (opt.stop) tl->RegisterSecondaryExternalBooleanAsLimit(opt.stop);
+// 外からの停止を段ごとの停止に結ぶ。CP-SAT は解き終えると 1 つ目の停止フラグを自分で立てる＝段ごとに別のフラグを渡す
+//   （共有すると第 2 段が始まった瞬間に止まっていた）。呼び出し側のフラグは見張りのスレッドが段のフラグへ写す: 2 つ目の枠
+//   （RegisterSecondaryExternalBooleanAsLimit）は CP-SAT が局所探索の停止に上書きすることがあり、外からの停止が効かず
+//   予算の最後まで走っていた（golden 180 秒・40 秒で停止→180 秒、`cpsat_bench` の CPSAT_STOP_AT。3.727.132）。
+class StopRelay {
+public:
+    StopRelay(std::atomic<bool>* src, std::atomic<bool>& dst) {
+        if (src == nullptr) return;
+        th_ = std::thread([this, src, &dst] {
+            while (!done_.load()) {
+                if (src->load()) { dst.store(true); return; }
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+        });
+    }
+    ~StopRelay() { done_.store(true); if (th_.joinable()) th_.join(); }
+    StopRelay(const StopRelay&) = delete;
+    StopRelay& operator=(const StopRelay&) = delete;
+private:
+    std::atomic<bool> done_{false};
+    std::thread th_;
+};
+
+// 返す StopRelay は SolveCpModel が戻るまで生かすこと（[[nodiscard]]）。
+[[nodiscard]] inline std::unique_ptr<StopRelay> linkStop(sat::Model& env, std::atomic<bool>& phaseStop, const Options& opt) {
+    env.GetOrCreate<operations_research::TimeLimit>()->RegisterExternalBooleanAsLimit(&phaseStop);
+    return std::make_unique<StopRelay>(opt.stop, phaseStop);
 }
 
 // マスの値だけのヒントを、補助変数を含む全変数のヒントへ広げる（3.727.89）。マスの変数だけのヒントは「不完全」と扱われ、CP-SAT は
@@ -732,7 +754,7 @@ inline bool completeHint(sat::CpModelProto& proto, const Options& opt, double se
     sat::Model env;
     env.Add(sat::NewSatParameters(prm));
     std::atomic<bool> phaseStop{false};
-    linkStop(env, phaseStop, opt);
+    const auto relay = linkStop(env, phaseStop, opt);
     const auto r = sat::SolveCpModel(proto, &env);
     if (r.status() != sat::OPTIMAL && r.status() != sat::FEASIBLE) return false;
     auto* h = proto.mutable_solution_hint();
@@ -756,7 +778,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
         sat::Model env;
         env.Add(sat::NewSatParameters(params(opt, phase1Seconds)));
         std::atomic<bool> phaseStop{false};
-        linkStop(env, phaseStop, opt);
+        const auto relay = linkStop(env, phaseStop, opt);
         auto r = sat::SolveCpModel(m.cp().Build(), &env);
         res.status = r.status();
         if (r.status() != sat::OPTIMAL && r.status() != sat::FEASIBLE) { res.wallSeconds = elapsed(); return res; }
@@ -776,7 +798,7 @@ inline Result solve(const MagiProblem& p, const std::vector<int>& hint, const Op
     sat::Model env;
     env.Add(sat::NewSatParameters(params(opt, std::max(0.05, opt.maxSeconds - elapsed()))));
     std::atomic<bool> phaseStop{false};
-    linkStop(env, phaseStop, opt);
+    const auto relay = linkStop(env, phaseStop, opt);
     if (opt.onBound) env.Add(sat::NewBestBoundCallback([&](double b) { opt.onBound((long long)std::ceil(b - 1e-6)); }));
     if (opt.onSolution) {
         env.Add(sat::NewFeasibleSolutionObserver([&](const sat::CpSolverResponse& r) {
@@ -983,7 +1005,7 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
             sat::Model env;
             env.Add(sat::NewSatParameters(params(o, std::min(io.subSeconds, io.maxSeconds - elapsed()))));
             std::atomic<bool> phaseStop{false};
-            linkStop(env, phaseStop, o);
+            const auto relay = linkStop(env, phaseStop, o);
             const auto r = sat::SolveCpModel(proto, &env);
             const bool solved = r.status() == sat::OPTIMAL || r.status() == sat::FEASIBLE;
             std::vector<int> nb; Score ns{0, 0};
