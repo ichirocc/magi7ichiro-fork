@@ -19,9 +19,10 @@ class PreRunCheckTest {
         assertEquals(0, s.impossibleWishes.size)
         assertEquals(0, s.forcedShortfalls.size)
         assertEquals(listOf(8, 9, 10, 28), s.dayProofs.map { it.day })
-        assertEquals(listOf(3), s.staffProofs.map { it.staff })
+        // 職員11（10）: 10/14〜20 のうち 6 日が勤務の希望＝「休 7日で2回以上」をその 7 日で満たせない（希望の日付の位置まで見る証明）。
+        assertEquals(listOf(3, 10), s.staffProofs.map { it.staff })
         assertEquals(listOf(Triple(7, 1, 0), Triple(10, 12, 0)), s.wishOverCaps.map { Triple(it.staff, it.wished, it.hi) })
-        assertEquals(9, s.floorCount)
+        assertEquals(10, s.floorCount)
         assertEquals(4, s.rerunClears.size)
         assertEquals(PreRunCheck.WallHint(22, 8, 7, 7), s.wallHint)
         assertTrue(s.needsSheet)

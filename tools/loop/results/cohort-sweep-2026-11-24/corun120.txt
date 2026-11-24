@@ -1,0 +1,16 @@
+SOLVE json/golden_state.opt.flat 120秒 入力 必須0 重み145726 → 必須0 重み43030 下限 必須0 重み696
+SWEEP json/golden_state.corun.flat K=2 組=45 K最適と証明=43 良くなる組=2 未決=0 入力 必須0・重み43030 最良 必須0・重み42710 5.5秒
+SWEEP json/golden_state.corun.flat K=3 組=120 K最適と証明=103 良くなる組=17 未決=0 入力 必須0・重み43030 最良 必須0・重み40658 48.2秒
+IMPROVE json/golden_state.corun.flat 30秒 必須 0→0 重み 43030→39319 部分=91 採用=10 最適=69
+SOLVE json/sept2026_state.opt.flat 120秒 入力 必須0 重み100493 → 必須0 重み16655 下限 必須0 重み1915
+SWEEP json/sept2026_state.corun.flat K=2 組=45 K最適と証明=42 良くなる組=3 未決=0 入力 必須0・重み16655 最良 必須0・重み16377 3.9秒
+SWEEP json/sept2026_state.corun.flat K=3 組=120 K最適と証明=95 良くなる組=25 未決=0 入力 必須0・重み16655 最良 必須0・重み16055 24.1秒
+IMPROVE json/sept2026_state.corun.flat 30秒 必須 0→0 重み 16655→13739 部分=214 採用=24 最適=208
+SOLVE json/blocked_covu_state.opt.flat 120秒 入力 必須4 重み91726 → 必須4 重み66291 下限 必須4 重み10952
+SWEEP json/blocked_covu_state.corun.flat K=2 組=45 K最適と証明=37 良くなる組=8 未決=0 入力 必須4・重み66291 最良 必須4・重み63178 7.4秒
+SWEEP json/blocked_covu_state.corun.flat K=3 組=120 K最適と証明=64 良くなる組=56 未決=0 入力 必須4・重み66291 最良 必須4・重み60100 67.0秒
+IMPROVE json/blocked_covu_state.corun.flat 30秒 必須 4→4 重み 66291→58321 部分=93 採用=20 最適=72
+SOLVE json/oct2026_grid_state.opt.flat 120秒 入力 必須9 重み104872 → 必須9 重み104495 下限 必須9 重み40355
+SWEEP json/oct2026_grid_state.corun.flat K=2 組=55 K最適と証明=43 良くなる組=12 未決=0 入力 必須9・重み104495 最良 必須9・重み103687 10.1秒
+SWEEP json/oct2026_grid_state.corun.flat K=3 組=165 K最適と証明=101 良くなる組=64 未決=0 入力 必須9・重み104495 最良 必須9・重み103297 81.7秒
+IMPROVE json/oct2026_grid_state.corun.flat 30秒 必須 9→9 重み 104495→100280 部分=342 採用=25 最適=337

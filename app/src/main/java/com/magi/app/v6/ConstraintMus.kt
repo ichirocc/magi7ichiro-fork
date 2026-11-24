@@ -84,8 +84,10 @@ object ConstraintMus {
      * 職員1人スコープの証明可能矛盾を全職員について検出し、各々を極小コアへ縮約して返す。
      * 証明ルール（active な Item のみを使用＝MUSの意味論を保証）:
      *  A) シフト x の需要下限 demand_x = max(下限, 窓の厳密最小日数, xへの固定（希望・手動）の数) > 上限 cap_x
+     *     窓の最小日数は固定の日付の位置まで見る（x の固定は回数に数え、別のシフトの固定の日には x を置けない）。
      *  B) 鳩の巣: Σ_x demand_x > T（各日はちょうど1シフト＝計T日しかない）
      *  C) 強制下限: 他の全担当シフトに上限がある場合、count_x ≥ T−Σ他上限 > cap_x
+     *  D) 固定の日だけで窓の回数に届かない（窓の中が別のシフトの固定で埋まる）
      */
     fun analyzeStaffConflicts(p: Problem): List<StaffConflict> {
         val out = ArrayList<StaffConflict>()
@@ -181,22 +183,20 @@ object ConstraintMus {
         val floors = HashMap<Int, Int>()
         val rules = HashMap<Int, MutableList<WindowRule>>()
         val pins = HashMap<Int, Int>()
+        val fixed = ArrayList<WishPin>()
         for (it in items) when (it) {
             is RangeCap -> caps[it.shift] = it.hi
             is RangeFloor -> floors[it.shift] = it.lo
             is WindowRule -> rules.getOrPut(it.shift) { ArrayList() }.add(it)
-            is WishPin -> pins[it.shift] = (pins[it.shift] ?: 0) + 1
+            is WishPin -> { pins[it.shift] = (pins[it.shift] ?: 0) + 1; fixed.add(it) }
             is DayNeed -> {}
         }
-        // 窓ルールの厳密最小日数（rule部分集合ごとにmemo）。null（t>62等で計算不能）は 0 扱い＝
-        //   下限を弱める方向なので健全（誤検知しない）。
-        fun minWin(x: Int): Int {
-            val rs = rules[x] ?: return 0
-            if (rs.isEmpty()) return 0
-            // null（t>62等で計算不能）は 0 扱い＝下限を弱める方向なので健全（誤検知しない）。
-            return cachedMinDays(p.T, rs.map { it.windowDays to it.minCount }) ?: 0
+        val demands = HashMap<Int, Int>()
+        for (x in allowed) {
+            val win = windowMin(p, x, rules[x].orEmpty(), fixed) ?: return true   // D)
+            demands[x] = maxOf(floors[x] ?: 0, win, pins[x] ?: 0)
         }
-        fun demand(x: Int): Int = maxOf(floors[x] ?: 0, minWin(x), pins[x] ?: 0)
+        fun demand(x: Int): Int = demands.getValue(x)
         // A) 需要下限 > 上限
         for (x in allowed) {
             val cap = caps[x] ?: continue
@@ -226,6 +226,20 @@ object ConstraintMus {
         }
         return false
     }
+
+    /** シフト [x] の窓ルール [rs] を満たす最少日数（[fixed] の日付の位置まで見る）。固定の日だけで満たせない窓は null、規則なし・t>62 は 0（下限を弱める側＝健全）。 */
+    private fun windowMin(p: Problem, x: Int, rs: List<WindowRule>, fixed: List<WishPin>): Int? {
+        if (rs.isEmpty() || p.T <= 0 || p.T > 62) return 0
+        val pairs = rs.map { it.windowDays to it.minCount }
+        if (fixed.isEmpty()) return cachedMinDays(p.T, pairs) ?: 0
+        val forced = IntArray(p.T) { -1 }
+        for (f in fixed) if (f.day in 0 until p.T) forced[f.day] = if (f.shift == x) 1 else 0
+        return SmartInitialScheduler.minDaysWithFixed(p.T, pairs, forced)
+    }
+
+    /** コア [core]（1 人の職員の矛盾）で、シフト [x] の窓ルールを満たすのに要る最少日数（証明と同じ計算）。null＝固定の日だけで満たせない窓がある。画面の説明用。 */
+    fun windowNeed(p: Problem, x: Int, core: List<Item>): Int? =
+        windowMin(p, x, core.filterIsInstance<WindowRule>().filter { it.shift == x }, core.filterIsInstance<WishPin>())
 
     /** [3.692.0] 日の証明（[analyzeDayConflicts] と同じ判定＝上限 0 と固定（希望・手動）を置けない側に数える）で、その日に最低いくつ席が空くか
      *  （最大マッチングの不足）とコアの必要人数のシフト。人員不足の診断（[V6PortAnalyzer.diagnoseCoverage]）が設定ミス診断と同じ根拠で「充足不可」を言うため。 */

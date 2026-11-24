@@ -224,17 +224,23 @@ object SmartInitialScheduler {
         if (t <= 0 || t > 62) return null
         val valid = rules.filter { it.first in 1..t && it.second > 0 }
         if (valid.isEmpty()) return null
-        val chosen = BooleanArray(t)
-        var used = 0
+        return minDaysWithFixed(t, valid, IntArray(t) { -1 })
+    }
+
+    /** [minDaysForFullCompliance] に日ごとの固定を足したもの。[forced]: 1＝すでに x（回数に数える）・0＝x にできない・-1＝自由。
+     *  同じ貪欲で厳密（総当たり照合）。固定の日のせいで満たせない窓があれば null。 */
+    fun minDaysWithFixed(t: Int, rules: List<Pair<Int, Int>>, forced: IntArray): Int? {
+        val chosen = BooleanArray(t) { forced[it] == 1 }
+        var used = chosen.count { it }
         for (end in 0 until t) {
-            for ((days, minimum) in valid) {
-                if (end + 1 < days) continue
+            for ((days, minimum) in rules) {
+                if (days !in 1..t || minimum <= 0 || end + 1 < days) continue
                 val from = end - days + 1
                 var cnt = 0
                 for (j in from..end) if (chosen[j]) cnt++
                 var j = end
                 while (cnt < minimum) {
-                    while (j >= from && chosen[j]) j--
+                    while (j >= from && (chosen[j] || forced[j] == 0)) j--
                     if (j < from) return null
                     chosen[j] = true
                     used++

@@ -79,6 +79,34 @@ class MinDaysForFullComplianceTest {
         assertNull(SmartInitialScheduler.minDaysForFullCompliance(63, listOf(7 to 1)))
     }
 
+    /** 固定の日つきの総当たり: forced 1 の日は必ず対象・0 の日は対象にしない、全窓を満たす最小日数（無ければ null）。 */
+    private fun oracleFixed(t: Int, rules: List<Pair<Int, Int>>, forced: IntArray): Int? {
+        var best: Int? = null
+        for (mask in 0 until (1 shl t)) {
+            if ((0 until t).any { j -> val on = (mask shr j) and 1 == 1; (forced[j] == 1 && !on) || (forced[j] == 0 && on) }) continue
+            val pc = Integer.bitCount(mask)
+            if (best != null && pc >= best!!) continue
+            val ok = rules.all { (days, minimum) ->
+                days !in 1..t || minimum <= 0 || (0..(t - days)).all { j0 -> (j0 until j0 + days).count { (mask shr it) and 1 == 1 } >= minimum }
+            }
+            if (ok) best = pc
+        }
+        return best
+    }
+
+    @Test
+    fun fixedDaysMatchBruteForceOracle() {
+        // 希望・手動固定の日付の位置まで見た最少日数（ConstraintMus の上限×期間の制約の証明が読む）も厳密であること。
+        val rnd = java.util.Random(7)
+        repeat(4000) {
+            val t = 1 + rnd.nextInt(12)
+            val rules = List(1 + rnd.nextInt(2)) { val w = 1 + rnd.nextInt(t); w to 1 + rnd.nextInt(w) }
+            val forced = IntArray(t) { when (rnd.nextInt(4)) { 0 -> 1; 1 -> 0; else -> -1 } }
+            assertEquals("t=$t rules=$rules forced=${forced.toList()}", oracleFixed(t, rules, forced),
+                SmartInitialScheduler.minDaysWithFixed(t, rules, forced))
+        }
+    }
+
     @Test
     fun longWindowsAreAnsweredInsteadOfBlowingUp() {
         // 旧DPは窓18で6.3秒・窓22以上はヒープ3GBでもOOMだった長さ。
