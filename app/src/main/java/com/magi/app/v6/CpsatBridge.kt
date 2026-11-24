@@ -30,8 +30,9 @@ object CpsatBridge {
 }
 
 /**
- * 必須違反の原因（S4、`magi_cpsat::HardExplainer`）。どの核も「この中の 1 件を緩めないと必須違反は消えない」の証明で、
- * 核どうしは互いに素＝核の数は必須の件数の下限。[Core.minimal] はどの 1 件を外しても成り立つと確かめた核。
+ * 必須違反の原因（S4、`magi_cpsat::HardExplainer`）。どの核も「この中のどれか 1 件を緩めない限り、必須違反が少なくとも 1 件残る」の証明で、
+ * 核どうしは互いに素＝核の数は必須の件数の下限（最適化器と同じく上限 0 の日に置かない前提。最終段 [DayCapHardRelief] がその日に置くと下回り得る）。
+ * [Core.minimal] はどの 1 件を外しても証明が成り立たなくなる（それ以上小さくできない）と確かめた核。
  */
 object HardCauses {
     enum class Kind { WISH, PIN, NEED, FORBIDDEN_SEQ, OUTSIDE, DAY_CAP }

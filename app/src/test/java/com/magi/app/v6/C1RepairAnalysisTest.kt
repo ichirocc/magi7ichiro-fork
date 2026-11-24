@@ -70,9 +70,10 @@ class C1RepairAnalysisTest {
 
     @Test
     fun exactSolveRejectsPatchThatBreaksAnExactPin() {
-        // i0 の X を 0回に固定（lo==hi==0・現状も0＝ピン充足中）。joint を下げる配置は必ず i0 が X を
-        // 受け取るので、ピンを守る限り改善手は存在しない。旧実装は joint c1 しか見ずこれを提案していた。
-        val s = pinFixture(staffRange = mapOf("0,1" to Range("0", "0")))
+        // a の X を 2回に固定（lo==hi==2・現状も2＝ピン充足中）。joint を下げる配置は必ず a が X を i0 へ
+        // 渡すので、ピンを守る限り改善手は存在しない。旧実装は joint c1 しか見ずこれを提案していた。
+        // （旧: i0 を 0回に固定していたが、3.727.105 から上限 0 の人に c1 は掛からない＝i0 の窓は違反でない。）
+        val s = pinFixture(staffRange = mapOf("1,1" to Range("2", "2")))
         val p = Problem(s); val sched = s.schedule.toIntArray2D()
         val v = C1RepairAnalysis.analyze(p, sched).first { it.staff == 0 }
         val r = C1RepairAnalysis.solveWindow(p, sched, v)

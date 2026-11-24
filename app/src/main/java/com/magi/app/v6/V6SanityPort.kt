@@ -897,7 +897,8 @@ object V6SanityPort {
                 for (c in p.cons1) {
                     if (c.day1 <= 0 || c.day1 > p.T || c.day2 <= 0 || c.day2 > c.day1) continue
                     val x = c.shiftIdx
-                    val members = (0 until p.S).count { p.canDo(it, x) }
+                    // 数えるのは期間の制約が掛かる人（[c1Applies]＝担当でき個人上限が 0 でない。チェッカーと同じ）。
+                    val members = (0 until p.S).count { p.c1Applies(it, x) }
                     if (members == 0) continue
                     val cap = IntArray(p.T) { j ->
                         val wished = (0 until p.S).count { p.wishFixed(it, j) && p.wish[it][j] == x }
@@ -946,8 +947,9 @@ object V6SanityPort {
                     if (c.day1 <= 0 || c.day2 <= 0 || c.day1 > p.T || c.day2 > c.day1) continue
                     val disjoint = p.T / c.day1
                     if (disjoint <= 0) continue
-                    val nCanDo = capableCount(si)
-                    if (nCanDo == 0) continue   // 担当者ゼロは別の案内対象
+                    // 要る回数は期間の制約が掛かる人（[c1Applies]）だけで数える。担当者ゼロは別の案内対象。
+                    val nCanDo = (0 until p.S).count { p.c1Applies(it, si) }
+                    if (nCanDo == 0) continue
                     val demand = nCanDo * c.day2 * disjoint
                     val sym = symOf(si)
                     if (si == p.restIdx) {

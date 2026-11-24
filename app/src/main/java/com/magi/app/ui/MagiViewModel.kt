@@ -1526,6 +1526,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private val agentSeen = HashSet<Long>()   // 代行が一度見た盤面×設定（元に戻した盤面・同じ結果で輪を回し直さない）
     private var agentResume = false           // 判断待ちを承認した＝次の検査のあと、作成を待たずに代行が続きを回す
     private var agentWasRunning = false       // 直前に見た作成の実行中フラグ（作成が終わった瞬間を捉える）
+    /** ［そろえて組み直す］の結果の盤面の指紋。この盤面では代行を動かさない（代行は回数を動かす＝固定した回数を崩す、L2）。 */
+    private var agentSkipBoardKey: Long? = null
     private var agentRunStateKey: Long? = null // 作成が終わった時点の設定の指紋。これと違えば（作成のあとに制約を変えた）代行は動かない
 
     /** 希望・設定の判断を承認した入口から呼ぶ（再作成まで走る入口は作成の完了で回るので要らない）。 */
@@ -1555,6 +1557,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (!resume && !agentAfterRun(agentRunStateKey, stateKey(st))) return
         val sched = currentSchedule ?: return
         val key0 = boardKey(sched)
+        if (!resume && key0 == agentSkipBoardKey) return
         if (!agentSeen.add(key0 * 31 + stateKey(st))) return
         val snap = sched.copy2D(); val stKey = stateKey(st)
         cancelFixSearch()
@@ -2763,10 +2766,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (runBlockedByInFlight("回数をそろえて組み直す")) return
         if (!ensureValidForRun(st0, sched0, "回数をそろえて組み直す")) return
         val which = shifts?.sorted()?.joinToString("・") { st0.shifts.getOrNull(it)?.kigou ?: "$it" } ?: "全シフト"
+        val ui0 = _ui.value; val result0 = resultSchedule
         pushUndo("回数をそろえて組み直す")
         _ui.update { it.copy(messageIsError = false, running = true, fixSuggestions = emptyList(), message = GROUP_EQUALIZE_RESOLVING) }
         logOp("I", "回数をそろえて組み直す 開始（$which・最大${GROUP_EQUALIZE_RESOLVE_SEC.toInt()}秒）")
-        val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)
+        val boardToken = beginBoardJob(MagiPhase.Equalizing, engineRun = true)
         beginFgRunGuard("回数をそろえて組み直す")
         startRunClock(System.currentTimeMillis())
         job = viewModelScope.launch {
@@ -2779,10 +2783,20 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     com.magi.app.v6.GroupCountEqualizer.resolveKeepingCounts(st0, eq.schedule, shifts, GROUP_EQUALIZE_RESOLVE_SEC, threads) { !ctx.isActive }
                 }
                 val finalSched = (res?.board ?: eq.schedule).copy2D()
+                // 何も変わらなかったら当てない＝「組み直しました X→X」と空の元に戻す段を残さない（積んだ段は外す）。
+                if (finalSched.contentDeepEquals(com.magi.app.v6.normalizeSchedule(sched0, com.magi.app.v6.cachedProblem(st0)))) {
+                    rollbackBoardCommit(st0, sched0, result0, ui0)
+                    _ui.update { it.copy(messageIsError = false, running = false, message = GROUP_EQUALIZE_RESOLVE_UNCHANGED) }
+                    logOp("I", "回数をそろえて組み直す 完了（$which）: 変化なし（" +
+                        (if (res == null) "CP-SAT が使えない" else "採った部分 ${res.accepted}・${res.wallMs / 1000}秒") + "）")
+                    terminalLogged = true
+                    return@launch
+                }
                 val finalReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, finalSched) }
                 currentSchedule = finalSched
                 resultSchedule = finalSched
                 state = st0.withSchedule(finalSched)
+                agentSkipBoardKey = boardKey(finalSched)
                 autoSave()
                 val eqTotal = res?.before?.total ?: finalReport.total
                 pushReport(state ?: st0, finalSched, finalReport, runLabel = "回数をそろえて組み直す") { it.copy(

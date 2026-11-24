@@ -52,8 +52,8 @@ internal object HardRepairCore {
     }
 
 
-    /** [3.507.0] 個人上限 0 のセル（希望固定を除く）だけを置けるシフトへ戻した盤面と、その件数。最終番兵の「入力」基準に使う
-     *  （群外セルは触らない＝従来の基準のまま）。 */
+    /** [3.507.0] 上限 0 のセル（[isCapZeroCell]＝個人上限 0・実効の目安 0・日の上限人数 0。希望固定を除く）だけを置けるシフトへ
+     *  戻した盤面と、その件数。最終番兵の「入力」基準に使う（群外セルは触らない＝従来の基準のまま）。 */
     internal fun clearCappedCells(
         state: MagiState, schedule: Array<IntArray>,
         /** true なら日の上限 0（[Problem.dayCapBanned]）だけのセルは残す＝個人上限 0・目安 0 のセルだけ外す。 */
