@@ -18,7 +18,7 @@ class AltTradeTest {
 
     @Test
     fun tradeLineSaysWhatImprovesFirstInUnits() {
-        assertEquals("期間の制約が 2件減り、上限超過が 1回増えます", altTradeLine(cur, cur + ("c1" to 3) + ("high" to 3)))
+        assertEquals("期間の制約を 2件減らすなら、上限超過を 1回譲ることになります", altTradeLine(cur, cur + ("c1" to 3) + ("high" to 3)))
         assertEquals("どの項目も今と同じか少なく、曜日の偏りが 2pt減ります", altTradeLine(cur, cur + ("weekly" to 8)))
         assertEquals("どの項目も今と同じか多い案です", altTradeLine(cur, cur + ("high" to 4)))
         assertNull(altTradeLine(cur, cur))
@@ -27,7 +27,7 @@ class AltTradeTest {
     @Test
     fun manyFamiliesAreCappedAtTwo() {
         val alt = mapOf("c1" to 2, "high" to 1, "weekly" to 9, "c3" to 1, "c3m" to 1, "low" to 1)
-        assertEquals("期間の制約が 3件・上限超過が 1回（ほか 1 項目）減り、守るとよい並びが 1件・推奨の並びが 1件（ほか 1 項目）増えます", altTradeLine(cur, alt))
+        assertEquals("期間の制約を 3件・上限超過を 1回（ほか 1 項目）減らすなら、守るとよい並びを 1件・推奨の並びを 1件（ほか 1 項目）譲ることになります", altTradeLine(cur, alt))
     }
 
     @Test
@@ -63,5 +63,23 @@ class AltTradeTest {
         assertEquals("元より良い", altTagAfterApply("今より良い", applied = true))
         assertEquals("今より良い", altTagAfterApply("今より良い", applied = false))
         assertEquals("必須が少ない（必須 1件）", altTagAfterApply("必須が少ない（必須 1件）", applied = true))
+    }
+
+    /** 両端と膝点（docs/seesaw.md §6.4）: c1 と high の交換で、点が 3 つ以上なら交換率がいちばん変わる内側に札。 */
+    @Test
+    fun edgesAndKnee() {
+        val c = mapOf("c1" to 10, "high" to 0)
+        // 点 (c1, high) を c1 の少ない順に: 案3 (2,10)・案2 (4,4)・案1 (6,1)・今 (10,0)。率 3・1.5・0.25 → 変化は案2で 1.5、案1で 1.25
+        val alts = listOf(0 to mapOf("c1" to 6, "high" to 1), 0 to mapOf("c1" to 4, "high" to 4), 0 to mapOf("c1" to 2, "high" to 10))
+        val m = altEdgeMarks(0, c, alts)
+        assertEquals(listOf(null, "釣り合いがよい", "期間の制約がいちばん少ない"), m)
+    }
+
+    @Test
+    fun edgesOnlyWhenTwoPointsAndNothingForOtherHard() {
+        val c = mapOf("c1" to 10, "high" to 0)
+        assertEquals(listOf("期間の制約がいちばん少ない"), altEdgeMarks(0, c, listOf(0 to mapOf("c1" to 6, "high" to 1))))
+        assertEquals(listOf<String?>(null), altEdgeMarks(0, c, listOf(1 to mapOf("c1" to 6, "high" to 1))))
+        assertEquals(listOf<String?>(null), altEdgeMarks(0, c, listOf(0 to mapOf("c1" to 12, "high" to 1))))   // 減る族が無い
     }
 }

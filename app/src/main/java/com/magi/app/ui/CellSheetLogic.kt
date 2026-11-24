@@ -1739,7 +1739,7 @@ internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard:
  * 札は必須の件数が違えば「必須が少ない／多い」、同じなら族の件数の比べ方（[altTrade]）で「今より良い／一長一短／今より悪い／今と同じ」。
  * 比べる相手は案を計算した時点の勤務表（[alternativesWorse] と同じ）。色に頼らず言葉で伝える。
  */
-data class AltLine(val tag: String, val down: String?, val up: String?)
+data class AltLine(val tag: String, val down: String?, val up: String?, val mark: String? = null)
 
 internal fun altLine(curHard: Int, cur: Map<String, Int>, altHard: Int, alt: Map<String, Int>): AltLine {
     val tag = when {
@@ -1783,18 +1783,50 @@ internal fun altTrade(cur: Map<String, Int>, alt: Map<String, Int>): AltTrade {
 }
 
 /**
- * 交換の説明（§6.4 の R5＝良くなる族を先に、譲る族を後に、件数で）。必須の件数が同じ案だけに付ける。重みや点数は出さない。
- * 例:「期間の制約が 2件減り、上限超過が 1回増えます」。族が 3 つ以上あるときは件数の大きい 2 つと「ほか N 項目」。
+ * 交換の説明（§6.4 の R5＝良くしたい族を起点に、譲る族を後に、件数で）。必須の件数が同じ案だけに付ける。重みや点数は出さない。
+ * 例:「期間の制約を 2件減らすなら、上限超過を 1回譲ることになります」。族が 3 つ以上あるときは件数の大きい 2 つと「ほか N 項目」。
  */
 internal fun altTradeLine(cur: Map<String, Int>, alt: Map<String, Int>): String? {
     val (down, up) = altDeltas(cur, alt)
     fun part(xs: List<Pair<String, Int>>, verb: String): String? = if (xs.isEmpty()) null else altDeltaPart(xs, "が ") + verb
     return when (altTrade(cur, alt)) {
-        AltTrade.TRADE -> "${part(down, "減り")}、${part(up, "増えます")}"
+        AltTrade.TRADE -> "${altDeltaPart(down, "を ")}減らすなら、${altDeltaPart(up, "を ")}譲ることになります"
         AltTrade.DOMINATES -> "どの項目も今と同じか少なく、${part(down, "減ります")}"
         AltTrade.DOMINATED -> "どの項目も今と同じか多い案です"
         AltTrade.SAME -> null
     }
+}
+
+/**
+ * [シーソー S4、docs/seesaw.md §6.4] 他の案の両端と膝点の札。必須の件数が今と同じ案だけを、案全体でいちばん減る族 A と
+ * いちばん増える族 B の 2 つで並べる（点＝今の勤務表と案、A・B どちらでも他に劣る点は外す）。A の少ない端・B の少ない端に
+ * 「A がいちばん少ない」「B がいちばん少ない」、点が 3 つ以上なら隣どうしの交換率（B の減り÷A の増え）がいちばん大きく変わる
+ * 内側の点に「釣り合いがよい」。点は証明つきの前線ではなく見せている案の中の比べ（文言も「案の中で」の意味）。
+ * 返り値は案ごとの札（今の勤務表には付けない）。
+ */
+internal fun altEdgeMarks(curHard: Int, cur: Map<String, Int>, alts: List<Pair<Int, Map<String, Int>>>): List<String?> {
+    val none = List<String?>(alts.size) { null }
+    val same = alts.indices.filter { alts[it].first == curHard }
+    if (same.isEmpty()) return none
+    val fams = com.magi.app.v6.MirrorKeys.all
+    fun d(k: Int, f: String) = (alts[k].second[f] ?: 0) - (cur[f] ?: 0)
+    val a = fams.maxByOrNull { f -> same.sumOf { k -> maxOf(0, -d(k, f)) } }?.takeIf { f -> same.any { d(it, f) < 0 } } ?: return none
+    val b = fams.filter { it != a }.maxByOrNull { f -> same.sumOf { k -> maxOf(0, d(k, f)) } }?.takeIf { f -> same.any { d(it, f) > 0 } } ?: return none
+    // 点: -1＝今の勤務表
+    val pts = (listOf(-1) + same).map { k -> Triple(k, if (k < 0) cur[a] ?: 0 else alts[k].second[a] ?: 0, if (k < 0) cur[b] ?: 0 else alts[k].second[b] ?: 0) }
+    val front = pts.filter { p -> pts.none { q -> q !== p && q.second <= p.second && q.third <= p.third && (q.second < p.second || q.third < p.third) } }
+        .distinctBy { it.second to it.third }.sortedBy { it.second }
+    if (front.size < 2) return none
+    val marks = none.toMutableList()
+    val la = breakdownLabels[a] ?: a; val lb = breakdownLabels[b] ?: b
+    front.first().first.takeIf { it >= 0 }?.let { marks[it] = "${la}がいちばん少ない" }
+    front.last().first.takeIf { it >= 0 }?.let { marks[it] = "${lb}がいちばん少ない" }
+    if (front.size >= 3) {
+        val rate = DoubleArray(front.size - 1) { i -> (front[i].third - front[i + 1].third).toDouble() / (front[i + 1].second - front[i].second) }
+        val knee = (1 until front.size - 1).maxByOrNull { i -> kotlin.math.abs(rate[i - 1] - rate[i]) }!!
+        front[knee].first.takeIf { it >= 0 }?.let { marks[it] = "釣り合いがよい" }
+    }
+    return marks
 }
 
 /** すべての案が今より悪い（印の数が案の数と合うときだけ）。 */

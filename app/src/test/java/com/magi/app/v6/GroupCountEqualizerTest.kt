@@ -161,4 +161,31 @@ class GroupCountEqualizerTest {
         val onlyD = GroupCountEqualizer.fixedCounts(p, b, setOf(1))
         assertEquals(14, onlyD[0 * k + 1]); assertEquals(-1, onlyD[0 * k + 0]); assertEquals(-1, onlyD[0 * k + 2])
     }
+
+    @Test fun countsStaffHoldingAShiftTheyCannotTakeNewly() {
+        // fair の母集団は「置ける人、またはいま入っている人」。s0 は D の上限 0 なのに 6 回入っていて、置けるのは s1 だけ
+        // （s2 も D の上限 0・0 回）。旧: 置ける人だけを数えて 1 人＝この組を外し、D を s1 へ回さなかった。
+        val sched = listOf(List(14) { if (it < 6) 1 else 0 }, List(14) { 0 }, List(14) { 2 }, List(14) { 0 })
+        val range = mapOf("0,1" to Range("", "0"), "2,1" to Range("", "0"))
+        val st = state(sched, range)
+        val b = sched.map { it.toIntArray() }.toTypedArray()
+        val before = UnifiedViolationChecker.check(st, b)
+        val r = GroupCountEqualizer.apply(st, b, setOf(1))
+        val after = UnifiedViolationChecker.check(st, r.schedule)
+        assertTrue(r.swaps > 0)
+        assertTrue("s0 の D が減る", r.schedule[0].count { it == 1 } < 6)
+        assertTrue("fair が増えない", (after.breakdown["fair"] ?: 0) <= (before.breakdown["fair"] ?: 0))
+        assertTrue(after.hard <= before.hard)
+        assertEquals(dayCounts(b, 14), dayCounts(r.schedule, 14))
+    }
+
+    @Test fun stopsWhenAsked() {
+        // 停止の合図で、1 組ずつの段も焼きなましも走らずに戻る（［そろえて組み直す］の停止が効く）
+        val sched = listOf(List(14) { 1 }, List(14) { if (it % 2 == 0) 1 else 0 }, List(14) { 0 }, List(14) { 2 })
+        val st = state(sched)
+        val b = sched.map { it.toIntArray() }.toTypedArray()
+        val r = GroupCountEqualizer.apply(st, b) { true }
+        assertEquals(0, r.swaps)
+        assertEquals(b.map { it.toList() }, r.schedule.map { it.toList() })
+    }
 }
