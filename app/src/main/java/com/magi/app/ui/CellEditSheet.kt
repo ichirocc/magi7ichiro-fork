@@ -29,7 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.filled.Warning
@@ -228,7 +228,7 @@ internal fun CellEditSheet(
                 SheetUndoButton(canUndo, onUndo)
                 // 割当の 1 段目は閉じるを置かない（2026-11-24 利用者「閉じるボタンは不要」＝端末の戻る）。
                 if (mode == 1 || step != 0) IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
-                IconButton(onClick = onToggleExpand) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "小さく表示") }
+                IconButton(onClick = onToggleExpand) { Icon(Icons.Filled.ArrowDropDown, contentDescription = "小さく表示") }
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
             val sheetScope = rememberCoroutineScope()
@@ -425,8 +425,10 @@ internal fun CellEditSheet(
                 }
             }
             // 上段が画面に入りきらないとき、送れることを見せる（行の途中で切れて下が空く＝続きがあると分からなかった、2026-10-27 実機）。
-            if (mode == 0 && upperScroll.canScrollForward) MagiTextButton(
-                onClick = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } },
+            val readMore: () -> Unit = { sheetScope.launch { upperScroll.animateScrollTo((upperScroll.value + upperScroll.viewportSize * 3 / 4).coerceAtMost(upperScroll.maxValue)) } }
+            // 1 段目は［続きを読む］と［自分で勤務を選ぶ］を 1 行に（2026-11-24 利用者の配置案）。ほかの段は単独の行。
+            if (mode == 0 && step != 0 && upperScroll.canScrollForward) MagiTextButton(
+                onClick = readMore,
                 modifier = Modifier.heightIn(min = 48.dp).align(Alignment.CenterHorizontally),
             ) { Text(CELL_SHEET_MORE_BELOW) }
             if (mode == 1) {
@@ -440,7 +442,11 @@ internal fun CellEditSheet(
             }
             if (mode == 0 && step == 0) {
                 // 縦に送る部分の末尾に置くと半分隠れたので固定部へ。
-                if (!dilemma || dilemmaChoice == 2) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
+                val canChoose = !dilemma || dilemmaChoice == 2
+                if (canChoose || upperScroll.canScrollForward) Row(Modifier.padding(top = 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (upperScroll.canScrollForward) MagiTextButton(onClick = readMore, modifier = Modifier.heightIn(min = 48.dp)) { Text(CELL_SHEET_MORE_BELOW, maxLines = 1) }
+                    if (canChoose) MagiTextButton(onClick = { step = 1 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ", maxLines = 1) }
+                }
                 // 前日・翌日・閉じるの行は置かない（2026-11-24 利用者「前後の日付と閉じるボタンは不要」）。日は表のセルを押して移り、閉じるのは端末の戻る。
                 // 板挟みの選択肢はこの固定部に置く（上の読むところは縦に送るので、長いと画面の外に隠れた）。
                 if (dilemma && dilemmaChoice == 0) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
