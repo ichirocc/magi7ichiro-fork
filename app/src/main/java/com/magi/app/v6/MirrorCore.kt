@@ -784,6 +784,17 @@ fun Problem.extBanNewCells(base: Array<IntArray>, cand: Array<IntArray>): List<P
 /** 拡張希望: `cand` が `base` から禁止のシフトを新しく置いていないか。 */
 fun Problem.keepsExtBan(base: Array<IntArray>, cand: Array<IntArray>): Boolean = !hasExtBan || extBanNewCells(base, cand).isEmpty()
 
+/** 拡張希望の禁止だけ（日の上限 0 は数えない）を `base` から新しく置いていないか。日の上限 0 のセルを残す盤面
+ *  （[DayCapHardRelief]・[HardRepairCore.dayCapKeptBaseline]）の採否に使う＝救済と同じ基準。 */
+fun Problem.keepsExtWishBan(base: Array<IntArray>, cand: Array<IntArray>): Boolean {
+    if (extBan.flat == null) return true
+    for (i in 0 until minOf(S, base.size, cand.size)) for (j in 0 until minOf(T, base[i].size, cand[i].size)) {
+        val k = cand[i][j]
+        if (k != base[i][j] && extWishBanned(i, j, k)) return false
+    }
+    return true
+}
+
 /** [#41] 盤面の手動固定セルがどれも固定の値か（最終番兵）。 */
 fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
     if (!hasPins) return true

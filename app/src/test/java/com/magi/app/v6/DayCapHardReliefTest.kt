@@ -64,6 +64,41 @@ class DayCapHardReliefTest {
         assertTrue("救済の起きる盤面が無い", false)
     }
 
+    /** 入力以外の段が上限 0 の日に置いて必須を減らしていたら、そのセルを残した版も候補に足す（外した版だけだと
+     *  救済の土台が別の段へ偏り、その段の良い盤面を取りこぼす。sept2026）。上限 0 の日の無い段・入力は足さない。 */
+    @Test fun dayCapKeptStagesAddsTheKeptBoardOnlyWhenItHasFewerHard() {
+        val st0 = load("sample_state_v6.json")
+        val p0 = Problem(st0)
+        val rest = p0.restIdx!!
+        val board = st0.schedule.toIntArray2D()
+        val base = UnifiedViolationChecker.check(st0, board)
+        for (cell in base.violations.filterValues { it == "vio-c3n" }.keys) {
+            val (i, j) = cell.split(',').map { it.toInt() }
+            if (p0.wishLocked(i, j) || p0.pinned(i, j) || board[i][j] == rest || !p0.mayPlace(i, rest)) continue
+            val st = capRest(st0, rest, listOf(j))
+            val p = Problem(st)
+            val r = DayCapHardRelief.apply(st, board, UnifiedViolationChecker.check(st, board), Long.MAX_VALUE)
+            if (r.placed.isEmpty()) continue
+            val stages = listOf(
+                V6FinalPort.StageCandidate("入力", r.schedule, r.report),
+                V6FinalPort.StageCandidate("探索", board, UnifiedViolationChecker.check(st, board)),
+                V6FinalPort.StageCandidate("後処理", r.schedule, r.report),
+            )
+            val added = V6FinalPort.dayCapKeptStages(st, p, stages)
+            // 入力は足さない（呼び出し側の dayCapKept が扱う）。救済した後処理の段は必ず足され、必須は救済後と同じ。
+            assertTrue(added.none { it.label.startsWith("入力") })
+            val kept = added.single { it.label == "後処理（上限0の日を保つ）" }
+            assertEquals(r.report.hard, kept.report.hard)
+            val cleared = V6FinalPort.clearedCapZeroStages(st, p, stages)
+            for (a in added) {
+                val c = cleared.single { it.label == a.label.replace("上限0の日を保つ", "上限0を外す") }
+                assertTrue("${a.label}: 外した版より必須が少ないときだけ足す", a.report.hard < c.report.hard)
+            }
+            return
+        }
+        assertTrue("救済の起きる盤面が無い", false)
+    }
+
     @Test fun leavesTheBoardAloneWithoutCapZeroDays() {
         val st = load("sample_state_v6.json")
         val board = st.schedule.toIntArray2D()
