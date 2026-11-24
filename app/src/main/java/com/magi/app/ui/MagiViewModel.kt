@@ -127,6 +127,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         private set
     internal var job: Job? = null
     private var checkJob: Job? = null
+    /** ［グループ内の回数をそろえる］の計算（二重起動を防ぐ）。 */
+    private var equalizeJob: Job? = null
     internal var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
     private var checkSeq = 0L
     /** [3.392.0] 直し方の探索も seq で世代管理する（cancel() が非同期なため。詳細は findFixSuggestions）。 */
@@ -2745,10 +2747,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun equalizeGroupCounts(shifts: Set<Int>? = null) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
+        // 計算中にもう一度押されたら新しく始めない（同じ盤面から計算が重なるだけ＝後の結果は古さの検査で捨てられる）。
+        if (equalizeJob?.isActive == true) return
         val sched = currentSchedule ?: return
         val snap = sched.map { it.copyOf() }.toTypedArray()
         // 月全体の焼きなましで 1〜数秒かかるので画面を止めない。計算中に勤務表が変わったら当てない。
-        viewModelScope.launch {
+        equalizeJob = viewModelScope.launch {
             val r = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st, snap, shifts) }
             // 計算中（1〜数秒）に作成が始まっていたら当てない＝作成中の盤面をその場で書き換えない。
             if (optimizeInFlight() || state !== st || currentSchedule !== sched || !sched.indices.all { sched[it].contentEquals(snap[it]) }) {
@@ -2776,7 +2780,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             var terminalLogged = false
             try {
-                val eq = withContext(Dispatchers.Default) { com.magi.app.v6.GroupCountEqualizer.apply(st0, sched0.copy2D(), shifts) }
+                // 停止の合図をそろえる段にも渡す（旧: 焼きなましを終えるまで停止が効かなかった）。
+                val eq = withContext(Dispatchers.Default) {
+                    val ctx = coroutineContext
+                    com.magi.app.v6.GroupCountEqualizer.apply(st0, sched0.copy2D(), shifts) { !ctx.isActive }
+                }
                 val threads = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(1, 7)
                 val res = withContext(Dispatchers.Default) {
                     val ctx = coroutineContext
@@ -2886,12 +2894,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (curRep == null || r.hard != curRep.hard) 2 else when (altTrade(curRep.breakdown, r.breakdown)) { AltTrade.DOMINATES -> 0; AltTrade.TRADE -> 1; else -> 2 }
             }
             val sorted = order.map { source2[it] }
+            val marks = curRep?.let { c -> altEdgeMarks(c.hard, c.breakdown, order.map { reps[it].hard to reps[it].breakdown }) }
             sorted to order.mapIndexed { idx, k ->
                 val rep = reps[k]
                 val worse = curRep != null && betterReport(curRep, rep)
                 val trade = if (curRep != null && rep.hard == curRep.hard) altTradeLine(curRep.breakdown, rep.breakdown) else null
                 Triple(alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep), trade), worse,
-                    curRep?.let { altLine(it.hard, it.breakdown, rep.hard, rep.breakdown) })
+                    curRep?.let { altLine(it.hard, it.breakdown, rep.hard, rep.breakdown).copy(mark = marks?.get(idx)) })
             }
         }
         alternativeScheds = alts

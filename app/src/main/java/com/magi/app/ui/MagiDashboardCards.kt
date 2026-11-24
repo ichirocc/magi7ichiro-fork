@@ -2154,7 +2154,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                         Text(s, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone)
                     } else {
                         Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-                            Text("案${i + 1}　" + if (isSel) ALT_APPLIED_TAG else altTagAfterApply(l.tag, selected >= 0), style = MaterialTheme.typography.bodyMedium, fontWeight = headEmph, color = cs.onSurface)
+                            Text("案${i + 1}　" + (if (isSel) ALT_APPLIED_TAG else altTagAfterApply(l.tag, selected >= 0)) + (l.mark?.let { "・$it" } ?: ""), style = MaterialTheme.typography.bodyMedium, fontWeight = headEmph, color = cs.onSurface)
                             l.down?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
                             l.up?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = emph, color = tone) }
                         }

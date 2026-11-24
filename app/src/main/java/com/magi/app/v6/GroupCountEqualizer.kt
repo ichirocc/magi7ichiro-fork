@@ -15,13 +15,15 @@ import com.magi.app.model.MagiState
 object GroupCountEqualizer {
     data class Result(val schedule: Array<IntArray>, val swaps: Int, val spreadBefore: Long, val spreadAfter: Long)
 
-    /** グループ×シフトごとの対象（置ける人・2 人以上）。シフトを選ばない・置ける人が 1 人以下なら null。 */
-    private fun eligible(p: Problem, shifts: Set<Int>?): Array<Array<IntArray?>> =
+    /** グループ×シフトごとの対象（2 人以上）。母集団は採点の fair と同じ「置ける人、またはいまそのシフトに入っている人」
+     *  （`fairDevOfBucket`。旧: 置ける人だけ＝上限 0 なのに入っている人と置ける人の 2 人の組を、fair は数えるのにそろえる側が外していた）。
+     *  シフトを選ばない・対象が 1 人以下なら null。 */
+    private fun eligible(p: Problem, shifts: Set<Int>?, cnt: Array<IntArray>): Array<Array<IntArray?>> =
         Array(p.groupMembers.size) { g ->
             val m = p.groupMembers[g]
             Array(p.K) { k ->
                 if (m.size < 2 || (shifts != null && k !in shifts) || k !in p.bucket[g]) null
-                else m.filter { p.mayPlace(it, k) }.toIntArray().takeIf { it.size >= 2 }
+                else m.filter { p.mayPlace(it, k) || cnt[it][k] > 0 }.toIntArray().takeIf { it.size >= 2 }
             }
         }
 
@@ -43,7 +45,8 @@ object GroupCountEqualizer {
      * 途中は個人の範囲を外れても必須が増えてもよい（罰として数える）が、採るのは「各 (職員,シフト) の範囲からの外れ量が元以下・
      * 必須が元以下」の盤面のうち、目標からのずれがいちばん小さいものだけ。よりそろった盤面が見つかれば [work] を書き換えて true。
      */
-    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, elig: Array<Array<IntArray?>>, iters: Int, seed: Long, fastCool: Boolean): Boolean {
+    private fun anneal(p: Problem, work: Array<IntArray>, cnt0: Array<IntArray>, elig: Array<Array<IntArray?>>, iters: Int, seed: Long, fastCool: Boolean,
+                       shouldStop: () -> Boolean = { false }): Boolean {
         // 手は 1 手ごとに無作為に作る（全部を先に並べると 30 人・31 日で数十万件になる）: 2 人の同じ日の入れ替え・3 人の回し・
         // 同じ 2 人の前後 2 日をまとめた入れ替えを等しい割合で。1 人目はグループから、相手は半分は同じグループ・半分は誰でも
         // （同じグループの中だけでは禁止の並びや希望で動けない回数を、別のグループの人との入れ替えで動かす。12 月の実データで
@@ -78,6 +81,7 @@ object GroupCountEqualizer {
         val locked = BooleanArray(p.S * p.T) { p.wishLocked(it / p.T, it % p.T) }   // 希望・手動固定（毎手引くと重い）
         val who2 = IntArray(2); val who3 = IntArray(3); val day1 = IntArray(1); val day2 = IntArray(2)
         for (step in 0 until iters) {
+            if ((step and 1023) == 0 && shouldStop()) break   // 停止の合図を約 1,000 手ごとに見る（それまでの最良は残す）
             temp *= cool
             var gi = rnd.nextInt(pairTotal); var g = 0
             while (gi >= pairW[g]) { gi -= pairW[g]; g++ }
@@ -176,11 +180,11 @@ object GroupCountEqualizer {
 
 
     fun apply(state: MagiState, schedule: Array<IntArray>, shifts: Set<Int>? = null, maxSwaps: Int = 2_000,
-              annealIters: Int = ANNEAL_ITERS, seed: Long = 1L): Result {
+              annealIters: Int = ANNEAL_ITERS, seed: Long = 1L, shouldStop: () -> Boolean = { false }): Result {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
         val cnt = counts(p, work)
-        val elig = eligible(p, shifts)
+        val elig = eligible(p, shifts, cnt)
         val before = totalDev(p, elig, cnt)
         if (elig.all { row -> row.all { it == null } }) return Result(work, 0, before, before)   // そろえる (グループ,シフト) が無い
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)   // 希望固定と手動固定
@@ -208,7 +212,7 @@ object GroupCountEqualizer {
         }
         data class Cand(val gain: Double, val a: Int, val b: Int, val d: Int)
         var swaps = 0
-        while (swaps < maxSwaps) {
+        while (swaps < maxSwaps && !shouldStop()) {
             for (g in elig.indices) for (k in 0 until p.K) devNow[g][k] = if (elig[g][k] != null) groupDev(p, g, k, cnt) else 0.0
             val cands = ArrayList<Cand>()
             for (m in p.groupMembers) {
@@ -245,8 +249,9 @@ object GroupCountEqualizer {
         //   （速く冷やす＝有効な手で 2 回、ゆっくり＝1 手 1 回で t1 に届く）を両方走らせる。速いほうを先に走らせ同点は先を残す＝速いほうだけより悪くならない。
         var bestRun: Array<IntArray>? = null; var bestRunDev = totalDev(p, elig, cnt)
         if (annealIters > 0) for (run in 0 until ANNEAL_RUNS) for (fastCool in listOf(true, false)) {
+            if (shouldStop()) break
             val w = work.copy2D()
-            if (!anneal(p, w, cnt, elig, annealIters, seed + run, fastCool)) continue
+            if (!anneal(p, w, cnt, elig, annealIters, seed + run, fastCool, shouldStop)) continue
             val dv = totalDev(p, elig, counts(p, w))
             if (dv < bestRunDev) { bestRunDev = dv; bestRun = w }
         }
