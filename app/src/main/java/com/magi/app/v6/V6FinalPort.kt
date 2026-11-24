@@ -1540,10 +1540,7 @@ object V6FinalPort {
         //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
         ensureActive()
         // 交換の候補はシーソーの時点の本命と比べて選んだ＝最終の本命（追加精製・最終番兵の後）と比べ直し、必須が違うか優越されるものは外す。
-        val finalTradeoffs = seesawTradeoffs.filter { t ->
-            val r = UnifiedViolationChecker.check(state, t)
-            r.hard == finalReport.hard && !SeesawRelink.dominates(finalReport, r) && r.breakdown != finalReport.breakdown
-        }
+        val finalTradeoffs = seesawTradeoffs.filter { t -> SeesawRelink.isTradeoff(finalReport, UnifiedViolationChecker.check(state, t)) }
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
             // 交換の候補を先に、空いた枠（最大 3）を探索の他の案で埋める（旧: 候補が 1 件でもあると他の案を全部置き換えていた）。
             alternatives = if (finalTradeoffs.isEmpty()) chained.alternatives
