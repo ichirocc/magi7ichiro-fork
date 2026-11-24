@@ -1,7 +1,7 @@
 package com.magi.app.ui
 
 import com.magi.app.v6.Problem
-import com.magi.app.v6.canDo
+import com.magi.app.v6.c1Applies
 import com.magi.app.v6.mayPlace
 import com.magi.app.v6.lockTo
 import com.magi.app.v6.wishLocked
@@ -28,13 +28,13 @@ data class C1Shortage(
 internal fun c1Changeable(p: Problem, i: Int, d: Int, k: Int): Boolean =
     if (p.wishLocked(i, d)) p.lockTo(i, d) == k else p.mayPlaceAt(i, d, k)
 
-/** 盤面 [s] の期間の制約の不足区間。窓の数え方はチェッカー（担当不可の職員は対象外）と同じ。 */
+/** 盤面 [s] の期間の制約の不足区間。窓の数え方はチェッカー（[c1Applies] の外の職員は対象外）と同じ。 */
 internal fun c1Shortages(p: Problem, s: Array<IntArray>): List<C1Shortage> {
     val out = ArrayList<C1Shortage>()
     for (c in p.cons1) {
         if (c.day1 <= 0 || c.day1 > p.T) continue
         for (i in 0 until p.S) {
-            if (!p.canDo(i, c.shiftIdx)) continue
+            if (!p.c1Applies(i, c.shiftIdx)) continue
             val row = s[i]
             val cand = BooleanArray(p.T) { d -> row[d] != c.shiftIdx && c1Changeable(p, i, d, c.shiftIdx) }
             var runStart = -1; var n = 0; var stuck = false

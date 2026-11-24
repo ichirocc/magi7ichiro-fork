@@ -10,6 +10,7 @@ internal enum class MagiPhase(val busyLabel: String?) {
     Drafting("下書きづくり"),
     Optimizing("勤務表づくり"),
     Polishing("仕上げ最適化"),
+    Equalizing("回数をそろえて組み直し"),
     Background("閉じている間の最適化"),
     ;
 
@@ -17,7 +18,7 @@ internal enum class MagiPhase(val busyLabel: String?) {
 
     /** 画面を消灯させないのはこの 3 つだけ（前景で探索が走っている段階）。
      *  読み込み・CSV取込は短く、背景実行は前景サービスが持つので画面は要らない。 */
-    val keepsScreenOn: Boolean get() = this == Drafting || this == Optimizing || this == Polishing
+    val keepsScreenOn: Boolean get() = this == Drafting || this == Optimizing || this == Polishing || this == Equalizing
 }
 
 /** イベントが要求する権限の種類。どの段階で通すかは [MagiArbiter] が決める。 */

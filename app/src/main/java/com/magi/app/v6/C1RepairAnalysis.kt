@@ -126,7 +126,7 @@ object C1RepairAnalysis {
             val x = c.shiftIdx
             if (x !in 0 until p.K || c.day1 !in 1..p.T || c.day2 < 1) continue
             for (i in 0 until p.S) {
-                if (!p.canDo(i, x)) continue
+                if (!p.c1Applies(i, x)) continue
                 var j = 0
                 while (j <= p.T - c.day1) {
                     var z = 0
