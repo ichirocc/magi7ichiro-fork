@@ -51,9 +51,13 @@ internal object AlnsSearch {
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
         val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
-        // 拡張希望の禁止へ置いた修復は採らない
-        var outSched = if (p.keepsExtBan(res.schedule, repaired.schedule)) repaired.schedule else res.schedule
-        var report = UnifiedViolationChecker.check(state, outSched)
+        // 拡張希望の禁止へ置いた修復は採らない。修復は SA の結果より良いときだけ採る（下限の埋めが禁止の並び・人員不足を増やし得る。
+        //   入口の hf67（N1b）と同じ keep-best。旧: 入力とだけ比べ、SA の結果より悪い修復後の盤面を返し得た）。
+        val saReport = UnifiedViolationChecker.check(state, res.schedule)
+        val repairedReport = UnifiedViolationChecker.check(state, repaired.schedule)
+        val repairAdopted = p.keepsExtBan(res.schedule, repaired.schedule) && !better(saReport, repairedReport)
+        var outSched = if (repairAdopted) repaired.schedule else res.schedule
+        var report = if (repairAdopted) repairedReport else saReport
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
         //   入力より悪化した結果をそのまま返していた。RSI++ は Phase1 Seed に runV5 を使い、以降の各段は前段比
         //   keep-best のため、Phase1 の劣化(実測: 入力HARD=1/195 → Seed HARD=2/229)が全チェーンへ伝播し、
