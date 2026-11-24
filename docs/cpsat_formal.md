@@ -181,6 +181,27 @@ JNI `nativeCpsatImproveFixedCounts`、Kotlin `CpsatResolve.run(fixCounts=)`。
 - **下限が当てはまる範囲**: CP-SAT の定義域（置ける値＋入力の値、希望・手動固定はその値）の盤面だけ。採用した盤面が外れていれば
   （上限 0 の日に置いた最終段 `DayCapHardRelief` など、`CpsatCoRun.inDomain`）、ギャップ・証明の一行・「まだ狙える」の上限に下限を使わない。
 
+## K 人の組の厳密スイープ（TOOL、2026-11-24）
+`tools/native/cpsat_cohort_sweep.cpp`（出力不変）。すべての K 人の組について、ほかの職員の行を固定して組の行だけを CP-SAT で解く（1 段目＝必須を減らせるか、
+2 段目＝必須を入力以下にして重みを最小に）。モデルの目的は実際の重み以下なので、下限が入力以上なら「その K 人の行だけを変えて良くなる盤面は無い」（K 最適）。
+見つけた盤面はエンジンの採点（`fullEvalParts`）で確かめる。K 最適は前線の上（本物の交換、`docs/seesaw.md`）の証明ではない。発端は利用者が貼った総当たりの案
+（職員 1 人の全合法行の直積を Prefix Trie で刈る）で、合法行は 1 人で約 10^15〜10^16 本あり列挙できない（DP で数えた上界）ため CP-SAT で解く形にした。
+
+測定（ホスト 4 コア、優先順位、組あたり上限 20 秒、未決 0）。盤面は付属 6 件をホストで 30 秒最適化したもの（Kotlin のみ・CP-SAT の併走なし）と、
+それを起点に CP-SAT の全体の解（`solve`、2 ワーカー＝端末の併走と同じ）を 120 秒かけたもの。最良は 1 組で得た最良（組ごとに独立）、解き直しは `improve` 30 秒・4 スレッド。
+
+| 盤面 | K=2 良くなる組・最良 | K=3 良くなる組・最良 | 解き直し 30 秒 |
+|---|---|---|---|
+| 30 秒最適化後（golden・sample・sept2026・oct2026・blocked_covu・full_coverage） | 42/45・15/45 など、−0.8〜−34.5% | 120/120〜16/20、−1.4〜−52.2% | −3.2〜−83.9% |
+| CP-SAT 120 秒後: golden（43,030） | 2/45・−0.7% | 17/120・−5.5% | −8.6% |
+| 同 sept2026（16,655） | 3/45・−1.7% | 25/120・−3.6% | −17.5% |
+| 同 blocked_covu（66,291） | 8/45・−4.7% | 56/120・−9.3% | −12.0% |
+| 同 oct2026（104,495） | 12/55・−0.8% | 64/165・−1.1% | −4.0% |
+
+読み: ホストの 30 秒の盤面は遠く（2 人の行の組み直しだけで −35% の組がある）、CP-SAT の併走のあとでも 3 人の組の 14〜39% は良くなる。改善を積み重ねる
+解き直し（アプリでは既定 OFF・端末で未測定、backlog #55）は、1 組の最良より大きく下げる。端末の盤面（実行 #5 は下限とのギャップ 5.9%）では余地はそれ以下。
+生データと再現の手順は `tools/loop/results/cohort-sweep-2026-11-24/`。
+
 ## 必須違反の原因（S4、2026-11-10）
 - `magi_cpsat::HardExplainer`。次の条件を 1 件ずつ「守る」仮定にする。希望（翌日の希望による前日の禁止 c3w を含む）、手動固定、
   日×シフトの必要人数、禁止の並びの規則（始まりの日ごと）、職員ごとの「担当外・拡張希望の禁止を置かない」。置ける値は最適化のモデルと同じ
@@ -214,4 +235,5 @@ g++ -O2 -std=c++20 -DMAGI_HOST_TEST -I app/src/main/cpp -I tools/native tools/na
 g++ -O2 -DNDEBUG -std=c++20 -DMAGI_HOST_TEST -DMAGI_WITH_CPSAT -DOR_PROTO_DLL= -DUSE_GLOP -DUSE_BOP -I app/src/main/cpp -I tools/native -I <O>/include \
   tools/native/cpsat_bench.cpp -L<O>/lib -lortools -lprotobuf $(ls <O>/lib/libabsl_*.so | sed 's#.*/lib\(.*\)\.so#-l\1#') -Wl,-rpath,<O>/lib -o cpsat_bench
 # 下限の検査（同じ組み方で tools/native/cpsat_bound_check.cpp。-pthread）: cpsat_bound_check <flat> [盤面数=200] [乱数] [優先順位=1] [別の盤面.flat ...]
+# K 人の組の厳密スイープ（同じ組み方で tools/native/cpsat_cohort_sweep.cpp。-pthread）: cpsat_cohort_sweep <flat> [K=3] [秒/組=20] [優先順位=1] [ワーカー=4] [良くなった盤面の書き出し先]
 ```

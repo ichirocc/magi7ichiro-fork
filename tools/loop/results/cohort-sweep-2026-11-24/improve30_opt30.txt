@@ -1,0 +1,6 @@
+IMPROVE json/golden_state.opt.flat 30秒 必須 0→0 重み 145726→57699 部分=79 採用=32 最適=59
+IMPROVE json/sample_state_v6.opt.flat 30秒 必須 1→1 重み 15017→12730 部分=171 採用=23 最適=167
+IMPROVE json/sept2026_state.opt.flat 30秒 必須 0→0 重み 100493→16139 部分=150 採用=34 最適=136
+IMPROVE json/oct2026_grid_state.opt.flat 30秒 必須 9→9 重み 104872→100346 部分=386 採用=20 最適=377
+IMPROVE json/blocked_covu_state.opt.flat 30秒 必須 4→4 重み 91726→58378 部分=66 採用=26 最適=46
+IMPROVE json/full_coverage_state.opt.flat 30秒 必須 0→0 重み 1999→1936 部分=208 採用=4 最適=196
