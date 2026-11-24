@@ -213,6 +213,9 @@ object PolishGate {
      */
     @Volatile var mafs2Enabled: Boolean = false
 
+    /** シーソーの 3 人 × 2 日の巡回（[CycleSwapPolish]、`docs/seesaw.md` §6）を後処理の最後に入れる。既定 **false**（対の比較で採否）。 */
+    @Volatile var cycleSwapPolish: Boolean = false
+
     /** 膜の細胞 LNS（`MembraneCellLns`、`docs/membrane_search.md` §11）を後処理の最終段に入れる。既定 **true**（2 腕比較 12 勝 3 敗、3.727.20 ユーザー決定）。 */
     @Volatile var membraneCellLns: Boolean = true
 
@@ -245,7 +248,7 @@ object PolishGate {
         "combineExhaustPairs" to combineExhaustPairs,
         "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish,
-        "membraneCellLns" to membraneCellLns,
+        "membraneCellLns" to membraneCellLns, "cycleSwapPolish" to cycleSwapPolish,
         "seesawRelink" to seesawRelink,
         "cpsatCoRun" to cpsatCoRun, "cpsatResolve" to cpsatResolve, "rogsController" to rogsController,
         
@@ -267,7 +270,7 @@ object PolishGate {
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }
-        b("membraneCellLns") { membraneCellLns = it }
+        b("membraneCellLns") { membraneCellLns = it }; b("cycleSwapPolish") { cycleSwapPolish = it }
         b("seesawRelink") { seesawRelink = it }
         b("cpsatCoRun") { cpsatCoRun = it }; b("cpsatResolve") { cpsatResolve = it }; b("rogsController") { rogsController = it }
         b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
@@ -495,6 +498,8 @@ object V6HotfixPasses {
         val countChainEnabled: Boolean = false,
         /** 膜の細胞 LNS を最終段に入れる（[EngineConfig.membraneCellLns] の写し）。 */
         val membraneCell: Boolean = true,
+        /** シーソーの 3 人 × 2 日の巡回（[EngineConfig.cycleSwapPolish] の写し）。 */
+        val cycleSwap: Boolean = false,
         /** 禁止連続の崩し範囲を広げる（[EngineConfig.wideC3nBreakDays] の写し）。 */
         val wideC3nBreakDays: Boolean = false,
         /** 玉突きの設定（[EngineConfig.ejection] の写し）。 */
@@ -725,6 +730,11 @@ object V6HotfixPasses {
                 val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
                 val r = CovOReliefPolish.apply(state, work, shouldStop = reliefStop)
                 PostFold.Board(r.newSchedule, r.logs, r.report)
+            },
+            PostStep(PostStages.CYCLE_SWAP, skipWhenStopped = true, enabled = { params.cycleSwap }) { work ->
+                val stop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+                val r = CycleSwapPolish.apply(state, work, shouldStop = stop)
+                PostFold.Board(r.newSchedule, r.logs, r.report, r.applied)
             },
         ), shouldStop)
     }

@@ -15,6 +15,7 @@ data class EngineConfig(
     val aptFairSoftTolerance: Boolean = false,
     val countChainPolish: Boolean = false,
     val membraneCellLns: Boolean = true,
+    val cycleSwapPolish: Boolean = false,
     /** シーソーの Path Relinking（[PolishGate.seesawRelink] の写し。後処理の後、V6FinalPort が読む）。 */
     val seesawRelink: Boolean = false,
     /** CP-SAT の併走（[PolishGate.cpsatCoRun] の写し）。 */
@@ -34,6 +35,7 @@ data class EngineConfig(
         aptFairSoftTolerance = aptFairSoftTolerance,
         countChainEnabled = countChainPolish,
         membraneCell = membraneCellLns,
+        cycleSwap = cycleSwapPolish,
         wideC3nBreakDays = wideC3nBreakDays,
         ejection = ejection,
     )
@@ -51,6 +53,7 @@ data class EngineConfig(
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance && ObjectiveWeights.allowsAptFairTolerance(),
             countChainPolish = PolishGate.countChainPolish,
             membraneCellLns = PolishGate.membraneCellLns,
+            cycleSwapPolish = PolishGate.cycleSwapPolish,
             seesawRelink = PolishGate.seesawRelink,
             cpsatCoRun = PolishGate.cpsatCoRun,
             cpsatResolve = PolishGate.cpsatResolve,
