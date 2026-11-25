@@ -1,0 +1,84 @@
+golden_state,1,off,TIME,総49.262s (予算30s＋後処理10s＋玉突き10s): 探索29.994s + 連鎖0.0s + 解き直し0.0s + 統合0.006s + 後処理6.197s + 追加精製13.024s / workers設定4 SAチェーン4本
+golden_state,1,off,ExtraRefine,予算残13sで追加精製: HARD 0→0 / total 567→567
+golden_state,1,off2,TIME,総49.879s (予算30s＋後処理10s＋玉突き10s): 探索29.999s + 連鎖0.0s + 解き直し0.0s + 統合0.001s + 後処理3.868s + 追加精製16.006s / workers設定4 SAチェーン4本
+golden_state,1,off2,ExtraRefine,予算残16sで追加精製: HARD 0→0 / total 564→564
+golden_state,1,on,TIME,総49.68s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.0s + 後処理4.67s + 追加精製15.007s / workers設定4 SAチェーン4本
+golden_state,1,on,ExtraRefine,予算残15sで追加精製: HARD 0→0 / total 585→585
+golden_state,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1694 回・69ms・重み 71365→71365・必須 0→0
+golden_state,2,off,TIME,総49.3s (予算30s＋後処理10s＋玉突き10s): 探索30.0s + 連鎖0.0s + 解き直し0.0s + 統合0.0s + 後処理3.288s + 追加精製16.01s / workers設定4 SAチェーン4本
+golden_state,2,off,ExtraRefine,予算残16sで追加精製: HARD 0→0 / total 525→525
+golden_state,2,off2,TIME,総49.401s (予算30s＋後処理10s＋玉突き10s): 探索29.999s + 連鎖0.0s + 解き直し0.0s + 統合0.001s + 後処理3.391s + 追加精製16.007s / workers設定4 SAチェーン4本
+golden_state,2,off2,ExtraRefine,予算残16sで追加精製: HARD 0→0 / total 578→578
+golden_state,2,on,TIME,総49.5s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.04s + 後処理3.451s + 追加精製16.005s / workers設定4 SAチェーン4本
+golden_state,2,on,ExtraRefine,予算残16sで追加精製: HARD 0→0 / total 549→549
+golden_state,2,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1606 回・51ms・重み 74173→74173・必須 0→0
+sample_state_v6,1,off,TIME,総49.802s (予算30s＋後処理10s＋玉突き10s): 探索29.995s + 連鎖0.0s + 解き直し0.0s + 統合0.035s + 後処理2.756s + 追加精製17.009s / workers設定4 SAチェーン4本
+sample_state_v6,1,off,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 1 / total 259 のまま後処理の結果を採用）
+sample_state_v6,1,off2,TIME,総49.379s (予算30s＋後処理10s＋玉突き10s): 探索30.0s + 連鎖0.0s + 解き直し0.0s + 統合0.02s + 後処理2.354s + 追加精製17.003s / workers設定4 SAチェーン4本
+sample_state_v6,1,off2,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 1 / total 273 のまま後処理の結果を採用）
+sample_state_v6,1,on,TIME,総49.839s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.025s + 後処理2.804s + 追加精製17.005s / workers設定4 SAチェーン4本
+sample_state_v6,1,on,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 1 / total 264 のまま後処理の結果を採用）
+sample_state_v6,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1420 回・37ms・重み 12575→12575・必須 1→1
+sample_state_v6,2,off,TIME,総49.554s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.025s + 後処理1.52s + 追加精製18.006s / workers設定4 SAチェーン4本
+sample_state_v6,2,off,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 1 / total 255 のまま後処理の結果を採用）
+sample_state_v6,2,off2,TIME,総49.172s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.027s + 後処理2.131s + 追加精製17.011s / workers設定4 SAチェーン4本
+sample_state_v6,2,off2,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 1 / total 261 のまま後処理の結果を採用）
+sample_state_v6,2,on,TIME,総49.33s (予算30s＋後処理10s＋玉突き10s): 探索30.001s + 連鎖0.0s + 解き直し0.0s + 統合0.031s + 後処理2.29s + 追加精製17.007s / workers設定4 SAチェーン4本
+sample_state_v6,2,on,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 1 / total 255 のまま後処理の結果を採用）
+sample_state_v6,2,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1582 回・44ms・重み 12749→12749・必須 1→1
+sept2026_state,1,off,TIME,総31.547s (予算30s＋後処理10s＋玉突き10s): 探索27.018s + 連鎖0.0s + 解き直し0.0s + 統合0.034s + 後処理4.491s + 追加精製0.003s / workers設定4 SAチェーン4本
+sept2026_state,1,off,ExtraRefine,締切まで残り18s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の18s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,1,off2,TIME,総30.469s (予算30s＋後処理10s＋玉突き10s): 探索27.003s + 連鎖0.0s + 解き直し0.0s + 統合0.021s + 後処理3.444s + 追加精製0.0s / workers設定4 SAチェーン4本
+sept2026_state,1,off2,ExtraRefine,締切まで残り19s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の19s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,1,on,TIME,総30.367s (予算30s＋後処理10s＋玉突き10s): 探索27.002s + 連鎖0.0s + 解き直し0.0s + 統合0.019s + 後処理3.345s + 追加精製0.0s / workers設定4 SAチェーン4本
+sept2026_state,1,on,ExtraRefine,締切まで残り19s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の19s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1618 回・50ms・重み 28083→28083・必須 0→0
+sept2026_state,2,off,TIME,総31.838s (予算30s＋後処理10s＋玉突き10s): 探索27.003s + 連鎖0.0s + 解き直し0.0s + 統合0.019s + 後処理4.815s + 追加精製0.0s / workers設定4 SAチェーン4本
+sept2026_state,2,off,ExtraRefine,締切まで残り18s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の18s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,2,off2,TIME,総31.528s (予算30s＋後処理10s＋玉突き10s): 探索27.008s + 連鎖0.0s + 解き直し0.0s + 統合0.033s + 後処理4.487s + 追加精製0.0s / workers設定4 SAチェーン4本
+sept2026_state,2,off2,ExtraRefine,締切まで残り18s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の18s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,2,on,TIME,総31.323s (予算30s＋後処理10s＋玉突き10s): 探索27.006s + 連鎖0.0s + 解き直し0.0s + 統合0.028s + 後処理4.287s + 追加精製0.001s / workers設定4 SAチェーン4本
+sept2026_state,2,on,ExtraRefine,締切まで残り18s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の18s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+sept2026_state,2,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 1572 回・47ms・重み 31807→31807・必須 0→0
+oct2026_grid_state,1,off,TIME,総31.563s (予算30s＋後処理10s＋玉突き10s): 探索27.005s + 連鎖0.0s + 解き直し0.0s + 統合0.016s + 後処理4.536s + 追加精製0.0s / workers設定4 SAチェーン4本
+oct2026_grid_state,1,off,ExtraRefine,締切まで残り18s（うち探索予算30sの残り0s・残りは後置の予約枠。追加精製に使える上限は予約枠の18s）だが実行せず: 停滞検知で早期終了済み（無改善なら早く返す方針）
+oct2026_grid_state,1,off2,TIME,総49.614s (予算30s＋後処理10s＋玉突き10s): 探索30.0s + 連鎖0.0s + 解き直し0.0s + 統合0.0s + 後処理4.585s + 追加精製15.027s / workers設定4 SAチェーン4本
+oct2026_grid_state,1,off2,ExtraRefine,予算残15sで追加精製: HARD 9→9 / total 441→441
+oct2026_grid_state,1,on,TIME,総49.976s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.019s + 後処理4.945s + 追加精製15.008s / workers設定4 SAチェーン4本
+oct2026_grid_state,1,on,ExtraRefine,予算残15sで追加精製: HARD 9→9 / total 457→457
+oct2026_grid_state,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 2708 回・156ms・重み 105093→105093・必須 9→9
+oct2026_grid_state,2,off,TIME,総49.257s (予算30s＋後処理10s＋玉突き10s): 探索30.0s + 連鎖0.0s + 解き直し0.0s + 統合0.018s + 後処理6.211s + 追加精製13.021s / workers設定4 SAチェーン4本
+oct2026_grid_state,2,off,ExtraRefine,予算残13sで追加精製: 改善なし（HARD 9 / total 446 のまま後処理の結果を採用）
+oct2026_grid_state,2,off2,TIME,総49.081s (予算30s＋後処理10s＋玉突き10s): 探索29.993s + 連鎖0.0s + 解き直し0.0s + 統合0.001s + 後処理5.061s + 追加精製14.017s / workers設定4 SAチェーン4本
+oct2026_grid_state,2,off2,ExtraRefine,予算残14sで追加精製: 改善なし（HARD 9 / total 438 のまま後処理の結果を採用）
+oct2026_grid_state,2,on,TIME,総49.643s (予算30s＋後処理10s＋玉突き10s): 探索30.004s + 連鎖0.0s + 解き直し0.0s + 統合0.021s + 後処理3.603s + 追加精製16.012s / workers設定4 SAチェーン4本
+oct2026_grid_state,2,on,ExtraRefine,予算残16sで追加精製: 改善なし（HARD 9 / total 442 のまま後処理の結果を採用）
+oct2026_grid_state,2,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 2804 回・122ms・重み 105115→105115・必須 9→9
+blocked_covu_state,1,off,TIME,総49.605s (予算30s＋後処理10s＋玉突き10s): 探索30.001s + 連鎖0.0s + 解き直し0.0s + 統合0.037s + 後処理6.558s + 追加精製13.007s / workers設定4 SAチェーン4本
+blocked_covu_state,1,off,ExtraRefine,予算残13sで追加精製: 改善なし（HARD 4 / total 337 のまま後処理の結果を採用）
+blocked_covu_state,1,off2,TIME,総49.925s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.027s + 後処理4.889s + 追加精製15.005s / workers設定4 SAチェーン4本
+blocked_covu_state,1,off2,ExtraRefine,予算残15sで追加精製: HARD 4→4 / total 335→335
+blocked_covu_state,1,on,TIME,総49.167s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.033s + 後処理6.126s + 追加精製13.005s / workers設定4 SAチェーン4本
+blocked_covu_state,1,on,ExtraRefine,予算残13sで追加精製: HARD 4→4 / total 340→340
+blocked_covu_state,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 2970 回・85ms・重み 57394→57394・必須 4→4
+blocked_covu_state,2,off,TIME,総49.298s (予算30s＋後処理10s＋玉突き10s): 探索30.004s + 連鎖0.0s + 解き直し0.0s + 統合0.035s + 後処理6.254s + 追加精製13.005s / workers設定4 SAチェーン4本
+blocked_covu_state,2,off,ExtraRefine,予算残13sで追加精製: HARD 4→4 / total 327→327
+blocked_covu_state,2,off2,TIME,総49.576s (予算30s＋後処理10s＋玉突き10s): 探索30.005s + 連鎖0.0s + 解き直し0.0s + 統合0.042s + 後処理4.523s + 追加精製15.005s / workers設定4 SAチェーン4本
+blocked_covu_state,2,off2,ExtraRefine,予算残15sで追加精製: HARD 4→4 / total 357→357
+blocked_covu_state,2,on,TIME,総49.322s (予算30s＋後処理10s＋玉突き10s): 探索30.002s + 連鎖0.0s + 解き直し0.0s + 統合0.037s + 後処理5.279s + 追加精製14.003s / workers設定4 SAチェーン4本
+blocked_covu_state,2,on,ExtraRefine,予算残14sで追加精製: HARD 4→4 / total 338→338
+blocked_covu_state,2,on,CycleSwapPolish,3人×2日の巡回: 採用 3 手・評価 12442 回・497ms・重み 64757→64554・必須 4→4
+full_coverage_state,1,off,TIME,総49.392s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.013s + 後処理2.368s + 追加精製17.004s / workers設定4 SAチェーン4本
+full_coverage_state,1,off,ExtraRefine,予算残17sで追加精製: 改善なし（HARD 0 / total 133 のまま後処理の結果を採用）
+full_coverage_state,1,off2,TIME,総49.353s (予算30s＋後処理10s＋玉突き10s): 探索30.005s + 連鎖0.0s + 解き直し0.0s + 統合0.017s + 後処理1.324s + 追加精製18.006s / workers設定4 SAチェーン4本
+full_coverage_state,1,off2,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 0 / total 133 のまま後処理の結果を採用）
+full_coverage_state,1,on,TIME,総49.476s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.016s + 後処理1.454s + 追加精製18.003s / workers設定4 SAチェーン4本
+full_coverage_state,1,on,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 0 / total 139 のまま後処理の結果を採用）
+full_coverage_state,1,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 554 回・18ms・重み 1946→1946・必須 0→0
+full_coverage_state,2,off,TIME,総49.522s (予算30s＋後処理10s＋玉突き10s): 探索30.004s + 連鎖0.0s + 解き直し0.0s + 統合0.012s + 後処理1.504s + 追加精製18.001s / workers設定4 SAチェーン4本
+full_coverage_state,2,off,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 0 / total 126 のまま後処理の結果を採用）
+full_coverage_state,2,off2,TIME,総49.58s (予算30s＋後処理10s＋玉突き10s): 探索30.003s + 連鎖0.0s + 解き直し0.0s + 統合0.012s + 後処理1.563s + 追加精製18.002s / workers設定4 SAチェーン4本
+full_coverage_state,2,off2,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 0 / total 126 のまま後処理の結果を採用）
+full_coverage_state,2,on,TIME,総49.554s (予算30s＋後処理10s＋玉突き10s): 探索30.004s + 連鎖0.0s + 解き直し0.0s + 統合0.009s + 後処理1.539s + 追加精製18.002s / workers設定4 SAチェーン4本
+full_coverage_state,2,on,ExtraRefine,予算残18sで追加精製: 改善なし（HARD 0 / total 138 のまま後処理の結果を採用）
+full_coverage_state,2,on,CycleSwapPolish,3人×2日の巡回: 採用 0 手・評価 552 回・8ms・重み 1945→1945・必須 0→0
