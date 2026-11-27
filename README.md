@@ -52,6 +52,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-27（3.727.137: 下書きに間隔で配る／詰めて配る（既定 OFF、最適化後 4 勝 6 敗）・gap と c1 のシーソーを測定）
 **最終更新**：2026-11-27（3.727.136: 出力不変の高速化＝後処理の重複判定の鍵の衝突と reportKey のマップ生成を除き −4〜−8%）
 **最終更新**：2026-11-27（文書のみ: Interaction Nets の適用性を机上で判定＝作らない、`docs/interaction_nets.md`）
 **最終更新**：2026-11-27（3.727.135: 解き直しの区間に 4〜5 人×全日（12 月の実データで −70）・解き直しは既定 OFF のまま）

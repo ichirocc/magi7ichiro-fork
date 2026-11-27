@@ -1,0 +1,32 @@
+DRAFT dec2026_state off 必須=51 重み=491687 gap=35 c1=21 c3n=32 covU=18 hash=90423848
+FINAL dec2026_state off seed1 必須=3 重み=51253 gap=25 c1=69 c3n=2 covU=1
+FINAL dec2026_state off seed2 必須=3 重み=47110 gap=18 c1=58 c3n=2 covU=1
+DRAFT dec2026_state on 必須=44 重み=426908 gap=24 c1=21 c3n=26 covU=18 hash=e4ef0a80
+FINAL dec2026_state on seed1 必須=3 重み=46619 gap=14 c1=59 c3n=2 covU=1
+FINAL dec2026_state on seed2 必須=3 重み=46454 gap=13 c1=56 c3n=2 covU=1
+DRAFT full_coverage_state off 必須=15 重み=152580 gap=0 c1=0 c3n=0 covU=15 hash=acdb5948
+FINAL full_coverage_state off seed1 必須=0 重み=1937 gap=0 c1=0 c3n=0 covU=0
+FINAL full_coverage_state off seed2 必須=0 重み=1937 gap=0 c1=0 c3n=0 covU=0
+DRAFT full_coverage_state on 必須=15 重み=152740 gap=0 c1=0 c3n=0 covU=15 hash=ccfb19a2
+FINAL full_coverage_state on seed1 必須=0 重み=1944 gap=0 c1=0 c3n=0 covU=0
+FINAL full_coverage_state on seed2 必須=0 重み=1939 gap=0 c1=0 c3n=0 covU=0
+DRAFT dec2026_state off 必須=51 重み=491687 gap=35 c1=21 c3n=32 covU=18 hash=90423848
+FINAL dec2026_state off seed3 必須=3 重み=49698 gap=25 c1=64 c3n=2 covU=1
+FINAL dec2026_state off seed4 必須=3 重み=46678 gap=12 c1=58 c3n=2 covU=1
+FINAL dec2026_state off seed5 必須=3 重み=48542 gap=27 c1=66 c3n=2 covU=1
+FINAL dec2026_state off seed6 必須=3 重み=49282 gap=16 c1=70 c3n=2 covU=1
+DRAFT dec2026_state on 必須=44 重み=426908 gap=24 c1=21 c3n=26 covU=18 hash=e4ef0a80
+FINAL dec2026_state on seed3 必須=3 重み=47077 gap=15 c1=56 c3n=2 covU=1
+FINAL dec2026_state on seed4 必須=3 重み=48078 gap=23 c1=61 c3n=2 covU=1
+FINAL dec2026_state on seed5 必須=3 重み=52978 gap=20 c1=83 c3n=2 covU=1
+FINAL dec2026_state on seed6 必須=3 重み=49784 gap=18 c1=68 c3n=2 covU=1
+DRAFT full_coverage_state off 必須=15 重み=152580 gap=0 c1=0 c3n=0 covU=15 hash=acdb5948
+FINAL full_coverage_state off seed3 必須=0 重み=1955 gap=0 c1=0 c3n=0 covU=0
+FINAL full_coverage_state off seed4 必須=0 重み=1961 gap=0 c1=0 c3n=0 covU=0
+DRAFT full_coverage_state on 必須=15 重み=152740 gap=0 c1=0 c3n=0 covU=15 hash=ccfb19a2
+FINAL full_coverage_state on seed3 必須=0 重み=1959 gap=0 c1=0 c3n=0 covU=0
+FINAL full_coverage_state on seed4 必須=0 重み=1959 gap=0 c1=0 c3n=0 covU=0
+製品の重み:
+窓 1-31日 可能解 必須 3→3 重み 46555→46555 下限 42693 |
+gap 最優先:
+窓 1-31日 可能解 必須 3→3 重み 46555→53348 下限 251116 | c1 56→91 c3 51→40 c3m 45→47 c3mn 2→5 c42 5→2 c42s 6→7 covO 0→2 low 3→2 high 9→8 fair 34→33 weekly 215→218 gap 14→2
