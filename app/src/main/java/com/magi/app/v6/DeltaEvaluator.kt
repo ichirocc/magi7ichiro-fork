@@ -190,11 +190,13 @@ class DeltaEvaluator(private val p: Problem) {
     internal fun reportKey(): LongArray {
         val s = score()
         val hard = s / SCORE_HARD_UNIT
-        val raw = familyRaw()
-        var hardW = 0.0
-        for (f in MirrorKeys.hard) hardW += (raw[f] ?: 0L) * ObjectiveWeights.of(f)
+        // familyRaw() と同じ値をマップを作らずに読む（手の採否ごとに呼ばれる。整数×整数の重みなので足す順で値は変わらない）。
+        val hardW = hGrpV * ObjectiveWeights.of("groupViol") + hc3n * ObjectiveWeights.of("c3n") + covUTot * ObjectiveWeights.of("covU") +
+            hpref * ObjectiveWeights.of("pref") + hc3w * ObjectiveWeights.of("c3w") + hExt * ObjectiveWeights.of("extWish")
         val (lo, hi) = rangeRaw()
-        return longArrayOf(hard, (s - hard * SCORE_HARD_UNIT) + hardW.toLong(), raw.values.sum() + lo + hi)
+        val rawSum = sc1 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 + hc3n + sc3m + sc3mn + hpref + hGrpV + hc3w + sApt + sFair + sWeekly +
+            scovO + covUTot + hExt + sGap
+        return longArrayOf(hard, (s - hard * SCORE_HARD_UNIT) + hardW.toLong(), rawSum + lo + hi)
     }
 
     /** Fused previewMove + commit for a single cell. Returns the new total score. */

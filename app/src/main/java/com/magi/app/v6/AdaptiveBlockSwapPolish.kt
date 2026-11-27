@@ -874,7 +874,8 @@ internal object AdaptiveBlockSwapPolish {
             windowsTried++
             for (b in 0 until p.S) {
                 if (b == a) continue
-                val key = (min(a, b).toLong() shl 48) or (max(a, b).toLong() shl 32) or (start.toLong() shl 16) or length.toLong()
+                // 奇数を掛けて混ぜる（1 対 1＝重複の判定は同じ）。詰めたままだと Long.hashCode で職員の組と窓が打ち消し合い、HashSet が衝突で木になっていた。
+                val key = ((min(a, b).toLong() shl 48) or (max(a, b).toLong() shl 32) or (start.toLong() shl 16) or length.toLong()) * -0x61c8864680b583ebL
                 if (key in ctx.seen) continue
                 // [3.499.0] 方向フィルタはアンカーごとに違うので、重複排除は**通過した窓だけ**に掛ける（旧: 先に seen へ入れて
                 //   いたため、回数超過アンカーが「k が減らない相手」として捨てた窓を、同じ窓を要る別アンカーが二度と作れなかった）。
