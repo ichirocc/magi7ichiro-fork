@@ -847,6 +847,8 @@ struct ImproveOptions {
     std::function<void(const std::vector<int>&, long long, long long)> onBest;
     // 同じ盤面で最適と証明済みの部分（自由にするマスの組）を解き直さない（解き直しても改善は出ない）。浮いた時間で別の部分を解く。
     bool skipProven = false;
+    // 「職員 2〜3 人×全日」の区間を「4〜5 人×全日」にする（解き直しだけ。5 人の行を同時に回す連鎖に届く、2026-11-27 の 12 月の実データ）。
+    bool wideCohort = false;
     // Options::fixCounts と同じ（部分ごとのモデルへ渡す）。開始の盤面がこの回数を満たしていること。
     std::vector<int> fixCounts;
 };
@@ -889,9 +891,9 @@ template <class Rng> inline int pickWeighted(const std::vector<long long>& w, Rn
 }
 
 // 自由にするマスを決める（force＝固定する値、自由なマスは -1）。無作為 3 種＋狙う 2 種を順に回す。
-//   0 日の窓×職員（多い職場は 14 人まで）／1 職員 2〜3 人×全日／2 職員 4〜5 人×日の窓
+//   0 日の窓×職員（多い職場は 14 人まで）／1 職員 2〜3 人×全日（wide＝4〜5 人）／2 職員 4〜5 人×日の窓
 //   3 T1 の量が多い職員＋同じグループの 1〜2 人×全日／4 fair の偏りが大きいグループ×日の窓
-template <class Rng> inline std::vector<int> pickRegion(const MagiProblem& p, const std::vector<int>& b, int kind, Rng& rng) {
+template <class Rng> inline std::vector<int> pickRegion(const MagiProblem& p, const std::vector<int>& b, int kind, Rng& rng, bool wide = false) {
     const int S = p.S, T = p.T, K = p.K;
     std::vector<int> force(b);
     auto ri = [&](int lo, int hi) { return lo + (int)(rng() % (unsigned long long)(hi - lo + 1)); };
@@ -944,7 +946,7 @@ template <class Rng> inline std::vector<int> pickRegion(const MagiProblem& p, co
         freeCells(staff, j0, len);
     } else if (kind == 1) {
         auto staff = shuffled(all);
-        staff.resize((size_t)std::min(S, ri(2, 3)));
+        staff.resize((size_t)std::min(S, wide ? ri(4, 5) : ri(2, 3)));
         freeCells(staff, 0, T);
     } else {
         auto staff = shuffled(all);
@@ -985,7 +987,7 @@ inline ImproveResult improve(const MagiProblem& p, const std::vector<int>& start
             Options o;
             o.workers = 1; o.randomSeed = (long long)(rng() & 0x7fffffff); o.stop = io.stop; o.fairFixedRef = true;
             o.fixCounts = io.fixCounts;
-            o.force = pickRegion(p, cur, kind, rng);
+            o.force = pickRegion(p, cur, kind, rng, io.wideCohort);
             kind = (kind + 1) % 5;
             const unsigned long long key = regionKey(o.force);
             // 小さい問題で全部が証明済みになっても空回りしないよう、続けて飛ばすのは 200 回まで。

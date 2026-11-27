@@ -88,6 +88,7 @@ static jlongArray cpsatImproveImpl(JNIEnv* env, jlong h, jintArray startArr, jdo
     env->GetIntArrayRegion(startArr, 0, (jsize)start.size(), start.data());
     magi_cpsat::ImproveOptions io;
     io.maxSeconds = maxSeconds; io.threads = threads; io.randomSeed = seed; io.stop = &job->stop;
+    io.wideCohort = fixArr == nullptr;   // 解き直しだけ（［そろえて組み直す］は回数の固定つきで今の区間のまま）
     if (fixArr != nullptr) {
         if (env->GetArrayLength(fixArr) != (jsize)((size_t)p.S * p.K)) return out;
         io.fixCounts.assign((size_t)p.S * p.K, -1);
