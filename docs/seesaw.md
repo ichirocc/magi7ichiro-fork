@@ -128,7 +128,7 @@ I8・I9 はこの文書で足した（`seesaw_detail.md` §7 は I1〜I7）。
 | `CellSheetLogic.kt` の `altTrade`・`altTradeLine` | DEFAULT | S4: 「他の案」を族の件数で比べて並べ、「期間の制約が 2件減り、上限超過が 1回増えます」と説明する（重みや点数は出さない） |
 | `GapPolish.kt` | DEFAULT | シフトの間隔の研磨: 移動できる区間を先に見つけて 2 人の行を入れ替え（3.727.127）、落ちたら崩れた休みの窓を同じ日の入れ替えで埋め直して 1 組で採点（`compoundRepair`、3.727.129） |
 | `MembraneCellLns.kt` | DEFAULT | 後処理の最終段: 職員 5 名 × 全期間の細胞を焼きなまし（見かけ（重み）を詰める。実機 #5 は 1,164 ms・採用 0） |
-| `CpsatResolve`（`CpsatBridge.kt`） | DEFAULT の部品（解き直しは設定で ON） | 盤面の一部を CP-SAT で厳密に解き直す（`magi_cpsat::improve`）。区間は 5 種を順に回す: 職員 14 人まで×4〜7 日／2〜3 人×全日／4〜5 人×10〜14 日／T1 の量が多い職員と同じグループの 1〜2 人×全日／fair の偏りが大きいグループ×12〜16 日。日数は範囲の中で無作為（7→14→21 日のような固定の拡大はしない）。複数人×複数日を一度に解くので F6 の取り逃しに届きうる（F10） |
+| `CpsatResolve`（`CpsatBridge.kt`） | DEFAULT の部品（解き直しは設定で ON） | 盤面の一部を CP-SAT で厳密に解き直す（`magi_cpsat::improve`）。区間は 5 種を順に回す: 職員 14 人まで×4〜7 日／2〜3 人×全日（解き直しは 4〜5 人×全日、3.727.135。［そろえて組み直す］は 2〜3 人のまま）／4〜5 人×10〜14 日／T1 の量が多い職員と同じグループの 1〜2 人×全日／fair の偏りが大きいグループ×12〜16 日。日数は範囲の中で無作為（7→14→21 日のような固定の拡大はしない）。複数人×複数日を一度に解くので F6 の取り逃しに届きうる（F10） |
 | `tools/loop/seesaw_arm.py`・`run_seesaw_map.sh`・`seesaw_map_stats.py` | TOOL | S1 の地図（族の重みだけ ×2 の腕を作り、今の重みの腕と同時に走らせて集計） |
 | `tools/loop/seesaw_s2b.py` | TOOL | S2b（盤面ごとのパレート判定）。要 `ortools` |
 | `tools/loop/seesaw_front.py` | TOOL | S2c（前線の断面、膝点の材料）。要 `ortools` |
