@@ -29,6 +29,64 @@ object SmartInitialScheduler {
     /** ③〜⑤で、置くとシフトの間隔（gap）の不足が 1 日増えるごとに足す罰（個人上限超過 1000 より下、回数の偏り 1〜2 より上）。 */
     private const val GAP_PENALTY = 10
 
+    /** ③の前に、間隔の規則があり日ごとの必要人数があるシフトを月全体で先に配る（[dealSpaced]）。既定 **false**（測って採否、2026-11-27）。 */
+    @Volatile var spacedDeal: Boolean = false
+
+    /**
+     * 間隔で配る／詰めて配る（利用者 2026-11-27「シフトの間隔の制約研磨…詰めて配る。間隔で配る。」「初期解生成に反映する」）。
+     * 日を順に見て、そのシフト X の必要人数が足りない日ごとに、空いている職員から 1 人ずつ選ぶ:
+     * 前日も X でブロックを続けられる人（推奨の並びの X の連続まで＝詰める）を先に、次に前の X のかたまりから
+     * 間隔 N 日以上空いた人のうち空きの長い人（間隔で配る）。間隔が足りない人・置けない人・上限の人・禁止の並びになる人は選ばない。
+     * 選べる人がいなければその枠は③に任せる。
+     */
+    private fun dealSpaced(p: Problem, schedule: Array<IntArray>): Int {
+        var dealt = 0
+        val counts = countMatrix(p, schedule)
+        val cov = coverage(p, schedule)
+        for (g in p.consGap) {
+            val x = g.shiftIdx
+            if (x !in 0 until p.K || g.days <= 0) continue
+            // 詰める長さ＝推奨・必須の並びの先頭に続く X の数の最大（無ければ 1＝続けない）
+            var blockMax = 1
+            for (c in p.cons3 + p.cons3m) {
+                var r = 0
+                while (r < c.seq.size && c.seq[r] == x) r++
+                if (r > blockMax) blockMax = r
+            }
+            for (j in 0 until p.T) {
+                while (p.covUCell(x, j, cov[j][x]) > 0) {
+                    var best = -1; var bestKey = Long.MAX_VALUE
+                    for (i in 0 until p.S) {
+                        if (schedule[i][j] >= 0 || !p.mayPlace(i, x) || p.extBanned(i, j, x)) continue
+                        val hi = p.rangeHi[i][x]
+                        if (hi != Int.MAX_VALUE && counts[i][x] >= hi) continue
+                        if (p.makesForbiddenRun(schedule, i, j, x)) continue
+                        var last = -1
+                        for (d in j - 1 downTo 0) if (schedule[i][d] == x) { last = d; break }
+                        var next = -1
+                        for (d in j + 1 until p.T) if (schedule[i][d] == x) { next = d; break }
+                        if (next > j + 1 && next - j < g.days) continue
+                        val key: Long = if (last == j - 1) {
+                            var run = 0
+                            var d = j - 1
+                            while (d >= 0 && schedule[i][d] == x) { run++; d-- }
+                            if (run >= blockMax) continue
+                            0L
+                        } else {
+                            if (last >= 0 && j - last < g.days) continue
+                            val rest = if (last < 0) p.T + 1 else j - last
+                            1_000_000L - rest * 1_000L + counts[i][x]
+                        }
+                        if (key < bestKey) { bestKey = key; best = i }
+                    }
+                    if (best < 0) break
+                    schedule[best][j] = x; counts[best][x]++; cov[j][x]++; dealt++
+                }
+            }
+        }
+        return dealt
+    }
+
     /** (i,j) に k を置いたときに増える gap の不足日数（空きセル -1 は k でない扱い＝チェッカーと同じ式）。 */
     private fun gapIncrease(p: Problem, row: IntArray, i: Int, j: Int, k: Int): Int {
         var inc = 0
@@ -103,6 +161,7 @@ object SmartInitialScheduler {
         //   [need2単独定義セル見落とし修正] need1のみを見ると、need1未設定・need2のみで需要が定義された
         //   シフトがdemandOrderへ一切追加されず初期解が積極的に埋めない（3.173.0のCoverageDiagnosis修正と
         //   同根、covUCellをsource of truthとして統一）。
+        if (spacedDeal && p.consGap.isNotEmpty()) dealSpaced(p, schedule)
         var counts = countMatrix(p, schedule)
         var cov = coverage(p, schedule)
         for (j in 0 until p.T) {

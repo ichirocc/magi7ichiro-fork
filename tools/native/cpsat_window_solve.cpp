@@ -1,5 +1,5 @@
 // 日の範囲（全職員×[lo,hi]、1 始まり）だけを自由にして CP-SAT で解く（TOOL・出力不変）。「集めて配る」（ブロック移動つき）1 回分が届く範囲の上界（2026-11-27）。
-// cpsat_window_solve <flat> <秒> lo-hi [lo-hi ...]。組み方は cpsat_cohort_sweep.cpp と同じ（-pthread）
+// cpsat_window_solve <flat> <秒> lo-hi [lo-hi ...]（環境変数 GAPW＝測定の中だけ gap の重みをこの値にして解く。結果は製品の重みで採点して出す）。組み方は cpsat_cohort_sweep.cpp と同じ（-pthread）
 #define main parity_main
 #include "host_parity_bench.cpp"
 #undef main
@@ -14,10 +14,12 @@ int main(int argc, char** argv) {
     MagiProblem p; std::vector<int> base;
     if (argc < 4 || !loadFlat(argv[1], p, base)) return 2;
     setPriority(p);
+    const MagiProblem p0 = p;   // 採点は製品の（優先順位の）重みのまま
+    if (const char* g = getenv("GAPW")) p.w.gap = atoi(g);
     const double secs = atof(argv[2]);
     magi_cpsat::HardW hw;
     auto score = [&](const std::vector<int>& b, long long& hard, long long& w, long long* bd) {
-        long long out[2]; fullEvalParts(p, b.data(), out, bd);
+        long long out[2]; fullEvalParts(p0, b.data(), out, bd);
         hard = out[0];
         w = out[1] + bd[15] * hw.groupViol + bd[10] * hw.covU + bd[3] * hw.c3n + bd[19] * hw.c3w + bd[12] * hw.pref + bd[20] * hw.extWish;
     };
