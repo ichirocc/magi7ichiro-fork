@@ -34,6 +34,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/delta_cpp_unification.md`](./docs/delta_cpp_unification.md) | **差分計算の C++ 一本化・高速化と並列処理**（仕様＝ユーザー提示の方針 5 点・変えてはならないもの・§12 並列処理、現行コードの対応・残りの段・テスト、2026-11-10） |
 | [`docs/seesaw.md`](./docs/seesaw.md) | **シーソー（族のあいだの違反の移動）の仕様**（2026-11-24 に他社 AI 向けに書き直し、K 人の組の厳密スイープの結果を反映）。定義・してはいけないこと（I1〜I9）・採否の規則・測定済みの事実 F1〜F10・判定の手順・コードの地図・S1〜S5 と 1 組の手の状態・否決した案・利用者の判断が要るもの |
 | [`docs/seesaw_detail.md`](./docs/seesaw_detail.md) | シーソーの詳細記録（旧本文、節番号はそのまま＝コードの「seesaw.md §N」はここを指す）。論文の見直し §11・ドッグフーディング §13・実装の記録 §14 |
+| [`docs/interaction_nets.md`](./docs/interaction_nets.md) | **Interaction Nets（相互作用ネット）の適用性（机上、2026-11-27）**。結論＝このままの形では作らない（採点が盤面全体で決まり局所規則で採否を決められない・1 マスが複数の制約に関わり主ポートが 1 つにならない）。近い考え方は既存の玉突き連鎖・違反連結成分修復・解き直しが担う。再検討の条件つき |
 | [`docs/membrane_search.md`](./docs/membrane_search.md) | **膜計算（組織様 P システム）を改良拡張した頭打ち盤面の探索の設計書**（2026-11-01 設計、M0 は 13/13 で改善、3.727.19 で `MembraneCellLns`、3.727.20 で既定 ON。設計時の要点:細胞＝残る違反から作る職員×日の部分問題、通信＝ずらせる余裕を透過性にした交換・移動、阻んだ必須の位置で融合・分裂、細胞の中は厳密解、「この範囲では減らせない」の記録、M0 の測定で採否） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の仕様**（他社 AI 向けに一本化: DEFAULT／PROPOSAL の分離・不変条件・チェックリスト・測定の規則を含む。層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
@@ -51,6 +52,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-11-27（文書のみ: Interaction Nets の適用性を机上で判定＝作らない、`docs/interaction_nets.md`）
 **最終更新**：2026-11-27（3.727.135: 解き直しの区間に 4〜5 人×全日（12 月の実データで −70）・解き直しは既定 OFF のまま）
 **最終更新**：2026-11-24（測定: シーソーの SpprcGridFixingLns を机上検証＋数え上げ＝SPPRC は作らない、不一致セルの区間は既存の解き直しに 2 勝 4 敗）
 **最終更新**：2026-11-24（測定・否決: シーソー S3 の外側の歩き＝本命の更新 0 回で作らない）
